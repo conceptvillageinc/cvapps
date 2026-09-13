@@ -139,7 +139,7 @@ Base44 SDK   →   Supabase
 - [x] ドメイン制限：`@concept-village.co.jp` 以外はDBトリガーでサインアップ自体を拒否
 - [x] `AuthContext.jsx` の書き換え、`app-params.js` / `authReturnTo.js` / `base44Client.js` の削除
 - [x] Login画面をGoogleログインのみに簡素化
-- [ ] Google Cloud側のOAuth設定（→ `docs/supabase-setup.md` の手順3。**要ご対応**）
+- [x] Google Cloud側のOAuth設定（`docs/supabase-setup.md` 手順3）
 - [ ] UserManagement の招待フロー再実装（現状は呼ぶとエラーになる）
 - [ ] `PageNotFound.jsx` の管理者向け文言がBase44前提のまま（軽微）
 
@@ -161,8 +161,9 @@ Base44 SDK   →   Supabase
   - DB設計の段階で、後からAPI直結に差し替えられる形にしておく
 
 ### Phase 6: 本番切替とBase44解約
-- Vercelデプロイ、独自ドメイン設定
-- 動作確認後、Base44アプリを解約
+- [x] Vercelデプロイ（Proプラン）
+- [ ] 独自ドメイン設定
+- [ ] 動作確認後、Base44アプリを解約
 
 ## 6. 今後の機能追加（移行後）
 - 工程管理表の作成機能（→ Phase 5 のスプレッドシート出力に接続）

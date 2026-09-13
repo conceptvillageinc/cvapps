@@ -15,7 +15,7 @@ Base44 上に構築されていたものを、Base44 に依存しない自前環
 | サーバー処理 | Base44 Functions (Deno) | ⏳ Phase 4 で Vercel Functions へ |
 | AI | Base44 `InvokeLLM` | ⏳ Phase 4 で Claude API へ |
 | ファイル | Base44 `UploadFile` | ⏳ Phase 4 で Supabase Storage へ |
-| ホスティング | — | ⏳ Phase 5 で Vercel へ |
+| ホスティング | **Vercel** | ✅ デプロイ済み |
 
 `@base44/sdk` への依存は削除済みです。未移行の機能（AI・ファイルアップロード・
 サーバー関数・メンバー招待）は、呼ぶと「どのフェーズで実装予定か」を示すエラーになります。
