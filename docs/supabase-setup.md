@@ -69,12 +69,17 @@ Supabase ダッシュボード → 左メニュー **SQL Editor** → **New quer
 1. ダッシュボード → **Authentication → Sign In / Providers → Google**
 2. **Enable** をオンにして、上で控えたクライアントID・シークレットを貼り付け → Save
 3. **Authentication → URL Configuration**
-   - **Site URL**: 本番のURL（Vercelデプロイ後に設定。開発中は `http://localhost:5173`）
+   - **Site URL**: `https://cvapps-delta.vercel.app`
    - **Redirect URLs** に次の2つを追加:
      ```
+     https://cvapps-delta.vercel.app/**
      http://localhost:5173/**
-     https://<Vercelの本番ドメイン>/**
      ```
+
+> Googleログイン後の戻り先を決めているのは Supabase です。アプリが要求したURLが
+> Redirect URLs に**無い**場合、Supabase は Site URL へ飛ばします。
+> ここが `http://localhost:5173` のままだと、ログインは成功しているのに
+> 「localhost で接続が拒否されました」になります。
 
 > **メール／パスワードでのサインアップは無効にしてください**（Googleのみに統一するため）。
 > **Authentication → Sign In / Providers → Email** を無効化します。
@@ -88,10 +93,17 @@ Supabase ダッシュボード → 左メニュー **SQL Editor** → **New quer
 3. 設定はほぼ自動検出されます（Framework: Vite / Build: `npm run build` / Output: `dist`）。
    **Environment Variables** に次の2つだけ追加してください:
 
-   | Name | Value |
-   |---|---|
-   | `VITE_SUPABASE_URL` | `https://qtdesganhbxacbwhpdma.supabase.co` |
-   | `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...`（Supabaseの Project Settings → API Keys） |
+   | Name | Value | Type |
+   |---|---|---|
+   | `VITE_SUPABASE_URL` | `https://qtdesganhbxacbwhpdma.supabase.co` | **Config** |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...`（Project Settings → API Keys） | **Config** |
+
+   > **Type は必ず Config にしてください。** `VITE_` はブラウザに埋め込む公開値の印なので、
+   > Secret を選ぶと Vercel が安全側に倒して値をビルドに渡さず、起動時にエラーになります。
+   > Secret は後から Config に変更できないため、間違えた場合は削除して作り直しです。
+   >
+   > 環境変数はビルド時にJavaScriptへ焼き込まれます。追加・変更したら **Redeploy** が必要です。
+   > なお「Redeploy」は*同じコミットを*ビルドし直す機能で、新しいコミットは取り込みません。
 
 4. **Deploy**
 
@@ -99,10 +111,12 @@ Supabase ダッシュボード → 左メニュー **SQL Editor** → **New quer
 
 ### デプロイ後にSupabase側を更新する
 
-**Authentication → URL Configuration** を開き、発行されたURLを設定します:
+**Authentication → URL Configuration** を開き、発行されたURLを設定します（手順3-2と同じ場所）:
 
-- **Site URL**: `https://<発行されたURL>`
-- **Redirect URLs**: `https://<発行されたURL>/**` を追加
+- **Site URL**: `https://cvapps-delta.vercel.app`
+- **Redirect URLs**: `https://cvapps-delta.vercel.app/**` を追加
+
+**これを忘れると、ログインは通るのに `localhost` へ飛ばされます。**
 
 > Google Cloud 側のリダイレクトURIは変更不要です。
 > Google → Supabase → アプリ の順に転送されるため、Googleが知る必要があるのは
@@ -145,4 +159,6 @@ Phase 2・3 は成功です。
 | ログイン後に「利用者として登録されていません」と出る | `public.users` に行がない。トリガーが動いたか SQL Editor で `select * from public.users;` を確認 |
 | ログイン自体がエラーになる | 許可ドメイン外のアカウント。`@concept-village.co.jp` でログインしてください |
 | データが空で表示される | RLSで弾かれている可能性。`public.users` に自分の行があるか確認 |
-| `Supabase の接続情報が設定されていません` | `.env.local` が無いか、変数名が違う。`.env.example` と見比べてください |
+| `Supabase の接続情報が設定されていません` | `.env.local` が無いか、変数名が違う。Vercelなら環境変数の Type が Secret になっていないか確認 |
+| ログイン後に `localhost で接続が拒否されました` | Supabase の **URL Configuration** が未更新。Site URL と Redirect URLs を本番URLにしてください |
+| 画面が真っ白で何も出ない | `index.html` の保険で原因が出るはず。それも出ないならビルドが古い。Deployments で最新コミットが Ready か確認 |
