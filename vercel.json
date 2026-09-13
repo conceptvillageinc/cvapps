@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "comment": "SPAのため全パスをindex.htmlへ。ただし /api/* は Functions に通す",
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
