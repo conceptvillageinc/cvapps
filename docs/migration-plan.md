@@ -133,20 +133,35 @@ Base44 SDK   →   Supabase
   `〒028-1105` / `969-2751` / `9700228` と3通りの表記が混在していた。
   `src/lib/postalCode.js` が期待するハイフンなし7桁に統一。
 
-### Phase 3: 認証の置き換え（大半をPhase 2で先行実施）
+### Phase 3: 認証の置き換え ✅ 完了
 データ層を動かすには認証が不可欠なため、必要な範囲をPhase 2で先に実装した。
 - [x] Supabase Auth + Googleプロバイダ
 - [x] ドメイン制限：`@concept-village.co.jp` 以外はDBトリガーでサインアップ自体を拒否
 - [x] `AuthContext.jsx` の書き換え、`app-params.js` / `authReturnTo.js` / `base44Client.js` の削除
 - [x] Login画面をGoogleログインのみに簡素化
 - [x] Google Cloud側のOAuth設定（`docs/supabase-setup.md` 手順3）
-- [ ] UserManagement の招待フロー再実装（現状は呼ぶとエラーになる）
+- [x] 本番URLでの動作確認（ログイン・一覧表示・新規作成・URL直打ち）
+- [ ] UserManagement の招待フロー再実装（現状は呼ぶとエラーになる。Phase 4 へ送る）
 - [ ] `PageNotFound.jsx` の管理者向け文言がBase44前提のまま（軽微）
 
-### Phase 4: サーバー処理の移植
-- `fetchPriceFromUrl` / `collectWebPrices` を Vercel Functions へ
-- InvokeLLM 4箇所を Claude API 呼び出しへ（サーバー側）
-- UploadFile を Supabase Storage へ
+### Phase 4: サーバー処理とAI機能の移植
+Base44 に残っている最後の依存。呼び出し箇所は8つ。
+
+| 対象 | 箇所 | 移植先 |
+|---|---|---|
+| `UploadFile` 3箇所 | 見積書PDF取込 / 価格表スクショ2箇所 | Supabase Storage（非公開バケット＋署名URL） |
+| `InvokeLLM` 4箇所 | メール文面生成 / FAQ回答 / 見積書PDF読取 / 価格表スクショ読取 | Vercel Function 経由で Claude API |
+| `functions.invoke` 2種 | `fetchPriceFromUrl` / `collectWebPrices` | Vercel Functions（Deno→Node へ移植） |
+| `users.inviteUser` | メンバー招待 | Supabase Admin API（service_role をサーバー側で使用） |
+
+設計方針:
+- **APIキーはブラウザに出さない。** `ANTHROPIC_API_KEY` は Vercel の環境変数
+  （`VITE_` を付けない）に置き、`/api/*` の Function からのみ使う
+- Function 側で Supabase の JWT を検証し、ログイン済みメンバー以外は 401 を返す
+  （そうしないとAPIキーの踏み台にされる）
+- 画面側の呼び出し形（`db.integrations.Core.InvokeLLM` 等）は変えない。
+  アダプタ層 `src/api/db.js` の中身だけ差し替える
+- モデルIDは `claude_opus_4_8` のまま放置されているので現行IDへ更新する
 
 ### Phase 5: 外部連携
 - **Googleスプレッドシート**: サービスアカウント方式。
