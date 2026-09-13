@@ -81,7 +81,34 @@ Supabase ダッシュボード → 左メニュー **SQL Editor** → **New quer
 
 ---
 
-## 4. ローカルで動かす
+## 4. Vercel へデプロイする
+
+1. [vercel.com](https://vercel.com/) に GitHub アカウントでログイン
+2. **Add New → Project** → `conceptvillageinc/cvapps` を **Import**
+3. 設定はほぼ自動検出されます（Framework: Vite / Build: `npm run build` / Output: `dist`）。
+   **Environment Variables** に次の2つだけ追加してください:
+
+   | Name | Value |
+   |---|---|
+   | `VITE_SUPABASE_URL` | `https://qtdesganhbxacbwhpdma.supabase.co` |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_...`（Supabaseの Project Settings → API Keys） |
+
+4. **Deploy**
+
+デプロイ後、`https://<プロジェクト名>.vercel.app` のようなURLが発行されます。
+
+### デプロイ後にSupabase側を更新する
+
+**Authentication → URL Configuration** を開き、発行されたURLを設定します:
+
+- **Site URL**: `https://<発行されたURL>`
+- **Redirect URLs**: `https://<発行されたURL>/**` を追加
+
+> Google Cloud 側のリダイレクトURIは変更不要です。
+> Google → Supabase → アプリ の順に転送されるため、Googleが知る必要があるのは
+> Supabaseのコールバックだけです。
+
+### ローカルで動かす場合
 
 ```bash
 cp .env.example .env.local
@@ -90,8 +117,12 @@ npm install
 npm run dev
 ```
 
-`http://localhost:5173` を開き、Googleでログイン。
-ログイン後、見積一覧・クライアント一覧にデータが表示されれば Phase 2・3 は成功です。
+この場合は Supabase の Redirect URLs に `http://localhost:5173/**` も追加してください。
+
+### 動作確認
+
+URLを開いてGoogleでログイン。見積一覧・クライアント一覧にデータが表示されれば
+Phase 2・3 は成功です。
 
 ---
 
