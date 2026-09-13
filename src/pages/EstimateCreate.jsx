@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ export default function EstimateCreate() {
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
-    queryFn: () => base44.entities.Client.list("-name"),
+    queryFn: () => db.entities.Client.list("-name"),
   });
 
   // freeeインポートの重複登録対策として、同一名前は1件に集約して表示
@@ -66,8 +66,8 @@ export default function EstimateCreate() {
       return;
     }
     setSaving(true);
-    const estimateNumber = await generateEstimateNumber(base44);
-    const created = await base44.entities.Estimate.create({
+    const estimateNumber = await generateEstimateNumber(db);
+    const created = await db.entities.Estimate.create({
       ...formData,
       estimate_number: estimateNumber,
       project_group_id: estimateNumber,
@@ -80,12 +80,12 @@ export default function EstimateCreate() {
     try {
       const matchedClient = clients.find(c => c.name === formData.client_name);
       if (matchedClient) {
-        await base44.entities.Client.update(matchedClient.id, {
+        await db.entities.Client.update(matchedClient.id, {
           quote_count: (matchedClient.quote_count || 0) + 1,
         });
       } else {
         // クライアント一覧にない新規名前で作成された場合は、Clientを新規登録
-        await base44.entities.Client.create({ name: formData.client_name, quote_count: 1 });
+        await db.entities.Client.create({ name: formData.client_name, quote_count: 1 });
       }
     } catch (e) {
       // 頻度更新の失敗は見積作成自体を妨げない

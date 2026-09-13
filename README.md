@@ -7,34 +7,38 @@ Base44 上に構築されていたものを、Base44 に依存しない自前環
 
 ## 技術構成
 
-| 領域 | 現在 | 移行後（予定） |
+| 領域 | 現在 | 状態 |
 |---|---|---|
-| フロントエンド | React 18 + Vite + Tailwind + shadcn/ui | 同じ（そのまま継続） |
-| データ | Base44 エンティティ（`@base44/sdk`） | Supabase (Postgres) |
-| 認証 | Base44 Auth | Supabase Auth（Googleログインのみ） |
-| サーバー処理 | Base44 Functions (Deno) | Vercel Functions |
-| AI | Base44 `InvokeLLM` | Claude API（サーバー側） |
-| ファイル | Base44 `UploadFile` | Supabase Storage |
-| ホスティング | Base44 | Vercel |
+| フロントエンド | React 18 + Vite + Tailwind + shadcn/ui | そのまま継続 |
+| データ | **Supabase (Postgres)** | ✅ 移行済み |
+| 認証 | **Supabase Auth（Googleログインのみ）** | ✅ 移行済み |
+| サーバー処理 | Base44 Functions (Deno) | ⏳ Phase 4 で Vercel Functions へ |
+| AI | Base44 `InvokeLLM` | ⏳ Phase 4 で Claude API へ |
+| ファイル | Base44 `UploadFile` | ⏳ Phase 4 で Supabase Storage へ |
+| ホスティング | — | ⏳ Phase 5 で Vercel へ |
+
+`@base44/sdk` への依存は削除済みです。未移行の機能（AI・ファイルアップロード・
+サーバー関数・メンバー招待）は、呼ぶと「どのフェーズで実装予定か」を示すエラーになります。
 
 ## セットアップ
 
+初回は **[docs/supabase-setup.md](docs/supabase-setup.md)** の手順（スキーマ作成・データ投入・
+Googleログイン設定）を先に済ませてください。
+
 ```bash
+cp .env.example .env.local   # Supabaseの接続情報を記入
 npm install
 npm run dev     # 開発サーバー
 npm run build   # 本番ビルド
 npm run lint    # Lint
 ```
 
-> **注意**: 現時点ではデータ層・認証層がまだ Base44 SDK を参照しているため、
-> `npm run dev` で起動しても Base44 のバックエンドなしでは画面が動作しません。
-> ビルドが通る状態までが Phase 1 の到達点です。実際に動くのは Phase 2・3 完了後です。
-
 ## ディレクトリ構成
 
 ```
 src/
-├── api/          Base44 クライアント（Phase 2 でアダプタ層に置き換え）
+├── api/db.js     データアクセスのアダプタ層（Base44 SDK と同じ形で Supabase を呼ぶ）
+├── lib/supabase.js  Supabase クライアント
 ├── components/
 │   ├── estimates/  見積関連コンポーネント（12件・業務ロジックの中核）
 │   └── ui/         shadcn/ui コンポーネント（実際に使う17件のみ）

@@ -6,14 +6,14 @@ function padSeq(n) {
   return String(n).padStart(3, "0");
 }
 
-export async function generateEstimateNumber(base44) {
+export async function generateEstimateNumber(db) {
   const now = new Date();
   const yy = String(now.getFullYear()).slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const prefix = `CV-${yy}${mm}-`;
 
   // 直近の見積を取得し、同月内の連番の最大値を調べる
-  const all = await base44.entities.Estimate.list("-created_date", 500);
+  const all = await db.entities.Estimate.list("-created_date", 500);
   const usedNumbers = new Set(all.map(e => e.estimate_number).filter(Boolean));
 
   const thisMonthSeqs = all

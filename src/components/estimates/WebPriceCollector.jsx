@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Globe, AlertTriangle, CheckCircle2, ExternalLink, RefreshCw } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { toast } from "sonner";
 import { WEB_PRINT_TYPES, WEB_VENDORS } from "@/lib/constants";
 
@@ -27,7 +27,7 @@ export default function WebPriceCollector({ estimate, onPricesCollected }) {
     setFailed([]);
 
     try {
-      const response = await base44.functions.invoke("collectWebPrices", {
+      const response = await db.functions.invoke("collectWebPrices", {
         print_type: estimate.print_type,
         quantities: estimate.quantities,
         size: estimate.size,

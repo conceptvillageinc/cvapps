@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,7 @@ export default function RevisionPanel({ estimate, onUpdate }) {
 
   const { data: siblings = [] } = useQuery({
     queryKey: ["estimateRevisions", groupId],
-    queryFn: () => base44.entities.Estimate.filter({ project_group_id: groupId }),
+    queryFn: () => db.entities.Estimate.filter({ project_group_id: groupId }),
     enabled: !!groupId,
   });
 
@@ -43,9 +43,9 @@ export default function RevisionPanel({ estimate, onUpdate }) {
         reviewer_id, reviewer_name, approved_date, review_comments, approval_checklist,
         freee_deal_id, freee_estimate_id, freee_status, is_final_submitted, ...rest
       } = estimate;
-      return base44.entities.Estimate.create({
+      return db.entities.Estimate.create({
         ...rest,
-        estimate_number: await generateEstimateNumber(base44),
+        estimate_number: await generateEstimateNumber(db),
         status: "draft",
         freee_status: "not_linked",
         review_comments: [],
@@ -65,7 +65,7 @@ export default function RevisionPanel({ estimate, onUpdate }) {
 
   const { data: settings = [] } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => base44.entities.SystemSettings.list(),
+    queryFn: () => db.entities.SystemSettings.list(),
   });
   const dealProbabilityOptions = (() => {
     const s = settings.find(x => x.setting_key === "deal_probability_options");

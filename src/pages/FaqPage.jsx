@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -94,13 +94,13 @@ export default function FaqPage() {
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["faqItems"],
-    queryFn: () => base44.entities.FaqItem.list("sort_order"),
+    queryFn: () => db.entities.FaqItem.list("sort_order"),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["faqItems"] });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.FaqItem.create(data),
+    mutationFn: (data) => db.entities.FaqItem.create(data),
     onSuccess: () => {
       invalidate();
       toast.success("追加しました");
@@ -109,13 +109,13 @@ export default function FaqPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.FaqItem.update(id, data),
+    mutationFn: ({ id, data }) => db.entities.FaqItem.update(id, data),
     onSuccess: invalidate,
     onError: (err) => toast.error("更新に失敗しました: " + err.message),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.FaqItem.delete(id),
+    mutationFn: (id) => db.entities.FaqItem.delete(id),
     onSuccess: () => {
       invalidate();
       toast.success("削除しました");
@@ -139,7 +139,7 @@ export default function FaqPage() {
     setAiLoading(true);
     try {
       const existingQA = items.map(i => `Q: ${i.question}\nA: ${i.answer}`).join("\n\n");
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await db.integrations.Core.InvokeLLM({
         prompt: `あなたは「CV見積アプリ」の使い方サポートアシスタントです。以下のアプリの機能概要を参考に、メンバーからの質問に日本語で簡潔に回答してください。手順がある場合は番号付きリストで。コンテキストにない内容（アプリの仕様にない細かい仕様など）は想像で答えず、「この点は情報がないため、担当者に確認してください」と正直に伝えてください。
 
 【アプリの機能概要】${APP_CONTEXT}
@@ -152,7 +152,7 @@ ${aiQuestion.trim()}`,
       });
       const answerText = typeof result === "string" ? result : (result?.text || JSON.stringify(result));
       const minOrder = items.length > 0 ? Math.min(...items.map(i => i.sort_order || 0)) : 0;
-      await base44.entities.FaqItem.create({ question: aiQuestion.trim(), answer: answerText, sort_order: minOrder - 1 });
+      await db.entities.FaqItem.create({ question: aiQuestion.trim(), answer: answerText, sort_order: minOrder - 1 });
       invalidate();
       toast.success("AIの回答をQ&Aに登録しました");
       setAiQuestion("");
@@ -171,7 +171,7 @@ ${aiQuestion.trim()}`,
     // 並び替え後、それぞれのsort_orderを振り直して保存
     next.forEach((item, i) => {
       if (item.sort_order !== i) {
-        base44.entities.FaqItem.update(item.id, { sort_order: i }).then(invalidate);
+        db.entities.FaqItem.update(item.id, { sort_order: i }).then(invalidate);
       }
     });
   };

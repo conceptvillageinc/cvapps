@@ -104,18 +104,44 @@ Base44 SDK   →   Supabase
    （インストール 613 → 414 パッケージ）。削除後もビルドが通ることを確認済み。
 5. **トースト通知の不具合を修正** — 下記「留意点」参照。
 
-### Phase 2: データ層の置き換え
-- Supabaseプロジェクト作成、Postgresスキーマ設計（8エンティティ → テーブル）
-- freee関連3フィールドを削除、`schema_version` の扱いを整理
-- RLS（Row Level Security）ポリシー設計
-- 実データ移行（サンプル3件を除く）
-- `src/api/entities.js` アダプタ層を導入し、Base44 SDK → Supabase へ差し替え
+### Phase 2: データ層の置き換え ✅ 完了
+- [x] Supabaseプロジェクト作成（`qtdesganhbxacbwhpdma`）
+- [x] Postgresスキーマ設計 → `supabase/migrations/0001_initial_schema.sql`（8テーブル）
+- [x] freee関連3フィールドと `deal_status`（旧・未使用）を削除
+- [x] RLSポリシー：`public.users` に登録されたメンバーのみ全操作可
+- [x] データ移行SQLの生成 → `scripts/generate-seed.mjs`
+- [x] アダプタ層 `src/api/db.js` を導入し、Base44 SDK → Supabase へ差し替え
+- [x] `@base44/sdk` を package.json から削除（Base44への依存が完全に消えた）
 
-### Phase 3: 認証の置き換え
-- Supabase Auth + Googleプロバイダ（`concept-village.co.jp` ドメイン制限）
-- `AuthContext.jsx` の書き換え、`app-params.js` の削除
-- Register / ForgotPassword / ResetPassword / OAuthConsent の削除
-- UserManagement の招待フロー再実装
+#### スキーマ設計の判断
+- **`line_items`（新方式）を主とするが、旧方式のカラムも残した。**
+  旧形式7件のうち4件にデザイン費データがあり、変換は可能だが、
+  旧形式の画面にぶら下がる「見積書PDF取込」「ネット印刷価格収集」が
+  新方式の画面にまだ繋がっていない。データを失わずに保持しておき、
+  UIの一本化は機能の移植とあわせて後のフェーズで判断する。
+- **未定義だった2フィールドを正式化**：`clients.quote_count`、`estimates.client_honorific`。
+  どちらも画面では使われているのに Base44 のスキーマに定義が無かった。
+- **`created_date` / `updated_date` → `created_at` / `updated_at`。**
+  画面側は旧名で参照しているため、読み替えはアダプタ層が行う。
+
+#### 移行時に行ったデータクリーンアップ
+- **クライアントの重複統合：502件 → 257件。**
+  freeeからのインポートが2回走っており、ほぼ全件が2重登録されていた。
+  246グループのうち237グループは中身も完全一致だったため自動統合。
+  項目ごとに非空の値を採用し、`quote_count` は最大値を採用。
+- **郵便番号の正規化：206件。**
+  `〒028-1105` / `969-2751` / `9700228` と3通りの表記が混在していた。
+  `src/lib/postalCode.js` が期待するハイフンなし7桁に統一。
+
+### Phase 3: 認証の置き換え（大半をPhase 2で先行実施）
+データ層を動かすには認証が不可欠なため、必要な範囲をPhase 2で先に実装した。
+- [x] Supabase Auth + Googleプロバイダ
+- [x] ドメイン制限：`@concept-village.co.jp` 以外はDBトリガーでサインアップ自体を拒否
+- [x] `AuthContext.jsx` の書き換え、`app-params.js` / `authReturnTo.js` / `base44Client.js` の削除
+- [x] Login画面をGoogleログインのみに簡素化
+- [ ] Google Cloud側のOAuth設定（→ `docs/supabase-setup.md` の手順3。**要ご対応**）
+- [ ] UserManagement の招待フロー再実装（現状は呼ぶとエラーになる）
+- [ ] `PageNotFound.jsx` の管理者向け文言がBase44前提のまま（軽微）
 
 ### Phase 4: サーバー処理の移植
 - `fetchPriceFromUrl` / `collectWebPrices` を Vercel Functions へ

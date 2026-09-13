@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,13 +24,13 @@ export default function VendorManagement() {
 
   const { data: vendors = [], isLoading } = useQuery({
     queryKey: ["vendors"],
-    queryFn: () => base44.entities.PrintVendor.list("name"),
+    queryFn: () => db.entities.PrintVendor.list("name"),
   });
 
   const saveMutation = useMutation({
     mutationFn: (data) => editing
-      ? base44.entities.PrintVendor.update(editing.id, data)
-      : base44.entities.PrintVendor.create(data),
+      ? db.entities.PrintVendor.update(editing.id, data)
+      : db.entities.PrintVendor.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vendors"] });
       setDialogOpen(false);
@@ -41,7 +41,7 @@ export default function VendorManagement() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.PrintVendor.delete(id),
+    mutationFn: (id) => db.entities.PrintVendor.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vendors"] });
       toast.success("削除しました");

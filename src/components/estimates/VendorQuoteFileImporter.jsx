@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileUp, AlertTriangle, Check, X, Sparkles } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { toast } from "sonner";
 import NumericField from "@/components/estimates/NumericField";
 
@@ -101,8 +101,8 @@ export default function VendorQuoteFileImporter({ estimate, onImported }) {
     setExtracted(null);
 
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      const result = await base44.integrations.Core.InvokeLLM({
+      const { file_url } = await db.integrations.Core.UploadFile({ file });
+      const result = await db.integrations.Core.InvokeLLM({
         prompt: EXTRACT_PROMPT,
         file_urls: [file_url],
         model: "claude_opus_4_8",

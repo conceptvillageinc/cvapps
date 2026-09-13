@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useMemo } from "react";
@@ -127,12 +127,12 @@ export default function EstimateList() {
 
   const { data: estimates = [], isLoading } = useQuery({
     queryKey: ["estimates"],
-    queryFn: () => base44.entities.Estimate.list("-created_date", 100),
+    queryFn: () => db.entities.Estimate.list("-created_date", 100),
   });
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
-    queryFn: () => base44.entities.Client.list("-name"),
+    queryFn: () => db.entities.Client.list("-name"),
   });
   const clientKanaMap = useMemo(() => {
     const m = {};
@@ -142,7 +142,7 @@ export default function EstimateList() {
 
   const { data: settings = [] } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => base44.entities.SystemSettings.list(),
+    queryFn: () => db.entities.SystemSettings.list(),
   });
 
   const dealProbabilityMaster = useMemo(() => {

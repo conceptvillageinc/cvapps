@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,12 +80,12 @@ export default function ClientManagement() {
 
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
-    queryFn: () => base44.entities.Client.list("-created_date"),
+    queryFn: () => db.entities.Client.list("-created_date"),
   });
 
   const saveMutation = useMutation({
     mutationFn: (data) =>
-      editing ? base44.entities.Client.update(editing.id, data) : base44.entities.Client.create(data),
+      editing ? db.entities.Client.update(editing.id, data) : db.entities.Client.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       setDialogOpen(false);
@@ -93,14 +93,14 @@ export default function ClientManagement() {
   });
 
   const inlineUpdateMutation = useMutation({
-    mutationFn: ({ id, field, value }) => base44.entities.Client.update(id, { [field]: value }),
+    mutationFn: ({ id, field, value }) => db.entities.Client.update(id, { [field]: value }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Client.delete(id),
+    mutationFn: (id) => db.entities.Client.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["clients"] }),
   });
 

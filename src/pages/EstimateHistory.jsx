@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useState } from "react";
@@ -21,7 +21,7 @@ export default function EstimateHistory() {
 
   const { data: estimates = [], isLoading } = useQuery({
     queryKey: ["estimates-history"],
-    queryFn: () => base44.entities.Estimate.list("-created_date", 200),
+    queryFn: () => db.entities.Estimate.list("-created_date", 200),
   });
 
   const approvedEstimates = estimates.filter(e =>
@@ -42,7 +42,7 @@ export default function EstimateHistory() {
     const { id, created_date, updated_date, created_by_id, estimate_number, status,
             reviewer_id, reviewer_name, approved_date, review_comments, approval_checklist,
             freee_deal_id, freee_estimate_id, freee_status, ...rest } = est;
-    const newEstimate = await base44.entities.Estimate.create({
+    const newEstimate = await db.entities.Estimate.create({
       ...rest,
       estimate_number: `CV-${Date.now().toString(36).toUpperCase()}`,
       status: "draft",

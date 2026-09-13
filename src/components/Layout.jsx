@@ -5,7 +5,7 @@ import {
   LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle
 } from "lucide-react";
 import { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,7 +38,7 @@ export default function Layout() {
   const isAdmin = user?.role === "admin";
 
   const handleLogout = () => {
-    base44.auth.logout("/login");
+    db.auth.logout("/login");
   };
 
   const NavLink = ({ item, onClick }) => {

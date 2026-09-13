@@ -30,3 +30,9 @@ dist-ssr
 
 .vite
 .vercel
+
+# 移行データ（クライアントの住所・電話など個人情報を含むためコミットしない）
+# 生成方法は scripts/generate-seed.mjs と docs/supabase-setup.md を参照
+supabase/seed_*.sql
+supabase/seed_*-review.json
+scripts/export/

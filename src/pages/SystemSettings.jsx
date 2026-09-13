@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,9 +14,9 @@ async function upsertSetting(existingList, key, value, description) {
   const existing = existingList.find(s => s.setting_key === key);
   const data = { setting_key: key, setting_value: value, description };
   if (existing) {
-    await base44.entities.SystemSettings.update(existing.id, data);
+    await db.entities.SystemSettings.update(existing.id, data);
   } else {
-    await base44.entities.SystemSettings.create(data);
+    await db.entities.SystemSettings.create(data);
   }
 }
 
@@ -82,7 +82,7 @@ export default function SystemSettingsPage() {
 
   const { data: settings = [] } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => base44.entities.SystemSettings.list(),
+    queryFn: () => db.entities.SystemSettings.list(),
   });
 
   const [markupLabel, setMarkupLabel] = useState("1.25");

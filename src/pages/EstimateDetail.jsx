@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,14 +43,14 @@ export default function EstimateDetail() {
 
   const { data: estimate, isLoading } = useQuery({
     queryKey: ["estimate", estimateId],
-    queryFn: () => base44.entities.Estimate.filter({ id: estimateId }),
+    queryFn: () => db.entities.Estimate.filter({ id: estimateId }),
     select: (data) => data[0],
     enabled: !!estimateId,
   });
 
   const { data: emailLogs = [] } = useQuery({
     queryKey: ["emailLogs", estimateId],
-    queryFn: () => base44.entities.EmailLog.filter({ estimate_id: estimateId }),
+    queryFn: () => db.entities.EmailLog.filter({ estimate_id: estimateId }),
     enabled: !!estimateId,
   });
 
@@ -64,7 +64,7 @@ export default function EstimateDetail() {
   }, [estimate]);
 
   const saveMutation = useMutation({
-    mutationFn: (data) => base44.entities.Estimate.update(estimateId, data),
+    mutationFn: (data) => db.entities.Estimate.update(estimateId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estimate", estimateId] });
     },
@@ -122,7 +122,7 @@ export default function EstimateDetail() {
     const { id, created_date, updated_date, created_by_id, estimate_number, status,
             reviewer_id, reviewer_name, approved_date, review_comments, approval_checklist,
             freee_deal_id, freee_estimate_id, freee_status, ...rest } = formData;
-    const newEstimate = await base44.entities.Estimate.create({
+    const newEstimate = await db.entities.Estimate.create({
       ...rest,
       estimate_number: `CV-${Date.now().toString(36).toUpperCase()}`,
       status: "draft",
@@ -135,7 +135,7 @@ export default function EstimateDetail() {
   };
 
   const handleDelete = async () => {
-    await base44.entities.Estimate.delete(estimateId);
+    await db.entities.Estimate.delete(estimateId);
     toast.success("見積を削除しました");
     navigate("/estimates");
   };

@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +25,7 @@ const STATUS_MAP = {
 export default function Dashboard() {
   const { data: estimates = [], isLoading } = useQuery({
     queryKey: ["estimates"],
-    queryFn: () => base44.entities.Estimate.list("-created_date", 50),
+    queryFn: () => db.entities.Estimate.list("-created_date", 50),
   });
 
   const stats = {

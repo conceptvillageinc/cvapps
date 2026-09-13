@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Mail, Send, Loader2, Sparkles, Eye, Edit3 } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { toast } from "sonner";
 import { EMAIL_VENDOR_MAP } from "@/lib/constants";
 
@@ -22,7 +22,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
 
     const specText = `印刷物種別: ${estimate.print_type}\nサイズ: ${estimate.size || "未指定"}\n用途: ${estimate.usage || "未指定"}\n紙質: ${estimate.paper_type || "未指定"}\n印刷枚数: ${(estimate.quantities || []).map(q => q.toLocaleString() + "枚").join(", ") || "未指定"}\n印刷色数: ${estimate.color_count || "未指定"}\n希望納期: ${estimate.desired_delivery_date || "未指定"}`;
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await db.integrations.Core.InvokeLLM({
       prompt: `以下の印刷仕様に基づいて、印刷会社への見積依頼メールを生成してください。
 丁寧なビジネスメールの形式で、以下の情報を含めてください：
 - 件名
@@ -64,7 +64,7 @@ ${specText}
   };
 
   const sendEmail = async (email, idx) => {
-    await base44.entities.EmailLog.create({
+    await db.entities.EmailLog.create({
       estimate_id: estimate.id,
       recipient_company: email.company_name,
       subject: email.subject,

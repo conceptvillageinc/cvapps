@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,11 +20,11 @@ export default function UserManagement() {
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
-    queryFn: () => base44.entities.User.list("full_name"),
+    queryFn: () => db.entities.User.list("full_name"),
   });
 
   const updateRoleMutation = useMutation({
-    mutationFn: ({ id, role }) => base44.entities.User.update(id, { role }),
+    mutationFn: ({ id, role }) => db.entities.User.update(id, { role }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("権限を変更しました");
@@ -33,7 +33,7 @@ export default function UserManagement() {
 
   const handleInvite = async () => {
     if (!inviteEmail) return;
-    await base44.users.inviteUser(inviteEmail, inviteRole);
+    await db.users.inviteUser(inviteEmail, inviteRole);
     toast.success(`${inviteEmail}に招待を送信しました`);
     setInviteOpen(false);
     setInviteEmail("");

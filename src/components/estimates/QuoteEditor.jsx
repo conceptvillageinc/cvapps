@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -69,7 +69,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
   const { data: priceMasterEntries = [] } = useQuery({
     queryKey: ["priceMaster"],
-    queryFn: () => base44.entities.PriceMaster.list("-last_updated"),
+    queryFn: () => db.entities.PriceMaster.list("-last_updated"),
   });
 
   // 価格マスタ一覧：選択済みセル（selected=true）が1つ以上あるレコードのみ対象
@@ -89,13 +89,13 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
-    queryFn: () => base44.entities.Client.list("-name"),
+    queryFn: () => db.entities.Client.list("-name"),
   });
   const client = clients.find(c => c.name === estimate.client_name);
 
   const { data: settings = [] } = useQuery({
     queryKey: ["settings"],
-    queryFn: () => base44.entities.SystemSettings.list(),
+    queryFn: () => db.entities.SystemSettings.list(),
   });
   const notesTemplates = useMemo(() => {
     const s = settings.find(x => x.setting_key === "notes_templates");

@@ -1,4 +1,4 @@
-import { base44 } from "@/api/base44Client";
+import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect, Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -278,7 +278,7 @@ function RefreshPanel({ record, onClose, onApplied }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke("fetchPriceFromUrl", {
+      const res = await db.functions.invoke("fetchPriceFromUrl", {
         url: record.source_url,
         spec_summary: record.spec_summary,
       });
@@ -304,8 +304,8 @@ function RefreshPanel({ record, onClose, onApplied }) {
     setLoading(true);
     setError(null);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      const res = await base44.integrations.Core.InvokeLLM({
+      const { file_url } = await db.integrations.Core.UploadFile({ file });
+      const res = await db.integrations.Core.InvokeLLM({
         prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は税込の数値のみで返してください（カンマは除去）。`,
         file_urls: [file_url],
         model: "claude_opus_4_8",
@@ -373,7 +373,7 @@ function DialogAutoFill({ form, onDetected }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke("fetchPriceFromUrl", {
+      const res = await db.functions.invoke("fetchPriceFromUrl", {
         url: form.source_url,
         spec_summary: form.spec_summary,
       });
@@ -398,8 +398,8 @@ function DialogAutoFill({ form, onDetected }) {
     setLoading(true);
     setError(null);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      const res = await base44.integrations.Core.InvokeLLM({
+      const { file_url } = await db.integrations.Core.UploadFile({ file });
+      const res = await db.integrations.Core.InvokeLLM({
         prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は税込の数値のみで返してください（カンマは除去）。`,
         file_urls: [file_url],
         model: "claude_opus_4_8",
@@ -462,18 +462,18 @@ export default function PriceMasterList() {
 
   const { data: records = [], isLoading } = useQuery({
     queryKey: ["priceMaster"],
-    queryFn: () => base44.entities.PriceMaster.list("-last_updated"),
+    queryFn: () => db.entities.PriceMaster.list("-last_updated"),
   });
 
   const { data: vendors = [] } = useQuery({
     queryKey: ["printVendors"],
-    queryFn: () => base44.entities.PrintVendor.list("name"),
+    queryFn: () => db.entities.PrintVendor.list("name"),
   });
 
   const saveMutation = useMutation({
     mutationFn: (data) => editing
-      ? base44.entities.PriceMaster.update(editing.id, data)
-      : base44.entities.PriceMaster.create(data),
+      ? db.entities.PriceMaster.update(editing.id, data)
+      : db.entities.PriceMaster.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       setDialogOpen(false);
@@ -487,7 +487,7 @@ export default function PriceMasterList() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.PriceMaster.delete(id),
+    mutationFn: (id) => db.entities.PriceMaster.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       toast.success("削除しました");
@@ -498,7 +498,7 @@ export default function PriceMasterList() {
   });
 
   const refreshMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.PriceMaster.update(id, data),
+    mutationFn: ({ id, data }) => db.entities.PriceMaster.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       setRefreshingId(null);
@@ -509,7 +509,7 @@ export default function PriceMasterList() {
   });
 
   const gridSaveMutation = useMutation({
-    mutationFn: ({ id, price_grid }) => base44.entities.PriceMaster.update(id, { price_grid }),
+    mutationFn: ({ id, price_grid }) => db.entities.PriceMaster.update(id, { price_grid }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       setGridEditingRecord(null);
