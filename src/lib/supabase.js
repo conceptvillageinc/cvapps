@@ -4,10 +4,18 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 if (!url || !publishableKey) {
+  const missing = [
+    !url && 'VITE_SUPABASE_URL',
+    !publishableKey && 'VITE_SUPABASE_PUBLISHABLE_KEY',
+  ].filter(Boolean).join(' / ');
+
   throw new Error(
-    'Supabase の接続情報が設定されていません。' +
-    '.env.example を .env.local にコピーし、VITE_SUPABASE_URL と ' +
-    'VITE_SUPABASE_PUBLISHABLE_KEY を設定してください。'
+    `Supabase の接続情報が設定されていません（未設定: ${missing}）。\n` +
+    '・Vercel の場合: Settings → Environment Variables に上記を追加し、' +
+    'Production / Preview / Development すべてにチェックを入れて保存したうえで、' +
+    'Deployments から Redeploy してください（環境変数はビルド時に埋め込まれるため、' +
+    '追加しただけでは既存のデプロイに反映されません）。\n' +
+    '・ローカルの場合: .env.example を .env.local にコピーして値を設定してください。'
   );
 }
 

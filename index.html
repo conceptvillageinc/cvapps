@@ -4,9 +4,65 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CV見積アプリ</title>
+    <style>
+      #boot {
+        font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+        max-width: 40rem;
+        margin: 4rem auto;
+        padding: 0 1.5rem;
+        color: #334155;
+        line-height: 1.7;
+      }
+      #boot h1 { font-size: 1.125rem; color: #b91c1c; margin-bottom: 0.75rem; }
+      #boot pre {
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        overflow-x: auto;
+        font-size: 0.8125rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #boot .muted { color: #64748b; font-size: 0.875rem; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot"><p class="muted">読み込み中…</p></div>
+    </div>
+    <script>
+      // 画面が真っ白になるのを防ぐための保険。
+      // main.jsx が読み込まれる前にエラーが起きても、原因が画面に出るようにする。
+      (function () {
+        var shown = false;
+        function show(message) {
+          if (shown) return;
+          var boot = document.getElementById('boot');
+          if (!boot) return;
+          shown = true;
+          var h = document.createElement('h1');
+          h.textContent = 'アプリを起動できませんでした';
+          var pre = document.createElement('pre');
+          pre.textContent = message;
+          var p = document.createElement('p');
+          p.className = 'muted';
+          p.textContent =
+            'この内容をそのままお知らせください。ブラウザの再読み込みでは直りません。';
+          boot.textContent = '';
+          boot.appendChild(h);
+          boot.appendChild(pre);
+          boot.appendChild(p);
+        }
+        window.addEventListener('error', function (e) {
+          show((e && e.message) || '不明なエラー');
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e && e.reason;
+          show((r && (r.message || String(r))) || '不明なエラー');
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
