@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { Mail, Send, Loader2, Sparkles, Eye, Edit3 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";

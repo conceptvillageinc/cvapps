@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   FileText, Plus, Clock, CheckCircle2, AlertTriangle,
-  ArrowRight, TrendingUp, Building2, Send
+  ArrowRight
 } from "lucide-react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";

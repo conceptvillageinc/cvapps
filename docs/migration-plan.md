@@ -78,18 +78,31 @@ Base44 SDK   →   Supabase
 
 ## 5. フェーズ
 
-### Phase 1: リポジトリ投入 ← 進行中
+### Phase 1: リポジトリ投入 ✅ 完了
 - [x] ブランチ作成・ディレクトリ構成
 - [x] ビルド設定（vite / tailwind / postcss / eslint / jsconfig / components.json）
-- [x] `@base44/vite-plugin` の除去
-- [x] コアロジック（constants / estimateNumber / postalCode / utils）
+- [x] `@base44/vite-plugin` の除去と、`@/` エイリアスの明示的な定義
+- [x] コアロジック（constants / designFees / estimateNumber / postalCode / utils）
 - [x] アプリ骨格（App.jsx / Layout.jsx / AuthContext / ProtectedRoute ほか）
-- [ ] `src/lib/designFees.js`
-- [ ] `src/components/estimates/*`（12ファイル）
-- [ ] `src/pages/*`（12ファイル）
-- [ ] `src/components/ui/*`（49ファイル）
-- [ ] `base44/functions/*`（サーバー関数2本・移植元として保持）
-- [ ] `npm install` と `npm run build` が通ることの確認
+- [x] `src/components/estimates/*`（12ファイル）
+- [x] `src/pages/*`（11画面。認証4画面は方針により対象外）
+- [x] `src/components/ui/*`（実際に使用している17件のみ）
+- [x] `legacy/base44-functions/`（サーバー関数2本・移植元として保持）
+- [x] `npm install` / `npm run build` / `npm run lint` がすべて通ることを確認
+
+#### Phase 1 で加えた変更（Base44からの単純コピーではない点）
+1. **`@base44/vite-plugin` を削除** — Base44 のビルド時プラグイン。これが `@/` → `src/` の
+   エイリアスを提供していたため、`vite.config.js` に `resolve.alias` を明示的に追加した。
+2. **認証4画面を移送対象外** — Googleログインのみとする決定に基づき、
+   Register / ForgotPassword / ResetPassword / OAuthConsent は移送せず、
+   `App.jsx` から該当ルートと import を削除。
+3. **UIコンポーネントは17件のみ移送** — Base44テンプレート由来の shadcn/ui 49件のうち、
+   実際に import されているのは17件だけだった。残り32件（sidebar / chart / carousel 等）は未使用のため見送り。
+   将来必要になれば `npx shadcn@latest add <name>` で追加できる。
+4. **未使用依存を削除** — package.json から three / stripe / leaflet / recharts / framer-motion /
+   jspdf / html2canvas / moment / lodash / zod 等、実際には import されていない約40パッケージを削除
+   （インストール 613 → 414 パッケージ）。削除後もビルドが通ることを確認済み。
+5. **トースト通知の不具合を修正** — 下記「留意点」参照。
 
 ### Phase 2: データ層の置き換え
 - Supabaseプロジェクト作成、Postgresスキーマ設計（8エンティティ → テーブル）
@@ -128,8 +141,28 @@ Base44 SDK   →   Supabase
 ## 6. 今後の機能追加（移行後）
 - 工程管理表の作成機能（→ Phase 5 のスプレッドシート出力に接続）
 
-## 7. 留意点
-- `EmailPreview.jsx` の送信処理は `EmailLog` への記録のみで、実際のメール送信経路が未確認。Phase 4で要確認。
-- `package.json` には Base44テンプレート由来の未使用依存（three / stripe / leaflet など）が残っている。
-  ビルドが通るようになった段階で棚卸しする。
-- `Estimate` は `schema_version` 1（旧方式）と 2（新方式 line_items）が混在。移行時に整理方針を決める。
+## 7. 留意点・移行中に見つかった課題
+
+### 修正済み：トースト通知が一切表示されていなかった（Base44版からのバグ）
+アプリ全体で `toast.success(...)` などの通知に **sonner** を使っているが、
+`App.jsx` がマウントしていたのは **Radix UI ベースの別のトースター**（`@/components/ui/toaster`）だった。
+sonner の通知を表示するには sonner 自身の `<Toaster />` が必要なため、
+「保存しました」「削除しました」等の通知が**どの画面でも表示されない状態**だった
+（Radix側の `useToast()` はどこからも呼ばれておらず、完全に死んでいた）。
+
+Phase 1 で `App.jsx` のマウント先を sonner の `<Toaster />` に変更し、
+未使用の Radix トースト3ファイル（toaster / toast / use-toast）は移送対象から外した。
+**移行後の動作確認時に、通知が出るようになっているかを確認してください。**
+
+### 未解決・Phase 2以降で判断が必要
+- **メール送信が実装されていない** — `EmailPreview.jsx` の「送信記録」ボタンは `EmailLog` に
+  レコードを作るだけで、実際のメール送信は行っていない。実運用で送信まで必要なら Phase 4 で設計が必要。
+- **`client_honorific` がスキーマ未定義** — `QuoteEditor.jsx` が読み書きしているが、
+  Base44 の Estimate スキーマには定義がない。Phase 2 のDB設計で正式なカラムとして追加する。
+- **`Estimate` に旧方式と新方式が混在** — `schema_version` 1（cost_price/design_fees中心）と
+  2（line_items中心）。画面も分岐している。移行時に「旧方式を残すか、2に一本化するか」を決める。
+- **AIモデル指定が古い** — `VendorQuoteFileImporter.jsx` と `PriceMasterList.jsx` で
+  `model: "claude_opus_4_8"` を指定している。Phase 4 の Claude API 移植時に現行モデルへ更新する。
+- **ネット印刷の価格収集はAIの推定値** — `collectWebPrices` は実サイトから価格を取得しておらず、
+  AIに推定させている。実用上の精度は要検証（UI上にも警告表示あり）。
+- **バンドルサイズ 823KB（gzip 246KB）** — 単一チャンク。運用上の実害が出たらコード分割を検討。
