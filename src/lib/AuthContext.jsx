@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }) => {
 
       if (error.status === 403) {
         // Googleログインは通ったが、このアプリの利用者として登録されていない
-        setAuthError({ type: 'user_not_registered', message: error.message });
+        setAuthError({ type: 'user_not_registered', message: error.message, email: error.email });
       } else if (error.status === 401) {
         setAuthError({ type: 'auth_required', message: error.message });
       } else {
@@ -58,12 +58,6 @@ export const AuthProvider = ({ children }) => {
     await db.auth.logout(shouldRedirect ? '/login' : undefined);
   }, []);
 
-  const navigateToLogin = useCallback(() => {
-    if (window.location.pathname !== '/login') {
-      window.location.href = '/login';
-    }
-  }, []);
-
   return (
     <AuthContext.Provider value={{
       user,
@@ -72,7 +66,6 @@ export const AuthProvider = ({ children }) => {
       authError,
       authChecked,
       logout,
-      navigateToLogin,
       checkUserAuth,
     }}>
       {children}

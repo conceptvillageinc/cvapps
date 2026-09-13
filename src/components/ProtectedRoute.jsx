@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import AuthErrorScreen from '@/components/AuthErrorScreen';
 
 const DefaultFallback = () => (
   <div className="fixed inset-0 flex items-center justify-center">
@@ -25,6 +26,10 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
+    }
+    if (authError.type === 'unknown') {
+      // 通信エラーなど。ログイン画面に飛ばすと原因が見えなくなるので出す。
+      return <AuthErrorScreen message={authError.message} onRetry={checkUserAuth} />;
     }
     return unauthenticatedElement;
   }

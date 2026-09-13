@@ -200,6 +200,7 @@ const auth = {
       // 認証は通ったが public.users に行がない = このアプリの利用者として未登録
       const err = new Error('User not registered for this app');
       err.status = 403;
+      err.email = user.email;
       throw err;
     }
 
