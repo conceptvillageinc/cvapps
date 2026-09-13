@@ -105,7 +105,6 @@ export default function VendorQuoteFileImporter({ estimate, onImported }) {
       const result = await db.integrations.Core.InvokeLLM({
         prompt: EXTRACT_PROMPT,
         file_urls: [file_url],
-        model: "claude_opus_4_8",
         response_json_schema: EXTRACT_SCHEMA,
       });
       openEditPanel(result);

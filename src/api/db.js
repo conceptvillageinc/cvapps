@@ -234,28 +234,93 @@ const auth = {
 };
 
 // ============================================================================
-// 未移行の機能
-// 呼ばれた時点で「どのフェーズで実装するか」が分かるように明示的に失敗させる。
+// ファイル保管・AI呼び出し
 // ============================================================================
-function notYetMigrated(what, phase) {
-  return () => {
-    throw new Error(`${what} は未移行です（Phase ${phase} で Vercel Functions へ移植予定）`);
-  };
+
+const UPLOAD_BUCKET = 'uploads';
+
+/** ログイン中のアクセストークン。サーバー側はこれで呼び出し元を確認する。 */
+async function accessToken() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    const err = new Error('ログインの有効期限が切れました。再度ログインしてください');
+    err.status = 401;
+    throw err;
+  }
+  return session.access_token;
+}
+
+/** /api/* の Vercel Function を呼ぶ。 */
+async function callFunction(name, payload) {
+  const res = await fetch(`/api/${name}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${await accessToken()}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(body.error || `サーバー処理に失敗しました (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return body;
+}
+
+// ファイル名に日本語や記号が入っていても壊れないよう、保存名は機械的に付ける。
+// 元のファイル名は拡張子だけ引き継ぐ。
+function storagePath(file) {
+  const ext = (file.name.match(/\.[a-zA-Z0-9]+$/) || ['.bin'])[0].toLowerCase();
+  return `${crypto.randomUUID()}${ext}`;
 }
 
 const integrations = {
   Core: {
-    InvokeLLM: notYetMigrated('AI呼び出し（InvokeLLM）', 4),
-    UploadFile: notYetMigrated('ファイルアップロード（UploadFile）', 4),
+    /**
+     * Supabase Storage の非公開バケットへ保存する。
+     * 返す file_url はバケット内のパス。公開URLではない（URLが漏れても読めない）。
+     * サーバー側の /api/llm がこのパスを受け取り、service_role で実体を読む。
+     */
+    async UploadFile({ file }) {
+      const path = storagePath(file);
+      const { error } = await supabase.storage
+        .from(UPLOAD_BUCKET)
+        .upload(path, file, { contentType: file.type || undefined, upsert: false });
+
+      if (error) throw new Error(`ファイルの保存に失敗しました: ${error.message}`);
+
+      return { file_url: path, file_path: path };
+    },
+
+    /** Claude API 呼び出し。APIキーはサーバー側にあり、ブラウザには出ない。 */
+    async InvokeLLM({ prompt, file_urls, response_json_schema }) {
+      const result = await callFunction('llm', {
+        prompt,
+        file_urls: file_urls || [],
+        response_json_schema,
+      });
+      // スキーマ無しの場合は { text } が返る。画面側は文字列も受け取れる作りなので合わせる。
+      return response_json_schema ? result : result.text;
+    },
   },
 };
 
 const functions = {
-  invoke: notYetMigrated('サーバー関数の呼び出し', 4),
+  invoke: notYetMigrated('ネット印刷価格の取得', '4-C'),
 };
 
 const users = {
-  inviteUser: notYetMigrated('メンバー招待', 3),
+  inviteUser: notYetMigrated('メンバー招待', '4-B'),
 };
+
+// 未移行の機能。呼ばれた時点でどこで実装するかが分かるように明示的に失敗させる。
+function notYetMigrated(what, phase) {
+  return () => {
+    throw new Error(`${what} は未移行です（Phase ${phase} で対応予定）`);
+  };
+}
 
 export const db = { entities, auth, integrations, functions, users };

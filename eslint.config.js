@@ -9,6 +9,20 @@ export default [
     ignores: ["dist/**", "legacy/**", "node_modules/**"],
   },
   {
+    // Vercel Functions（Node 環境で動くサーバー側コード）
+    files: ["api/**/*.js"],
+    ...pluginJs.configs.recommended,
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: { ecmaVersion: 2022, sourceType: "module" },
+    },
+    plugins: { "unused-imports": pluginUnusedImports },
+    rules: {
+      "no-unused-vars": "off",
+      "unused-imports/no-unused-imports": "error",
+    },
+  },
+  {
     files: [
       "src/components/**/*.{js,mjs,cjs,jsx}",
       "src/pages/**/*.{js,mjs,cjs,jsx}",

@@ -12,9 +12,9 @@ Base44 上に構築されていたものを、Base44 に依存しない自前環
 | フロントエンド | React 18 + Vite + Tailwind + shadcn/ui | そのまま継続 |
 | データ | **Supabase (Postgres)** | ✅ 移行済み |
 | 認証 | **Supabase Auth（Googleログインのみ）** | ✅ 移行済み |
-| サーバー処理 | Base44 Functions (Deno) | ⏳ Phase 4 で Vercel Functions へ |
-| AI | Base44 `InvokeLLM` | ⏳ Phase 4 で Claude API へ |
-| ファイル | Base44 `UploadFile` | ⏳ Phase 4 で Supabase Storage へ |
+| サーバー処理 | **Vercel Functions** | 🔄 AI呼び出しは移行済み。価格収集は Phase 4-C |
+| AI | **Claude API（サーバー側）** | ✅ 移行済み |
+| ファイル | **Supabase Storage** | ✅ 移行済み |
 | ホスティング | **Vercel** | ✅ デプロイ済み |
 
 `@base44/sdk` への依存は削除済みです。未移行の機能（AI・ファイルアップロード・
@@ -45,6 +45,10 @@ src/
 ├── lib/          定数・デザイン費マスタ・見積番号採番・郵便番号ユーティリティ等
 ├── pages/        画面（11件）
 └── hooks, utils
+
+api/
+├── llm.js        AI呼び出し（Claude API）。APIキーはここだけが持つ
+└── _lib/         JWT検証・Claude呼び出しの共通処理
 
 legacy/
 └── base44-functions/  Base44 サーバー関数のソース（Phase 4 の移植元・ビルド対象外）

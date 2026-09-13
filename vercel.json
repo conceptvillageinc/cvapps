@@ -2,8 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "comment": "SPAのため全パスをindex.htmlへ。ただし /api/* は Functions に通す",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/llm.js": {
+      "maxDuration": 120
+    }
+  }
 }

@@ -308,7 +308,6 @@ function RefreshPanel({ record, onClose, onApplied }) {
       const res = await db.integrations.Core.InvokeLLM({
         prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は税込の数値のみで返してください（カンマは除去）。`,
         file_urls: [file_url],
-        model: "claude_opus_4_8",
         response_json_schema: GRID_EXTRACT_SCHEMA,
       });
       if (!res?.price_grid || res.price_grid.length === 0) {
@@ -402,7 +401,6 @@ function DialogAutoFill({ form, onDetected }) {
       const res = await db.integrations.Core.InvokeLLM({
         prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は税込の数値のみで返してください（カンマは除去）。`,
         file_urls: [file_url],
-        model: "claude_opus_4_8",
         response_json_schema: GRID_EXTRACT_SCHEMA,
       });
       if (!res?.price_grid || res.price_grid.length === 0) {
