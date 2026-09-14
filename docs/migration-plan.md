@@ -177,9 +177,27 @@ Base44 SDK   →   Supabase
 ### Phase A-3: 残り
 - [ ] ネット印刷価格収集を新形式へ（**Phase 4-C のサーバー関数移植が前提**）
 
-### Phase 4-B / 4-C: 残り
-- [ ] メンバー招待（`users.inviteUser`）を Supabase Admin API へ
-- [ ] `fetchPriceFromUrl` / `collectWebPrices` を Vercel Functions へ（定期実行の設計込み）
+### Phase 4-C: サーバー関数の移植 🔄 半分完了
+- [x] `fetchPriceFromUrl` → `/api/fetch-price`（Deno → Node）
+  - 元の実装に無かった**取得先URLの検証を追加**。ユーザーが入れたURLをサーバーが
+    代わりに取得する作りなので、`localhost` や `169.254.169.254`（クラウドの
+    認証情報が取れる場所）など社内側を踏ませない。
+  - タイムアウト（20秒）も追加。元は無制限で、応答しないサイトで関数が固まる。
+- [ ] `collectWebPrices` → **移植前に要判断**（下記）
+
+#### collectWebPrices を移植すべきか
+移植元のコードを読んだところ、この関数は**ネット印刷各社のサイトを一切見ていない**。
+「一般的な市場価格帯を参考に現実的な価格を推定してください」とAIに尋ねているだけで、
+返ってくるのは**実在しない推定価格**。それが「各社見積価格」の比較表に入り、
+見積の原価として使われる。UIに「推定値」の注意書きはあるが、表に並ぶと実価格と
+見分けがつかない。
+
+代替手段はすでにある:
+- `fetchPriceFromUrl`（実際にページを取得して抽出。今回移植済み）
+- 価格マスタ（実際に収集した価格を保存してある）
+
+### Phase 4-B: メンバー招待
+- [ ] `users.inviteUser` を Supabase Admin API へ
 
 ### Phase 4: 対象一覧
 Base44 に残っている最後の依存。呼び出し箇所は8つ。

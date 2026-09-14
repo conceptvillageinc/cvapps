@@ -9,6 +9,9 @@
   "functions": {
     "api/llm.js": {
       "maxDuration": 120
+    },
+    "api/fetch-price.js": {
+      "maxDuration": 120
     }
   }
 }

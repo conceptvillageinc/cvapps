@@ -308,8 +308,23 @@ const integrations = {
   },
 };
 
+// Base44 のサーバー関数名 → Vercel Function のパス
+const FUNCTION_ROUTES = {
+  fetchPriceFromUrl: 'fetch-price',
+};
+
 const functions = {
-  invoke: notYetMigrated('ネット印刷価格の取得', '4-C'),
+  /**
+   * Base44 の functions.invoke 互換。
+   * 呼び出し側が res.data を見る作りなので、返り値は { data } で包む。
+   */
+  async invoke(name, payload) {
+    const route = FUNCTION_ROUTES[name];
+    if (!route) {
+      throw new Error(`${name} は未移行です（Phase 4-C で対応予定）`);
+    }
+    return { data: await callFunction(route, payload) };
+  },
 };
 
 const users = {
