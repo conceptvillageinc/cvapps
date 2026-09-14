@@ -15,6 +15,7 @@ Base44 上に構築されていたものを、Base44 に依存しない自前環
 | サーバー処理 | **Vercel Functions** | ✅ 移行済み |
 | AI | **Claude API（サーバー側）** | ✅ 移行済み |
 | ファイル | **Supabase Storage** | ✅ 移行済み |
+| メール送信 | **Google Workspace（Gmail API）** | ✅ 招待・見積依頼メール |
 | ホスティング | **Vercel** | ✅ デプロイ済み |
 
 `@base44/sdk` への依存は削除済みです。未移行の機能（AI・ファイルアップロード・

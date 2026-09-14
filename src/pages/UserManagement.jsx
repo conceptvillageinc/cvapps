@@ -46,9 +46,17 @@ export default function UserManagement() {
     if (!inviteEmail) return;
     setInviting(true);
     try {
-      await db.users.inviteUser(inviteEmail, inviteRole);
+      const result = await db.users.inviteUser(inviteEmail, inviteRole);
       queryClient.invalidateQueries({ queryKey: ["invitations"] });
-      toast.success(`${inviteEmail} を招待しました。本人にアプリのURLをお知らせください`);
+      if (result?.mail?.sent) {
+        toast.success(`${inviteEmail} に招待メールを送信しました`);
+      } else {
+        // 招待の登録自体は成功している。メールだけ届いていない状態を隠さない。
+        toast.warning(
+          `${inviteEmail} を招待しましたが、メールを送信できませんでした（${result?.mail?.reason || "理由不明"}）。本人にアプリのURLをお知らせください`,
+          { duration: 10000 },
+        );
+      }
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("user");
@@ -160,9 +168,9 @@ export default function UserManagement() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              招待した方に<strong>アプリのURL</strong>をお知らせください。
-              会社のGoogleアカウントでログインした時点で利用開始になります
-              （招待メールは自動送信されません）。
+              招待メールに記載したURLを開き、会社のGoogleアカウントでログインした時点で
+              利用開始になります。メールが届かない場合は、下のボタンでURLをコピーして
+              直接お知らせください。
             </p>
             <div className="space-y-1.5">
               {invitations.map(inv => (
@@ -222,7 +230,8 @@ export default function UserManagement() {
               招待する
             </Button>
             <p className="text-[11px] text-muted-foreground">
-              招待メールは自動送信されません。登録後、本人にアプリのURLをお知らせください。
+              会社のメールアドレスから招待メールが届きます。
+              返信先は招待したご本人（あなた）になります。
             </p>
           </div>
         </DialogContent>

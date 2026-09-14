@@ -1,4 +1,5 @@
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
+import { sendMail, isMailConfigured } from './_lib/gmail.js';
 
 // ============================================================================
 // POST /api/invite
@@ -12,6 +13,20 @@ import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 // ============================================================================
 
 const ALLOWED_DOMAIN = 'concept-village.co.jp';
+
+function inviteBody(appUrl, inviterName) {
+  return `CV見積アプリへご招待します。
+
+下記のURLを開き、会社のGoogleアカウント（@${ALLOWED_DOMAIN}）でログインしてください。
+ログインした時点で利用開始となります。パスワードの設定は不要です。
+
+${appUrl}
+
+招待者: ${inviterName}
+
+※このメールに心当たりがない場合は破棄してください。
+`;
+}
 
 export default async function handler(req, res) {
   if (!requirePost(req, res)) return;
@@ -64,7 +79,29 @@ export default async function handler(req, res) {
 
     if (error) throw new Error(error.message);
 
-    res.status(200).json({ invitation: data });
+    // 招待自体は登録できているので、メールが送れなくても失敗にはしない。
+    // ここで 500 を返すと、管理者には「招待できなかった」と見えるのに
+    // 招待レコードは残っている、という食い違いが起きる。
+    let mail = { sent: false, reason: 'メール送信が未設定です' };
+
+    if (isMailConfigured()) {
+      const appUrl = req.headers.origin || `https://${req.headers.host}`;
+      try {
+        await sendMail({
+          to: email,
+          subject: 'CV見積アプリへの招待',
+          body: inviteBody(appUrl, user.email),
+          replyTo: user.email,
+          fromName: 'CV見積アプリ',
+        });
+        mail = { sent: true };
+      } catch (mailErr) {
+        console.error('[api/invite] メール送信失敗', mailErr);
+        mail = { sent: false, reason: mailErr.message };
+      }
+    }
+
+    res.status(200).json({ invitation: data, mail });
   } catch (err) {
     console.error('[api/invite]', err);
     res.status(500).json({ error: err.message || '招待の登録に失敗しました' });

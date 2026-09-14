@@ -15,6 +15,9 @@
     },
     "api/invite.js": {
       "maxDuration": 30
+    },
+    "api/send-estimate-email.js": {
+      "maxDuration": 30
     }
   }
 }

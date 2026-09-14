@@ -318,6 +318,7 @@ const integrations = {
 // Base44 のサーバー関数名 → Vercel Function のパス
 const FUNCTION_ROUTES = {
   fetchPriceFromUrl: 'fetch-price',
+  sendEstimateEmail: 'send-estimate-email',
 };
 
 const functions = {

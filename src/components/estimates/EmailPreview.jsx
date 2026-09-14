@@ -17,6 +17,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
   const [generating, setGenerating] = useState(false);
   const [emails, setEmails] = useState([]);
   const [editingIdx, setEditingIdx] = useState(null);
+  const [sendingIdx, setSendingIdx] = useState(null);
   const [selected, setSelected] = useState(null); // null = 既定値の適用前
 
   const { data: printVendors = [] } = useQuery({
@@ -38,6 +39,12 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
   }, [estimate, options, selected]);
 
   const vendors = selected || [];
+
+  const vendorEmail = (name) =>
+    printVendors.find(v => v.name === name)?.email || "";
+
+  // 選んだ宛先のうち、メールアドレスが未登録の会社
+  const missingEmail = vendors.filter(name => !vendorEmail(name));
 
   const toggleVendor = (name) => {
     setSelected(prev => {
@@ -74,16 +81,24 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
   };
 
   const sendEmail = async (email, idx) => {
-    await db.entities.EmailLog.create({
-      estimate_id: estimate.id,
-      recipient_company: email.company_name,
-      subject: email.subject,
-      body: email.body,
-      status: "sent",
-      sent_at: new Date().toISOString(),
-    });
-    toast.success(`${email.company_name}への見積依頼メールを記録しました`);
-    onEmailSent?.();
+    setSendingIdx(idx);
+    try {
+      const { data } = await db.functions.invoke("sendEstimateEmail", {
+        estimate_id: estimate.id,
+        recipient_company: email.company_name,
+        subject: email.subject,
+        body: email.body,
+      });
+      toast.success(`${email.company_name}（${data.recipient_email}）へ送信しました`);
+      onEmailSent?.();
+    } catch (err) {
+      // 送信できなかった場合もサーバー側で failed として記録している。
+      // 「送ったつもり」にならないよう、履歴を読み直す。
+      toast.error("送信できませんでした: " + err.message);
+      onEmailSent?.();
+    } finally {
+      setSendingIdx(null);
+    }
   };
 
   return (
@@ -128,6 +143,13 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
           )}
         </div>
 
+        {missingEmail.length > 0 && (
+          <p className="text-xs text-amber-700">
+            {missingEmail.join("・")} はメールアドレスが未登録のため送信できません。
+            「印刷所情報」で登録してください。
+          </p>
+        )}
+
         {emails.length === 0 && emailLogs.length === 0 && (
           <div className="text-center py-6">
             <Mail className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
@@ -145,6 +167,9 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
             <div className="bg-muted/50 px-4 py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px]">{email.company_name}</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {vendorEmail(email.company_name) || "メールアドレス未登録"}
+                </span>
                 <span className="text-xs text-muted-foreground">{email.subject}</span>
               </div>
               <div className="flex gap-1.5">
@@ -161,8 +186,12 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                   size="sm"
                   className="h-7 text-xs gap-1"
                   onClick={() => sendEmail(email, idx)}
+                  disabled={sendingIdx !== null}
                 >
-                  <Send className="w-3 h-3" /> 送信記録
+                  {sendingIdx === idx
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Send className="w-3 h-3" />}
+                  送信
                 </Button>
               </div>
             </div>
@@ -204,10 +233,16 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
             <p className="text-xs font-medium text-muted-foreground">送信履歴</p>
             {emailLogs.map(log => (
               <div key={log.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/30 text-xs">
-                <Badge variant="secondary" className="text-[9px]">
-                  {log.status === "sent" ? "送信済" : log.status}
+                <Badge
+                  variant={log.status === "failed" ? "destructive" : "secondary"}
+                  className="text-[9px]"
+                >
+                  {log.status === "sent" ? "送信済" : log.status === "failed" ? "送信失敗" : "下書き"}
                 </Badge>
                 <span className="font-medium">{log.recipient_company}</span>
+                {log.recipient_email && (
+                  <span className="text-muted-foreground">{log.recipient_email}</span>
+                )}
                 <span className="text-muted-foreground">{log.subject}</span>
                 {log.sent_at && (
                   <span className="text-muted-foreground ml-auto">
