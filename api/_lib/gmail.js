@@ -70,8 +70,21 @@ function describeKeyProblem(raw) {
   return facts.join(' / ');
 }
 
+/**
+ * サービスアカウントのアドレスを取り出す。
+ * 秘密鍵と同様、JSONから値をコピーする過程で引用符やキー名が混ざりやすい。
+ * JSON全体を貼られた場合は client_email の値を拾う。
+ */
+function normalizeClientEmail(raw) {
+  const text = (raw || '').trim();
+
+  // 「xxx@yyy.iam.gserviceaccount.com」の形をどこからでも拾う
+  const match = text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.iam\.gserviceaccount\.com/);
+  return match ? match[0] : text.replace(/^["']|["',]+$/g, '');
+}
+
 function config() {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const clientEmail = normalizeClientEmail(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
   const rawKey = process.env.GOOGLE_PRIVATE_KEY;
   const privateKey = normalizePrivateKey(rawKey);
 
@@ -86,6 +99,14 @@ function config() {
     throw new Error(
       `メール送信の設定が未完了です（未設定: ${missing.join(' / ')}）。` +
       'Vercel の環境変数を確認してください（VITE_ は付けないこと）。'
+    );
+  }
+
+  if (!clientEmail.endsWith('.iam.gserviceaccount.com')) {
+    throw new Error(
+      'GOOGLE_SERVICE_ACCOUNT_EMAIL がサービスアカウントのアドレスになっていません。' +
+      'JSONファイルの client_email の値（末尾が .iam.gserviceaccount.com）を設定してください。' +
+      `（いま設定されている値: 「${clientEmail}」）`
     );
   }
 
@@ -168,7 +189,11 @@ async function getAccessToken(impersonate) {
 
   if (!res.ok) {
     // よくある原因を切り分けやすいメッセージにする
-    const hint = data.error === 'unauthorized_client'
+    const hint = data.error === 'invalid_client'
+      ? `（サービスアカウント「${clientEmail}」が見つかりません。` +
+        'GOOGLE_SERVICE_ACCOUNT_EMAIL の値が正しいか、そのサービスアカウントが' +
+        '削除されていないかを確認してください）'
+      : data.error === 'unauthorized_client'
       ? '（Google Workspace 管理コンソールで「ドメイン全体の委任」が未設定の可能性があります）'
       : data.error === 'invalid_grant'
         ? `（${impersonate} が Google Workspace のユーザーとして存在しないか、Gmail が有効になっていない可能性があります）`

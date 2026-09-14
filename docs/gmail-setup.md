@@ -94,8 +94,8 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 
 | Key | Value | Type | 必須 |
 |---|---|---|---|
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSONの `client_email` | Config | ○ |
-| `GOOGLE_PRIVATE_KEY` | JSONの `private_key` を**そのまま**貼り付け | **Secret** | ○ |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSONの `client_email`（末尾が `.iam.gserviceaccount.com`） | Config | ○ |
+| `GOOGLE_PRIVATE_KEY` | **JSONファイルの中身をまるごと貼り付け** | **Secret** | ○ |
 | `GMAIL_ALWAYS_CC` | 送信控えを残すアドレス（例: `info@concept-village.co.jp`） | Config | 任意 |
 | `GMAIL_SENDER` | 差出人が特定できない場合の予備（例: `info@concept-village.co.jp`） | Config | 任意 |
 
@@ -110,11 +110,13 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 ### 注意点
 
 - **`VITE_` は付けないでください。** 付けるとブラウザから秘密鍵が読めてしまいます
-- **`GOOGLE_PRIVATE_KEY` は `-----BEGIN PRIVATE KEY-----` から
-  `-----END PRIVATE KEY-----` までを貼り付けてください。**
-  `\n` を含む1行のままで構いません（実際の改行に直す処理はアプリ側で行います）。
-  JSONからコピーすると前後の `"` やカンマが混ざりやすいですが、
-  アプリ側で取り除くので、多少余分が付いていても動きます
+- **`GOOGLE_PRIVATE_KEY` は JSONファイルを開いて `Cmd + A` → `Cmd + C` で
+  全部コピーし、そのまま貼り付けるのが確実です。**
+  鍵の部分だけを選択しようとすると端が欠けやすく、欠けると鍵として成立しません。
+  ファイル全体を貼れば、アプリ側が `-----BEGIN` から `-----END PRIVATE KEY-----`
+  までを自動で探し出します。
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` も同様に、引用符やキー名が混ざっていても
+  アドレス部分だけを拾います
 - CC先・差出人は**実在するメールボックス**を指定してください。
   グループアドレス（エイリアス）では送信できません
 
@@ -169,6 +171,8 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 | `メール送信の設定が未完了です（未設定: …）` | 環境変数の名前違い、または Redeploy していない |
 | `DECODER routines::unsupported` / `秘密鍵を読み込めませんでした` | 秘密鍵の貼り付けが不完全。`-----BEGIN` から `-----END PRIVATE KEY-----` まで入っているか確認 |
 | `GOOGLE_PRIVATE_KEY が秘密鍵の形式になっていません` | 別の値を貼っている可能性。JSONの `private_key` の値か確認 |
+| `The OAuth client was not found` | `GOOGLE_SERVICE_ACCOUNT_EMAIL` が違う、またはそのサービスアカウントが削除済み。エラーに実際の値が出るので確認 |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL がサービスアカウントのアドレスになっていません` | `client_id`（数字）や個人のアドレスを貼っている。`client_email` の値を設定 |
 | `invalid_grant` / `Invalid JWT` | 秘密鍵が別のサービスアカウントのもの、または鍵が削除されている |
 | `invalid_grant`（…が Google Workspace のユーザーとして存在しない） | ログイン中の方のアドレスでGmailが使えない状態。Workspaceでそのユーザーが有効か確認 |
 | `Precondition check failed` | CC先がエイリアス、または実在しないアドレス |
