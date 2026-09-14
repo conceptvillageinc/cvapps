@@ -128,7 +128,12 @@ export default function Layout() {
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.full_name || "ユーザー"}</p>
-                  <p className="text-[10px] text-sidebar-foreground/50">{isAdmin ? "管理者" : "メンバー"}</p>
+                  <p className="text-[10px] text-sidebar-foreground/50">
+                    {isAdmin ? "管理者" : "メンバー"}
+                    <span className="ml-1.5 opacity-60" title="いま表示されているビルド">
+                      build {__BUILD_ID__}
+                    </span>
+                  </p>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-sidebar-foreground/40" />
               </button>
