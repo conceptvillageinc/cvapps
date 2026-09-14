@@ -12,6 +12,9 @@
     },
     "api/fetch-price.js": {
       "maxDuration": 120
+    },
+    "api/invite.js": {
+      "maxDuration": 30
     }
   }
 }

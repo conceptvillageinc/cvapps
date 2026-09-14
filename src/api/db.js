@@ -23,12 +23,15 @@ const TABLES = {
   SystemSettings: 'system_settings',
   FaqItem: 'faq_items',
   User: 'users',
+  Invitation: 'invitations',
 };
 
 // 書き込みを許可するカラム。
 // ここに無いキーは無視される。画面側が送ってくる Base44 の名残
 // （freee_status / created_date / id など）を安全に捨てるための仕組み。
 const WRITABLE_COLUMNS = {
+  // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
+  invitations: ['email', 'role'],
   estimates: [
     'estimate_number', 'client_name', 'client_honorific', 'person_in_charge',
     'estimate_title', 'estimate_date', 'validity_period_months', 'schema_version',
@@ -140,7 +143,11 @@ function createEntity(entityName) {
     async filter(conditions = {}, sort, limit) {
       let query = supabase.from(table).select('*');
       for (const [field, value] of Object.entries(conditions)) {
-        query = query.eq(toColumn(field), value);
+        // NULL の比較は eq では一致しない（SQL の NULL = NULL は真にならない）。
+        // 「未対応のものだけ」のような絞り込みには is を使う必要がある。
+        query = value === null
+          ? query.is(toColumn(field), null)
+          : query.eq(toColumn(field), value);
       }
       const parsed = parseSort(sort);
       if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
@@ -328,7 +335,10 @@ const functions = {
 };
 
 const users = {
-  inviteUser: notYetMigrated('メンバー招待', '4-B'),
+  /** 管理者がメンバーを招待する。権限の確認はサーバー側で行う。 */
+  async inviteUser(email, role = 'user') {
+    return callFunction('invite', { email, role });
+  },
 };
 
 // 未移行の機能。呼ばれた時点でどこで実装するかが分かるように明示的に失敗させる。
