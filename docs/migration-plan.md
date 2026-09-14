@@ -144,13 +144,14 @@ Base44 SDK   →   Supabase
 - [ ] UserManagement の招待フロー再実装（現状は呼ぶとエラーになる。Phase 4 へ送る）
 - [ ] `PageNotFound.jsx` の管理者向け文言がBase44前提のまま（軽微）
 
-### Phase 4-A: ファイル保管とAI機能 ✅ 実装完了（要セットアップ）
+### Phase 4-A: ファイル保管とAI機能 ✅ 完了
 手順は `docs/phase4-setup.md`。
 - [x] Supabase Storage（非公開バケット `uploads`）へ UploadFile を移植
 - [x] `/api/llm`（Vercel Function）経由で Claude API を呼ぶ形に InvokeLLM 4箇所を移植
 - [x] 呼び出し元のJWT検証（`api/_lib/guard.js`）。ログイン済みメンバー以外は 401/403
 - [x] 画面側に残っていた古いモデルID `claude_opus_4_8` の指定を削除（モデルはサーバーが決める）
-- [ ] Storage バケット作成・Vercel環境変数3つ・Redeploy（**要ご対応**）
+- [x] Storage バケット作成・Vercel環境変数3つ・Redeploy
+- [x] 本番で4機能すべて動作確認（FAQ回答 / メール生成 / 見積書PDF取込 / 価格表スクショ取込）
 
 ### Phase 4-B / 4-C: 残り
 - [ ] メンバー招待（`users.inviteUser`）を Supabase Admin API へ
