@@ -7,7 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Star } from "lucide-react";
 import { useState } from "react";
 import { getMarkupRate, EMAIL_VENDOR_MAP, WEB_PRINT_TYPES, WEB_VENDORS, applyMarkup } from "@/lib/constants";
-import WebPriceCollector from "@/components/estimates/WebPriceCollector";
 import VendorQuoteFileImporter from "@/components/estimates/VendorQuoteFileImporter";
 
 export default function PriceTable({ estimate, onUpdate }) {
@@ -69,14 +68,13 @@ export default function PriceTable({ estimate, onUpdate }) {
     onUpdate({ vendor_prices: updated });
   };
 
-  const handleWebPricesCollected = (newVendorPrices) => {
+  const handleVendorPricesImported = (newVendorPrices) => {
     onUpdate({ vendor_prices: newVendorPrices });
   };
 
   return (
     <div className="space-y-4">
-    <VendorQuoteFileImporter estimate={estimate} onImported={handleWebPricesCollected} />
-    <WebPriceCollector estimate={estimate} onPricesCollected={handleWebPricesCollected} />
+    <VendorQuoteFileImporter estimate={estimate} onImported={handleVendorPricesImported} />
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">

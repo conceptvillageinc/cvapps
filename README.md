@@ -12,7 +12,7 @@ Base44 上に構築されていたものを、Base44 に依存しない自前環
 | フロントエンド | React 18 + Vite + Tailwind + shadcn/ui | そのまま継続 |
 | データ | **Supabase (Postgres)** | ✅ 移行済み |
 | 認証 | **Supabase Auth（Googleログインのみ）** | ✅ 移行済み |
-| サーバー処理 | **Vercel Functions** | 🔄 AI呼び出しは移行済み。価格収集は Phase 4-C |
+| サーバー処理 | **Vercel Functions** | ✅ 移行済み |
 | AI | **Claude API（サーバー側）** | ✅ 移行済み |
 | ファイル | **Supabase Storage** | ✅ 移行済み |
 | ホスティング | **Vercel** | ✅ デプロイ済み |
