@@ -62,6 +62,15 @@ export const getMarkupRate = (printType) => {
   return MARKUP_RATES[printType] || MARKUP_RATES.default;
 };
 
+// 原価に掛け率を掛けて出し値（単価）を求める。
+// 単純に Math.ceil(cost * rate) とすると、12000 × 1.35 が浮動小数点の誤差で
+// 16200.000000000002 になり、1円高い 16201 が出てしまう。
+// 掛け算の結果を一度まるめてから切り上げる。
+export const applyMarkup = (cost, rate) => {
+  const raw = (Number(cost) || 0) * (Number(rate) || 1);
+  return Math.ceil(Number(raw.toFixed(6)));
+};
+
 // 新方式の見積明細で使う大カテゴリ
 export const LINE_ITEM_CATEGORIES = [
   { key: "design", label: "デザイン費", source: "design_master" },

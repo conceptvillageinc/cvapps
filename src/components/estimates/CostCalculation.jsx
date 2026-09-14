@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, Calculator } from "lucide-react";
-import { getMarkupRate } from "@/lib/constants";
+import { getMarkupRate, applyMarkup } from "@/lib/constants";
 import { useEffect } from "react";
 import NumericField from "@/components/estimates/NumericField";
 
@@ -26,7 +26,7 @@ export default function CostCalculation({ estimate, onUpdate }) {
 
   const recalculate = () => {
     if (costPrice > 0) {
-      const newSellingPrice = Math.ceil(costPrice * markupRate);
+      const newSellingPrice = applyMarkup(costPrice, markupRate);
       onUpdate({
         selling_price: newSellingPrice,
         gross_profit: newSellingPrice - costPrice,
@@ -66,7 +66,7 @@ export default function CostCalculation({ estimate, onUpdate }) {
             <NumericField
               value={costPrice || null}
               onCommit={(cost) => {
-                const selling = Math.ceil(cost * markupRate);
+                const selling = applyMarkup(cost, markupRate);
                 onUpdate({
                   cost_price: cost,
                   selling_price: selling,

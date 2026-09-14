@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Star } from "lucide-react";
 import { useState } from "react";
-import { getMarkupRate, EMAIL_VENDOR_MAP, WEB_PRINT_TYPES, WEB_VENDORS } from "@/lib/constants";
+import { getMarkupRate, EMAIL_VENDOR_MAP, WEB_PRINT_TYPES, WEB_VENDORS, applyMarkup } from "@/lib/constants";
 import WebPriceCollector from "@/components/estimates/WebPriceCollector";
 import VendorQuoteFileImporter from "@/components/estimates/VendorQuoteFileImporter";
 
@@ -37,7 +37,7 @@ export default function PriceTable({ estimate, onUpdate }) {
     const updated = vendorPrices.map((v, i) => ({ ...v, is_selected: i === idx }));
     const selected = updated[idx];
     const costPrice = selected.price;
-    const sellingPrice = Math.ceil(costPrice * markupRate);
+    const sellingPrice = applyMarkup(costPrice, markupRate);
     const grossProfit = sellingPrice - costPrice;
 
     onUpdate({

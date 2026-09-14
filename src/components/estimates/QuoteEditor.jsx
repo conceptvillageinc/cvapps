@@ -10,16 +10,18 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText,
+  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
 import {
-  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, TAX_RATE, getMarkupRate,
+  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, TAX_RATE, getMarkupRate, applyMarkup,
 } from "@/lib/constants";
 import { DESIGN_FEE_MASTER, getDesignItemsByCategory } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import { formatPostalCode } from "@/lib/postalCode";
+
+import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 
 const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: Printer, build: Hammer, other: Plus };
 
@@ -121,6 +123,10 @@ export default function QuoteEditor({ estimate, onUpdate }) {
     commitItems([...lineItems, { id: uid(), row_type: "item", ...item }]);
   };
 
+  const addItems = (items) => {
+    commitItems([...lineItems, ...items.map(item => ({ id: uid(), row_type: "item", ...item }))]);
+  };
+
   const addTextRow = () => {
     commitItems([...lineItems, { id: uid(), row_type: "text", text: "" }]);
   };
@@ -169,7 +175,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
     const quantity = cell.quantity || 1;
     const costPerUnit = cell.price / quantity;
     const markupRate = getMarkupRate(entry.category);
-    const unitPrice = Math.ceil(costPerUnit * markupRate);
+    const unitPrice = applyMarkup(costPerUnit, markupRate);
     addItem({
       category: catDef.label,
       name: `${entry.category}（${entry.vendor_name}・${cell.label}納期）`,
@@ -546,6 +552,9 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                     </Button>
                   );
                 })}
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("vendor_quote")}>
+                  <FileUp className="w-3.5 h-3.5" /> 仕入先見積から読込
+                </Button>
                 <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 text-foreground hover:bg-emerald-100 hover:text-foreground" onClick={addTextRow}>
                   <Type className="w-3.5 h-3.5" /> テキスト行（見出し・注記）
                 </Button>
@@ -634,12 +643,18 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
       {/* カテゴリ別の選択ダイアログ */}
       <Dialog open={!!addPanel} onOpenChange={(open) => !open && closeAddPanel()}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className={`${addPanel === "vendor_quote" ? "max-w-3xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
-              {LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.label} を追加
+              {addPanel === "vendor_quote"
+                ? "仕入先見積から明細を読み込む"
+                : `${LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.label} を追加`}
             </DialogTitle>
           </DialogHeader>
+
+          {addPanel === "vendor_quote" && (
+            <VendorQuoteImport onAdd={addItems} onClose={closeAddPanel} />
+          )}
 
           {addPanel === "design" && (
             <div className="space-y-3">
@@ -704,7 +719,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                   >
                     <span>{cell.quantity}枚 ・ {cell.label}納期</span>
                     <span className="text-primary font-medium">
-                      原価¥{(cell.price || 0).toLocaleString()} → 出し値¥{Math.ceil((cell.price / (cell.quantity || 1)) * getMarkupRate(priceMasterPick.category) * (cell.quantity || 1)).toLocaleString()}
+                      原価¥{(cell.price || 0).toLocaleString()} → 出し値¥{(applyMarkup(cell.price / (cell.quantity || 1), getMarkupRate(priceMasterPick.category)) * (cell.quantity || 1)).toLocaleString()}
                     </span>
                   </button>
                 ))}
@@ -839,7 +854,7 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
               <NumericField
                 value={item.markup_rate}
                 onCommit={(rate) => {
-                  const unitPrice = Math.ceil((item.cost_price || 0) * rate);
+                  const unitPrice = applyMarkup(item.cost_price, rate);
                   onChange({ markup_rate: rate, unit_price: unitPrice, amount: unitPrice * (item.quantity || 1) });
                 }}
                 className={`h-6 w-16 text-[10px] px-1.5 bg-white shrink-0 ${noSpinner}`}
