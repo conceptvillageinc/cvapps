@@ -22,27 +22,64 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 
 /**
- * 環境変数に貼られた秘密鍵を、OpenSSL が読める PEM に整える。
+ * 環境変数に貼られた値から、秘密鍵の本体を取り出す。
  *
- * JSONファイルから値をコピーすると、前後の二重引用符まで一緒に入りやすい。
- * 引用符が混ざったままだと `DECODER routines::unsupported` で失敗するが、
- * このエラー文からは原因がまず分からないので、ここで吸収する。
+ * JSONファイルからコピーすると、前後の二重引用符・カンマ・キー名まで
+ * 一緒に入りやすい。前後を削る方式だと取りこぼすため、
+ * 「-----BEGIN ... PRIVATE KEY-----」から「-----END ... PRIVATE KEY-----」
+ * までを探して切り出す。余分が何であっても落ちる。
  */
+const PEM_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/;
+
 function normalizePrivateKey(raw) {
-  return (raw || '')
-    .trim()
-    .replace(/^["']|["']$/g, '')   // 前後の引用符を落とす
-    .replace(/\\n/g, '\n')         // \n 表記を実際の改行に戻す
-    .trim();
+  // \n 表記を実際の改行に戻してから本体を探す
+  const text = (raw || '').replace(/\\n/g, '\n');
+  const match = text.match(PEM_BLOCK);
+  if (!match) return '';
+
+  const block = match[0];
+  const header = block.slice(0, block.indexOf('-----', 5) + 5);
+  const footer = block.slice(block.lastIndexOf('-----BEGIN') === 0 ? block.indexOf('-----END') : 0)
+    .match(/-----END [A-Z ]*PRIVATE KEY-----/)[0];
+
+  // 貼り付けの過程で改行が失われることがある。base64 部分を64文字ごとに
+  // 折り返して組み立て直す。PEM は改行が無いと OpenSSL が読めない。
+  const base64 = block
+    .slice(header.length, block.length - footer.length)
+    .replace(/[^A-Za-z0-9+/=]/g, '');
+
+  const wrapped = base64.replace(/(.{64})/g, '$1\n').replace(/\n$/, '');
+
+  return `${header}\n${wrapped}\n${footer}\n`;
+}
+
+/**
+ * 鍵が読めないときに、原因の見当をつけるための情報。
+ * 鍵そのものは出さず、形だけを報告する。
+ */
+function describeKeyProblem(raw) {
+  const value = raw || '';
+  if (!value.trim()) return '値が空です';
+
+  const facts = [`長さ${value.length}文字`];
+  facts.push(value.includes('BEGIN') ? 'BEGIN あり' : '**BEGIN が無い**');
+  facts.push(value.includes('END') ? 'END あり' : '**END が無い**');
+  facts.push(value.includes('PRIVATE KEY') ? 'PRIVATE KEY あり' : '**PRIVATE KEY の文字が無い**');
+  facts.push(value.includes('\\n') ? '\\n 表記あり' : value.includes('\n') ? '改行あり' : '**改行が無い**');
+
+  return facts.join(' / ');
 }
 
 function config() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY);
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY;
+  const privateKey = normalizePrivateKey(rawKey);
 
+  // 「未設定」と「設定はされているが鍵として読めない」は原因も対処も違う。
+  // 混同すると、値を入れているのに「未設定です」と出て堂々巡りになる。
   const missing = [
     !clientEmail && 'GOOGLE_SERVICE_ACCOUNT_EMAIL',
-    !privateKey && 'GOOGLE_PRIVATE_KEY',
+    !rawKey && 'GOOGLE_PRIVATE_KEY',
   ].filter(Boolean);
 
   if (missing.length > 0) {
@@ -52,11 +89,12 @@ function config() {
     );
   }
 
-  if (!privateKey.startsWith('-----BEGIN') || !privateKey.includes('PRIVATE KEY-----')) {
+  if (!privateKey) {
     throw new Error(
-      'GOOGLE_PRIVATE_KEY が秘密鍵の形式になっていません。' +
-      'JSONファイルの private_key の値を、前後の二重引用符を含めずに ' +
-      '「-----BEGIN PRIVATE KEY-----」から「-----END PRIVATE KEY-----」まで貼り付けてください。'
+      'GOOGLE_PRIVATE_KEY から秘密鍵を読み取れません。' +
+      'JSONファイルの private_key の値を「-----BEGIN PRIVATE KEY-----」から ' +
+      '「-----END PRIVATE KEY-----」まで貼り付けてください。' +
+      `（いま設定されている値: ${describeKeyProblem(process.env.GOOGLE_PRIVATE_KEY)}）`
     );
   }
 
