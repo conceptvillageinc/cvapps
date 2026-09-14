@@ -60,11 +60,11 @@ export default async function handler(req, res) {
     let sendError = null;
     try {
       await sendMail({
+        // 操作した本人のアドレスから送る。返信は本人に直接届く。
+        sendAs: user.email,
         to: vendor.email,
         subject,
         body,
-        // 返信は送信した本人に届くようにする
-        replyTo: user.email,
         fromName: '株式会社コンセプト・ヴィレッジ',
       });
     } catch (err) {

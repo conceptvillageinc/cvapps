@@ -4,7 +4,9 @@ import crypto from 'node:crypto';
 // 会社の Google Workspace からメールを送る
 //
 // サービスアカウントに「ドメイン全体の委任」を設定し、社内のメールボックス
-// （例: info@concept-village.co.jp）になりすまして送信する。
+// になりすまして送信する。差出人は【操作した本人】のアドレスにする。
+// 送信控えが本人の Gmail「送信済み」に残り、印刷会社からの返信も本人に届く。
+// GMAIL_ALWAYS_CC を設定すると、全送信の控えをそのアドレスにCCする。
 //
 // 外部の配信サービスを使わない理由:
 //   * 追加費用がない（契約済みの Workspace の範囲内）
@@ -23,12 +25,10 @@ function config() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   // Vercel の環境変数では改行を \n と書くため、実際の改行に戻す
   const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
-  const sender = process.env.GMAIL_SENDER;
 
   const missing = [
     !clientEmail && 'GOOGLE_SERVICE_ACCOUNT_EMAIL',
     !privateKey && 'GOOGLE_PRIVATE_KEY',
-    !sender && 'GMAIL_SENDER',
   ].filter(Boolean);
 
   if (missing.length > 0) {
@@ -38,15 +38,20 @@ function config() {
     );
   }
 
-  return { clientEmail, privateKey, sender };
+  return {
+    clientEmail,
+    privateKey,
+    // 送信者が特定できない場合の差出人（通常は使わない）
+    fallbackSender: process.env.GMAIL_SENDER || '',
+    // 送信控えを残すアドレス。未設定ならCCしない。
+    alwaysCc: process.env.GMAIL_ALWAYS_CC || '',
+  };
 }
 
 /** メール送信が設定済みか。未設定でも画面を壊さないための判定に使う。 */
 export function isMailConfigured() {
   return Boolean(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-    process.env.GOOGLE_PRIVATE_KEY &&
-    process.env.GMAIL_SENDER
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY
   );
 }
 
@@ -59,16 +64,18 @@ function base64url(input) {
 }
 
 /** サービスアカウントの鍵で署名したJWTを、アクセストークンに交換する。 */
-async function getAccessToken() {
-  const { clientEmail, privateKey, sender } = config();
+async function getAccessToken(impersonate) {
+  const { clientEmail, privateKey } = config();
   const now = Math.floor(Date.now() / 1000);
 
   const claims = {
     iss: clientEmail,
     scope: SCOPE,
     aud: TOKEN_URL,
-    // 委任により、この人が送ったことにする
-    sub: sender,
+    // 委任により、この人のメールボックスから送る。
+    // 呼び出し側がリクエストの中身から決めてはいけない値で、必ず
+    // サーバーで検証済みのログイン情報（user.email）を渡すこと。
+    sub: impersonate,
     iat: now,
     exp: now + 3600,
   };
@@ -92,7 +99,9 @@ async function getAccessToken() {
     // よくある原因を切り分けやすいメッセージにする
     const hint = data.error === 'unauthorized_client'
       ? '（Google Workspace 管理コンソールで「ドメイン全体の委任」が未設定の可能性があります）'
-      : '';
+      : data.error === 'invalid_grant'
+        ? `（${impersonate} が Google Workspace のユーザーとして存在しないか、Gmail が有効になっていない可能性があります）`
+        : '';
     throw new Error(`メール送信の認証に失敗しました: ${data.error_description || data.error || res.status}${hint}`);
   }
 
@@ -107,10 +116,11 @@ function encodeHeader(value) {
     : `=?UTF-8?B?${Buffer.from(value).toString('base64')}?=`;
 }
 
-function buildMime({ to, from, subject, body, replyTo }) {
+function buildMime({ to, cc, from, subject, body, replyTo }) {
   const headers = [
     `From: ${from}`,
     `To: ${to}`,
+    cc ? `Cc: ${cc}` : null,
     replyTo ? `Reply-To: ${replyTo}` : null,
     `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
@@ -126,15 +136,38 @@ function buildMime({ to, from, subject, body, replyTo }) {
 
 /**
  * メールを1通送る。
- * 差出人は GMAIL_SENDER 固定。呼び出し側が任意の差出人を指定できると、
- * 会社のドメインを騙ったメールを出せてしまうため。
+ *
+ * 差出人（sendAs）は「ログイン中の本人のアドレス」を渡す。送信控えは本人の
+ * Gmail の「送信済み」に残り、返信も本人に直接届く。
+ *
+ * 重要: sendAs はリクエストの中身から決めてはいけない。必ずサーバーで
+ * 検証済みのログイン情報（requireMember が返す user.email）を渡すこと。
+ * 画面から指定できる作りにすると、社内の別の人になりすましてメールを
+ * 出せてしまう。
  */
-export async function sendMail({ to, subject, body, replyTo, fromName }) {
-  const { sender } = config();
-  const token = await getAccessToken();
+export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, cc }) {
+  const { fallbackSender, alwaysCc } = config();
 
+  const sender = sendAs || fallbackSender;
+  if (!sender) {
+    throw new Error('差出人が決まりません（GMAIL_SENDER が未設定です）');
+  }
+
+  // 送信控えのアドレス。差出人自身が入っていても意味がないので除く。
+  const ccList = [...new Set([cc, alwaysCc].filter(Boolean))]
+    .filter(addr => addr.toLowerCase() !== sender.toLowerCase());
+
+  const token = await getAccessToken(sender);
   const from = fromName ? `${encodeHeader(fromName)} <${sender}>` : sender;
-  const raw = base64url(buildMime({ to, from, subject, body, replyTo }));
+
+  const raw = base64url(buildMime({
+    to,
+    cc: ccList.join(', '),
+    from,
+    subject,
+    body,
+    replyTo,
+  }));
 
   const res = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(sender)}/messages/send`,
@@ -154,5 +187,5 @@ export async function sendMail({ to, subject, body, replyTo, fromName }) {
     throw new Error(`メールを送信できませんでした: ${data.error?.message || res.status}`);
   }
 
-  return { id: data.id, from: sender };
+  return { id: data.id, from: sender, cc: ccList };
 }

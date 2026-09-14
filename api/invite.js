@@ -88,10 +88,10 @@ export default async function handler(req, res) {
       const appUrl = req.headers.origin || `https://${req.headers.host}`;
       try {
         await sendMail({
+          sendAs: user.email,
           to: email,
           subject: 'CV見積アプリへの招待',
           body: inviteBody(appUrl, user.email),
-          replyTo: user.email,
           fromName: 'CV見積アプリ',
         });
         mail = { sent: true };

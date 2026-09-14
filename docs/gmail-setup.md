@@ -92,18 +92,27 @@ JSONファイルがダウンロードされます。**このファイルはパ�
 
 Vercel → **cvapps** → **Settings → Environments → Production** → **Add Environment Variable**
 
-| Key | Value | Type |
-|---|---|---|
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSONの `client_email` | Config |
-| `GOOGLE_PRIVATE_KEY` | JSONの `private_key` を**そのまま**貼り付け | **Secret** |
-| `GMAIL_SENDER` | 差出人にするアドレス（例: `info@concept-village.co.jp`） | Config |
+| Key | Value | Type | 必須 |
+|---|---|---|---|
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSONの `client_email` | Config | ○ |
+| `GOOGLE_PRIVATE_KEY` | JSONの `private_key` を**そのまま**貼り付け | **Secret** | ○ |
+| `GMAIL_ALWAYS_CC` | 送信控えを残すアドレス（例: `info@concept-village.co.jp`） | Config | 任意 |
+| `GMAIL_SENDER` | 差出人が特定できない場合の予備（例: `info@concept-village.co.jp`） | Config | 任意 |
+
+> **差出人は、操作した本人のアドレスになります。** `mina@concept-village.co.jp` で
+> ログインしている人が送れば、`mina@` から届きます。`GMAIL_SENDER` は使われません
+> （何らかの理由で本人が特定できないときの予備です）。
+>
+> `GMAIL_ALWAYS_CC` を設定すると、**すべての送信がそのアドレスにCCされます**。
+> 誰がどこへ送ったかを1箇所に集約でき、担当者不在時にも追えます。
+> 差出人自身がCC先と同じ場合は、二重にならないよう自動で除外します。
 
 ### 注意点
 
 - **`VITE_` は付けないでください。** 付けるとブラウザから秘密鍵が読めてしまいます
 - **`GOOGLE_PRIVATE_KEY` は JSON に書かれている形（`\n` を含む1行）のまま**貼り付けてください。
   実際の改行に直す処理はアプリ側で行います
-- `GMAIL_SENDER` は**実在するメールボックス**を指定してください。
+- CC先・差出人は**実在するメールボックス**を指定してください。
   グループアドレス（エイリアス）では送信できません
 
 登録後、**Deployments → 最新の「⋯」→ Redeploy** を実行してください。
@@ -130,7 +139,9 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 
 - 宛先アドレスは**印刷所情報に登録されたもの**が使われます。画面に表示されます
 - 未登録の会社には送信できません（警告が出ます）
-- **返信は操作した本人に届きます**（Reply-To を設定しています）
+- **差出人は操作した本人**です。返信もそのまま本人に届きます
+- 送信済みメールは**本人の Gmail の「送信済み」**に残ります
+- `GMAIL_ALWAYS_CC` を設定していれば、そのアドレスにも控えが届きます
 - 送信履歴に「送信済」または「送信失敗」が記録されます
 
 ---
@@ -141,8 +152,9 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 画面から任意のアドレスを渡せる作りにすると、ログインできる人なら誰でも会社の
 メールアドレスから好きな相手へ送信できてしまうためです。
 
-**差出人も固定です**（`GMAIL_SENDER`）。呼び出し側が指定できると、会社のドメインを
-騙ったメールを出せてしまいます。
+**差出人も画面からは指定できません。** サーバー側で確認したログイン情報
+（本人のメールアドレス）をそのまま使います。リクエストの中身から差出人を
+決められる作りにすると、社内の別の人になりすましてメールを出せてしまいます。
 
 ---
 
@@ -153,7 +165,8 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 | `メール送信の認証に失敗しました…ドメイン全体の委任が未設定の可能性` | **②を実施していない**か、クライアントIDが違う。管理コンソールで数字のIDとスコープを確認 |
 | `メール送信の設定が未完了です（未設定: …）` | 環境変数の名前違い、または Redeploy していない |
 | `invalid_grant` / `Invalid JWT` | 秘密鍵の貼り付けが不完全。`-----BEGIN` から `-----END PRIVATE KEY-----\n` まで含まれているか確認 |
-| `Precondition check failed` | `GMAIL_SENDER` が実在しないアドレス、またはエイリアス。実在のメールボックスを指定 |
+| `invalid_grant`（…が Google Workspace のユーザーとして存在しない） | ログイン中の方のアドレスでGmailが使えない状態。Workspaceでそのユーザーが有効か確認 |
+| `Precondition check failed` | CC先がエイリアス、または実在しないアドレス |
 | 「◯◯のメールアドレスが未登録です」 | 印刷所情報でその会社にメールアドレスを登録してください |
 | 未設定のまま招待した | 招待は登録されています。「アプリのURLをコピー」から手動でお知らせください |
 
