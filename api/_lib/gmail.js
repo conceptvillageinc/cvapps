@@ -21,10 +21,24 @@ import crypto from 'node:crypto';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 
+/**
+ * 環境変数に貼られた秘密鍵を、OpenSSL が読める PEM に整える。
+ *
+ * JSONファイルから値をコピーすると、前後の二重引用符まで一緒に入りやすい。
+ * 引用符が混ざったままだと `DECODER routines::unsupported` で失敗するが、
+ * このエラー文からは原因がまず分からないので、ここで吸収する。
+ */
+function normalizePrivateKey(raw) {
+  return (raw || '')
+    .trim()
+    .replace(/^["']|["']$/g, '')   // 前後の引用符を落とす
+    .replace(/\\n/g, '\n')         // \n 表記を実際の改行に戻す
+    .trim();
+}
+
 function config() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  // Vercel の環境変数では改行を \n と書くため、実際の改行に戻す
-  const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+  const privateKey = normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY);
 
   const missing = [
     !clientEmail && 'GOOGLE_SERVICE_ACCOUNT_EMAIL',
@@ -35,6 +49,14 @@ function config() {
     throw new Error(
       `メール送信の設定が未完了です（未設定: ${missing.join(' / ')}）。` +
       'Vercel の環境変数を確認してください（VITE_ は付けないこと）。'
+    );
+  }
+
+  if (!privateKey.startsWith('-----BEGIN') || !privateKey.includes('PRIVATE KEY-----')) {
+    throw new Error(
+      'GOOGLE_PRIVATE_KEY が秘密鍵の形式になっていません。' +
+      'JSONファイルの private_key の値を、前後の二重引用符を含めずに ' +
+      '「-----BEGIN PRIVATE KEY-----」から「-----END PRIVATE KEY-----」まで貼り付けてください。'
     );
   }
 
@@ -81,7 +103,18 @@ async function getAccessToken(impersonate) {
   };
 
   const unsigned = `${base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${base64url(JSON.stringify(claims))}`;
-  const signature = crypto.createSign('RSA-SHA256').update(unsigned).sign(privateKey);
+
+  let signature;
+  try {
+    signature = crypto.createSign('RSA-SHA256').update(unsigned).sign(privateKey);
+  } catch (err) {
+    // OpenSSL の DECODER エラーは原因が読み取れないので、対処を書いて返す
+    throw new Error(
+      '秘密鍵を読み込めませんでした。GOOGLE_PRIVATE_KEY の貼り付けを確認してください' +
+      `（前後の二重引用符やカンマが混ざっていないか）。詳細: ${err.message}`
+    );
+  }
+
   const jwt = `${unsigned}.${base64url(signature)}`;
 
   const res = await fetch(TOKEN_URL, {

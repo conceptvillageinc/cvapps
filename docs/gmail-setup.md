@@ -110,8 +110,11 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 ### 注意点
 
 - **`VITE_` は付けないでください。** 付けるとブラウザから秘密鍵が読めてしまいます
-- **`GOOGLE_PRIVATE_KEY` は JSON に書かれている形（`\n` を含む1行）のまま**貼り付けてください。
-  実際の改行に直す処理はアプリ側で行います
+- **`GOOGLE_PRIVATE_KEY` は `-----BEGIN PRIVATE KEY-----` から
+  `-----END PRIVATE KEY-----` までを貼り付けてください。**
+  `\n` を含む1行のままで構いません（実際の改行に直す処理はアプリ側で行います）。
+  JSONからコピーすると前後の `"` やカンマが混ざりやすいですが、
+  アプリ側で取り除くので、多少余分が付いていても動きます
 - CC先・差出人は**実在するメールボックス**を指定してください。
   グループアドレス（エイリアス）では送信できません
 
@@ -164,7 +167,9 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 |---|---|
 | `メール送信の認証に失敗しました…ドメイン全体の委任が未設定の可能性` | **②を実施していない**か、クライアントIDが違う。管理コンソールで数字のIDとスコープを確認 |
 | `メール送信の設定が未完了です（未設定: …）` | 環境変数の名前違い、または Redeploy していない |
-| `invalid_grant` / `Invalid JWT` | 秘密鍵の貼り付けが不完全。`-----BEGIN` から `-----END PRIVATE KEY-----\n` まで含まれているか確認 |
+| `DECODER routines::unsupported` / `秘密鍵を読み込めませんでした` | 秘密鍵の貼り付けが不完全。`-----BEGIN` から `-----END PRIVATE KEY-----` まで入っているか確認 |
+| `GOOGLE_PRIVATE_KEY が秘密鍵の形式になっていません` | 別の値を貼っている可能性。JSONの `private_key` の値か確認 |
+| `invalid_grant` / `Invalid JWT` | 秘密鍵が別のサービスアカウントのもの、または鍵が削除されている |
 | `invalid_grant`（…が Google Workspace のユーザーとして存在しない） | ログイン中の方のアドレスでGmailが使えない状態。Workspaceでそのユーザーが有効か確認 |
 | `Precondition check failed` | CC先がエイリアス、または実在しないアドレス |
 | 「◯◯のメールアドレスが未登録です」 | 印刷所情報でその会社にメールアドレスを登録してください |
