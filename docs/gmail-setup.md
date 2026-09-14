@@ -92,12 +92,42 @@ JSONファイルがダウンロードされます。**このファイルはパ�
 
 Vercel → **cvapps** → **Settings → Environments → Production** → **Add Environment Variable**
 
-| Key | Value | Type | 必須 |
+> ⚠️ **下の表の「何を貼るか」の文章をそのまま貼り付けないでください。**
+> 説明文です。実際に貼る値は各項目の下に書いてあります。
+
+| Key | Type | 必須 | 何を貼るか |
 |---|---|---|---|
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSONの `client_email`（末尾が `.iam.gserviceaccount.com`） | Config | ○ |
-| `GOOGLE_PRIVATE_KEY` | **JSONファイルの中身をまるごと貼り付け** | **Secret** | ○ |
-| `GMAIL_ALWAYS_CC` | 送信控えを残すアドレス（例: `info@concept-village.co.jp`） | Config | 任意 |
-| `GMAIL_SENDER` | 差出人が特定できない場合の予備（例: `info@concept-village.co.jp`） | Config | 任意 |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Config | ○ | 下記 ③-1 |
+| `GOOGLE_PRIVATE_KEY` | **Secret** | ○ | 下記 ③-2 |
+| `GMAIL_ALWAYS_CC` | Config | 任意 | 下記 ③-3 |
+| `GMAIL_SENDER` | Config | 任意 | 下記 ③-3 |
+
+### ③-1. `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+
+JSONファイルを開き、`client_email` の**右側にあるアドレス**（引用符の中身）を貼ります。
+
+```json
+"client_email": "cv-estimate-mailer@xxxxx.iam.gserviceaccount.com",
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ここ
+```
+
+末尾は必ず `.iam.gserviceaccount.com` になります。
+②で使った `client_id`（数字の羅列）とは**別の項目**です。混同しやすいので注意してください。
+
+### ③-2. `GOOGLE_PRIVATE_KEY`
+
+**JSONファイルを開いて `Cmd + A`（全選択）→ `Cmd + C`、それをそのまま貼ります。**
+
+鍵の部分だけを選択しようとすると端が欠けやすく、欠けると鍵として成立しません。
+ファイル全体を貼れば、アプリ側が鍵の本体を自動で探し出します。
+
+### ③-3. `GMAIL_ALWAYS_CC` / `GMAIL_SENDER`
+
+メールアドレスをそのまま書きます。例:
+
+```
+info@concept-village.co.jp
+```
 
 > **差出人は、操作した本人のアドレスになります。** `mina@concept-village.co.jp` で
 > ログインしている人が送れば、`mina@` から届きます。`GMAIL_SENDER` は使われません
@@ -110,13 +140,7 @@ Vercel → **cvapps** → **Settings → Environments → Production** → **Add
 ### 注意点
 
 - **`VITE_` は付けないでください。** 付けるとブラウザから秘密鍵が読めてしまいます
-- **`GOOGLE_PRIVATE_KEY` は JSONファイルを開いて `Cmd + A` → `Cmd + C` で
-  全部コピーし、そのまま貼り付けるのが確実です。**
-  鍵の部分だけを選択しようとすると端が欠けやすく、欠けると鍵として成立しません。
-  ファイル全体を貼れば、アプリ側が `-----BEGIN` から `-----END PRIVATE KEY-----`
-  までを自動で探し出します。
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL` も同様に、引用符やキー名が混ざっていても
-  アドレス部分だけを拾います
+- 前後に `"` やカンマ、キー名が混ざっていても動きます（アプリ側で取り除きます）
 - CC先・差出人は**実在するメールボックス**を指定してください。
   グループアドレス（エイリアス）では送信できません
 
