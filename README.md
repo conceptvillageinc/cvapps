@@ -4,6 +4,7 @@
 
 Base44 上に構築されていたものを、Base44 に依存しない自前環境へ移行中です。
 移行の全体計画・決定事項は **[docs/migration-plan.md](docs/migration-plan.md)** を参照してください。
+移行後の拡張計画（案件〜請求〜管理表）は **[docs/roadmap-v2.md](docs/roadmap-v2.md)** にあります。
 
 ## 技術構成
 
