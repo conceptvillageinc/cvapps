@@ -44,8 +44,10 @@ freeeから改めてエクスポートして取り込み直したくなったと
 - **ご自身で作る場合**: Node.js（無料のプログラム実行環境）が入ったPCで、次のコマンドを実行します。
 
   ```bash
-  node scripts/import-freee-projects.mjs <freeeのCSV> supabase/seed_freee_projects.sql
+  node scripts/import-freee-projects.mjs <freeeのCSV> supabase/seed_freee_projects.sql --chunk 100
   ```
+
+  `--chunk 100` で案件100件ごとにファイルが分かれます（SQL Editor のサイズ制限対策）。
 
   CSVは freee販売 → 案件 → エクスポート で、**「顧客名称」列が含まれる形式**を使います。
   クライアントマスタとの突合を細かくしたい場合は、Base44移行時のクライアントJSON
@@ -55,13 +57,19 @@ freeeから改めてエクスポートして取り込み直したくなったと
 
   | ファイル | 内容 |
   |---|---|
-  | `supabase/seed_freee_projects.sql` | SQL Editor に貼って実行するもの |
+  | `supabase/seed_freee_projects_1.sql` … | SQL Editor に貼って実行するもの（番号順） |
   | `supabase/seed_freee_projects-review.json` | 突合の結果・要確認事項 |
 
 ### 2-3. 実行する
 
-Supabase → SQL Editor → New query → `seed_freee_projects.sql` をテキストエディタで開き、
-**中身をすべてコピーして貼り付け** → **Run**。
+Supabase の SQL Editor は大きなクエリを受け付けないため（「Query is too large」エラー）、
+取込SQLは **`seed_freee_projects_1.sql` 〜 `_8.sql` の8ファイルに分割**してあります。
+
+1. SQL Editor → **New query**
+2. `seed_freee_projects_1.sql` をテキストエディタで開き、中身をすべてコピーして貼り付け → **Run**
+3. 同じタブの中身を消して `_2.sql` を貼り付け → Run。以降 `_8.sql` まで**番号順に**繰り返す
+
+各ファイルの Run は数秒で終わります。結果欄に「Success. No rows returned」と出れば成功です。
 
 案件番号は登録日順に `P-2410-001` から振られます。
 **同じSQLを2回実行しても二重登録にはなりません**（同じ案件は上書き、番号は最初のまま）。

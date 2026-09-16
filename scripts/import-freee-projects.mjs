@@ -2,7 +2,10 @@
 // ============================================================================
 // freee販売の「案件」エクスポートCSVから、projects 投入用の SQL を生成する。
 //
-//   node scripts/import-freee-projects.mjs <freee案件CSV> <出力先.sql> [--clients <clients.json>]
+//   node scripts/import-freee-projects.mjs <freee案件CSV> <出力先.sql> [--clients <clients.json>] [--chunk 150]
+//
+// --chunk N を付けると、案件 N 件ごとにファイルを分ける（<出力先>_1.sql, _2.sql ...）。
+// Supabase の SQL Editor は約1MBを超えるクエリを受け付けないため、分けて実行する。
 //
 // 入力:
 //   freee案件CSV   freee販売 → 案件 → エクスポート（顧客名称を含む形式）
@@ -30,6 +33,8 @@ import crypto from 'node:crypto';
 const args = process.argv.slice(2);
 const positional = args.filter((a) => !a.startsWith('--'));
 const clientsArg = args.includes('--clients') ? args[args.indexOf('--clients') + 1] : null;
+// Supabase の SQL Editor は大きなクエリを受け付けないため、複数ファイルに分割できる
+const chunkArg = args.includes('--chunk') ? Number(args[args.indexOf('--chunk') + 1]) : 0;
 const [csvPath, outPath] = positional;
 
 if (!csvPath || !outPath) {
@@ -311,7 +316,16 @@ for (const r of records) {
     isRecurring: /定期/.test(prob),
     notes: r['社内メモ'] || null,
     createdAt: r['登録日時'] || null,
-    legacyData: r,
+    // 列に落とした項目は保持しない（取込SQLのサイズを抑えるため）。
+    // 元の表記（タグ付き顧客名・接頭辞付き案件名）と、列にしなかった金額だけ残す。
+    legacyData: {
+      '顧客名称': r['顧客名称'],
+      '案件名称': r['案件名称'],
+      '粗利(実績)': r['粗利(実績)'],
+      '納品確定金額(税抜)': r['納品確定金額(税抜)'],
+      '仕入合計金額(税抜)': r['仕入合計金額(税抜)'],
+      '登録日時': r['登録日時'],
+    },
   });
 }
 
@@ -321,21 +335,23 @@ projects.sort((a, b) => (a.registeredAt + (a.createdAt || '')).localeCompare(b.r
 // ---------------------------------------------------------------------------
 // SQL 出力
 // ---------------------------------------------------------------------------
-const out = [];
-out.push('-- freee販売 案件エクスポートの取込（scripts/import-freee-projects.mjs が生成）');
-out.push(`-- 生成: ${new Date().toISOString()}  元: ${csvPath}  行数: ${records.length}`);
-out.push('-- 冪等: 同じ案件（legacy_id）は上書き、案件番号は最初に付いたものを維持する。');
-out.push('begin;');
-out.push('');
-out.push('-- ---- クライアント（無ければ作成し、送付方法・定期の有無を反映） ----');
+const headerLines = (part, total) => [
+  '-- freee販売 案件エクスポートの取込（scripts/import-freee-projects.mjs が生成）',
+  `-- 生成: ${new Date().toISOString()}  行数: ${records.length}` + (total > 1 ? `  分割: ${part}/${total}（番号順に実行する）` : ''),
+  '-- 冪等: 同じ案件（legacy_id）は上書き、案件番号は最初に付いたものを維持する。',
+  'begin;',
+  '',
+];
 
+const clientLines = [];
+clientLines.push('-- ---- クライアント（無ければ作成し、送付方法・定期の有無を反映） ----');
 for (const [name, u] of clientUpdates) {
-  out.push(
+  clientLines.push(
     `insert into public.clients (name, invoice_delivery_method, invoice_delivery_notes, has_recurring_billing, quote_count) ` +
     `select ${q(name)}, ${q(u.method)}, ${q(u.notes.join(' / ') || null)}, ${bool(u.recurring)}, 0 ` +
     `where not exists (select 1 from public.clients where name = ${q(name)});`
   );
-  out.push(
+  clientLines.push(
     `update public.clients set ` +
     `invoice_delivery_method = coalesce(invoice_delivery_method, ${q(u.method)}), ` +
     `invoice_delivery_notes = coalesce(invoice_delivery_notes, ${q(u.notes.join(' / ') || null)}), ` +
@@ -344,38 +360,88 @@ for (const [name, u] of clientUpdates) {
   );
 }
 
-out.push('');
-out.push('-- ---- 案件 ----');
-for (const p of projects) {
-  const clientId = p.clientLinked
-    ? `(select id from public.clients where name = ${q(p.clientName)} order by created_at limit 1)`
-    : 'null';
-  out.push(
-    `insert into public.projects (project_number, client_id, client_name, name, deal_probability, phase, status, ` +
-    `expected_revenue, expected_cost, other_cost, confirmed_revenue, confirmed_cost, ` +
-    `registered_at, due_date, payment_due_date, is_recurring, notes, legacy_id, legacy_data, created_at) values (` +
-    `public.next_project_number(${date(p.registeredAt)}), ${clientId}, ${q(p.clientName)}, ${q(p.name)}, ${q(p.prob)}, ${q(p.phase)}, 'open', ` +
-    `${num(p.expectedRevenue)}, ${num(p.expectedCost)}, ${num(p.otherCost)}, ${num(p.confirmedRevenue)}, ${num(p.confirmedCost)}, ` +
-    `${date(p.registeredAt)}, ${date(p.dueDate)}, ${date(p.paymentDueDate)}, ${bool(p.isRecurring)}, ${q(p.notes)}, ${q(p.legacyId)}, ${json(p.legacyData)}, ` +
-    `${p.createdAt ? `'${p.createdAt}'::timestamptz` : 'now()'}) ` +
-    `on conflict (legacy_id) do update set client_id = excluded.client_id, client_name = excluded.client_name, name = excluded.name, ` +
-    `deal_probability = excluded.deal_probability, phase = excluded.phase, ` +
-    `expected_revenue = excluded.expected_revenue, expected_cost = excluded.expected_cost, other_cost = excluded.other_cost, ` +
-    `confirmed_revenue = excluded.confirmed_revenue, confirmed_cost = excluded.confirmed_cost, ` +
-    `registered_at = excluded.registered_at, due_date = excluded.due_date, is_recurring = excluded.is_recurring, ` +
-    `notes = excluded.notes, legacy_data = excluded.legacy_data;`
-  );
-}
-out.push('');
-out.push('commit;');
+// 1行ごとに長い insert 文を書くとファイルが大きくなり、Supabase の SQL Editor が
+// 受け付けない。行ごとの値は JSON にまとめ、実際の insert は一時関数に任せる。
+// pg_temp の関数はこの実行（セッション）の中だけで有効で、DBには残らない。
+const importFunction = `
+create or replace function pg_temp.import_project(j jsonb) returns void language plpgsql as $fn$
+begin
+  insert into public.projects (project_number, client_id, client_name, name, deal_probability, phase, status,
+    expected_revenue, expected_cost, other_cost, confirmed_revenue, confirmed_cost,
+    registered_at, due_date, payment_due_date, is_recurring, notes, legacy_id, legacy_data, created_at)
+  values (
+    public.next_project_number((j->>'registered_at')::date),
+    case when j->>'client_name' is not null and (j->>'client_linked')::boolean
+         then (select id from public.clients where name = j->>'client_name' order by created_at limit 1) end,
+    j->>'client_name', j->>'name', j->>'deal_probability', j->>'phase', 'open',
+    coalesce((j->>'expected_revenue')::numeric, 0), coalesce((j->>'expected_cost')::numeric, 0),
+    coalesce((j->>'other_cost')::numeric, 0), coalesce((j->>'confirmed_revenue')::numeric, 0),
+    coalesce((j->>'confirmed_cost')::numeric, 0),
+    (j->>'registered_at')::date, (j->>'due_date')::date, (j->>'payment_due_date')::date,
+    coalesce((j->>'is_recurring')::boolean, false), j->>'notes', j->>'legacy_id', j->'legacy_data',
+    coalesce((j->>'created_at')::timestamptz, now()))
+  on conflict (legacy_id) do update set
+    client_id = excluded.client_id, client_name = excluded.client_name, name = excluded.name,
+    deal_probability = excluded.deal_probability, phase = excluded.phase,
+    expected_revenue = excluded.expected_revenue, expected_cost = excluded.expected_cost, other_cost = excluded.other_cost,
+    confirmed_revenue = excluded.confirmed_revenue, confirmed_cost = excluded.confirmed_cost,
+    registered_at = excluded.registered_at, due_date = excluded.due_date, is_recurring = excluded.is_recurring,
+    notes = excluded.notes, legacy_data = excluded.legacy_data;
+end;
+$fn$;
+`.trim();
 
-fs.writeFileSync(outPath, out.join('\n') + '\n');
+const projectLine = (p) => {
+  const row = {
+    legacy_id: p.legacyId,
+    client_name: p.clientName,
+    client_linked: p.clientLinked,
+    name: p.name,
+    deal_probability: p.prob,
+    phase: p.phase,
+    expected_revenue: p.expectedRevenue,
+    expected_cost: p.expectedCost,
+    other_cost: p.otherCost,
+    confirmed_revenue: p.confirmedRevenue,
+    confirmed_cost: p.confirmedCost,
+    registered_at: p.registeredAt || null,
+    due_date: p.dueDate || null,
+    payment_due_date: p.paymentDueDate || null,
+    is_recurring: p.isRecurring,
+    notes: p.notes,
+    created_at: p.createdAt || null,
+    legacy_data: p.legacyData,
+  };
+  return `select pg_temp.import_project(${json(row)});`;
+};
+
+const chunks = [];
+if (chunkArg > 0) {
+  for (let i = 0; i < projects.length; i += chunkArg) chunks.push(projects.slice(i, i + chunkArg));
+} else {
+  chunks.push(projects);
+}
+
+const written = [];
+chunks.forEach((chunk, idx) => {
+  const part = idx + 1;
+  const lines = headerLines(part, chunks.length);
+  // クライアントは最初のファイルにだけ入れる
+  if (idx === 0) lines.push(...clientLines, '');
+  lines.push(`-- ---- 案件（${chunk.length}件） ----`, importFunction, '');
+  for (const p of chunk) lines.push(projectLine(p));
+  lines.push('', 'commit;');
+  const file = chunks.length > 1 ? outPath.replace(/\.sql$/, '') + `_${part}.sql` : outPath;
+  fs.writeFileSync(file, lines.join('\n') + '\n');
+  written.push(file);
+});
+
 const reviewPath = outPath.replace(/\.sql$/, '') + '-review.json';
 review.clients.createdCount = review.clients.created.length;
 review.grossProfitMismatchCount = review.grossProfitMismatch.length;
 fs.writeFileSync(reviewPath, JSON.stringify(review, null, 2));
 
-console.log(`案件: ${projects.length}件 → ${outPath}`);
+console.log(`案件: ${projects.length}件 → ${written.join(', ')}`);
 console.log(`クライアント: 完全一致 ${review.clients.exact}行 / 部分一致 ${review.clients.partial.length}社 / 新規作成 ${review.clients.created.length}社（うち似た既存名あり ${review.clients.similar.length}）/ 顧客名なし ${review.clients.blank}行`);
 console.log(`案件名の接頭辞を除去: ${review.projectNameStripped}件`);
 console.log(`受注確度が空: ${review.blankProbability.length} / フェーズが空: ${review.blankPhase.length}`);
