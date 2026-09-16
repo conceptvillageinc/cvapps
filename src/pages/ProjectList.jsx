@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,11 +20,12 @@ const ALL_YEARS = "all";
 
 export default function ProjectList() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { dealProbabilityOptions, phaseOptions, fiscalYearStartMonth } = useSystemSettings();
 
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("q") || "");
   // 既定では進行中の案件だけを表示する
   const [columnFilters, setColumnFilters] = useState({ status: [PROJECT_STATUS_MAP.open.label] });
   const [sortConfig, setSortConfig] = useState({ key: "registered_at", direction: "desc" });
@@ -180,6 +181,9 @@ export default function ProjectList() {
               <SelectItem value={ALL_YEARS} className="text-xs">すべての期</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" className="gap-2" onClick={() => navigate("/projects/recurring")}>
+            <Repeat className="w-4 h-4 text-teal-600" /> 定期売上
+          </Button>
           <Button className="gap-2" onClick={() => setCreateOpen(true)}>
             <Plus className="w-4 h-4" /> 新規案件
           </Button>

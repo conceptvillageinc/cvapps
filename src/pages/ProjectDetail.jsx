@@ -102,6 +102,9 @@ export default function ProjectDetail() {
               {project.is_recurring && (
                 <Badge className="text-[10px] bg-teal-100 text-teal-700 hover:bg-teal-100 gap-1"><Repeat className="w-2.5 h-2.5" /> 定期売上</Badge>
               )}
+              {project.recurring_template_id && (
+                <Link to="/projects/recurring" className="text-[10px] text-teal-700 hover:underline">ひな形から自動生成</Link>
+              )}
               {legacy && <Badge variant="outline" className="text-[10px] font-normal">freee販売から取込</Badge>}
             </div>
           </div>

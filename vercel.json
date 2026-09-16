@@ -18,6 +18,15 @@
     },
     "api/send-estimate-email.js": {
       "maxDuration": 30
+    },
+    "api/recurring-projects.js": {
+      "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/recurring-projects",
+      "schedule": "0 0 1 * *"
+    }
+  ]
 }

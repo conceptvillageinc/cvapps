@@ -25,6 +25,7 @@ const TABLES = {
   User: 'users',
   Invitation: 'invitations',
   Project: 'projects',
+  RecurringProjectTemplate: 'recurring_project_templates',
 };
 
 // 書き込みを許可するカラム。
@@ -33,6 +34,11 @@ const TABLES = {
 const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
+  recurring_project_templates: [
+    'client_id', 'client_name', 'name', 'deal_probability', 'phase',
+    'expected_revenue', 'expected_cost', 'other_cost',
+    'start_month', 'end_month', 'is_active', 'notes', 'created_by',
+  ],
   projects: [
     'project_number', 'client_id', 'client_name', 'name', 'deal_probability', 'phase',
     'status', 'expected_revenue', 'expected_cost', 'other_cost',
@@ -80,6 +86,7 @@ const DATE_COLUMNS = new Set([
   'estimate_date', 'desired_delivery_date', 'last_updated',
   'approved_date', 'sent_at',
   'registered_at', 'due_date', 'payment_due_date', 'vendor_payment_date',
+  'start_month', 'end_month',
 ]);
 
 // Base44 の並び替え指定（"-created_date" / "name"）を Supabase の形に変換

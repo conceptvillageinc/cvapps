@@ -22,6 +22,7 @@ import ClientManagement from '@/pages/ClientManagement';
 import FaqPage from '@/pages/FaqPage';
 import ProjectList from '@/pages/ProjectList';
 import ProjectDetail from '@/pages/ProjectDetail';
+import RecurringProjects from '@/pages/RecurringProjects';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
@@ -47,6 +48,7 @@ const AuthenticatedApp = () => {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/projects" element={<ProjectList />} />
+          <Route path="/projects/recurring" element={<RecurringProjects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/estimates/new" element={<EstimateCreate />} />
           <Route path="/estimates/:id" element={<EstimateDetail />} />

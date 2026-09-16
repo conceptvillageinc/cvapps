@@ -11,3 +11,12 @@ export async function generateProjectNumber(dateStr) {
   if (error) throw new Error("案件番号の採番に失敗しました: " + error.message);
   return data;
 }
+
+/** 指定した月（"yyyy-MM-dd"、省略時は今月）の定期売上案件を生成する。戻り値は作成件数。 */
+export async function generateRecurringProjects(dateStr) {
+  const { data, error } = await supabase.rpc("generate_recurring_projects", {
+    p_month: dateStr || new Date().toISOString().slice(0, 10),
+  });
+  if (error) throw new Error("定期案件の生成に失敗しました: " + error.message);
+  return data;
+}
