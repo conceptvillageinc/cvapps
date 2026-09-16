@@ -93,6 +93,7 @@ export default function SystemSettingsPage() {
   const [notesTemplates, setNotesTemplates] = useState([]);
   const [newProbabilityInput, setNewProbabilityInput] = useState("");
   const [newPhaseInput, setNewPhaseInput] = useState("");
+  const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState("10");
   const [newTemplateLabel, setNewTemplateLabel] = useState("");
   const [newTemplateText, setNewTemplateText] = useState("");
   const [dragTemplateIdx, setDragTemplateIdx] = useState(null);
@@ -122,6 +123,8 @@ export default function SystemSettingsPage() {
       if (phase) {
         try { setPhaseList(JSON.parse(phase.setting_value)); } catch { /* ignore */ }
       }
+      const fy = settings.find(s => s.setting_key === "fiscal_year_start_month");
+      if (fy && Number(fy.setting_value) >= 1 && Number(fy.setting_value) <= 12) setFiscalYearStartMonth(String(Number(fy.setting_value)));
       const templates = settings.find(s => s.setting_key === "notes_templates");
       if (templates) {
         try { setNotesTemplates(JSON.parse(templates.setting_value)); } catch { /* ignore */ }
@@ -275,6 +278,36 @@ export default function SystemSettingsPage() {
               value={proofreadingFee}
               onChange={e => setProofreadingFee(e.target.value)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">会計期</CardTitle>
+          <CardDescription className="text-xs">案件一覧や管理表で「今期」を判定するための期首の月</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-1.5 max-w-xs">
+            <Label className="text-xs">期首の月</Label>
+            <select
+              value={fiscalYearStartMonth}
+              onChange={e => {
+                const v = e.target.value;
+                setFiscalYearStartMonth(v);
+                upsertSetting(settings, "fiscal_year_start_month", String(v), "期首の月")
+                  .then(() => queryClient.invalidateQueries({ queryKey: ["settings"] }))
+                  .catch(err => toast.error("自動保存に失敗しました: " + err.message));
+              }}
+              className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <option key={m} value={String(m)}>{m}月始まり</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-muted-foreground">
+              例: 10月始まりなら「2025年度」は 2025/10〜2026/9 です
+            </p>
           </div>
         </CardContent>
       </Card>

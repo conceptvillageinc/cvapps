@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,12 @@ export default function EstimateDetail() {
     queryKey: ["emailLogs", estimateId],
     queryFn: () => db.entities.EmailLog.filter({ estimate_id: estimateId }),
     enabled: !!estimateId,
+  });
+
+  const { data: project } = useQuery({
+    queryKey: ["project", estimate?.project_id],
+    queryFn: () => db.entities.Project.get(estimate.project_id),
+    enabled: !!estimate?.project_id,
   });
 
   const [formData, setFormData] = useState(null);
@@ -165,6 +171,14 @@ export default function EstimateDetail() {
             </div>
             <p className="text-xs text-muted-foreground">
               {formData.estimate_number} · {formData.print_type}
+              {project && (
+                <>
+                  {" · "}
+                  <Link to={`/projects/${project.id}`} className="text-primary hover:underline">
+                    案件 {project.project_number} {project.name}
+                  </Link>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -221,7 +235,7 @@ export default function EstimateDetail() {
       )}
 
       {/* バージョン・商談ステータス */}
-      <RevisionPanel estimate={formData} onUpdate={handleUpdate} />
+      <RevisionPanel estimate={formData} onUpdate={handleUpdate} project={project} />
 
       {/* Tabs */}
       <Tabs defaultValue={formData.schema_version === 2 ? "quote" : "spec"} className="space-y-4">

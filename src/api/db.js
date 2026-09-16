@@ -24,6 +24,7 @@ const TABLES = {
   FaqItem: 'faq_items',
   User: 'users',
   Invitation: 'invitations',
+  Project: 'projects',
 };
 
 // 書き込みを許可するカラム。
@@ -32,8 +33,14 @@ const TABLES = {
 const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
+  projects: [
+    'project_number', 'client_id', 'client_name', 'name', 'deal_probability', 'phase',
+    'status', 'expected_revenue', 'expected_cost', 'other_cost',
+    'confirmed_revenue', 'confirmed_cost', 'registered_at', 'due_date',
+    'payment_due_date', 'vendor_payment_date', 'is_recurring', 'notes', 'created_by',
+  ],
   estimates: [
-    'estimate_number', 'client_name', 'client_honorific', 'person_in_charge',
+    'estimate_number', 'project_id', 'client_name', 'client_honorific', 'person_in_charge',
     'estimate_title', 'estimate_date', 'validity_period_months', 'schema_version',
     'line_items', 'print_type', 'size', 'usage', 'paper_type', 'quantities',
     'color_count', 'desired_delivery_date', 'additional_notes', 'status',
@@ -49,6 +56,7 @@ const WRITABLE_COLUMNS = {
   clients: [
     'name', 'name_kana', 'contact_person', 'contact_person_kana',
     'email', 'phone', 'postal_code', 'address', 'notes', 'quote_count',
+    'invoice_delivery_method', 'invoice_delivery_notes', 'has_recurring_billing',
   ],
   print_vendors: [
     'name', 'vendor_type', 'print_types', 'email', 'phone',
@@ -71,6 +79,7 @@ const WRITABLE_COLUMNS = {
 const DATE_COLUMNS = new Set([
   'estimate_date', 'desired_delivery_date', 'last_updated',
   'approved_date', 'sent_at',
+  'registered_at', 'due_date', 'payment_due_date', 'vendor_payment_date',
 ]);
 
 // Base44 の並び替え指定（"-created_date" / "name"）を Supabase の形に変換
@@ -152,6 +161,31 @@ function createEntity(entityName) {
       const parsed = parseSort(sort);
       if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
       if (limit) query = query.limit(limit);
+      return decorateAll(unwrap(await query));
+    },
+
+    /**
+     * 期間で絞り込む（from ≦ column ≦ to）。会計期ごとの一覧など、
+     * 全件を取ると多すぎる表に使う。from / to は省略可。
+     */
+    async between(column, from, to, sort, conditions = {}) {
+      let query = supabase.from(table).select('*');
+      if (from) query = query.gte(toColumn(column), from);
+      if (to) query = query.lte(toColumn(column), to);
+      for (const [field, value] of Object.entries(conditions)) {
+        query = value === null ? query.is(toColumn(field), null) : query.eq(toColumn(field), value);
+      }
+      const parsed = parseSort(sort);
+      if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
+      return decorateAll(unwrap(await query.limit(5000)));
+    },
+
+    /** 指定した列が配列のいずれかに一致する行 */
+    async whereIn(column, values, sort) {
+      if (!values || values.length === 0) return [];
+      let query = supabase.from(table).select('*').in(toColumn(column), values);
+      const parsed = parseSort(sort);
+      if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
       return decorateAll(unwrap(await query));
     },
 

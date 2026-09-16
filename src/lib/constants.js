@@ -117,9 +117,11 @@ export const DEAL_STATUS_MAP = {
 };
 
 // 受注確度の色分け（マスタで追加された値はグレーにフォールバック）
+// 選択肢は freee販売に合わせて A / C / A（定期売上） / 要注意（A）。旧値も色を残す。
 export const DEAL_PROBABILITY_COLORS = {
   "A": "bg-emerald-100 text-emerald-700",
   "A（定期売上）": "bg-teal-100 text-teal-700",
+  "要注意（A）": "bg-amber-100 text-amber-700",
   "要注意A": "bg-amber-100 text-amber-700",
   "B": "bg-blue-100 text-blue-700",
   "C": "bg-slate-100 text-slate-700",
@@ -129,10 +131,31 @@ export const getDealProbabilityColor = (label) => DEAL_PROBABILITY_COLORS[label]
 
 // フェーズの色分け
 export const PHASE_COLORS = {
+  "引き合い": "bg-violet-100 text-violet-700",
   "未着手": "bg-muted text-muted-foreground",
   "着手中": "bg-blue-100 text-blue-700",
+  "受注済": "bg-emerald-100 text-emerald-700",
 };
 export const getPhaseColor = (label) => PHASE_COLORS[label] || "bg-muted text-muted-foreground";
+
+// 案件の状態
+export const PROJECT_STATUS_MAP = {
+  open: { label: "進行中", color: "bg-blue-100 text-blue-700" },
+  completed: { label: "完了", color: "bg-emerald-100 text-emerald-700" },
+  lost: { label: "失注", color: "bg-red-100 text-red-700" },
+  cancelled: { label: "取消", color: "bg-slate-100 text-slate-600" },
+};
+
+// クライアントへの請求書送付方法
+export const INVOICE_DELIVERY_METHODS = {
+  freee: "freee送付",
+  post: "郵送",
+  email: "個別メール",
+  hand: "持参",
+};
+
+// 期首の月（system_settings の fiscal_year_start_month が無いときの既定値）
+export const DEFAULT_FISCAL_YEAR_START_MONTH = 10;
 
 // メール依頼先マッピング
 export const EMAIL_VENDOR_MAP = {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { db } from "@/api/db";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,14 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { GitBranch, Star, Loader2, Plus, ArrowRight } from "lucide-react";
+import { GitBranch, Star, Loader2, Plus, ArrowRight, FolderKanban } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_MAP, getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
-export default function RevisionPanel({ estimate, onUpdate }) {
+export default function RevisionPanel({ estimate, onUpdate, project = null }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [newRevisionOpen, setNewRevisionOpen] = useState(false);
@@ -63,18 +64,24 @@ export default function RevisionPanel({ estimate, onUpdate }) {
     },
   });
 
-  const { data: settings = [] } = useQuery({
-    queryKey: ["settings"],
-    queryFn: () => db.entities.SystemSettings.list(),
+  const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
+
+  // 案件に紐付いている見積では、受注確度・フェーズは案件の属性として扱い、
+  // 変更はその場で案件に保存する（見積の保存とは独立）。
+  const projectUpdate = useMutation({
+    mutationFn: (updates) => db.entities.Project.update(project.id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("案件の進捗を更新しました");
+    },
+    onError: (err) => toast.error("案件を更新できませんでした: " + (err?.message || "不明なエラー")),
   });
-  const dealProbabilityOptions = (() => {
-    const s = settings.find(x => x.setting_key === "deal_probability_options");
-    try { return s ? JSON.parse(s.setting_value) : ["A", "A（定期売上）", "要注意A", "B", "C", "失注"]; } catch { return []; }
-  })();
-  const phaseOptions = (() => {
-    const s = settings.find(x => x.setting_key === "phase_options");
-    try { return s ? JSON.parse(s.setting_value) : ["未着手", "着手中"]; } catch { return []; }
-  })();
+
+  const currentProbability = project ? project.deal_probability : (estimate.deal_probability || "B");
+  const currentPhase = project ? project.phase : (estimate.phase || "未着手");
+  const probabilityChoices = [...new Set([...dealProbabilityOptions, currentProbability].filter(Boolean))];
+  const phaseChoices = [...new Set([...phaseOptions, currentPhase].filter(Boolean))];
 
   const toggleFinal = (value) => {
     onUpdate({ is_final_submitted: value });
@@ -82,10 +89,18 @@ export default function RevisionPanel({ estimate, onUpdate }) {
   };
 
   const updateDealProbability = (v) => {
+    if (project) {
+      projectUpdate.mutate({ deal_probability: v, is_recurring: project.is_recurring || /定期/.test(v) });
+      return;
+    }
     onUpdate({ deal_probability: v, ...(v !== "失注" ? { lost_reason: "" } : {}) });
   };
 
   const updatePhase = (v) => {
+    if (project) {
+      projectUpdate.mutate({ phase: v });
+      return;
+    }
     onUpdate({ phase: v });
   };
 
@@ -138,14 +153,14 @@ export default function RevisionPanel({ estimate, onUpdate }) {
           <div className="space-y-1.5">
             <Label className="text-xs">受注確度</Label>
             <Select
-              value={estimate.deal_probability || "B"}
+              value={currentProbability}
               onValueChange={updateDealProbability}
             >
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {dealProbabilityOptions.map((label) => (
+                {probabilityChoices.map((label) => (
                   <SelectItem key={label} value={label} className="text-xs">{label}</SelectItem>
                 ))}
               </SelectContent>
@@ -154,14 +169,14 @@ export default function RevisionPanel({ estimate, onUpdate }) {
           <div className="space-y-1.5">
             <Label className="text-xs">フェーズ</Label>
             <Select
-              value={estimate.phase || "未着手"}
+              value={currentPhase}
               onValueChange={updatePhase}
             >
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {phaseOptions.map((label) => (
+                {phaseChoices.map((label) => (
                   <SelectItem key={label} value={label} className="text-xs">{label}</SelectItem>
                 ))}
               </SelectContent>
@@ -169,7 +184,7 @@ export default function RevisionPanel({ estimate, onUpdate }) {
           </div>
         </div>
 
-        {estimate.deal_probability === "失注" && (
+        {!project && estimate.deal_probability === "失注" && (
           <div className="space-y-1.5">
             <Label className="text-xs">失注理由</Label>
             <Input
@@ -181,9 +196,18 @@ export default function RevisionPanel({ estimate, onUpdate }) {
           </div>
         )}
 
-        <p className="text-[10px] text-muted-foreground -mt-1">
-          ※ 最終提出版・受注確度・フェーズの変更は、他の項目と同様、画面上部の「保存」ボタンを押すまで確定しません。受注確度・フェーズの選択肢は「システム設定」画面で編集できます
-        </p>
+        {project ? (
+          <p className="text-[10px] text-muted-foreground -mt-1 flex items-center gap-1 flex-wrap">
+            <FolderKanban className="w-3 h-3" />
+            受注確度・フェーズは案件
+            <Link to={`/projects/${project.id}`} className="text-primary hover:underline">{project.project_number} {project.name}</Link>
+            の属性です。変更するとすぐに案件へ保存されます
+          </p>
+        ) : (
+          <p className="text-[10px] text-muted-foreground -mt-1">
+            ※ この見積は案件に紐付いていません。受注確度・フェーズは見積の自動保存で確定します。選択肢は「システム設定」画面で編集できます
+          </p>
+        )}
 
         {allRevisions.length > 1 && (
           <div className="space-y-1.5 pt-1">

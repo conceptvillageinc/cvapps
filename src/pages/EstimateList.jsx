@@ -6,118 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, ArrowRight, Loader2, FileText, Filter, Check, ArrowUpDown } from "lucide-react";
+import { Plus, Search, ArrowRight, Loader2, FileText } from "lucide-react";
+import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PRINT_TYPES } from "@/lib/constants";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-
-// スプレッドシート同様、列内に実在する値（または選択肢マスタ）をチェックボックスで選ぶフィルター
-function ColumnFilter({ label, options, selected, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-
-  const isFiltered = selected !== null;
-  const activeSet = selected === null ? new Set(options) : new Set(selected);
-  const filteredOptions = options.filter(o => o.toLowerCase().includes(search.toLowerCase()));
-
-  const toggleValue = (value) => {
-    const next = new Set(activeSet);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
-    // 全選択状態に戻ったらフィルター解除（null）にする
-    onChange(next.size === options.length ? null : Array.from(next));
-  };
-
-  const selectAll = () => onChange(null);
-  const clearAll = () => onChange([]);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button className={`ml-1 align-middle ${isFiltered ? "text-primary" : "text-white/50 hover:text-white"}`}>
-          <Filter className="w-3 h-3" fill={isFiltered ? "currentColor" : "none"} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" align="start">
-        <div className="p-2 border-b">
-          <Input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={`${label}を検索`}
-            className="h-7 text-xs"
-          />
-        </div>
-        <div className="flex items-center justify-between px-2 py-1.5 border-b text-[10px]">
-          <button onClick={selectAll} className="text-primary hover:underline">すべて選択</button>
-          <button onClick={clearAll} className="text-muted-foreground hover:underline">クリア</button>
-        </div>
-        <div className="max-h-56 overflow-y-auto py-1">
-          {filteredOptions.length === 0 && (
-            <p className="text-[10px] text-muted-foreground text-center py-3">該当する値がありません</p>
-          )}
-          {filteredOptions.map(opt => {
-            const checked = activeSet.has(opt);
-            return (
-              <button
-                key={opt}
-                onClick={() => toggleValue(opt)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-muted/50 text-left"
-              >
-                <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 ${checked ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
-                  {checked && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-                </span>
-                <span className="truncate">{opt || "（空欄）"}</span>
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// 法人格表記（ソート対象外）
-const CORP_AFFIXES = ["株式会社", "有限会社", "一般社団法人", "NPO法人"];
-function stripCorpAffix(str = "") {
-  let s = str;
-  CORP_AFFIXES.forEach(p => {
-    if (s.startsWith(p)) s = s.slice(p.length);
-    if (s.endsWith(p)) s = s.slice(0, -p.length);
-  });
-  return s.trim();
-}
-
-// 並び替え（昇順・降順など）ボタン
-function SortButton({ options, sortKey, currentSort, onChange }) {
-  const [open, setOpen] = useState(false);
-  const active = currentSort?.key === sortKey;
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button className={`ml-1 align-middle ${active ? "text-primary" : "text-white/50 hover:text-white"}`}>
-          <ArrowUpDown className="w-3 h-3" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-40 p-1" align="start">
-        {options.map(opt => {
-          const isActive = active && currentSort.direction === opt.value;
-          return (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(isActive ? null : { key: sortKey, direction: opt.value }); setOpen(false); }}
-              className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50 flex items-center gap-1.5 ${isActive ? "text-primary font-medium" : ""}`}
-            >
-              {isActive && <Check className="w-3 h-3" />}
-              {opt.label}
-            </button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export default function EstimateList() {
   const navigate = useNavigate();
@@ -140,33 +35,29 @@ export default function EstimateList() {
     return m;
   }, [clients]);
 
-  const { data: settings = [] } = useQuery({
-    queryKey: ["settings"],
-    queryFn: () => db.entities.SystemSettings.list(),
+  const { dealProbabilityOptions: dealProbabilityMaster, phaseOptions: phaseMaster } = useSystemSettings();
+
+  // 案件に紐付いた見積は、受注確度・フェーズを案件から表示する
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects", "all"],
+    queryFn: () => db.entities.Project.list("-registered_at"),
   });
-
-  const dealProbabilityMaster = useMemo(() => {
-    const s = settings.find(x => x.setting_key === "deal_probability_options");
-    try { return s ? JSON.parse(s.setting_value) : ["A", "A（定期売上）", "要注意A", "B", "C", "失注"]; } catch { return []; }
-  }, [settings]);
-
-  const phaseMaster = useMemo(() => {
-    const s = settings.find(x => x.setting_key === "phase_options");
-    try { return s ? JSON.parse(s.setting_value) : ["未着手", "着手中"]; } catch { return []; }
-  }, [settings]);
+  const projectById = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects]);
+  const probabilityOf = (e) => (e.project_id && projectById[e.project_id]?.deal_probability) || e.deal_probability || "";
+  const phaseOf = (e) => (e.project_id && projectById[e.project_id]?.phase) || e.phase || "";
 
   // 列ごとの値取得・表示整形
   const columnDefs = useMemo(() => ({
     estimate_number: { label: "見積番号", getValue: e => e.estimate_number || "" },
     client_name: { label: "クライアント", getValue: e => e.client_name || "" },
     print_type: { label: "印刷物種別", getValue: e => e.print_type || "", master: PRINT_TYPES },
-    deal_probability: { label: "受注確度", getValue: e => e.deal_probability || "", master: dealProbabilityMaster },
-    phase: { label: "フェーズ", getValue: e => e.phase || "", master: phaseMaster },
+    deal_probability: { label: "受注確度", getValue: probabilityOf, master: dealProbabilityMaster },
+    phase: { label: "フェーズ", getValue: phaseOf, master: phaseMaster },
     total_amount: { label: "合計金額", getValue: e => e.total_amount ? `¥${e.total_amount.toLocaleString()}` : "—" },
     desired_delivery_date: { label: "希望納期", getValue: e => e.desired_delivery_date || "—" },
     created_date: { label: "作成日", getValue: e => format(new Date(e.created_date), "yyyy-MM-dd") },
     person_in_charge: { label: "作成担当者", getValue: e => e.person_in_charge || "" },
-  }), [dealProbabilityMaster, phaseMaster]);
+    }), [dealProbabilityMaster, phaseMaster, projectById]);
 
   // 各列の選択肢（マスタ + 実データにある値の和集合。存在するものだけ表示）
   const columnOptions = useMemo(() => {
@@ -355,6 +246,11 @@ export default function EstimateList() {
                         </TableCell>
                         <TableCell className="text-sm">
                           <div className="font-medium">{est.client_name}</div>
+                          {est.project_id && projectById[est.project_id] && (
+                            <div className="text-[10px] text-muted-foreground truncate max-w-[220px]">
+                              {projectById[est.project_id].project_number} {projectById[est.project_id].name}
+                            </div>
+                          )}
                           <div className="flex flex-wrap gap-1 mt-0.5">
                             {est.revision_label && (
                               <Badge variant="outline" className="text-[9px] font-normal">{est.revision_label}</Badge>
@@ -369,13 +265,13 @@ export default function EstimateList() {
                         </TableCell>
                         <TableCell className="text-sm">{est.print_type || "—"}</TableCell>
                         <TableCell>
-                          {est.deal_probability && (
-                            <Badge className={`text-[10px] ${getDealProbabilityColor(est.deal_probability)}`}>{est.deal_probability}</Badge>
+                          {probabilityOf(est) && (
+                            <Badge className={`text-[10px] ${getDealProbabilityColor(probabilityOf(est))}`}>{probabilityOf(est)}</Badge>
                           )}
                         </TableCell>
                         <TableCell>
-                          {est.phase && (
-                            <Badge className={`text-[10px] ${getPhaseColor(est.phase)}`}>{est.phase}</Badge>
+                          {phaseOf(est) && (
+                            <Badge className={`text-[10px] ${getPhaseColor(phaseOf(est))}`}>{phaseOf(est)}</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right text-sm font-medium tabular-nums">

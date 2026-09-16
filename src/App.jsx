@@ -20,6 +20,8 @@ import SystemSettingsPage from '@/pages/SystemSettings';
 import UserManagement from '@/pages/UserManagement';
 import ClientManagement from '@/pages/ClientManagement';
 import FaqPage from '@/pages/FaqPage';
+import ProjectList from '@/pages/ProjectList';
+import ProjectDetail from '@/pages/ProjectDetail';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
@@ -44,6 +46,8 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/projects" element={<ProjectList />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/estimates/new" element={<EstimateCreate />} />
           <Route path="/estimates/:id" element={<EstimateDetail />} />
           <Route path="/estimates" element={<EstimateList />} />

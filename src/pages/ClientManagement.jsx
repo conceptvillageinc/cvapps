@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { normalizePostalCode, isValidPostalCode, formatPostalCode, formatPostalInput } from "@/lib/postalCode";
+import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 
-const emptyForm = { name: "", name_kana: "", contact_person: "", contact_person_kana: "", email: "", phone: "", postal_code: "", address: "", notes: "" };
+const emptyForm = { name: "", name_kana: "", contact_person: "", contact_person_kana: "", email: "", phone: "", postal_code: "", address: "", notes: "", invoice_delivery_method: "", invoice_delivery_notes: "", has_recurring_billing: false };
 
 // クリックしてその場で編集できるセル。フォーカスを外すと自動保存される。
 // normalize: 入力中に値を正規化（例: 郵便番号のハイフン除去）
@@ -112,7 +113,7 @@ export default function ClientManagement() {
 
   const openEdit = (client) => {
     setEditing(client);
-    setForm({ name: client.name || "", name_kana: client.name_kana || "", contact_person: client.contact_person || "", contact_person_kana: client.contact_person_kana || "", email: client.email || "", phone: client.phone || "", postal_code: client.postal_code || "", address: client.address || "", notes: client.notes || "" });
+    setForm({ name: client.name || "", name_kana: client.name_kana || "", contact_person: client.contact_person || "", contact_person_kana: client.contact_person_kana || "", email: client.email || "", phone: client.phone || "", postal_code: client.postal_code || "", address: client.address || "", notes: client.notes || "", invoice_delivery_method: client.invoice_delivery_method || "", invoice_delivery_notes: client.invoice_delivery_notes || "", has_recurring_billing: !!client.has_recurring_billing });
     setDialogOpen(true);
   };
 
@@ -155,6 +156,7 @@ export default function ClientManagement() {
                   <tr className="border-b bg-muted/30">
                     <th className="text-left p-3 font-medium text-muted-foreground">クライアント名</th>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden md:table-cell">担当者</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground hidden md:table-cell w-36">請求書送付</th>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden lg:table-cell">メール</th>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden lg:table-cell">電話番号</th>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden lg:table-cell w-28">郵便番号</th>
@@ -176,6 +178,32 @@ export default function ClientManagement() {
                           value={client.contact_person}
                           onSave={(v) => inlineUpdateMutation.mutate({ id: client.id, field: "contact_person", value: v })}
                         />
+                      </td>
+                      <td className="p-3 hidden md:table-cell">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={client.invoice_delivery_method || ""}
+                            onChange={e => inlineUpdateMutation.mutate({ id: client.id, field: "invoice_delivery_method", value: e.target.value || null })}
+                            className="h-7 rounded-md border bg-background px-1.5 text-xs text-foreground"
+                            title={client.invoice_delivery_notes || ""}
+                          >
+                            <option value="">—</option>
+                            {Object.entries(INVOICE_DELIVERY_METHODS).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </select>
+                          <label className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap cursor-pointer" title="定期売上（毎月の請求）がある">
+                            <input
+                              type="checkbox"
+                              checked={!!client.has_recurring_billing}
+                              onChange={e => inlineUpdateMutation.mutate({ id: client.id, field: "has_recurring_billing", value: e.target.checked })}
+                            />
+                            定期
+                          </label>
+                        </div>
+                        {client.invoice_delivery_notes && (
+                          <div className="text-[10px] text-amber-700 mt-0.5 truncate max-w-[140px]" title={client.invoice_delivery_notes}>{client.invoice_delivery_notes}</div>
+                        )}
                       </td>
                       <td className="p-3 text-muted-foreground hidden lg:table-cell">
                         <InlineEditCell
@@ -282,6 +310,32 @@ export default function ClientManagement() {
               <Label className="text-xs">住所</Label>
               <Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="東京都渋谷区..." />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">請求書の送付方法</Label>
+                <select
+                  value={form.invoice_delivery_method}
+                  onChange={e => setForm(f => ({ ...f, invoice_delivery_method: e.target.value }))}
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                >
+                  <option value="">未設定</option>
+                  {Object.entries(INVOICE_DELIVERY_METHODS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">定期売上</Label>
+                <label className="flex items-center gap-2 h-9 text-sm cursor-pointer">
+                  <input type="checkbox" checked={form.has_recurring_billing} onChange={e => setForm(f => ({ ...f, has_recurring_billing: e.target.checked }))} />
+                  毎月の請求がある
+                </label>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">送付に関する補足</Label>
+              <Input value={form.invoice_delivery_notes} onChange={e => setForm(f => ({ ...f, invoice_delivery_notes: e.target.value }))} placeholder="例: ○○様宛 / CCあり / 送付方法要確認" />
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">備考</Label>
               <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
@@ -289,7 +343,7 @@ export default function ClientManagement() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>キャンセル</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={!form.name || (form.postal_code && !isValidPostalCode(form.postal_code)) || saveMutation.isPending}>
+            <Button onClick={() => saveMutation.mutate({ ...form, invoice_delivery_method: form.invoice_delivery_method || null })} disabled={!form.name || (form.postal_code && !isValidPostalCode(form.postal_code)) || saveMutation.isPending}>
               {saveMutation.isPending ? "保存中..." : "保存"}
             </Button>
           </DialogFooter>

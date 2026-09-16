@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, DEFAULT_VALIDITY_MONTHS 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Save, ArrowLeft, ChevronsUpDown, Check } from "lucide-react";
+import { Save, ArrowLeft, ChevronsUpDown, Check, Plus, FolderKanban } from "lucide-react";
+import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -19,9 +20,27 @@ import { generateEstimateNumber } from "@/lib/estimateNumber";
 
 export default function EstimateCreate() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
+  const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [project, setProject] = useState(null);
+
+  // 案件詳細の「この案件の見積を作成」から来た場合は、その案件を固定する
+  const lockedProjectId = searchParams.get("project");
+  const { data: lockedProject } = useQuery({
+    queryKey: ["project", lockedProjectId],
+    queryFn: () => db.entities.Project.get(lockedProjectId),
+    enabled: !!lockedProjectId,
+  });
+
+  // 進行中の案件（新しい順）。件名・クライアントの初期値に使う。
+  const { data: openProjects = [] } = useQuery({
+    queryKey: ["projects", "open"],
+    queryFn: () => db.entities.Project.filter({ status: "open" }, "-registered_at", 300),
+  });
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
@@ -60,21 +79,51 @@ export default function EstimateCreate() {
     }
   }, [user]);
 
+  // 案件を選んだら、クライアント名と件名の初期値を案件から引き継ぐ
+  const applyProject = (p) => {
+    setProject(p);
+    if (!p) return;
+    setFormData(prev => ({
+      ...prev,
+      client_name: p.client_name || prev.client_name,
+      estimate_title: prev.estimate_title || p.name || "",
+      desired_delivery_date: prev.desired_delivery_date || p.due_date || "",
+    }));
+  };
+
+  useEffect(() => {
+    if (lockedProject) applyProject(lockedProject);
+     
+  }, [lockedProject?.id]);
+
   const handleSave = async () => {
+    if (!project) {
+      toast.error("案件を選択するか、新しく作成してください");
+      return;
+    }
     if (!formData.client_name || !formData.desired_delivery_date) {
       toast.error("クライアント名、希望納期は必須です");
       return;
     }
     setSaving(true);
-    const estimateNumber = await generateEstimateNumber(db);
-    const created = await db.entities.Estimate.create({
-      ...formData,
-      estimate_number: estimateNumber,
-      project_group_id: estimateNumber,
-      revision_label: "初回",
-      deal_probability: "B",
-      phase: "未着手",
-    });
+    let created;
+    try {
+      const estimateNumber = await generateEstimateNumber(db);
+      created = await db.entities.Estimate.create({
+        ...formData,
+        estimate_number: estimateNumber,
+        project_group_id: estimateNumber,
+        project_id: project.id,
+        revision_label: "初回",
+        // 受注確度・フェーズは案件の属性。見積側には表示用の写しを持つ
+        deal_probability: project.deal_probability || "A",
+        phase: project.phase || "引き合い",
+      });
+    } catch (err) {
+      setSaving(false);
+      toast.error("見積を作成できませんでした: " + (err?.message || "不明なエラー"));
+      return;
+    }
 
     // 見積作成頻度をクライアント一覧の表示順に反映させるため、quote_countを更新
     try {
@@ -105,13 +154,84 @@ export default function EstimateCreate() {
           </Button>
           <div>
             <h1 className="text-xl font-bold tracking-tight">新規見積作成</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">基本情報を入力後、見積書画面で明細を追加します</p>
+            <p className="text-xs text-muted-foreground mt-0.5">案件を選んで基本情報を入力後、見積書画面で明細を追加します</p>
           </div>
         </div>
         <Button onClick={handleSave} disabled={saving} className="gap-2">
           <Save className="w-4 h-4" /> 作成して明細入力へ
         </Button>
       </div>
+
+      {/* 案件 */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2"><FolderKanban className="w-4 h-4" /> 案件 <span className="text-destructive text-xs font-normal">*</span></CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {project ? (
+            <div className="flex items-start justify-between gap-3 rounded-md border p-3 bg-muted/20">
+              <div className="min-w-0">
+                <p className="text-xs font-mono text-muted-foreground">{project.project_number}</p>
+                <p className="text-sm font-medium truncate">{project.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{project.client_name}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link to={`/projects/${project.id}`} className="text-xs text-primary hover:underline">詳細</Link>
+                {!lockedProjectId && (
+                  <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setProject(null)}>変更</Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Popover open={projectPopoverOpen} onOpenChange={setProjectPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="flex-1 justify-between font-normal">
+                    進行中の案件から選ぶ
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="案件番号・クライアント名・案件名で検索" />
+                    <CommandList>
+                      <CommandEmpty>該当する案件がありません。右のボタンから新規作成できます</CommandEmpty>
+                      <CommandGroup>
+                        {openProjects.map(p => (
+                          <CommandItem
+                            key={p.id}
+                            value={`${p.project_number} ${p.client_name} ${p.name}`}
+                            onSelect={() => { applyProject(p); setProjectPopoverOpen(false); }}
+                          >
+                            <div className="min-w-0">
+                              <div className="text-xs font-mono text-muted-foreground">{p.project_number} · {p.registered_at}</div>
+                              <div className="text-sm truncate">{p.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{p.client_name}</div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <Button variant="secondary" className="gap-1.5" onClick={() => setProjectDialogOpen(true)}>
+                <Plus className="w-4 h-4" /> 新規案件を作成
+              </Button>
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">
+            見積は案件に紐付けて管理します。受注確度・フェーズ・入金予定は案件側で持ちます
+          </p>
+        </CardContent>
+      </Card>
+
+      <ProjectFormDialog
+        open={projectDialogOpen}
+        onOpenChange={setProjectDialogOpen}
+        defaults={{ client_name: formData.client_name, name: formData.estimate_title, due_date: formData.desired_delivery_date }}
+        onSaved={(row) => applyProject(row)}
+      />
 
       {/* 基本情報 */}
       <Card>
