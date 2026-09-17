@@ -1,13 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, Calculator } from "lucide-react";
-import { getMarkupRate, applyMarkup } from "@/lib/constants";
+import { applyMarkup } from "@/lib/constants";
+import { usePricingRules, markupRateFor } from "@/lib/pricing";
 import { useEffect } from "react";
 import NumericField from "@/components/estimates/NumericField";
 
 export default function CostCalculation({ estimate, onUpdate }) {
   const costPrice = estimate.cost_price || 0;
-  const markupRate = getMarkupRate(estimate.print_type);
+  const { rules } = usePricingRules();
+  const markupRate = markupRateFor(rules, estimate.print_type);
   const sellingPrice = estimate.selling_price || 0;
   const proofreadingFee = estimate.proofreading_fee || 0;
   const otherFees = estimate.other_fees || 0;

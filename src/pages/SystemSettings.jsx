@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Settings, Plus, X, ArrowUp, ArrowDown, FileText, GripVertical, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import PricingRulesCard from "@/components/settings/PricingRulesCard";
 
 // 設定1件をupsert（存在すれば更新、無ければ新規作成）
 async function upsertSetting(existingList, key, value, description) {
@@ -85,8 +86,6 @@ export default function SystemSettingsPage() {
     queryFn: () => db.entities.SystemSettings.list(),
   });
 
-  const [markupLabel, setMarkupLabel] = useState("1.25");
-  const [markupOther, setMarkupOther] = useState("1.30");
   const [proofreadingFee, setProofreadingFee] = useState("0");
   const [dealProbabilityList, setDealProbabilityList] = useState(["A", "A（定期売上）", "要注意A", "B", "C", "失注"]);
   const [phaseList, setPhaseList] = useState(["未着手", "着手中"]);
@@ -99,19 +98,10 @@ export default function SystemSettingsPage() {
   const [dragTemplateIdx, setDragTemplateIdx] = useState(null);
 
   // 数値系フィールドの自動保存が、読み込み直後の初期値セットで誤って走らないようにするガード
-  const skipMarkupAutosave = useRef(true);
   const skipProofAutosave = useRef(true);
 
   useEffect(() => {
     if (settings.length > 0) {
-      const markup = settings.find(s => s.setting_key === "markup_rates");
-      if (markup) {
-        try {
-          const val = JSON.parse(markup.setting_value);
-          setMarkupLabel(String(val.package_label ?? 1.25));
-          setMarkupOther(String(val.other ?? 1.30));
-        } catch { /* ignore */ }
-      }
       const proof = settings.find(s => s.setting_key === "default_proofreading_fee");
       if (proof) setProofreadingFee(proof.setting_value);
 
@@ -132,17 +122,7 @@ export default function SystemSettingsPage() {
     }
   }, [settings.length]);
 
-  // 掛け率・デフォルト校正費：入力が落ち着いてから自動保存（読み込み直後の1回はスキップ）
-  useEffect(() => {
-    if (skipMarkupAutosave.current) { skipMarkupAutosave.current = false; return; }
-    const t = setTimeout(() => {
-      upsertSetting(settings, "markup_rates", JSON.stringify({ package_label: Number(markupLabel), other: Number(markupOther) }), "印刷物種別ごとの掛け率")
-        .then(() => queryClient.invalidateQueries({ queryKey: ["settings"] }))
-        .catch(err => toast.error("自動保存に失敗しました: " + err.message));
-    }, 800);
-    return () => clearTimeout(t);
-  }, [markupLabel, markupOther]);
-
+  // デフォルト校正費：入力が落ち着いてから自動保存（読み込み直後の1回はスキップ）
   useEffect(() => {
     if (skipProofAutosave.current) { skipProofAutosave.current = false; return; }
     const t = setTimeout(() => {
@@ -234,36 +214,7 @@ export default function SystemSettingsPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">掛け率設定</CardTitle>
-          <CardDescription className="text-xs">印刷物種別ごとの掛け率を設定します</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">パッケージラベル印刷</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={markupLabel}
-                onChange={e => setMarkupLabel(e.target.value)}
-              />
-              <p className="text-[10px] text-muted-foreground">例: 1.25 = 原価×1.25</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">その他全種別</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={markupOther}
-                onChange={e => setMarkupOther(e.target.value)}
-              />
-              <p className="text-[10px] text-muted-foreground">例: 1.30 = 原価×1.30</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <PricingRulesCard settings={settings} upsertSetting={upsertSetting} />
 
       <Card>
         <CardHeader>

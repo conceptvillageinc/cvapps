@@ -10,13 +10,16 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp,
+  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
 import {
-  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, TAX_RATE, getMarkupRate, applyMarkup,
+  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, TAX_RATE, applyMarkup,
 } from "@/lib/constants";
+import {
+  usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS,
+} from "@/lib/pricing";
 import { DESIGN_FEE_MASTER, getDesignItemsByCategory } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import { formatPostalCode } from "@/lib/postalCode";
@@ -34,6 +37,12 @@ const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appeara
 
 function round(n) {
   return Math.round(n || 0);
+}
+
+// 金額表示。割引行はマイナスになるので「-¥7,000」の形にする
+function yen(n) {
+  const v = Number(n) || 0;
+  return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString()}`;
 }
 
 function computeTotals(lineItems) {
@@ -55,7 +64,8 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const [addPanel, setAddPanel] = useState(null); // LINE_ITEM_CATEGORIES key
   const [priceMasterPick, setPriceMasterPick] = useState(null); // selected PriceMaster entry for tier selection
   const [dragId, setDragId] = useState(null);
-  const [manualForm, setManualForm] = useState({ name: "", quantity: 1, unit: "式", unit_price: 0 });
+  const [manualForm, setManualForm] = useState({ name: "", quantity: 1, unit: "式", unit_price: 0, cost: "", outsourcing: "" });
+  const { rules } = usePricingRules();
 
   const lineItems = estimate.line_items || [];
   const { subtotal, tax, total } = useMemo(() => computeTotals(lineItems), [lineItems]);
@@ -114,9 +124,19 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const validityMonths = estimate.validity_period_months ?? DEFAULT_VALIDITY_MONTHS;
   const validUntil = format(addMonths(new Date(estimateDate), validityMonths), "yyyy-MM-dd");
 
-  const commitItems = (newItems) => {
+  const commitItems = (rawItems) => {
+    // コンセプト設計費・校正費・割引などの自動計算行を、他の行の合計から入れ直す
+    const newItems = recomputeRuleRows(rawItems, rules);
     const totals = computeTotals(newItems);
     onUpdate({ line_items: newItems, total_amount: totals.total });
+  };
+
+  const addRuleRow = (rule, discount) => {
+    if (lineItems.some(li => li.source_type === "rule" && li.rule === rule && (rule !== "discount" || li.discount_key === discount?.key))) {
+      toast.info("その自動計算行はすでに追加されています");
+      return;
+    }
+    commitItems([...lineItems, { id: uid(), row_type: "item", ...makeRuleRow(rules, rule, discount) }]);
   };
 
   const addItem = (item) => {
@@ -153,7 +173,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const closeAddPanel = () => {
     setAddPanel(null);
     setPriceMasterPick(null);
-    setManualForm({ name: "", quantity: 1, unit: "式", unit_price: 0 });
+    setManualForm({ name: "", quantity: 1, unit: "式", unit_price: 0, cost: "", outsourcing: "" });
   };
 
   const pickDesignItem = (categoryLabel, masterItem) => {
@@ -174,7 +194,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
     const catDef = LINE_ITEM_CATEGORIES.find(c => c.key === addPanel);
     const quantity = cell.quantity || 1;
     const costPerUnit = cell.price / quantity;
-    const markupRate = getMarkupRate(entry.category);
+    const markupRate = markupRateFor(rules, entry.category);
     const unitPrice = applyMarkup(costPerUnit, markupRate);
     addItem({
       category: catDef.label,
@@ -205,6 +225,10 @@ export default function QuoteEditor({ estimate, onUpdate }) {
       unit_price: Number(manualForm.unit_price) || 0,
       amount: (Number(manualForm.quantity) || 1) * (Number(manualForm.unit_price) || 0),
       source_type: "manual",
+      // 外注の仕入額から売価を出した場合は、原価として持ち粗利に反映する
+      ...(manualForm.outsourcing && Number(manualForm.cost) > 0
+        ? { cost_price: Number(manualForm.cost), outsourcing_kind: manualForm.outsourcing }
+        : {}),
     });
     closeAddPanel();
   };
@@ -220,8 +244,8 @@ export default function QuoteEditor({ estimate, onUpdate }) {
         <td>${escapeHtml(li.name)}</td>
         <td class="num">${(li.quantity ?? "").toLocaleString ? li.quantity.toLocaleString() : li.quantity}</td>
         <td class="num">${escapeHtml(li.unit)}</td>
-        <td class="num">${(li.unit_price || 0).toLocaleString()}</td>
-        <td class="num">${(li.amount || 0).toLocaleString()}</td>
+        <td class="num">${yen(li.unit_price).replace("¥", "")}</td>
+        <td class="num">${yen(li.amount).replace("¥", "")}</td>
       </tr>`;
     }).join("");
 
@@ -432,8 +456,8 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                     <td className="px-3 py-2 align-top">{li.name}</td>
                     <td className="px-3 py-2 text-right align-top">{li.quantity?.toLocaleString?.() ?? li.quantity}</td>
                     <td className="px-3 py-2 text-right align-top">{li.unit}</td>
-                    <td className="px-3 py-2 text-right align-top">¥{(li.unit_price || 0).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right align-top font-medium">¥{(li.amount || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right align-top">{yen(li.unit_price)}</td>
+                    <td className="px-3 py-2 text-right align-top font-medium">{yen(li.amount)}</td>
                   </tr>
                 )
               ))}
@@ -555,6 +579,28 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                 <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("vendor_quote")}>
                   <FileUp className="w-3.5 h-3.5" /> 仕入先見積から読込
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200">
+                      <Calculator className="w-3.5 h-3.5" /> 自動計算行
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-1" align="start">
+                    <p className="text-[10px] text-muted-foreground px-2 py-1">他の明細の合計から金額が決まる行です。%はシステム設定で変更できます</p>
+                    <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("concept_fee")}>
+                      コンセプト設計費 <span className="text-muted-foreground">（印刷費を除く合計の{Math.round(rules.concept_fee.rate * 100)}%）</span>
+                    </button>
+                    <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("proofreading_fee")}>
+                      校正費 <span className="text-muted-foreground">（デザイン費の{Math.round(rules.proofreading_fee.rate * 100)}%）</span>
+                    </button>
+                    <div className="border-t my-1" />
+                    {rules.discounts.map(d => (
+                      <button key={d.key} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("discount", d)}>
+                        {d.label} <span className="text-muted-foreground">（デザイン費の{Math.round(d.rate * 100)}%を値引き）</span>
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
                 <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 text-foreground hover:bg-emerald-100 hover:text-foreground" onClick={addTextRow}>
                   <Type className="w-3.5 h-3.5" /> テキスト行（見出し・注記）
                 </Button>
@@ -709,7 +755,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                 ← 一覧に戻る
               </Button>
               <p className="text-sm font-medium">{priceMasterPick.category}（{priceMasterPick.vendor_name}）</p>
-              <p className="text-xs text-muted-foreground">{priceMasterPick.spec_summary} ・ 掛け率 ×{getMarkupRate(priceMasterPick.category)}</p>
+              <p className="text-xs text-muted-foreground">{priceMasterPick.spec_summary} ・ 掛け率 ×{markupRateFor(rules, priceMasterPick.category)}</p>
               <div className="space-y-1">
                 {priceMasterPick.selectedCells.map((cell, i) => (
                   <button
@@ -719,7 +765,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                   >
                     <span>{cell.quantity}枚 ・ {cell.label}納期</span>
                     <span className="text-primary font-medium">
-                      原価¥{(cell.price || 0).toLocaleString()} → 出し値¥{(applyMarkup(cell.price / (cell.quantity || 1), getMarkupRate(priceMasterPick.category)) * (cell.quantity || 1)).toLocaleString()}
+                      原価¥{(cell.price || 0).toLocaleString()} → 出し値¥{(applyMarkup(cell.price / (cell.quantity || 1), markupRateFor(rules, priceMasterPick.category)) * (cell.quantity || 1)).toLocaleString()}
                     </span>
                   </button>
                 ))}
@@ -745,6 +791,59 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                 <div className="space-y-1.5">
                   <Label className="text-xs">単価</Label>
                   <Input type="number" value={manualForm.unit_price} onChange={e => setManualForm({ ...manualForm, unit_price: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground">社内の時間単価（クリックで単価に入れる）</p>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    ["produce", "プロデュース・企画・コンサル"], ["model", "モデル対応"], ["other_work", "撮影同行サポート"],
+                    ["inhouse_design", "社内デザイン"], ["inhouse_photo", "社内撮影"], ["labeling", "一括表示作成"],
+                  ].filter(([k]) => Number(rules.hourly[k]) > 0).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      className="text-[10px] px-2 py-1 rounded border bg-white hover:bg-muted/50"
+                      onClick={() => setManualForm({ ...manualForm, name: manualForm.name || label, unit: k === "labeling" ? "商品" : "時間", unit_price: rules.hourly[k], outsourcing: "", cost: "" })}
+                    >
+                      {label} ¥{Number(rules.hourly[k]).toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-md border border-dashed p-2.5 space-y-2 bg-muted/20">
+                <p className="text-[10px] text-muted-foreground">外注の仕入額から売価を出す（売価 = 仕入 ÷ 率、{rules.rounding.outsourcing.toLocaleString()}円単位で切り上げ）</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">外注の種類</Label>
+                    <select
+                      value={manualForm.outsourcing}
+                      onChange={e => {
+                        const kind = e.target.value;
+                        const price = kind && Number(manualForm.cost) > 0 ? outsourcingPrice(rules, kind, Number(manualForm.cost)) : manualForm.unit_price;
+                        setManualForm({ ...manualForm, outsourcing: kind, unit_price: price });
+                      }}
+                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    >
+                      <option value="">使わない</option>
+                      {OUTSOURCING_KINDS.map(k => (
+                        <option key={k.key} value={k.key}>{k.label}（÷{rules.outsourcing[k.key]}）</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">仕入額（税抜・単価）</Label>
+                    <Input
+                      type="number"
+                      value={manualForm.cost}
+                      onChange={e => {
+                        const cost = e.target.value;
+                        const price = manualForm.outsourcing && Number(cost) > 0 ? outsourcingPrice(rules, manualForm.outsourcing, Number(cost)) : manualForm.unit_price;
+                        setManualForm({ ...manualForm, cost, unit_price: price });
+                      }}
+                      placeholder="例: 35000"
+                    />
+                  </div>
                 </div>
               </div>
               <Button className="w-full gap-1.5" onClick={submitManual}>
@@ -788,6 +887,7 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
     );
   }
 
+  const isRule = item.source_type === "rule";
   const hasCost = item.cost_price != null;
   const lineCostTotal = hasCost ? Number(item.cost_price) * (Number(item.quantity) || 1) : 0;
   const lineProfit = hasCost ? (Number(item.amount) || 0) - lineCostTotal : 0;
@@ -809,27 +909,42 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
       </td>
       <td className="px-3 py-2 align-top">
         <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />
-        {item.category && <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5">{item.category}</div>}
+        {item.category && (
+          <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex items-center gap-1">
+            {item.category}
+            {isRule && <span className="inline-flex items-center gap-0.5 text-emerald-700"><Lock className="w-2.5 h-2.5" /> {ruleRowHint(item)}</span>}
+          </div>
+        )}
       </td>
-      <td className="px-3 py-2 text-right align-top">
-        <NumericField
-          value={item.quantity}
-          onCommit={(q) => onChange({ quantity: q, amount: q * (item.unit_price || 0) })}
-          className={`${cellInputClass} text-right`}
-        />
-      </td>
-      <td className="px-3 py-2 text-right align-top">
-        <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} className={`${cellInputClass} text-right`} />
-      </td>
-      <td className="px-3 py-2 text-right align-top">
-        <NumericField
-          value={item.unit_price}
-          onCommit={(p) => onChange({ unit_price: p, amount: p * (item.quantity || 1) })}
-          className={`${cellInputClass} text-right`}
-        />
-      </td>
+      {isRule ? (
+        <>
+          <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">1</td>
+          <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">式</td>
+          <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">自動</td>
+        </>
+      ) : (
+        <>
+          <td className="px-3 py-2 text-right align-top">
+            <NumericField
+              value={item.quantity}
+              onCommit={(q) => onChange({ quantity: q, amount: q * (item.unit_price || 0) })}
+              className={`${cellInputClass} text-right`}
+            />
+          </td>
+          <td className="px-3 py-2 text-right align-top">
+            <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} className={`${cellInputClass} text-right`} />
+          </td>
+          <td className="px-3 py-2 text-right align-top">
+            <NumericField
+              value={item.unit_price}
+              onCommit={(p) => onChange({ unit_price: p, amount: p * (item.quantity || 1) })}
+              className={`${cellInputClass} text-right`}
+            />
+          </td>
+        </>
+      )}
       <td className="px-3 py-2 text-right align-top font-medium">
-        ¥{(item.amount || 0).toLocaleString()}
+        {yen(item.amount)}
       </td>
       <td className="px-2 py-2 align-top">
         <button onClick={onRemove} className="text-muted-foreground hover:text-destructive">
@@ -843,12 +958,15 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
         <td colSpan={6} className="px-3 pb-2 pt-0">
           <div className="p-2.5 rounded bg-amber-50 border border-amber-100 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <div className="text-[10px] text-amber-700">
-              原価 ¥{Number(item.cost_price).toLocaleString()} × {(item.quantity || 1).toLocaleString()}枚
+              原価 ¥{Number(item.cost_price).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}
               <span className="mx-1.5">−</span>
-              出し値 ¥{Number(item.unit_price || 0).toLocaleString()} × {(item.quantity || 1).toLocaleString()}枚
+              出し値 ¥{Number(item.unit_price || 0).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}
               <span className="mx-1.5">＝</span>
               粗利 <strong>¥{lineProfit.toLocaleString()}</strong>（粗利率 <strong>{lineProfitRate}%</strong>）
             </div>
+            {item.outsourcing_kind ? (
+              <div className="text-[10px] text-amber-700">外注（仕入 ÷ 率で売価を算出）</div>
+            ) : (
             <div className="flex items-center gap-1.5 text-[10px] text-amber-700">
               <span className="shrink-0">掛け率</span>
               <NumericField
@@ -861,6 +979,7 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
               />
               <span className="text-amber-600">変更すると自動反映</span>
             </div>
+            )}
           </div>
         </td>
       </tr>

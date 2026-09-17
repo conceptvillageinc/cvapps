@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Star } from "lucide-react";
 import { useState } from "react";
-import { getMarkupRate, EMAIL_VENDOR_MAP, WEB_PRINT_TYPES, WEB_VENDORS, applyMarkup } from "@/lib/constants";
+import { EMAIL_VENDOR_MAP, WEB_PRINT_TYPES, WEB_VENDORS, applyMarkup } from "@/lib/constants";
+import { usePricingRules, markupRateFor } from "@/lib/pricing";
 import VendorQuoteFileImporter from "@/components/estimates/VendorQuoteFileImporter";
 
 export default function PriceTable({ estimate, onUpdate }) {
@@ -14,7 +15,8 @@ export default function PriceTable({ estimate, onUpdate }) {
 
   const vendorPrices = estimate.vendor_prices || [];
   const printType = estimate.print_type;
-  const markupRate = getMarkupRate(printType);
+  const { rules } = usePricingRules();
+  const markupRate = markupRateFor(rules, printType);
 
   // Get suggested vendors
   const emailVendors = EMAIL_VENDOR_MAP[printType] || [];

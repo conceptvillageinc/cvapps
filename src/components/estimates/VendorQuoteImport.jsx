@@ -9,7 +9,8 @@ import {
 import { Loader2, FileUp, AlertTriangle, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import NumericField from "@/components/estimates/NumericField";
-import { LINE_ITEM_CATEGORIES, getMarkupRate, applyMarkup } from "@/lib/constants";
+import { LINE_ITEM_CATEGORIES, applyMarkup } from "@/lib/constants";
+import { usePricingRules, markupRateFor } from "@/lib/pricing";
 import { extractVendorQuote, costPerUnit, lineName } from "@/lib/vendorQuote";
 
 // ============================================================================
@@ -23,6 +24,7 @@ import { extractVendorQuote, costPerUnit, lineName } from "@/lib/vendorQuote";
 const IMPORTABLE_CATEGORIES = LINE_ITEM_CATEGORIES.filter(c => c.key !== "design");
 
 export default function VendorQuoteImport({ onAdd, onClose }) {
+  const { rules } = usePricingRules();
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -62,7 +64,7 @@ export default function VendorQuoteImport({ onAdd, onClose }) {
     setDraft({
       vendorName: result?.vendor_name || "",
       category: "print_paper",
-      markupRate: getMarkupRate(result?.vendor_name),
+      markupRate: markupRateFor(rules, result?.vendor_name),
       notes: result?.notes || "",
       rows: rows.length > 0 ? rows : [{ key: 0, selected: true, name: "", quantity: 1, cost: 0 }],
     });
