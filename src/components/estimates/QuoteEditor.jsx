@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock,
+  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
@@ -25,6 +25,7 @@ import NumericField from "@/components/estimates/NumericField";
 import { formatPostalCode } from "@/lib/postalCode";
 
 import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
+import WebPriceImport from "@/components/estimates/WebPriceImport";
 
 const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: Printer, build: Hammer, other: Plus };
 
@@ -579,6 +580,9 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                 <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("vendor_quote")}>
                   <FileUp className="w-3.5 h-3.5" /> 仕入先見積から読込
                 </Button>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("web_price")}>
+                  <Globe className="w-3.5 h-3.5" /> ネット印刷から取込
+                </Button>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200">
@@ -689,17 +693,27 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
       {/* カテゴリ別の選択ダイアログ */}
       <Dialog open={!!addPanel} onOpenChange={(open) => !open && closeAddPanel()}>
-        <DialogContent className={`${addPanel === "vendor_quote" ? "max-w-3xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
+        <DialogContent className={`${addPanel === "vendor_quote" || addPanel === "web_price" ? "max-w-3xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
               {addPanel === "vendor_quote"
                 ? "仕入先見積から明細を読み込む"
-                : `${LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.label} を追加`}
+                : addPanel === "web_price"
+                  ? "ネット印刷の価格ページから取り込む"
+                  : `${LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.label} を追加`}
             </DialogTitle>
           </DialogHeader>
 
           {addPanel === "vendor_quote" && (
             <VendorQuoteImport onAdd={addItems} onClose={closeAddPanel} />
+          )}
+
+          {addPanel === "web_price" && (
+            <WebPriceImport
+              defaultCategory={(estimate.print_specs || []).find(sp => sp.print_type)?.print_type || ""}
+              onAdd={addItems}
+              onClose={closeAddPanel}
+            />
           )}
 
           {addPanel === "design" && (
