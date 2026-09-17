@@ -6,7 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Mail, Send, Loader2, Sparkles, Eye, Edit3 } from "lucide-react";
+import { Mail, Send, Loader2, Sparkles, Eye, Edit3, Printer } from "lucide-react";
+import { specLabel, specMissing } from "@/lib/printSpecs";
 import { db } from "@/api/db";
 import { toast } from "sonner";
 import {
@@ -19,6 +20,14 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
   const [editingIdx, setEditingIdx] = useState(null);
   const [sendingIdx, setSendingIdx] = useState(null);
   const [selected, setSelected] = useState(null); // null = 既定値の適用前
+  // 新形式: どの印刷仕様を依頼するか（既定は全部）
+  const allSpecs = estimate.schema_version === 2 ? (estimate.print_specs || []) : [];
+  const [specIds, setSpecIds] = useState(null);
+  const selectedSpecs = allSpecs.filter(sp => specIds === null || specIds.includes(sp.id));
+  const toggleSpec = (id) => setSpecIds(prev => {
+    const cur = prev === null ? allSpecs.map(sp => sp.id) : prev;
+    return cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+  });
 
   const { data: printVendors = [] } = useQuery({
     queryKey: ["printVendors"],
@@ -26,16 +35,18 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
   });
 
   const options = useMemo(
-    () => recipientOptions(printVendors, estimate),
-    [printVendors, estimate],
+    () => recipientOptions(printVendors, estimate, selectedSpecs),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [printVendors, estimate.schema_version, estimate.print_type, JSON.stringify(selectedSpecs.map(sp => sp.print_type))],
   );
 
-  // 旧形式は印刷物種別から宛先が決まるので、それを初期選択にする。
-  // 新形式は決め手が無いので未選択から始める。
+  // 印刷物種別から宛先の既定値を決める（旧形式は見積の種別、新形式は選んだ印刷仕様の種別）。
+  // 決め手が無い新形式は未選択から始める。
   useEffect(() => {
     if (selected !== null) return;
-    const preset = defaultRecipients(estimate);
+    const preset = defaultRecipients(estimate, selectedSpecs);
     if (preset.length > 0 || options.length > 0) setSelected(preset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estimate, options, selected]);
 
   const vendors = selected || [];
@@ -60,10 +71,14 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
       toast.error("送信先を1社以上選んでください");
       return;
     }
+    if (estimate.schema_version === 2 && allSpecs.length > 0 && selectedSpecs.length === 0) {
+      toast.error("依頼する印刷仕様を1件以上選んでください");
+      return;
+    }
     setGenerating(true);
     try {
       const result = await db.integrations.Core.InvokeLLM({
-        prompt: buildEmailPrompt(vendors, buildSpecText(estimate)),
+        prompt: buildEmailPrompt(vendors, buildSpecText(estimate, selectedSpecs)),
         response_json_schema: EMAIL_SCHEMA,
       });
       const generated = result?.emails || [];
@@ -88,6 +103,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
         recipient_company: email.company_name,
         subject: email.subject,
         body: email.body,
+        spec_label: selectedSpecs.map((sp, i) => specLabel(sp, i)).join(" / ") || null,
       });
       toast.success(`${email.company_name}（${data.recipient_email}）へ送信しました`);
       onEmailSent?.();
@@ -121,6 +137,35 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* 新形式: どの印刷仕様を依頼するか */}
+        {estimate.schema_version === 2 && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> 依頼する印刷仕様</p>
+            {allSpecs.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                印刷仕様が未入力です。「印刷仕様」タブで種別・サイズ・枚数・希望納期を入力すると、その内容で依頼メールを作ります
+                （未入力のままでも、見積書の明細から作ることはできます）。
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {allSpecs.map((sp, i) => {
+                  const missing = specMissing(sp);
+                  return (
+                    <label key={sp.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <Checkbox
+                        checked={specIds === null || specIds.includes(sp.id)}
+                        onCheckedChange={() => toggleSpec(sp.id)}
+                      />
+                      {specLabel(sp, i)}
+                      {missing.length > 0 && <span className="text-[10px] text-amber-700">（{missing.join("・")}が未入力）</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 送信先の選択。印刷所情報に登録された「メール依頼先」から選ぶ */}
         <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
           <p className="text-xs font-medium text-muted-foreground">送信先を選ぶ</p>
@@ -240,6 +285,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                   {log.status === "sent" ? "送信済" : log.status === "failed" ? "送信失敗" : "下書き"}
                 </Badge>
                 <span className="font-medium">{log.recipient_company}</span>
+                {log.spec_label && <Badge variant="outline" className="text-[9px] font-normal">{log.spec_label}</Badge>}
                 {log.recipient_email && (
                   <span className="text-muted-foreground">{log.recipient_email}</span>
                 )}

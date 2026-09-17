@@ -1,4 +1,5 @@
 import { EMAIL_VENDOR_MAP } from "@/lib/constants";
+import { specText } from "@/lib/printSpecs";
 
 // ============================================================================
 // 見積依頼メールの宛先と、依頼に載せる仕様テキスト。
@@ -9,8 +10,15 @@ import { EMAIL_VENDOR_MAP } from "@/lib/constants";
 // 作業なので、明細からAIに推測させるより確実性を優先している。
 // ============================================================================
 
-/** 印刷物種別から決まる既定の宛先。旧形式のときだけ値が入る。 */
-export function defaultRecipients(estimate) {
+/**
+ * 印刷物種別から決まる既定の宛先。
+ * 旧形式は見積の印刷物種別、新形式は選んだ印刷仕様の種別から決める。
+ */
+export function defaultRecipients(estimate, specs = []) {
+  if (estimate?.schema_version === 2) {
+    const names = specs.flatMap((sp) => EMAIL_VENDOR_MAP[sp.print_type] || []);
+    return [...new Set(names)];
+  }
   return EMAIL_VENDOR_MAP[estimate?.print_type] || [];
 }
 
@@ -18,12 +26,12 @@ export function defaultRecipients(estimate) {
  * 宛先の候補。印刷所マスタ（メール依頼先）を基本にしつつ、
  * 旧形式の既定宛先がマスタに無くても選べるように足しておく。
  */
-export function recipientOptions(printVendors, estimate) {
+export function recipientOptions(printVendors, estimate, specs = []) {
   const fromMaster = (printVendors || [])
     .filter(v => v.vendor_type === "email")
     .map(v => v.name);
 
-  const merged = [...new Set([...fromMaster, ...defaultRecipients(estimate)])];
+  const merged = [...new Set([...fromMaster, ...defaultRecipients(estimate, specs)])];
   return merged.sort((a, b) => a.localeCompare(b, "ja"));
 }
 
@@ -35,9 +43,19 @@ function lineSummary(item) {
 
 /**
  * 依頼メールに載せる仕様テキスト。
- * 旧形式は仕様欄から、新形式は明細行から組み立てる。
+ * 新形式は印刷仕様（print_specs）から組み立てる。仕様が無い場合は明細行から。
+ * 旧形式は仕様欄から。
  */
-export function buildSpecText(estimate) {
+export function buildSpecText(estimate, specs = []) {
+  if (estimate?.schema_version === 2 && specs.length > 0) {
+    return [
+      `件名: ${estimate.estimate_title || "未指定"}`,
+      "",
+      specs.map((sp, i) => specText(sp, i)).join("\n\n"),
+      estimate.additional_notes ? `\n備考:\n${estimate.additional_notes}` : "",
+    ].filter(Boolean).join("\n");
+  }
+
   if (estimate?.schema_version === 2) {
     const items = (estimate.line_items || []).filter(li => li.row_type !== "text");
     const lines = items.length > 0

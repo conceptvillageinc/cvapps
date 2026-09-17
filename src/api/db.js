@@ -46,7 +46,7 @@ const WRITABLE_COLUMNS = {
     'payment_due_date', 'vendor_payment_date', 'is_recurring', 'notes', 'created_by',
   ],
   estimates: [
-    'estimate_number', 'project_id', 'client_name', 'client_honorific', 'person_in_charge',
+    'estimate_number', 'project_id', 'client_name', 'print_specs', 'client_honorific', 'person_in_charge',
     'estimate_title', 'estimate_date', 'validity_period_months', 'schema_version',
     'line_items', 'print_type', 'size', 'usage', 'paper_type', 'quantities',
     'color_count', 'desired_delivery_date', 'additional_notes', 'status',
@@ -74,7 +74,7 @@ const WRITABLE_COLUMNS = {
   ],
   email_logs: [
     'estimate_id', 'recipient_company', 'recipient_email',
-    'subject', 'body', 'status', 'sent_at',
+    'subject', 'body', 'status', 'sent_at', 'spec_label',
   ],
   system_settings: ['setting_key', 'setting_value', 'description'],
   faq_items: ['question', 'answer', 'sort_order'],

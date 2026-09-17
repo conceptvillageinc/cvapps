@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     recipient_company: company,
     subject,
     body,
+    spec_label: specLabel,
   } = req.body || {};
 
   if (!estimateId || !company || !subject || !body) {
@@ -83,6 +84,8 @@ export default async function handler(req, res) {
         body,
         status: sendError ? 'failed' : 'sent',
         sent_at: sendError ? null : new Date().toISOString(),
+        // どの印刷仕様の依頼かを履歴に残す（表示用の文字列。無くてもよい）
+        spec_label: typeof specLabel === 'string' ? specLabel.slice(0, 200) : null,
       })
       .select()
       .single();

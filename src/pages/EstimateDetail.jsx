@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer
 } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
@@ -19,6 +19,7 @@ import EmailPreview from "@/components/estimates/EmailPreview";
 import ReviewPanel from "@/components/estimates/ReviewPanel";
 import DesignFeeTable from "@/components/estimates/DesignFeeTable";
 import RevisionPanel from "@/components/estimates/RevisionPanel";
+import PrintSpecsPanel from "@/components/estimates/PrintSpecsPanel";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
 import {
@@ -61,6 +62,7 @@ export default function EstimateDetail() {
   });
 
   const [formData, setFormData] = useState(null);
+  const [activeTab, setActiveTab] = useState(null);
   const skipAutosave = useRef(true);
 
   useEffect(() => {
@@ -238,13 +240,21 @@ export default function EstimateDetail() {
       <RevisionPanel estimate={formData} onUpdate={handleUpdate} project={project} />
 
       {/* Tabs */}
-      <Tabs defaultValue={formData.schema_version === 2 ? "quote" : "spec"} className="space-y-4">
+      <Tabs value={activeTab || (formData.schema_version === 2 ? "quote" : "spec")} onValueChange={setActiveTab} className="space-y-4">
         <div className="overflow-x-auto">
           <TabsList className="bg-muted/50 w-max">
             {formData.schema_version === 2 ? (
-              <TabsTrigger value="quote" className="gap-1.5 text-xs">
-                <FileOutput className="w-3.5 h-3.5" /> 見積書
-              </TabsTrigger>
+              <>
+                <TabsTrigger value="quote" className="gap-1.5 text-xs">
+                  <FileOutput className="w-3.5 h-3.5" /> 見積書
+                </TabsTrigger>
+                <TabsTrigger value="specs" className="gap-1.5 text-xs">
+                  <Printer className="w-3.5 h-3.5" /> 印刷仕様
+                  {(formData.print_specs || []).length > 0 && (
+                    <span className="ml-0.5 text-[10px] text-muted-foreground">{formData.print_specs.length}</span>
+                  )}
+                </TabsTrigger>
+              </>
             ) : (
               <>
                 <TabsTrigger value="spec" className="gap-1.5 text-xs">
@@ -271,9 +281,14 @@ export default function EstimateDetail() {
         </div>
 
         {formData.schema_version === 2 ? (
-          <TabsContent value="quote">
-            <QuoteEditor estimate={formData} onUpdate={handleUpdate} />
-          </TabsContent>
+          <>
+            <TabsContent value="quote">
+              <QuoteEditor estimate={formData} onUpdate={handleUpdate} />
+            </TabsContent>
+            <TabsContent value="specs">
+              <PrintSpecsPanel estimate={formData} onUpdate={handleUpdate} onGoToEmail={() => setActiveTab("email")} />
+            </TabsContent>
+          </>
         ) : (
           <>
             <TabsContent value="spec">
