@@ -29,6 +29,7 @@ const TABLES = {
   DeliveryNote: 'delivery_notes',
   Invoice: 'invoices',
   BankTransaction: 'bank_transactions',
+  FiscalTarget: 'fiscal_targets',
 };
 
 // 書き込みを許可するカラム。
@@ -37,6 +38,10 @@ const TABLES = {
 const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
+  fiscal_targets: [
+    'fiscal_year', 'sales', 'purchase', 'gross_jump', 'gross_must',
+    'actual_purchase', 'actual_other_cost', 'notes',
+  ],
   bank_transactions: [
     'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',
     'payee_normalized', 'balance', 'source_hash', 'match_status', 'invoice_id', 'matched_by',

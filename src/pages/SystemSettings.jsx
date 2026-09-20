@@ -94,6 +94,8 @@ export default function SystemSettingsPage() {
   const [newProbabilityInput, setNewProbabilityInput] = useState("");
   const [newPhaseInput, setNewPhaseInput] = useState("");
   const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState("10");
+  const [grossMarginPct, setGrossMarginPct] = useState("80");
+  const skipMarginAutosave = useRef(true);
   const [newTemplateLabel, setNewTemplateLabel] = useState("");
   const [newTemplateText, setNewTemplateText] = useState("");
   const [dragTemplateIdx, setDragTemplateIdx] = useState(null);
@@ -116,6 +118,8 @@ export default function SystemSettingsPage() {
       }
       const fy = settings.find(s => s.setting_key === "fiscal_year_start_month");
       if (fy && Number(fy.setting_value) >= 1 && Number(fy.setting_value) <= 12) setFiscalYearStartMonth(String(Number(fy.setting_value)));
+      const gm = settings.find(s => s.setting_key === "gross_margin_target");
+      if (gm && Number(gm.setting_value) > 0) setGrossMarginPct(String(Math.round(Number(gm.setting_value) * 100)));
       const templates = settings.find(s => s.setting_key === "notes_templates");
       if (templates) {
         try { setNotesTemplates(JSON.parse(templates.setting_value)); } catch { /* ignore */ }
@@ -133,6 +137,19 @@ export default function SystemSettingsPage() {
     }, 800);
     return () => clearTimeout(t);
   }, [proofreadingFee]);
+
+  useEffect(() => {
+    if (skipMarginAutosave.current) { skipMarginAutosave.current = false; return; }
+    const t = setTimeout(() => {
+      const v = Number(grossMarginPct);
+      if (!(v > 0 && v <= 100)) return;
+      upsertSetting(settings, "gross_margin_target", String(v / 100), "粗利率の目標")
+        .then(() => queryClient.invalidateQueries({ queryKey: ["settings"] }))
+        .catch(err => toast.error("自動保存に失敗しました: " + err.message));
+    }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grossMarginPct]);
 
   // リスト系（受注確度・フェーズ・テンプレート）は各操作の直後に即座に保存する
   const saveList = (key, value, description) => {
@@ -262,6 +279,16 @@ export default function SystemSettingsPage() {
             <p className="text-[10px] text-muted-foreground">
               例: 10月始まりなら「2025年度」は 2025/10〜2026/9 です
             </p>
+          </div>
+          <div className="space-y-1.5 max-w-xs mt-4">
+            <Label className="text-xs">粗利率の目標（%）</Label>
+            <Input
+              type="number"
+              step="1"
+              value={grossMarginPct}
+              onChange={e => setGrossMarginPct(e.target.value)}
+            />
+            <p className="text-[10px] text-muted-foreground">売上粗利管理表で、この値以上を緑、未満を赤で表示します</p>
           </div>
         </CardContent>
       </Card>

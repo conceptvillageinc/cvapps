@@ -31,9 +31,12 @@ export function useSystemSettings() {
     const fiscalYearStartMonth = fy && Number(fy.setting_value) >= 1 && Number(fy.setting_value) <= 12
       ? Number(fy.setting_value)
       : DEFAULT_FISCAL_YEAR_START_MONTH;
+    const gm = settings.find((x) => x.setting_key === "gross_margin_target");
+    const grossMarginTarget = gm && Number(gm.setting_value) > 0 && Number(gm.setting_value) <= 1 ? Number(gm.setting_value) : 0.8;
     return {
       settings,
       isLoading,
+      grossMarginTarget,
       dealProbabilityOptions: parseList(settings, "deal_probability_options", DEFAULT_DEAL_PROBABILITY),
       phaseOptions: parseList(settings, "phase_options", DEFAULT_PHASE),
       fiscalYearStartMonth,

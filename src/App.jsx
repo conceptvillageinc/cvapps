@@ -29,6 +29,7 @@ import InvoiceList from '@/pages/InvoiceList';
 import InvoiceEdit from '@/pages/InvoiceEdit';
 import Payments from '@/pages/Payments';
 import AccountingExport from '@/pages/AccountingExport';
+import SalesReport from '@/pages/SalesReport';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
@@ -56,6 +57,7 @@ const AuthenticatedApp = () => {
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/recurring" element={<RecurringProjects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/sales-report" element={<SalesReport />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/accounting-export" element={<AccountingExport />} />
           <Route path="/invoices" element={<InvoiceList />} />
