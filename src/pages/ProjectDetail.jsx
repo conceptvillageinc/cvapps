@@ -10,7 +10,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck } from "lucide-react";
+import { DELIVERY_STATUS_MAP } from "@/lib/documents";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useSystemSettings } from "@/lib/useSystemSettings";
@@ -44,6 +45,12 @@ export default function ProjectDetail() {
   const { data: estimates = [] } = useQuery({
     queryKey: ["estimates", "byProject", id],
     queryFn: () => db.entities.Estimate.filter({ project_id: id }, "-created_date"),
+    enabled: !!id,
+  });
+
+  const { data: deliveryNotes = [] } = useQuery({
+    queryKey: ["deliveryNotes", "byProject", id],
+    queryFn: () => db.entities.DeliveryNote.filter({ project_id: id }, "-delivery_date"),
     enabled: !!id,
   });
 
@@ -287,6 +294,39 @@ export default function ProjectDetail() {
                     <Badge className={`text-[9px] ${es.color}`}>{es.label}</Badge>
                     <span className="text-sm tabular-nums w-28 text-right">{e.total_amount ? yen(e.total_amount) : "—"}</span>
                     <span className="text-[10px] text-muted-foreground w-12 text-right">{format(new Date(e.created_date), "M/d")}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 納品書 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2"><Truck className="w-4 h-4" /> 納品書（{deliveryNotes.length}件）</CardTitle>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/delivery-notes/new?project=${project.id}`)}>
+              <Plus className="w-3.5 h-3.5" /> 納品書を作成
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {deliveryNotes.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">まだ納品書がありません。見積詳細の「納品書を作成」からも作れます</p>
+          ) : (
+            <div className="divide-y">
+              {deliveryNotes.map((n) => {
+                const st = DELIVERY_STATUS_MAP[n.status] || DELIVERY_STATUS_MAP.draft;
+                return (
+                  <Link key={n.id} to={`/delivery-notes/${n.id}`} className="flex items-center gap-3 py-2.5 hover:bg-muted/40 -mx-2 px-2 rounded">
+                    <span className="text-xs font-mono text-muted-foreground w-28 shrink-0">{n.delivery_number}</span>
+                    <span className="text-xs text-muted-foreground w-20 shrink-0">{n.delivery_date}</span>
+                    <span className="text-sm flex-1 truncate">{n.title || "（件名なし）"}</span>
+                    <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
+                    {n.invoice_id ? <Badge className="text-[9px] bg-blue-100 text-blue-700 hover:bg-blue-100">請求済</Badge> : <Badge variant="outline" className="text-[9px] font-normal text-amber-700">未請求</Badge>}
+                    <span className="text-sm tabular-nums w-28 text-right">{yen(n.total)}</span>
                   </Link>
                 );
               })}

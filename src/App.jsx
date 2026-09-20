@@ -23,6 +23,8 @@ import FaqPage from '@/pages/FaqPage';
 import ProjectList from '@/pages/ProjectList';
 import ProjectDetail from '@/pages/ProjectDetail';
 import RecurringProjects from '@/pages/RecurringProjects';
+import DeliveryNoteList from '@/pages/DeliveryNoteList';
+import DeliveryNoteEdit from '@/pages/DeliveryNoteEdit';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
@@ -50,6 +52,9 @@ const AuthenticatedApp = () => {
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/recurring" element={<RecurringProjects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/delivery-notes" element={<DeliveryNoteList />} />
+          <Route path="/delivery-notes/new" element={<DeliveryNoteEdit />} />
+          <Route path="/delivery-notes/:id" element={<DeliveryNoteEdit />} />
           <Route path="/estimates/new" element={<EstimateCreate />} />
           <Route path="/estimates/:id" element={<EstimateDetail />} />
           <Route path="/estimates" element={<EstimateList />} />

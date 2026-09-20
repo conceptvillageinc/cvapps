@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Settings, Plus, X, ArrowUp, ArrowDown, FileText, GripVertical, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import PricingRulesCard from "@/components/settings/PricingRulesCard";
+import CompanyInfoCard from "@/components/settings/CompanyInfoCard";
 
 // 設定1件をupsert（存在すれば更新、無ければ新規作成）
 async function upsertSetting(existingList, key, value, description) {
@@ -213,6 +214,8 @@ export default function SystemSettingsPage() {
           <CheckCircle2 className="w-3.5 h-3.5" /> 変更は自動的に保存されます
         </div>
       </div>
+
+      <CompanyInfoCard settings={settings} upsertSetting={upsertSetting} />
 
       <PricingRulesCard settings={settings} upsertSetting={upsertSetting} />
 

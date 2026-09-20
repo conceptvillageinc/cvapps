@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer, ArrowRightLeft
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer, ArrowRightLeft, Truck
 } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
@@ -203,6 +203,11 @@ export default function EstimateDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {formData.schema_version === 2 && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/delivery-notes/new?estimate=${estimateId}`)} className="gap-1.5 text-xs">
+              <Truck className="w-3.5 h-3.5" /> 納品書を作成
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleDuplicate} className="gap-1.5 text-xs">
             <Copy className="w-3.5 h-3.5" /> 複製
           </Button>

@@ -26,6 +26,8 @@ const TABLES = {
   Invitation: 'invitations',
   Project: 'projects',
   RecurringProjectTemplate: 'recurring_project_templates',
+  DeliveryNote: 'delivery_notes',
+  Invoice: 'invoices',
 };
 
 // 書き込みを許可するカラム。
@@ -34,6 +36,18 @@ const TABLES = {
 const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
+  delivery_notes: [
+    'delivery_number', 'project_id', 'estimate_id', 'client_id', 'client_name', 'client_honorific',
+    'client_postal_code', 'client_address', 'title', 'delivery_date', 'line_items',
+    'subtotal', 'tax', 'total', 'tax_breakdown', 'notes', 'status', 'invoice_id',
+    'person_in_charge', 'created_by',
+  ],
+  invoices: [
+    'invoice_number', 'project_id', 'client_id', 'client_name', 'client_honorific',
+    'client_postal_code', 'client_address', 'title', 'invoice_date', 'due_date', 'line_items',
+    'subtotal', 'tax', 'total', 'tax_breakdown', 'notes', 'status', 'sent_at', 'paid_at',
+    'paid_amount', 'delivery_method', 'person_in_charge', 'created_by',
+  ],
   recurring_project_templates: [
     'client_id', 'client_name', 'name', 'deal_probability', 'phase',
     'expected_revenue', 'expected_cost', 'other_cost',
@@ -74,7 +88,7 @@ const WRITABLE_COLUMNS = {
   ],
   email_logs: [
     'estimate_id', 'recipient_company', 'recipient_email',
-    'subject', 'body', 'status', 'sent_at', 'spec_label',
+    'subject', 'body', 'status', 'sent_at', 'spec_label', 'document_type', 'document_id',
   ],
   system_settings: ['setting_key', 'setting_value', 'description'],
   faq_items: ['question', 'answer', 'sort_order'],
@@ -86,7 +100,7 @@ const DATE_COLUMNS = new Set([
   'estimate_date', 'desired_delivery_date', 'last_updated',
   'approved_date', 'sent_at',
   'registered_at', 'due_date', 'payment_due_date', 'vendor_payment_date',
-  'start_month', 'end_month',
+  'start_month', 'end_month', 'delivery_date', 'invoice_date', 'due_date', 'paid_at',
 ]);
 
 // Base44 の並び替え指定（"-created_date" / "name"）を Supabase の形に変換
@@ -390,4 +404,37 @@ function notYetMigrated(what, phase) {
   };
 }
 
-export const db = { entities, auth, integrations, functions, users };
+// ----------------------------------------------------------------------------
+// ストレージと帳票PDF
+// ----------------------------------------------------------------------------
+const storage = {
+  /** 非公開バケットのファイルを一時的に表示するための署名付きURL（1時間） */
+  async signedUrl(path, expiresIn = 3600) {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from(UPLOAD_BUCKET).createSignedUrl(path, expiresIn);
+    if (error) throw new Error(`ファイルのURLを取得できませんでした: ${error.message}`);
+    return data.signedUrl;
+  },
+};
+
+const documents = {
+  /**
+   * 納品書・請求書のPDFをサーバーで生成して受け取る。
+   * @param {'delivery'|'invoice'} type
+   * @returns {Promise<Blob>}
+   */
+  async pdf(type, id) {
+    const res = await fetch('/api/document-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await accessToken()}` },
+      body: JSON.stringify({ type, id }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `PDFの生成に失敗しました (${res.status})`);
+    }
+    return res.blob();
+  },
+};
+
+export const db = { entities, auth, integrations, functions, users, storage, documents };

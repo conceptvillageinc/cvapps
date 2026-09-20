@@ -21,6 +21,10 @@
     },
     "api/recurring-projects.js": {
       "maxDuration": 30
+    },
+    "api/document-pdf.js": {
+      "maxDuration": 30,
+      "includeFiles": "api/_lib/fonts/**"
     }
   },
   "crons": [
@@ -29,4 +33,4 @@
       "schedule": "0 0 1 * *"
     }
   ]
-}
+}\n
