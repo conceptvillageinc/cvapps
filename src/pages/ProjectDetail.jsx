@@ -242,7 +242,7 @@ export default function ProjectDetail() {
             <div className="border-t pt-3 space-y-2">
               <Field label="クライアント">
                 {client ? (
-                  <Link to="/clients" className="hover:underline inline-flex items-center gap-1">{client.name} <ExternalLink className="w-3 h-3 text-muted-foreground" /></Link>
+                  <Link to={`/clients/${client.id}`} className="hover:underline inline-flex items-center gap-1">{client.name} <ExternalLink className="w-3 h-3 text-muted-foreground" /></Link>
                 ) : (
                   <span>{project.client_name} <span className="text-[10px] text-muted-foreground">（マスタ未登録）</span></span>
                 )}

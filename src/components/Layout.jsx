@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3, CalendarClock
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
@@ -24,6 +24,7 @@ const navItems = [
   { path: "/payments", label: "入金確認", icon: Landmark },
   { path: "/accounting-export", label: "会計データ出力", icon: FileSpreadsheet },
   { path: "/sales-report", label: "売上粗利管理表", icon: BarChart3 },
+  { path: "/cashflow", label: "入出金予定表", icon: CalendarClock },
 ];
 
 const adminItems = [
