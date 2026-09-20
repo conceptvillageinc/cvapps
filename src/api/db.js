@@ -28,6 +28,7 @@ const TABLES = {
   RecurringProjectTemplate: 'recurring_project_templates',
   DeliveryNote: 'delivery_notes',
   Invoice: 'invoices',
+  BankTransaction: 'bank_transactions',
 };
 
 // 書き込みを許可するカラム。
@@ -36,6 +37,11 @@ const TABLES = {
 const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
+  bank_transactions: [
+    'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',
+    'payee_normalized', 'balance', 'source_hash', 'match_status', 'invoice_id', 'matched_by',
+    'memo', 'imported_by',
+  ],
   delivery_notes: [
     'delivery_number', 'project_id', 'estimate_id', 'client_id', 'client_name', 'client_honorific',
     'client_postal_code', 'client_address', 'title', 'delivery_date', 'line_items',
@@ -76,7 +82,7 @@ const WRITABLE_COLUMNS = {
   clients: [
     'name', 'name_kana', 'contact_person', 'contact_person_kana',
     'email', 'phone', 'postal_code', 'address', 'notes', 'quote_count',
-    'invoice_delivery_method', 'invoice_delivery_notes', 'has_recurring_billing',
+    'invoice_delivery_method', 'invoice_delivery_notes', 'has_recurring_billing', 'bank_payee_names',
   ],
   print_vendors: [
     'name', 'vendor_type', 'print_types', 'email', 'phone',
@@ -100,7 +106,7 @@ const DATE_COLUMNS = new Set([
   'estimate_date', 'desired_delivery_date', 'last_updated',
   'approved_date', 'sent_at',
   'registered_at', 'due_date', 'payment_due_date', 'vendor_payment_date',
-  'start_month', 'end_month', 'delivery_date', 'invoice_date', 'due_date', 'paid_at',
+  'start_month', 'end_month', 'delivery_date', 'invoice_date', 'due_date', 'paid_at', 'transaction_date',
 ]);
 
 // Base44 の並び替え指定（"-created_date" / "name"）を Supabase の形に変換
@@ -218,6 +224,13 @@ function createEntity(entityName) {
     async create(data) {
       const query = supabase.from(table).insert(sanitize(table, data)).select().single();
       return decorate(unwrap(await query));
+    },
+
+    /** 複数行をまとめて作成する（取込用） */
+    async createMany(rows) {
+      if (!rows || rows.length === 0) return [];
+      const query = supabase.from(table).insert(rows.map((r) => sanitize(table, r))).select();
+      return decorateAll(unwrap(await query));
     },
 
     async update(id, data) {
