@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe,
+  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
@@ -26,6 +26,7 @@ import { formatPostalCode } from "@/lib/postalCode";
 
 import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 import WebPriceImport from "@/components/estimates/WebPriceImport";
+import PastEstimateImport from "@/components/estimates/PastEstimateImport";
 
 const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: Printer, build: Hammer, other: Plus };
 
@@ -583,6 +584,9 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                 <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("web_price")}>
                   <Globe className="w-3.5 h-3.5" /> ネット印刷から取込
                 </Button>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("past_estimate")}>
+                  <History className="w-3.5 h-3.5" /> 過去見積から複製
+                </Button>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200">
@@ -693,19 +697,25 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
       {/* カテゴリ別の選択ダイアログ */}
       <Dialog open={!!addPanel} onOpenChange={(open) => !open && closeAddPanel()}>
-        <DialogContent className={`${addPanel === "vendor_quote" || addPanel === "web_price" ? "max-w-3xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
+        <DialogContent className={`${addPanel === "vendor_quote" || addPanel === "web_price" || addPanel === "past_estimate" ? "max-w-3xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
               {addPanel === "vendor_quote"
                 ? "仕入先見積から明細を読み込む"
                 : addPanel === "web_price"
                   ? "ネット印刷の価格ページから取り込む"
+                : addPanel === "past_estimate"
+                  ? "過去の見積から明細を複製する"
                   : `${LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.label} を追加`}
             </DialogTitle>
           </DialogHeader>
 
           {addPanel === "vendor_quote" && (
             <VendorQuoteImport onAdd={addItems} onClose={closeAddPanel} />
+          )}
+
+          {addPanel === "past_estimate" && (
+            <PastEstimateImport estimate={estimate} onAdd={addItems} onClose={closeAddPanel} />
           )}
 
           {addPanel === "web_price" && (
@@ -927,6 +937,7 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
           <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex items-center gap-1">
             {item.category}
             {isRule && <span className="inline-flex items-center gap-0.5 text-emerald-700"><Lock className="w-2.5 h-2.5" /> {ruleRowHint(item)}</span>}
+            {item.copied_from && <span className="inline-flex items-center gap-0.5 text-sky-700" title="過去の見積から複製した明細"><History className="w-2.5 h-2.5" /> 前回: {item.copied_from} から複製</span>}
           </div>
         )}
       </td>
