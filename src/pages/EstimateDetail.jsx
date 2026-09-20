@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer, ArrowRightLeft
 } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
@@ -20,6 +20,8 @@ import ReviewPanel from "@/components/estimates/ReviewPanel";
 import DesignFeeTable from "@/components/estimates/DesignFeeTable";
 import RevisionPanel from "@/components/estimates/RevisionPanel";
 import PrintSpecsPanel from "@/components/estimates/PrintSpecsPanel";
+import { convertLegacyEstimate, summarizeConversion } from "@/lib/convertLegacyEstimate";
+import { generateEstimateNumber } from "@/lib/estimateNumber";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
 import {
@@ -130,9 +132,14 @@ export default function EstimateDetail() {
     const { id, created_date, updated_date, created_by_id, estimate_number, status,
             reviewer_id, reviewer_name, approved_date, review_comments, approval_checklist,
             freee_deal_id, freee_estimate_id, freee_status, ...rest } = formData;
+    const estimateNumber = await generateEstimateNumber(db);
     const newEstimate = await db.entities.Estimate.create({
       ...rest,
-      estimate_number: `CV-${Date.now().toString(36).toUpperCase()}`,
+      estimate_number: estimateNumber,
+      project_group_id: estimateNumber,
+      parent_estimate_id: null,
+      revision_label: "初回",
+      is_final_submitted: false,
       status: "draft",
       freee_status: "not_linked",
       review_comments: [],
@@ -140,6 +147,17 @@ export default function EstimateDetail() {
     });
     toast.success("見積を複製しました");
     navigate(`/estimates/${newEstimate.id}`);
+  };
+
+  // 旧形式 → 新形式（見積書タブ）へ変換する。旧形式の列は残す。
+  const handleConvert = () => {
+    const patch = convertLegacyEstimate(formData);
+    const updated = { ...formData, ...patch };
+    setFormData(updated);
+    saveMutation.mutate(updated);
+    setActiveTab("quote");
+    const sum = summarizeConversion(patch);
+    toast.success(`新形式に変換しました（印刷費${sum.print}行・デザイン費${sum.design}行・印刷仕様${sum.specs}件）。内容を確認してください`);
   };
 
   const handleDelete = async () => {
@@ -233,6 +251,43 @@ export default function EstimateDetail() {
           <p className="text-sm text-destructive font-medium">
             原価が出し値を上回っています。修正が必要です。
           </p>
+        </div>
+      )}
+
+      {/* 旧形式の見積: 新形式への変換 */}
+      {formData.schema_version !== 2 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-sky-50 border border-sky-200">
+          <div className="flex-1 text-xs text-sky-900">
+            <p className="font-medium">この見積は旧形式（仕様・印刷費・デザイン費タブ）です。</p>
+            <p className="mt-0.5">
+              新形式に変換すると、印刷費・デザイン費・校正費が見積書タブの明細になり、仕様は「印刷仕様」タブに移ります。
+              変換後は、自動計算行・ネット印刷取込・過去見積からの複製が使えます。
+              {(() => {
+                const sum = summarizeConversion(convertLegacyEstimate(formData));
+                return `（変換後の見積金額: ¥${Number(sum.total || 0).toLocaleString()} 税込）`;
+              })()}
+            </p>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" className="gap-1.5 text-xs shrink-0">
+                <ArrowRightLeft className="w-3.5 h-3.5" /> 新形式に変換
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>新形式に変換しますか？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  旧形式のタブ（仕様・印刷費・デザイン費・プレビュー）は表示されなくなり、見積書タブで編集する形になります。
+                  旧形式の入力内容はデータとして残るため、元に戻したい場合はお知らせください。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConvert}>変換する</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
 
