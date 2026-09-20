@@ -120,7 +120,7 @@ export default function DeliveryNoteEdit() {
     }
     base.notes = company.delivery_notes || "";
     setForm(base);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isNew, existing, sourceEstimate, project, sourceEstimateId, sourceProjectId, company.delivery_notes]);
 
   // クライアントマスタから住所・郵便番号を補う
@@ -128,7 +128,7 @@ export default function DeliveryNoteEdit() {
     if (!form || !form.client_name || form.client_address) return;
     const c = clients.find((x) => x.name === form.client_name);
     if (c) setForm((f) => ({ ...f, client_id: c.id, client_postal_code: c.postal_code || "", client_address: c.address || "" }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [form?.client_name, clients.length]);
 
   const totals = useMemo(() => computeDocTotals(form?.line_items || []), [form?.line_items]);
@@ -156,7 +156,7 @@ export default function DeliveryNoteEdit() {
     mutationFn: async () => {
       const payload = {
         ...form,
-        client_name: form.client_name.trim(),
+        client_name: (form.client_name || "").trim(),
         line_items: form.line_items.filter((li) => li.name || li.amount),
         ...totals,
         created_by: form.created_by || user?.id || null,
@@ -171,7 +171,7 @@ export default function DeliveryNoteEdit() {
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
       queryClient.invalidateQueries({ queryKey: ["deliveryNote", row.id] });
       toast.success(isNew ? `納品書 ${row.delivery_number} を作成しました` : "保存しました");
-      setForm({ ...row, line_items: row.line_items || [] });
+      setForm((f) => ({ ...f, ...row, line_items: row.line_items || f.line_items || [] }));
       if (isNew) navigate(`/delivery-notes/${row.id}`, { replace: true });
     },
     onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
@@ -200,7 +200,7 @@ export default function DeliveryNoteEdit() {
   }
 
   const st = DELIVERY_STATUS_MAP[form.status] || DELIVERY_STATUS_MAP.draft;
-  const canSave = form.client_name.trim() && form.delivery_date && !save.isPending;
+  const canSave = (form.client_name || "").trim() && form.delivery_date && !save.isPending;
   const locked = !!form.invoice_id;
 
   return (

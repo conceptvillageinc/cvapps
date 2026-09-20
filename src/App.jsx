@@ -25,6 +25,8 @@ import ProjectDetail from '@/pages/ProjectDetail';
 import RecurringProjects from '@/pages/RecurringProjects';
 import DeliveryNoteList from '@/pages/DeliveryNoteList';
 import DeliveryNoteEdit from '@/pages/DeliveryNoteEdit';
+import InvoiceList from '@/pages/InvoiceList';
+import InvoiceEdit from '@/pages/InvoiceEdit';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
@@ -52,6 +54,9 @@ const AuthenticatedApp = () => {
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/recurring" element={<RecurringProjects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/invoices" element={<InvoiceList />} />
+          <Route path="/invoices/new" element={<InvoiceEdit />} />
+          <Route path="/invoices/:id" element={<InvoiceEdit />} />
           <Route path="/delivery-notes" element={<DeliveryNoteList />} />
           <Route path="/delivery-notes/new" element={<DeliveryNoteEdit />} />
           <Route path="/delivery-notes/:id" element={<DeliveryNoteEdit />} />
