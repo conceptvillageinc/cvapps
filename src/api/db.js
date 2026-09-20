@@ -374,6 +374,7 @@ const integrations = {
 const FUNCTION_ROUTES = {
   fetchPriceFromUrl: 'fetch-price',
   sendEstimateEmail: 'send-estimate-email',
+  sendDocumentEmail: 'send-document-email',
 };
 
 const functions = {

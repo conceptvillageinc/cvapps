@@ -212,22 +212,45 @@ function encodeHeader(value) {
     : `=?UTF-8?B?${Buffer.from(value).toString('base64')}?=`;
 }
 
-function buildMime({ to, cc, from, subject, body, replyTo }) {
-  const headers = [
+const wrap76 = (b64) => b64.replace(/(.{76})/g, '$1\r\n');
+
+/**
+ * MIME を組み立てる。添付（attachments: [{ filename, content: Buffer, contentType }]）
+ * がある場合は multipart/mixed にする。
+ */
+function buildMime({ to, cc, from, subject, body, replyTo, attachments = [] }) {
+  const common = [
     `From: ${from}`,
     `To: ${to}`,
     cc ? `Cc: ${cc}` : null,
     replyTo ? `Reply-To: ${replyTo}` : null,
     `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset="UTF-8"',
-    'Content-Transfer-Encoding: base64',
   ].filter(Boolean);
 
   // 本文は日本語が入るので base64 にする。76文字ごとに折り返す。
-  const encoded = Buffer.from(body, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n');
+  const encodedBody = wrap76(Buffer.from(body, 'utf8').toString('base64'));
 
-  return `${headers.join('\r\n')}\r\n\r\n${encoded}`;
+  if (attachments.length === 0) {
+    const headers = [...common, 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64'];
+    return `${headers.join('\r\n')}\r\n\r\n${encodedBody}`;
+  }
+
+  const boundary = `----=_Part_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+  const parts = [
+    `--${boundary}\r\nContent-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${encodedBody}`,
+    ...attachments.map((a) => {
+      // 日本語のファイル名は RFC 2231 / 2047 の両方で付ける（受信側の互換性のため）
+      const encodedName = encodeURIComponent(a.filename);
+      return `--${boundary}\r\n` +
+        `Content-Type: ${a.contentType || 'application/octet-stream'}; name="${encodeHeader(a.filename)}"\r\n` +
+        `Content-Disposition: attachment; filename="${encodeHeader(a.filename)}"; filename*=UTF-8''${encodedName}\r\n` +
+        `Content-Transfer-Encoding: base64\r\n\r\n${wrap76(a.content.toString('base64'))}`;
+    }),
+    `--${boundary}--`,
+  ];
+  const headers = [...common, `Content-Type: multipart/mixed; boundary="${boundary}"`];
+  return `${headers.join('\r\n')}\r\n\r\n${parts.join('\r\n')}`;
 }
 
 /**
@@ -241,7 +264,7 @@ function buildMime({ to, cc, from, subject, body, replyTo }) {
  * 画面から指定できる作りにすると、社内の別の人になりすましてメールを
  * 出せてしまう。
  */
-export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, cc }) {
+export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, cc, attachments }) {
   const { fallbackSender, alwaysCc } = config();
 
   const sender = sendAs || fallbackSender;
@@ -263,6 +286,7 @@ export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, c
     subject,
     body,
     replyTo,
+    attachments,
   }));
 
   const res = await fetch(

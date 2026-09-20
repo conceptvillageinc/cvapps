@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ArrowLeft, Save, FileDown, Plus, Trash2, Loader2, Truck, Send, CircleCheck, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
+import { Mail } from "lucide-react";
 import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
 import { formatPostalCode } from "@/lib/postalCode";
@@ -82,6 +84,7 @@ export default function InvoiceEdit() {
 
   const [form, setForm] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [mailOpen, setMailOpen] = useState(false);
   const [paidOpen, setPaidOpen] = useState(false);
   const [paidForm, setPaidForm] = useState({ paid_at: todayString(), paid_amount: "" });
 
@@ -102,6 +105,11 @@ export default function InvoiceEdit() {
     queryKey: ["project", projectId],
     queryFn: () => db.entities.Project.get(projectId),
     enabled: !!projectId,
+  });
+  const { data: emailLogs = [] } = useQuery({
+    queryKey: ["emailLogs", "invoice", id],
+    queryFn: () => db.entities.EmailLog.filter({ document_type: "invoice", document_id: id }, "-created_date"),
+    enabled: !isNew,
   });
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
@@ -295,6 +303,9 @@ export default function InvoiceEdit() {
             <>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={downloadPdf} disabled={pdfLoading}>
                 {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} PDF
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}>
+                <Mail className="w-3.5 h-3.5" /> メール送付
               </Button>
               {form.status === "draft" && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => quick.mutate({ status: "sent", sent_at: new Date().toISOString() })}>
@@ -526,6 +537,32 @@ export default function InvoiceEdit() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {!isNew && emailLogs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">送付履歴</CardTitle></CardHeader>
+          <CardContent className="space-y-1.5">
+            {emailLogs.map((log) => (
+              <div key={log.id} className="flex items-center gap-3 p-2 rounded-md bg-muted/30 text-xs">
+                <Badge variant={log.status === "failed" ? "destructive" : "secondary"} className="text-[9px]">{log.status === "sent" ? "送信済" : "送信失敗"}</Badge>
+                <span className="font-medium">{log.recipient_company}</span>
+                <span className="text-muted-foreground">{log.recipient_email}</span>
+                <span className="text-muted-foreground truncate">{log.subject}</span>
+                {log.sent_at && <span className="text-muted-foreground ml-auto whitespace-nowrap">{new Date(log.sent_at).toLocaleString("ja-JP")}</span>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {!isNew && (
+        <DocumentEmailDialog
+          open={mailOpen}
+          onOpenChange={setMailOpen}
+          type="invoice"
+          doc={form}
+          onSent={() => queryClient.invalidateQueries({ queryKey: ["invoice", id] })}
+        />
+      )}
     </div>
   );
 }
