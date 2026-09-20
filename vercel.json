@@ -29,6 +29,9 @@
     "api/send-document-email.js": {
       "maxDuration": 30,
       "includeFiles": "api/_lib/fonts/**"
+    },
+    "api/export-schedule-sheet.js": {
+      "maxDuration": 30
     }
   },
   "crons": [

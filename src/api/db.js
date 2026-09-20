@@ -30,6 +30,7 @@ const TABLES = {
   Invoice: 'invoices',
   BankTransaction: 'bank_transactions',
   FiscalTarget: 'fiscal_targets',
+  ProjectTask: 'project_tasks',
 };
 
 // 書き込みを許可するカラム。
@@ -38,6 +39,7 @@ const TABLES = {
 const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
+  project_tasks: ['project_id', 'name', 'owner', 'start_date', 'end_date', 'status', 'notes', 'sort_order'],
   fiscal_targets: [
     'fiscal_year', 'sales', 'purchase', 'gross_jump', 'gross_must',
     'actual_purchase', 'actual_other_cost', 'notes',
@@ -112,6 +114,7 @@ const DATE_COLUMNS = new Set([
   'approved_date', 'sent_at',
   'registered_at', 'due_date', 'payment_due_date', 'vendor_payment_date',
   'start_month', 'end_month', 'delivery_date', 'invoice_date', 'due_date', 'paid_at', 'transaction_date',
+  'start_date', 'end_date',
 ]);
 
 // Base44 の並び替え指定（"-created_date" / "name"）を Supabase の形に変換
@@ -393,6 +396,7 @@ const FUNCTION_ROUTES = {
   fetchPriceFromUrl: 'fetch-price',
   sendEstimateEmail: 'send-estimate-email',
   sendDocumentEmail: 'send-document-email',
+  exportScheduleSheet: 'export-schedule-sheet',
 };
 
 const functions = {

@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP, STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
+import ProjectTasks from "@/components/projects/ProjectTasks";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 
@@ -273,6 +274,9 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* 工程 */}
+      <ProjectTasks project={project} />
 
       {/* 見積 */}
       <Card>

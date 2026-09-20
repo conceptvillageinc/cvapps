@@ -145,13 +145,17 @@ function base64url(input) {
 }
 
 /** サービスアカウントの鍵で署名したJWTを、アクセストークンに交換する。 */
-async function getAccessToken(impersonate) {
+/**
+ * @param {string} impersonate  なりすます本人のアドレス
+ * @param {string} [scope]      既定は Gmail 送信。Sheets 出力などは呼び出し側が指定する
+ */
+export async function getAccessToken(impersonate, scope = SCOPE) {
   const { clientEmail, privateKey } = config();
   const now = Math.floor(Date.now() / 1000);
 
   const claims = {
     iss: clientEmail,
-    scope: SCOPE,
+    scope,
     aud: TOKEN_URL,
     // 委任により、この人のメールボックスから送る。
     // 呼び出し側がリクエストの中身から決めてはいけない値で、必ず
@@ -194,7 +198,7 @@ async function getAccessToken(impersonate) {
         'GOOGLE_SERVICE_ACCOUNT_EMAIL の値が正しいか、そのサービスアカウントが' +
         '削除されていないかを確認してください）'
       : data.error === 'unauthorized_client'
-      ? '（Google Workspace 管理コンソールで「ドメイン全体の委任」が未設定の可能性があります）'
+      ? `（Google Workspace 管理コンソールで「ドメイン全体の委任」にスコープ ${scope} が登録されていない可能性があります）`
       : data.error === 'invalid_grant'
         ? `（${impersonate} が Google Workspace のユーザーとして存在しないか、Gmail が有効になっていない可能性があります）`
         : '';
