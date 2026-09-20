@@ -57,7 +57,7 @@ export default function PastEstimateImport({ estimate, onAdd, onClose }) {
       if (e.id === estimate.id) continue;
       let items = [];
       if (e.schema_version === 2) {
-        items = (e.line_items || []).filter((li) => li.row_type !== "text" && li.source_type !== "rule");
+        items = (e.line_items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule");
       } else if (e.selling_price > 0) {
         // 旧形式: 印刷費1行として扱う
         const qty = (e.quantities || [])[0] || 1;

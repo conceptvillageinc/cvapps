@@ -57,7 +57,7 @@ export function buildSpecText(estimate, specs = []) {
   }
 
   if (estimate?.schema_version === 2) {
-    const items = (estimate.line_items || []).filter(li => li.row_type !== "text");
+    const items = (estimate.line_items || []).filter(li => li.row_type !== "text" && li.row_type !== "subtotal");
     const lines = items.length > 0
       ? items.map(lineSummary).join("\n")
       : "（明細が未入力です）";

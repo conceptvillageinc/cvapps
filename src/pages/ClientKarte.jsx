@@ -66,7 +66,7 @@ export default function ClientKarte() {
     const map = new Map();
     for (const e of estimates) {
       for (const li of e.line_items || []) {
-        if (li.row_type === "text" || li.source_type === "rule") continue;
+        if (li.row_type === "text" || li.row_type === "subtotal" || li.source_type === "rule") continue;
         let key, entry;
         if (li.source_type === "price_master") {
           const m = masterById[li.source_ref];

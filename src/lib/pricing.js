@@ -182,6 +182,24 @@ export function recomputeRuleRows(lineItems, rules) {
   return items;
 }
 
+/**
+ * 小計行（row_type: "subtotal"）の金額を入れ直す。
+ * 直前の小計行（または先頭）から、その行までの明細（自動計算行・テキスト行を除く）の合計。
+ * 小計行は合計には含めない（表示用）。
+ */
+export function recomputeSubtotals(lineItems) {
+  let running = 0;
+  return (lineItems || []).map((li) => {
+    if (li.row_type === "subtotal") {
+      const out = { ...li, amount: running, quantity: 1, unit_price: running };
+      running = 0;
+      return out;
+    }
+    if (li.row_type !== "text" && li.source_type !== "rule") running += Number(li.amount) || 0;
+    return li;
+  });
+}
+
 /** 自動計算行の根拠を短く説明する（画面の注記用） */
 export function ruleRowHint(li) {
   if (li.rule === "concept_fee") return "印刷費を除く合計から自動計算";

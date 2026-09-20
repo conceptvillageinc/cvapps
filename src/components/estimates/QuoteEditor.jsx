@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History,
+  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
@@ -18,7 +18,7 @@ import {
   LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, TAX_RATE, applyMarkup,
 } from "@/lib/constants";
 import {
-  usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS,
+  usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS, recomputeSubtotals,
 } from "@/lib/pricing";
 import { DESIGN_FEE_MASTER, getDesignItemsByCategory } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
@@ -27,6 +27,7 @@ import { formatPostalCode } from "@/lib/postalCode";
 import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 import WebPriceImport from "@/components/estimates/WebPriceImport";
 import PastEstimateImport from "@/components/estimates/PastEstimateImport";
+import SheetImport from "@/components/estimates/SheetImport";
 
 const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: Printer, build: Hammer, other: Plus };
 
@@ -49,7 +50,7 @@ function yen(n) {
 
 function computeTotals(lineItems) {
   const subtotal = (lineItems || [])
-    .filter(li => li.row_type !== "text")
+    .filter(li => li.row_type !== "text" && li.row_type !== "subtotal")
     .reduce((sum, li) => sum + (Number(li.amount) || 0), 0);
   const tax = round(subtotal * TAX_RATE);
   return { subtotal, tax, total: subtotal + tax };
@@ -75,7 +76,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   // 社内確認用：原価情報を持つ行のみを集計して粗利を計算
   const { totalCost, grossProfit, profitRate } = useMemo(() => {
     const cost = lineItems
-      .filter(li => li.row_type !== "text" && li.cost_price != null)
+      .filter(li => li.row_type !== "text" && li.row_type !== "subtotal" && li.cost_price != null)
       .reduce((sum, li) => sum + (Number(li.cost_price) || 0) * (Number(li.quantity) || 1), 0);
     const profit = subtotal - cost;
     return { totalCost: cost, grossProfit: profit, profitRate: subtotal > 0 ? ((profit / subtotal) * 100).toFixed(1) : 0 };
@@ -128,7 +129,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
   const commitItems = (rawItems) => {
     // コンセプト設計費・校正費・割引などの自動計算行を、他の行の合計から入れ直す
-    const newItems = recomputeRuleRows(rawItems, rules);
+    const newItems = recomputeSubtotals(recomputeRuleRows(rawItems, rules));
     const totals = computeTotals(newItems);
     onUpdate({ line_items: newItems, total_amount: totals.total });
   };
@@ -242,6 +243,9 @@ export default function QuoteEditor({ estimate, onUpdate }) {
       if (li.row_type === "text") {
         return `<tr class="text-row"><td colspan="5">${escapeHtml(li.text)}</td></tr>`;
       }
+      if (li.row_type === "subtotal") {
+        return `<tr class="subtotal-row"><td colspan="4" class="num">${escapeHtml(li.name || "小計")}</td><td class="num">${yen(li.amount).replace("¥", "")}</td></tr>`;
+      }
       return `<tr>
         <td>${escapeHtml(li.name)}</td>
         <td class="num">${(li.quantity ?? "").toLocaleString ? li.quantity.toLocaleString() : li.quantity}</td>
@@ -267,6 +271,9 @@ export default function QuoteEditor({ estimate, onUpdate }) {
     max-width: 900px;
     margin: 0 auto;
   }
+  tr.subtotal-row td { background: #f8fafc; font-weight: 600; border-top: 1px solid #94a3b8; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
   .print-btn {
     position: fixed; top: 16px; right: 16px;
     padding: 9px 18px; background: #1e293b; color: #fff; border: none;
@@ -453,6 +460,11 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                   <tr key={li.id} className="bg-muted/30">
                     <td colSpan={5} className="px-3 py-1.5 font-medium text-xs">{li.text}</td>
                   </tr>
+                ) : li.row_type === "subtotal" ? (
+                  <tr key={li.id} className="bg-slate-50 border-t border-slate-400">
+                    <td colSpan={4} className="px-3 py-1.5 text-right text-xs font-semibold">{li.name || "小計"}</td>
+                    <td className="px-3 py-1.5 text-right font-semibold">{yen(li.amount)}</td>
+                  </tr>
                 ) : (
                   <tr key={li.id} className="border-b">
                     <td className="px-3 py-2 align-top">{li.name}</td>
@@ -609,8 +621,14 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                     ))}
                   </PopoverContent>
                 </Popover>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("sheet_import")}>
+                  <Table2 className="w-3.5 h-3.5" /> スプレッドシートから取込
+                </Button>
                 <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 text-foreground hover:bg-emerald-100 hover:text-foreground" onClick={addTextRow}>
                   <Type className="w-3.5 h-3.5" /> テキスト行（見出し・注記）
+                </Button>
+                <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 text-foreground hover:bg-emerald-100 hover:text-foreground" onClick={() => commitItems([...lineItems, { id: uid(), row_type: "subtotal", name: "小計", amount: 0, source_type: "subtotal" }])}>
+                  <Sigma className="w-3.5 h-3.5" /> 小計行
                 </Button>
               </div>
             </div>
@@ -697,7 +715,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
       {/* カテゴリ別の選択ダイアログ */}
       <Dialog open={!!addPanel} onOpenChange={(open) => !open && closeAddPanel()}>
-        <DialogContent className={`${addPanel === "vendor_quote" || addPanel === "web_price" || addPanel === "past_estimate" ? "max-w-3xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
+        <DialogContent className={`${addPanel === "vendor_quote" || addPanel === "web_price" || addPanel === "past_estimate" || addPanel === "sheet_import" ? "max-w-4xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
               {addPanel === "vendor_quote"
@@ -706,12 +724,18 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                   ? "ネット印刷の価格ページから取り込む"
                 : addPanel === "past_estimate"
                   ? "過去の見積から明細を複製する"
+                : addPanel === "sheet_import"
+                  ? "スプレッドシートから明細を取り込む"
                   : `${LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.label} を追加`}
             </DialogTitle>
           </DialogHeader>
 
           {addPanel === "vendor_quote" && (
             <VendorQuoteImport onAdd={addItems} onClose={closeAddPanel} />
+          )}
+
+          {addPanel === "sheet_import" && (
+            <SheetImport onAdd={addItems} onClose={closeAddPanel} />
           )}
 
           {addPanel === "past_estimate" && (
@@ -883,6 +907,28 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
 
 function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove }) {
+  if (item.row_type === "subtotal") {
+    return (
+      <tr className={`bg-slate-50 border-t border-slate-400 ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
+        <td className="px-1 py-2 align-top">
+          <span draggable onDragStart={onDragStart} onDragEnd={onDragEnd} className="text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing inline-block mt-1">
+            <GripVertical className="w-3.5 h-3.5" />
+          </span>
+        </td>
+        <td colSpan={4} className="px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Sigma className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <Input value={item.name || ""} onChange={e => onChange({ name: e.target.value })} placeholder="小計" className="h-7 text-xs font-semibold bg-transparent border-none px-0 focus-visible:ring-0" />
+            <span className="text-[10px] text-muted-foreground shrink-0">直前の小計からここまでの合計（見積金額には含めません）</span>
+          </div>
+        </td>
+        <td className="px-3 py-2 text-right align-top font-semibold">{yen(item.amount)}</td>
+        <td className="px-2 py-2 align-top">
+          <button onClick={onRemove} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+        </td>
+      </tr>
+    );
+  }
   if (item.row_type === "text") {
     return (
       <tr className={`bg-muted/30 ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>

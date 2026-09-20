@@ -29,7 +29,7 @@ export function newDocItem(defaults = {}) {
 /** 見積の明細（テキスト行を除く）を帳票の明細に写す */
 export function docItemsFromEstimate(estimate) {
   return (estimate?.line_items || [])
-    .filter((li) => li.row_type !== "text")
+    .filter((li) => li.row_type !== "text" && li.row_type !== "subtotal")
     .map((li) => newDocItem({
       name: li.name || "",
       quantity: Number(li.quantity) || 1,
