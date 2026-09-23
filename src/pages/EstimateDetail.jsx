@@ -78,14 +78,15 @@ export default function EstimateDetail() {
   // 見積書PDF（印影あり／なし）とクライアントへのメール送付
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
-  const downloadPdf = async (withStamp) => {
+  const downloadPdf = async (withStamp, kind = "estimate") => {
     setPdfLoading(true);
     try {
       // 直前の編集が保存されてから生成する（自動保存は1秒待ち）
       await saveMutation.mutateAsync(formData);
-      const blob = await db.documents.pdf("estimate", estimateId, { stamp: withStamp });
+      const blob = await db.documents.pdf(kind, estimateId, { stamp: withStamp });
       const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
-      openBlob(blob, `【${clean(formData.client_name) || "クライアント"}】見積書_${clean(formData.estimate_title) || formData.estimate_number}.pdf`);
+      const label = kind === "purchase_order" ? "発注書" : "見積書";
+      openBlob(blob, `【${clean(formData.client_name) || "クライアント"}】${label}_${clean(formData.estimate_title) || formData.estimate_number}.pdf`);
     } catch (err) {
       toast.error("PDFを作成できませんでした: " + err.message);
     } finally {
@@ -272,6 +273,7 @@ export default function EstimateDetail() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(true)}>電子印鑑あり（メール送付用）</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false)}>電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false, "purchase_order")}>発注書の雛形（クライアント記入用・宛先 CV）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button variant="outline" size="sm" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }} className="gap-1.5 text-xs">

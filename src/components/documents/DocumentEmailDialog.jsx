@@ -11,6 +11,7 @@ import { Loader2, Send, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { companyInfoFromSettings } from "@/lib/documents";
+import { computeEstimateTotals } from "@/lib/estimateTotals";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -20,8 +21,7 @@ const numberOf = (type, doc) => (type === "invoice" ? doc.invoice_number : type 
 /** 見積書のメール本文: PDF の内容（件名・金額・主な項目・有効期限）に沿って組み立てる */
 function estimateTemplate(doc, company) {
   const items = (doc.line_items || []).filter((li) => li.row_type !== "subtotal");
-  const subtotal = items.filter((li) => li.row_type !== "text").reduce((s, li) => s + (Number(li.amount) || 0), 0);
-  const total = Math.round(subtotal * 1.1);
+  const total = Number(doc.total_amount) || computeEstimateTotals(items, { taxInclusive: !!doc.tax_inclusive }).total;
   const headings = items.filter((li) => li.row_type === "text" && li.text).map((li) => `　・${li.text}`);
   const mains = items.filter((li) => li.row_type !== "text").sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0)).slice(0, 5).map((li) => `　・${li.name}`);
   const outline = headings.length > 0 ? headings.slice(0, 8) : mains;

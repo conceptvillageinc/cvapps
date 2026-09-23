@@ -4,6 +4,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { nextMonthEnd } from "@/lib/fiscal";
+import { toTaxExclusiveUnitPrice, lineTaxRate } from "@/lib/estimateTotals";
 
 export const TAX_RATES = [10, 8];
 export const DEFAULT_TAX_RATE = 10;
@@ -28,15 +29,23 @@ export function newDocItem(defaults = {}) {
 
 /** 見積の明細（テキスト行を除く）を帳票の明細に写す */
 export function docItemsFromEstimate(estimate) {
+  // 税込見積の明細は税抜に直して写す（納品書・請求書は税抜で持つ）
+  const inclusive = !!estimate?.tax_inclusive;
   return (estimate?.line_items || [])
     .filter((li) => li.row_type !== "text" && li.row_type !== "subtotal")
-    .map((li) => newDocItem({
+    .map((li) => {
+      const rate = lineTaxRate(li);
+      const qty = Number(li.quantity) || 1;
+      const unitPrice = inclusive ? toTaxExclusiveUnitPrice(li.unit_price, rate) : (Number(li.unit_price) || 0);
+      return { li, rate, qty, unitPrice };
+    })
+    .map(({ li, rate, qty, unitPrice }) => newDocItem({
       name: li.name || "",
-      quantity: Number(li.quantity) || 1,
+      quantity: qty,
       unit: li.unit || "式",
-      unit_price: Number(li.unit_price) || 0,
-      amount: Number(li.amount) || 0,
-      tax_rate: Number(li.tax_rate) || DEFAULT_TAX_RATE,
+      unit_price: unitPrice,
+      amount: inclusive ? unitPrice * qty : (Number(li.amount) || 0),
+      tax_rate: rate,
       ...(li.cost_price != null ? { cost_price: Number(li.cost_price) } : {}),
       source_line_id: li.id,
       source_type: li.source_type || null,

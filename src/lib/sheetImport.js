@@ -2,7 +2,7 @@
 // スプレッドシート（Google スプレッドシート / Excel）から見積明細を読み取る。
 //
 // 入力は「シートからコピーして貼り付けたテキスト（タブ区切り）」または CSV。
-// 列は見出し行から自動で判定する（項目/名称, 数量, 単位, 単価, 金額, 原価, 備考, 大カテゴリ）。
+// 列は見出し行から自動で判定する（項目/名称, 数量, 単位, 単価, 金額, 仕入合計/仕入単価, 備考, 大カテゴリ）。
 // 見出し行が無い場合は 名称/数量/単位/単価/金額 の並びとみなす。
 //
 // 行の種類:
@@ -18,7 +18,9 @@ const HEADER_KEYS = {
   unit: ["単位"],
   unit_price: ["単価", "単価（税別）", "単価(税別)", "単価\n（税別）"],
   amount: ["金額", "金額（税別）", "金額(税別)", "小計", "明細金額"],
-  cost: ["原価", "仕入", "仕入額"],
+  // 仕入は「合計」で書く（決定事項）。単価で書きたい場合は「仕入単価」「原価単価」
+  cost_total: ["仕入合計", "仕入金額", "原価合計", "原価", "仕入", "仕入額", "仕入合計（税別）", "仕入金額（税別）"],
+  cost: ["仕入単価", "原価単価", "仕入単価（税別）", "原価単価（税別）"],
   notes: ["備考", "メモ", "注記"],
   no: ["no", "no.", "番号", "#"],
 };
@@ -129,7 +131,8 @@ export function parseSheetItems(text) {
     const qty = toNum(get("quantity"));
     const price = toNum(get("unit_price"));
     const amount = toNum(get("amount"));
-    const cost = toNum(get("cost"));
+    const costUnit = toNum(get("cost"));
+    const costTotal = toNum(get("cost_total"));
     const unit = String(get("unit") ?? "").trim();
     const notes = String(get("notes") ?? "").trim();
 
@@ -157,6 +160,8 @@ export function parseSheetItems(text) {
     const q = qty ?? 1;
     const up = price ?? (amount !== null && q ? Math.round(amount / q) : 0);
     const amt = amount ?? Math.round(q * up);
+    // 原価は単価で持つ（仕入合計 ÷ 数量）
+    const cost = costUnit ?? (costTotal !== null && q ? Math.round((costTotal / q) * 100) / 100 : null);
     const pctMatch = (nameOnly || label).match(/(\d+(?:\.\d+)?)\s*[%％]/);
     rows.push({
       kind: "item", level,
@@ -177,11 +182,11 @@ export function parseSheetItems(text) {
 /** テンプレートCSV（UTF-8 BOM付き） */
 export function templateCsv() {
   const lines = [
-    ["大カテゴリ", "名称", "数量", "単位", "単価", "原価", "備考"],
-    ["デザイン費", "トップページデザイン", "1", "ページ", "150000", "", ""],
+    ["大カテゴリ", "名称", "数量", "単位", "単価（税別）", "仕入合計（税別）", "備考"],
+    ["デザイン費", "トップページデザイン", "1", "ページ", "150000", "60000", "外注A社"],
     ["デザイン費", "下層ページデザイン（ベース）", "1", "ページ", "80000", "", ""],
-    ["構築費", "トップページ構築", "1", "ページ", "200000", "", ""],
-    ["構築費", "下層ページ構築（各ページ展開）", "20", "ページ", "5000", "", ""],
+    ["構築費", "トップページ構築", "1", "ページ", "200000", "120000", "外注B社"],
+    ["構築費", "下層ページ構築（各ページ展開）", "20", "ページ", "5000", "60000", "20ページ分の仕入合計"],
     ["自由入力", "運用保守", "4", "ヶ月", "30000", "", "アクセス解析レポート含む"],
   ];
   return "﻿" + lines.map((l) => l.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(",")).join("\r\n") + "\r\n";

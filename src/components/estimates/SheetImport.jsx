@@ -16,7 +16,7 @@ const CATEGORY_LABELS = LINE_ITEM_CATEGORIES.map((c) => c.label);
 /**
  * スプレッドシートからの明細取込。
  * Google スプレッドシート／Excel で範囲をコピーして貼り付けるか、CSV を選ぶ。
- * 見出し行（大カテゴリ・名称・数量・単位・単価・金額・原価・備考）は自動判定。
+ * 見出し行（大カテゴリ・名称・数量・単位・単価・金額・仕入合計・備考）は自動判定。仕入合計は数量で割って原価（単価）として持つ。
  */
 export default function SheetImport({ onAdd, onClose }) {
   const [text, setText] = useState("");
@@ -137,7 +137,7 @@ export default function SheetImport({ onAdd, onClose }) {
         onChange={(e) => setText(e.target.value)}
         onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t.includes("\t")) { e.preventDefault(); setText(t); run(t); } }}
         rows={parsed ? 3 : 8}
-        placeholder={"ここにシートの内容を貼り付け（見出し行を含めると列を自動判定します）\n例:\n項目\t数量\t単位\t単価（税別）\t金額（税別）\t備考\nデザイン費関連\nTOPページ\t1\tページ\t200000\t200000"}
+        placeholder={"ここにシートの内容を貼り付け（見出し行を含めると列を自動判定します）\n例:\n項目\t数量\t単位\t単価（税別）\t金額（税別）\t仕入合計（税別）\t備考\nデザイン費関連\nTOPページ\t1\tページ\t200000\t200000\t80000"}
         className="text-xs font-mono"
       />
       {!parsed && (
@@ -165,7 +165,7 @@ export default function SheetImport({ onAdd, onClose }) {
                   <th className="px-2 py-1.5 text-left font-medium">単位</th>
                   <th className="px-2 py-1.5 text-right font-medium">単価</th>
                   <th className="px-2 py-1.5 text-right font-medium">金額</th>
-                  <th className="px-2 py-1.5 text-right font-medium">原価</th>
+                  <th className="px-2 py-1.5 text-right font-medium">仕入合計</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,7 +187,7 @@ export default function SheetImport({ onAdd, onClose }) {
                     <td className="px-2 py-1">{r.unit}</td>
                     <td className="px-2 py-1 text-right tabular-nums">{Number(r.unit_price).toLocaleString()}</td>
                     <td className="px-2 py-1 text-right tabular-nums font-medium">{Number(r.amount).toLocaleString()}</td>
-                    <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">{r.cost_price != null ? Number(r.cost_price).toLocaleString() : ""}</td>
+                    <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">{r.cost_price != null ? Math.round(Number(r.cost_price) * (Number(r.quantity) || 1)).toLocaleString() : ""}</td>
                   </tr>
                 ))}
               </tbody>

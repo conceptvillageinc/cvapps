@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,12 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2,
+  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
 import {
-  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, TAX_RATE, applyMarkup,
+  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, applyMarkup,
 } from "@/lib/constants";
 import {
   usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS, recomputeSubtotals, withRuleRate, unlockRuleRow,
@@ -24,6 +24,7 @@ import { DESIGN_FEE_MASTER, getDesignItemsByCategory } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import { formatPostalCode } from "@/lib/postalCode";
 import { toTaxExcluded } from "@/lib/priceTax";
+import { computeEstimateTotals, lineTaxRate } from "@/lib/estimateTotals";
 
 import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 import WebPriceImport from "@/components/estimates/WebPriceImport";
@@ -49,13 +50,6 @@ function yen(n) {
   return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString()}`;
 }
 
-function computeTotals(lineItems) {
-  const subtotal = (lineItems || [])
-    .filter(li => li.row_type !== "text" && li.row_type !== "subtotal")
-    .reduce((sum, li) => sum + (Number(li.amount) || 0), 0);
-  const tax = round(subtotal * TAX_RATE);
-  return { subtotal, tax, total: subtotal + tax };
-}
 
 function escapeHtml(str) {
   return String(str || "").replace(/[&<>"']/g, c => ({
@@ -67,12 +61,17 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const [showInternal, setShowInternal] = useState(true);
   const [addPanel, setAddPanel] = useState(null); // LINE_ITEM_CATEGORIES key
   const [priceMasterPick, setPriceMasterPick] = useState(null); // selected PriceMaster entry for tier selection
+  const [pmCategory, setPmCategory] = useState(null); // 印刷費: 選んだ大カテゴリ（商品）
   const [dragId, setDragId] = useState(null);
   const [manualForm, setManualForm] = useState({ name: "", quantity: 1, unit: "式", unit_price: 0, cost: "", outsourcing: "" });
   const { rules } = usePricingRules();
 
   const lineItems = estimate.line_items || [];
-  const { subtotal, tax, total } = useMemo(() => computeTotals(lineItems), [lineItems]);
+  const taxInclusive = !!estimate.tax_inclusive;
+  const { subtotal, tax, total, breakdown } = useMemo(() => computeEstimateTotals(lineItems, { taxInclusive }), [lineItems, taxInclusive]);
+  const hasReduced = breakdown.some(b => b.rate === 8);
+  const unitLabel = taxInclusive ? "単価（税込）" : "単価";
+  const amountLabel = taxInclusive ? "金額（税込）" : "金額";
 
   // 社内確認用：原価情報を持つ行のみを集計して粗利を計算
   const { totalCost, grossProfit, profitRate } = useMemo(() => {
@@ -131,7 +130,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const commitItems = (rawItems) => {
     // コンセプト設計費・校正費・割引などの自動計算行を、他の行の合計から入れ直す
     const newItems = recomputeSubtotals(recomputeRuleRows(rawItems, rules));
-    const totals = computeTotals(newItems);
+    const totals = computeEstimateTotals(newItems, { taxInclusive });
     onUpdate({ line_items: newItems, total_amount: totals.total });
   };
 
@@ -177,6 +176,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const closeAddPanel = () => {
     setAddPanel(null);
     setPriceMasterPick(null);
+    setPmCategory(null);
     setManualForm({ name: "", quantity: 1, unit: "式", unit_price: 0, cost: "", outsourcing: "" });
   };
 
@@ -249,7 +249,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
         return `<tr class="subtotal-row"><td colspan="4" class="num">${escapeHtml(li.name || "小計")}</td><td class="num">${yen(li.amount).replace("¥", "")}</td></tr>`;
       }
       return `<tr>
-        <td>${escapeHtml(li.name)}</td>
+        <td>${escapeHtml(li.name)}${lineTaxRate(li) === 8 ? "（軽減8%）" : ""}</td>
         <td class="num">${(li.quantity ?? "").toLocaleString ? li.quantity.toLocaleString() : li.quantity}</td>
         <td class="num">${escapeHtml(li.unit)}</td>
         <td class="num">${yen(li.unit_price).replace("¥", "")}</td>
@@ -349,21 +349,21 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
   <table class="summary">
     <tr>
-      <td><span class="label">小計</span><span class="value">${subtotal.toLocaleString()}円</span></td>
+      <td><span class="label">小計（税抜）</span><span class="value">${subtotal.toLocaleString()}円</span></td>
       <td><span class="label">消費税</span><span class="value">${tax.toLocaleString()}円</span></td>
-      <td><span class="label">見積金額</span><span class="value">${total.toLocaleString()}円</span></td>
+      <td><span class="label">見積金額（税込）</span><span class="value">${total.toLocaleString()}円</span></td>
     </tr>
   </table>
 
   <table class="items">
-    <thead><tr><th>名称</th><th class="num" style="width:70px;">数量</th><th class="num" style="width:56px;">単位</th><th class="num" style="width:90px;">単価</th><th class="num" style="width:100px;">金額</th></tr></thead>
+    <thead><tr><th>名称</th><th class="num" style="width:70px;">数量</th><th class="num" style="width:56px;">単位</th><th class="num" style="width:90px;">${unitLabel}</th><th class="num" style="width:100px;">${amountLabel}</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 
   <div class="breakdown">
     <table>
-      <tr><td>10%対象(税抜)</td><td class="amt">${subtotal.toLocaleString()}円</td></tr>
-      <tr><td>10%消費税</td><td class="amt">${tax.toLocaleString()}円</td></tr>
+      ${breakdown.map(b => `<tr><td>${b.rate}%対象(税抜)</td><td class="amt">${b.taxable.toLocaleString()}円</td></tr><tr><td>${b.rate}%消費税</td><td class="amt">${b.tax.toLocaleString()}円</td></tr>`).join("")}
+      ${hasReduced ? `<tr><td colspan="2">（軽減8%）は軽減税率対象</td></tr>` : ""}
     </table>
   </div>
 
@@ -377,6 +377,13 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center gap-1.5" title="ON にすると単価・金額を税込で入力し、消費税は税込合計から逆算します（切り捨て）。既定は税別">
+          <Label htmlFor="qe-taxinc" className="text-xs cursor-pointer">税込で作る</Label>
+          <Switch id="qe-taxinc" checked={taxInclusive} onCheckedChange={(v) => {
+            const next = computeEstimateTotals(lineItems, { taxInclusive: v });
+            onUpdate({ tax_inclusive: v, total_amount: next.total });
+          }} />
+        </div>
         <div className="flex items-center gap-1.5">
           {showInternal ? <Eye className="w-3.5 h-3.5 text-primary" /> : <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />}
           <Label htmlFor="qe-internal" className="text-xs cursor-pointer">社内確認用（原価・掛け率を表示）</Label>
@@ -426,7 +433,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
           <div className="flex border rounded-lg overflow-hidden divide-x">
             <div className="flex-1 text-center py-2 bg-muted/30">
-              <p className="text-[10px] text-muted-foreground">小計</p>
+              <p className="text-[10px] text-muted-foreground">小計（税抜）</p>
               <p className="text-sm font-bold">{subtotal.toLocaleString()}円</p>
             </div>
             <div className="flex-1 text-center py-2 bg-muted/30">
@@ -434,7 +441,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
               <p className="text-sm font-bold">{tax.toLocaleString()}円</p>
             </div>
             <div className="flex-1 text-center py-2 bg-primary/10">
-              <p className="text-[10px] text-muted-foreground">見積金額</p>
+              <p className="text-[10px] text-muted-foreground">見積金額（税込）</p>
               <p className="text-lg font-bold text-primary">{total.toLocaleString()}円</p>
             </div>
           </div>
@@ -445,8 +452,8 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                 <th className="text-left px-3 py-2 font-medium">名称</th>
                 <th className="text-right px-3 py-2 font-medium w-16">数量</th>
                 <th className="text-right px-3 py-2 font-medium w-14">単位</th>
-                <th className="text-right px-3 py-2 font-medium w-20">単価</th>
-                <th className="text-right px-3 py-2 font-medium w-24">金額</th>
+                <th className="text-right px-3 py-2 font-medium w-20">{unitLabel}</th>
+                <th className="text-right px-3 py-2 font-medium w-24">{amountLabel}</th>
               </tr>
             </thead>
             <tbody>
@@ -469,7 +476,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                   </tr>
                 ) : (
                   <tr key={li.id} className="border-b">
-                    <td className="px-3 py-2 align-top">{li.name}</td>
+                    <td className="px-3 py-2 align-top">{li.name}{lineTaxRate(li) === 8 && <span className="text-[10px] text-muted-foreground ml-1">（軽減8%）</span>}</td>
                     <td className="px-3 py-2 text-right align-top">{li.quantity?.toLocaleString?.() ?? li.quantity}</td>
                     <td className="px-3 py-2 text-right align-top">{li.unit}</td>
                     <td className="px-3 py-2 text-right align-top">{yen(li.unit_price)}</td>
@@ -479,6 +486,20 @@ export default function QuoteEditor({ estimate, onUpdate }) {
               ))}
             </tbody>
           </table>
+
+          <div className="flex justify-end">
+            <table className="text-[11px] text-muted-foreground">
+              <tbody>
+                {breakdown.map(b => (
+                  <Fragment key={b.rate}>
+                    <tr><td className="pr-4">{b.rate}%対象(税抜)</td><td className="text-right text-foreground">{b.taxable.toLocaleString()}円</td></tr>
+                    <tr><td className="pr-4">{b.rate}%消費税</td><td className="text-right text-foreground">{b.tax.toLocaleString()}円</td></tr>
+                  </Fragment>
+                ))}
+                {hasReduced && <tr><td colSpan={2} className="text-[10px]">（軽減8%）は軽減税率対象</td></tr>}
+              </tbody>
+            </table>
+          </div>
 
           {estimate.additional_notes !== undefined && (
             <div className="text-xs text-muted-foreground">
@@ -645,8 +666,8 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                   <th className="text-left px-3 py-2 font-medium">名称</th>
                   <th className="text-right px-3 py-2 font-medium w-24">数量</th>
                   <th className="text-right px-3 py-2 font-medium w-16">単位</th>
-                  <th className="text-right px-3 py-2 font-medium w-28">単価</th>
-                  <th className="text-right px-3 py-2 font-medium w-32">金額</th>
+                  <th className="text-right px-3 py-2 font-medium w-28">{unitLabel}</th>
+                  <th className="text-right px-3 py-2 font-medium w-32">{amountLabel}</th>
                   <th className="w-16"></th>
                 </tr>
               </thead>
@@ -777,30 +798,76 @@ export default function QuoteEditor({ estimate, onUpdate }) {
             </div>
           )}
 
-          {(addPanel === "print_paper" || addPanel === "print_nonpaper") && !priceMasterPick && (
-            <div className="space-y-1.5">
-              {priceMasterEntriesWithSelection
-                .filter(e => e.paper_type_group === LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.paperGroup)
-                .map((entry) => (
-                  <button
-                    key={entry.id}
-                    onClick={() => setPriceMasterPick(entry)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm border rounded-md hover:bg-muted/40 text-left"
-                  >
-                    <div>
-                      <p>{entry.category}（{entry.vendor_name}）</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{entry.spec_summary} ・ {entry.selectedCells.length}パターン選択中</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  </button>
+          {(addPanel === "print_paper" || addPanel === "print_nonpaper") && !priceMasterPick && (() => {
+            // 商品（大カテゴリ）→ 仕様 → メーカー の順に選ぶ。同じ商品のメーカーは原価・出し値を横並びで比べられる
+            const group = LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.paperGroup;
+            const entries = priceMasterEntriesWithSelection.filter(e => e.paper_type_group === group);
+            const categories = [...new Set(entries.map(e => e.category))].sort((a, b) => a.localeCompare(b, "ja"));
+            if (entries.length === 0) {
+              return <p className="text-xs text-muted-foreground text-center py-6">選択済みの価格データがありません。「価格マスタ」画面で使うセルを選択しておいてください。</p>;
+            }
+            if (!pmCategory || !categories.includes(pmCategory)) {
+              return (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-muted-foreground">商品（大カテゴリ）を選ぶ → 仕様・メーカーごとの価格から選びます</p>
+                  {categories.map((cat) => {
+                    const inCat = entries.filter(e => e.category === cat);
+                    return (
+                      <button key={cat} onClick={() => setPmCategory(cat)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm border rounded-md hover:bg-muted/40 text-left">
+                        <div>
+                          <p>{cat}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{[...new Set(inCat.map(e => e.vendor_name))].join("・")} ・ {inCat.reduce((s, e) => s + e.selectedCells.length, 0)}パターン</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            }
+            const inCat = entries.filter(e => e.category === pmCategory);
+            const specs = [...new Set(inCat.map(e => e.spec_summary || "（仕様未記入）"))];
+            const markup = markupRateFor(rules, pmCategory);
+            return (
+              <div className="space-y-3">
+                <Button variant="ghost" size="sm" className="text-xs h-7 -ml-2" onClick={() => setPmCategory(null)}>← 商品一覧に戻る</Button>
+                <p className="text-sm font-medium">{pmCategory} <span className="text-xs text-muted-foreground font-normal">掛け率 ×{markup}・原価は税別</span></p>
+                {specs.map((spec) => (
+                  <div key={spec} className="border rounded-md overflow-hidden">
+                    <div className="px-3 py-1.5 text-xs font-medium bg-muted/40">{spec}</div>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-[10px] text-muted-foreground">
+                          <th className="text-left px-3 py-1 font-medium">メーカー</th>
+                          <th className="text-right px-2 py-1 font-medium">数量</th>
+                          <th className="text-left px-2 py-1 font-medium">納期</th>
+                          <th className="text-right px-2 py-1 font-medium">原価</th>
+                          <th className="text-right px-3 py-1 font-medium">出し値</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inCat.filter(e => (e.spec_summary || "（仕様未記入）") === spec).flatMap((entry) =>
+                          [...entry.selectedCells].sort((a, b) => (a.quantity - b.quantity) || String(a.label).localeCompare(String(b.label), "ja")).map((cell, i) => {
+                            const cost = toTaxExcluded(cell.price, entry.price_tax_mode);
+                            const price = applyMarkup(cost / (cell.quantity || 1), markup) * (cell.quantity || 1);
+                            return (
+                              <tr key={`${entry.id}-${i}`} className="border-t hover:bg-emerald-50 cursor-pointer" onClick={() => pickPriceMasterCell(entry, cell)} title="クリックで明細に追加">
+                                <td className="px-3 py-1.5">{i === 0 ? entry.vendor_name : ""}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums">{Number(cell.quantity || 0).toLocaleString()}</td>
+                                <td className="px-2 py-1.5">{cell.label}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">¥{Math.round(cost).toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums font-medium text-primary">¥{Math.round(price).toLocaleString()}</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 ))}
-              {priceMasterEntriesWithSelection.filter(e => e.paper_type_group === LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.paperGroup).length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-6">
-                  選択済みの価格データがありません。「価格マスタ」画面で使うセルを選択しておいてください。
-                </p>
-              )}
-            </div>
-          )}
+              </div>
+            );
+          })()}
 
           {(addPanel === "print_paper" || addPanel === "print_nonpaper") && priceMasterPick && (
             <div className="space-y-2">
@@ -971,7 +1038,7 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
 
   return (
     <>
-    <tr className={`${showInternal && hasCost ? "" : "border-b"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
+    <tr className={`${showInternal ? "" : "border-b"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
       <td className="px-1 py-2 align-top">
         <span
           draggable
@@ -1040,10 +1107,46 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
         </button>
       </td>
     </tr>
-    {showInternal && hasCost && (
+    {showInternal && (
       <tr className="border-b">
         <td></td>
-        <td colSpan={6} className="px-3 pb-2 pt-0">
+        <td colSpan={6} className="px-3 pb-2 pt-0 space-y-1">
+          {/* 税率・入稿先URL・スクショ・メモ（社内用。見積書には出ない） */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            <label className="flex items-center gap-1">
+              <span>税率</span>
+              <select
+                value={lineTaxRate(item)}
+                onChange={(e) => onChange({ tax_rate: Number(e.target.value) })}
+                className={`h-6 rounded border px-1 text-[10px] ${lineTaxRate(item) === 8 ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-white"}`}
+                title="食品など軽減税率の場合は 8%"
+              >
+                <option value={10}>10%</option>
+                <option value={8}>8%（軽減）</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-1 min-w-[220px] flex-1">
+              <Link2 className="w-3 h-3 shrink-0" />
+              <Input
+                value={item.source_url || ""}
+                onChange={(e) => onChange({ source_url: e.target.value })}
+                placeholder="入稿先URL（ネット印刷の注文ページなど）"
+                className="h-6 text-[10px] px-1.5 bg-white"
+              />
+              {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0">開く</a>}
+            </label>
+            <LineScreenshot path={item.screenshot_path} onChange={(p) => onChange({ screenshot_path: p })} />
+            <label className="flex items-center gap-1 min-w-[200px] flex-1">
+              <span className="shrink-0">メモ</span>
+              <Input
+                value={item.memo || ""}
+                onChange={(e) => onChange({ memo: e.target.value })}
+                placeholder="社内メモ（入稿の注意点など）"
+                className="h-6 text-[10px] px-1.5 bg-white"
+              />
+            </label>
+          </div>
+          {hasCost && (
           <div className="p-2.5 rounded bg-amber-50 border border-amber-100 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <div className="text-[10px] text-amber-700">
               原価 ¥{Number(item.cost_price).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}
@@ -1069,10 +1172,55 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
             </div>
             )}
           </div>
+          )}
         </td>
       </tr>
     )}
     </>
+  );
+}
+
+// 明細行のスクショ（入稿画面の控えなど）。非公開バケットに置き、署名付きURLで表示する
+function LineScreenshot({ path, onChange }) {
+  const [url, setUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    if (!path) { setUrl(null); return; }
+    db.storage.signedUrl(path).then((u) => alive && setUrl(u)).catch(() => alive && setUrl(null));
+    return () => { alive = false; };
+  }, [path]);
+  const upload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await db.integrations.Core.UploadFile({ file });
+      onChange(file_url);
+    } catch (err) {
+      toast.error("アップロードできませんでした: " + err.message);
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+  return (
+    <span className="flex items-center gap-1">
+      <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={upload} />
+      {path ? (
+        <>
+          <a href={url || "#"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline" title="スクショを開く">
+            {url && /\.(png|jpe?g|gif|webp)$/i.test(path) ? <img src={url} alt="スクショ" className="h-6 w-auto rounded border" /> : <ImageIcon className="w-3 h-3" />} スクショ
+          </a>
+          <button type="button" className="text-muted-foreground hover:text-destructive" title="スクショを外す" onClick={() => onChange(null)}><X className="w-3 h-3" /></button>
+        </>
+      ) : (
+        <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => inputRef.current?.click()} disabled={uploading}>
+          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />} スクショを付ける
+        </button>
+      )}
+    </span>
   );
 }
 

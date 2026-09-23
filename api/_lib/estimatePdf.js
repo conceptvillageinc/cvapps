@@ -51,16 +51,25 @@ function addMonths(dateStr, months) {
   return d.toISOString().slice(0, 10);
 }
 
-/** 小計・税率別の消費税・合計（見積書タブと同じ: 10%固定。行に tax_rate があれば税率別） */
-export function estimateTotals(lineItems) {
+/**
+ * 小計・税率別の消費税・合計。src/lib/estimateTotals.js と同じ計算（直すときは両方直す）。
+ *   税別見積: 消費税 = 税率ごとの合計 × 税率（四捨五入）
+ *   税込見積: 消費税 = 税率ごとの合計 × 税率 ÷ (100+税率) の切り捨て、税抜 = 税込 − 消費税
+ */
+export function estimateTotals(lineItems, taxInclusive = false) {
   const rows = (lineItems || []).filter((li) => li.row_type !== 'text' && li.row_type !== 'subtotal');
   const byRate = new Map();
   for (const li of rows) {
     const rate = Number(li.tax_rate) === 8 ? 8 : 10;
     byRate.set(rate, (byRate.get(rate) || 0) + (Number(li.amount) || 0));
   }
-  const breakdown = [...byRate.entries()].sort((a, b) => b[0] - a[0])
-    .map(([rate, taxable]) => ({ rate, taxable, tax: Math.round(taxable * rate / 100) }));
+  const breakdown = [...byRate.entries()].sort((a, b) => b[0] - a[0]).map(([rate, sum]) => {
+    if (taxInclusive) {
+      const tax = Math.floor((sum * rate) / (100 + rate));
+      return { rate, taxable: sum - tax, tax };
+    }
+    return { rate, taxable: sum, tax: Math.round((sum * rate) / 100) };
+  });
   const subtotal = breakdown.reduce((s, b) => s + b.taxable, 0);
   const tax = breakdown.reduce((s, b) => s + b.tax, 0);
   return { subtotal, tax, total: subtotal + tax, breakdown: breakdown.length ? breakdown : [{ rate: 10, taxable: 0, tax: 0 }] };
@@ -112,7 +121,7 @@ export function renderEstimatePdf({ estimate, client, company, stamp }) {
   });
 }
 
-// 明細表の列（名称は残り幅）
+// 明細表の列（名称は残り幅）。税込見積は単価・金額の見出しに（税込）を付ける
 const COLS = [
   ['名称', 0, 'left'],
   ['数量', 52, 'right'],
@@ -124,12 +133,13 @@ const NAME_W = CONTENT_W - COLS.slice(1).reduce((s, c) => s + c[1], 0);
 const ROW_PAD = 4;
 const HEAD_H = 16;
 
-function drawTableHeader(pdf, y) {
+function drawTableHeader(pdf, y, taxInclusive = false) {
   pdf.rect(MARGIN, y, CONTENT_W, HEAD_H).fill('#1e293b');
   pdf.fillColor('#fff').font('jp').fontSize(8);
   let x = MARGIN;
-  for (const [label, w0, align] of COLS) {
+  for (const [label0, w0, align] of COLS) {
     const w = w0 || NAME_W;
+    const label = taxInclusive && (label0 === '単価' || label0 === '金額') ? `${label0}(税込)` : label0;
     pdf.text(label, x + 4, y + 4, { width: w - 8, align, lineBreak: false });
     x += w;
   }
@@ -139,7 +149,8 @@ function drawTableHeader(pdf, y) {
 
 function drawEstimate(pdf, { estimate, client, company, stamp }) {
   const items = Array.isArray(estimate.line_items) ? estimate.line_items : [];
-  const totals = estimateTotals(items);
+  const taxInclusive = !!estimate.tax_inclusive;
+  const totals = estimateTotals(items, taxInclusive);
   const estimateDate = estimate.estimate_date || new Date().toISOString().slice(0, 10);
   const validityMonths = estimate.validity_period_months ?? 6;
   const validUntil = addMonths(estimateDate, validityMonths);
@@ -224,14 +235,14 @@ function drawEstimate(pdf, { estimate, client, company, stamp }) {
   y += bandH + 10;
 
   // ---- 明細表（流し込み・改ページあり） ----
-  y = drawTableHeader(pdf, y);
+  y = drawTableHeader(pdf, y, taxInclusive);
   const nameFont = () => pdf.font('jp').fontSize(8.5);
 
   const ensure = (h) => {
     if (y + h <= BOTTOM) return;
     pdf.addPage();
     y = MARGIN;
-    y = drawTableHeader(pdf, y);
+    y = drawTableHeader(pdf, y, taxInclusive);
   };
 
   for (const li of items) {
@@ -289,6 +300,9 @@ function drawEstimate(pdf, { estimate, client, company, stamp }) {
   ensure(bh + 4);
   pdf.rect(bwX, y, bwW, bh).stroke('#cbd5e1');
   let ly = y + 4;
+  if (totals.breakdown.some((b) => b.rate === 8)) {
+    pdf.font('jp').fontSize(6.5).fillColor('#333').text('（軽減8%）は軽減税率対象', MARGIN, y + 4, { width: bwX - MARGIN - 6, align: 'right', lineBreak: false });
+  }
   for (const b of totals.breakdown) {
     pdf.font('jp').fontSize(7.5).fillColor('#333').text(`${b.rate}%対象（税抜）`, bwX + 6, ly, { lineBreak: false });
     pdf.text(`${yen(b.taxable)}円`, bwX, ly, { width: bwW - 6, align: 'right', lineBreak: false });

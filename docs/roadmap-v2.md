@@ -358,4 +358,4 @@ S6 は他と依存が薄いので、Web案件の見積が先に必要なら前�
 ## 7. フィードバック対応（2026-09-23）
 
 「全体整理v2」の 38 項目＋4 項目への対応は `docs/feedback-2026-09.md` を参照。
-セットアップは `supabase/migrations/0011_feedback_1.sql` の実行のみ。
+セットアップは `supabase/migrations/0011_feedback_1.sql` と `0012_tax_inclusive.sql` の実行。
