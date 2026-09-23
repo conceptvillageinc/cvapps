@@ -6,7 +6,7 @@ import { estimateTotals } from './estimatePdf.js';
 // ============================================================================
 // 発注書の雛形（A4縦）。見積書の内容から作り、クライアントが CV へ発注するときに使う。
 //
-//   宛先   = CV（自社）御中
+//   宛先   = CV（自社）。社名のみで「御中」は付けない（クライアントの要望）
 //   発行元 = クライアント（クライアント一覧の住所・担当者を入れ、空欄は手書きできるように罫線）
 //   内容   = 見積の明細（税抜・消費税・税込）と「上記のとおり発注いたします」の文言
 //   署名欄 = 発注日／会社名／ご担当者／ご署名（印）
@@ -91,7 +91,7 @@ function draw(pdf, { estimate, client, company }) {
   const loc = (company.locations || [])[0];
   if (loc) { pdf.text(`〒${formatPostal(loc.postal)}　${loc.address}`, MARGIN, y, { width: 280 }); y += pdf.heightOfString(`〒${formatPostal(loc.postal)}　${loc.address}`, { width: 280 }) + 3; }
   pdf.font('jp-bold').fontSize(13).fillColor('#000');
-  const toLine = `${company.name} 御中`;
+  const toLine = company.name;
   pdf.text(toLine, MARGIN, y, { width: 280 });
   const toH = pdf.heightOfString(toLine, { width: 280 });
   pdf.moveTo(MARGIN, y + toH + 2).lineTo(MARGIN + Math.min(280, pdf.widthOfString(toLine) + 4), y + toH + 2).lineWidth(1.2).stroke('#1e293b');
