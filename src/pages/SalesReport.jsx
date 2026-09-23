@@ -100,7 +100,7 @@ function TargetsDialog({ open, onOpenChange, fiscalYear, months, targets, onSave
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{fiscalYearLabel(fiscalYear)} の目標</DialogTitle>
-          <DialogDescription className="text-xs">税抜。年額を入れて「月割り」を押すと12等分します。月ごとに直接直すこともできます。目標粗利は「売上目標 − 仕入目標」で計算されます</DialogDescription>
+          <DialogDescription className="text-xs">金額はすべて税別（税抜）で入力してください。年額を入れて「月割り」を押すと12等分します。月ごとに直接直すこともできます。目標粗利は「売上目標 − 仕入目標」で計算されます</DialogDescription>
         </DialogHeader>
         {form && (
           <div className="space-y-4 min-w-0 max-w-full">
@@ -193,7 +193,7 @@ export default function SalesReport() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><BarChart3 className="w-5 h-5" /> 売上粗利管理表</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {fiscalYearLabel(fy, fiscalYearStartMonth)}　粗利率の目標 {pct(grossMarginTarget)}（システム設定で変更可）
+            {fiscalYearLabel(fy, fiscalYearStartMonth)}　粗利率の目標 {pct(grossMarginTarget)}（システム設定で変更可）　※金額はすべて税別（税抜）
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -235,7 +235,7 @@ export default function SalesReport() {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <CardTitle className="text-sm">{chart === "sales" ? "月別の売上（実績・見込）と目標" : "月別の粗利（実績＋見込）と目標"}</CardTitle>
-              <CardDescription className="text-xs">税抜・円。実績は請求書、見込は案件（請求済み分を除く）から</CardDescription>
+              <CardDescription className="text-xs">税別・円。実績は請求書、見込は案件（請求済み分を除く）から</CardDescription>
             </div>
             <Tabs value={chart} onValueChange={setChart}>
               <TabsList className="h-8">
@@ -264,8 +264,9 @@ export default function SalesReport() {
                 ) : (
                   <>
                     <Bar dataKey="粗利計" fill={C.actual} maxBarSize={24} radius={[4, 4, 0, 0]} />
-                    <Line type="monotone" dataKey="目標粗利" stroke={C.target} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
+                    {/* 凡例・線の順は 必達 → 目標 → ジャンプ（低い順） */}
                     <Line type="monotone" dataKey="必達粗利" stroke={C.forecast} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
+                    <Line type="monotone" dataKey="目標粗利" stroke={C.target} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
                     <Line type="monotone" dataKey="ジャンプ目標" stroke={C.must} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
                   </>
                 )}
@@ -279,7 +280,7 @@ export default function SalesReport() {
       {/* 表 */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">管理表（税抜・円）</CardTitle>
+          <CardTitle className="text-sm">管理表（税別・円）</CardTitle>
           <CardDescription className="text-xs">粗利率は目標（{pct(grossMarginTarget)}）以上を緑、未満を赤で表示。必要売上・必要粗利はマイナスが不足</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -299,24 +300,24 @@ export default function SalesReport() {
                 <tbody>
                   {[
                     ["目標", [
-                      ["売上", "target", "sales"], ["仕入", "target", "purchase"], ["目標粗利（ジャンプ）", "target", "gross_jump"],
-                      ["目標粗利", "target", "gross"], ["必達粗利", "target", "gross_must"], ["粗利率", "target", "margin", "pct"],
+                      ["売上", "target", "sales"], ["仕入", "target", "purchase"], ["必達粗利", "target", "gross_must"],
+                      ["目標粗利", "target", "gross"], ["目標粗利（ジャンプ）", "target", "gross_jump"], ["粗利率", "target", "margin", "pct"],
                     ]],
                     ["着地見込", [
                       ["売上（案件見込 A）", "forecast", "sales_a"], ["売上（要注意A）", "forecast", "sales_a2"],
                       ["発注見込 A", "forecast", "cost_a"], ["発注見込（要注意）", "forecast", "cost_a2"],
                       ["粗利", "forecast", "gross"], ["粗利率", "forecast", "margin", "pct"],
                       ["うち定期売上", "forecast", "recurring", "yen", true],
-                      ["必要売上", "forecast", "need_sales"], ["必要粗利（ジャンプ）", "forecast", "need_gross_jump"], ["必要粗利（目標）", "forecast", "need_gross"], ["必要粗利（必達）", "forecast", "need_gross_must"],
+                      ["必要売上", "forecast", "need_sales"], ["必要粗利（必達）", "forecast", "need_gross_must"], ["必要粗利（目標）", "forecast", "need_gross"], ["必要粗利（ジャンプ）", "forecast", "need_gross_jump"],
                     ]],
                     ["実績", [
                       ["売上（請求）", "actual", "sales"], ["調達（仕入）", "actual", "purchase"], ["その他原価", "actual", "other_cost"],
                       ["粗利", "actual", "gross"], ["粗利率", "actual", "margin", "pct"],
-                      ["必要売上", "actual", "need_sales"], ["必要粗利（ジャンプ）", "actual", "need_gross_jump"], ["必要粗利（目標）", "actual", "need_gross"], ["必要粗利（必達）", "actual", "need_gross_must"],
+                      ["必要売上", "actual", "need_sales"], ["必要粗利（必達）", "actual", "need_gross_must"], ["必要粗利（目標）", "actual", "need_gross"], ["必要粗利（ジャンプ）", "actual", "need_gross_jump"],
                     ]],
                     ["計", [
                       ["売上", "total", "sales"], ["仕入", "total", "purchase"], ["粗利", "total", "gross"], ["粗利率", "total", "margin", "pct"],
-                      ["必要売上（目標）", "total", "need_sales"], ["必要粗利（ジャンプ）", "total", "need_gross_jump"], ["必要粗利（目標）", "total", "need_gross"], ["必要粗利（必達）", "total", "need_gross_must"],
+                      ["必要売上（目標）", "total", "need_sales"], ["必要粗利（必達）", "total", "need_gross_must"], ["必要粗利（目標）", "total", "need_gross"], ["必要粗利（ジャンプ）", "total", "need_gross_jump"],
                     ]],
                   ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false], i) => (
                     <tr key={`${block}-${key}`} className={`border-t ${i === 0 ? "border-t-2 border-t-slate-300" : ""} ${block === "計" ? "bg-muted/30" : ""}`}>

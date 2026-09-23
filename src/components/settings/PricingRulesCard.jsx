@@ -45,6 +45,8 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
       round_concept: String(r.rounding.concept),
       round_proof: String(r.rounding.proofreading),
       concept_rate: toPct(r.concept_fee.rate),
+      direction_rate: toPct(r.direction_fee.rate),
+      round_direction: String(r.rounding.direction ?? r.rounding.concept),
       proof_rate: toPct(r.proofreading_fee.rate),
       discounts: r.discounts.map((d) => ({ key: d.key, label: d.label, rate: toPct(d.rate) })),
       hourly: Object.fromEntries(Object.entries(r.hourly).map(([k, v]) => [k, String(v)])),
@@ -61,8 +63,9 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
       const payload = {
         markup: { package: n(form.markup_package, 1.3), other: n(form.markup_other, 1.35) },
         outsourcing: { design: n(form.out_design, 0.6), build: n(form.out_build, 0.75), photo: n(form.out_photo, 0.6) },
-        rounding: { outsourcing: n(form.round_out, 5000), concept: n(form.round_concept, 5000), proofreading: n(form.round_proof, 1000) },
+        rounding: { outsourcing: n(form.round_out, 5000), concept: n(form.round_concept, 5000), proofreading: n(form.round_proof, 1000), direction: n(form.round_direction, 5000) },
         concept_fee: { rate: fromPct(n(form.concept_rate, 20)) },
+        direction_fee: { rate: fromPct(n(form.direction_rate, 10)) },
         proofreading_fee: { rate: fromPct(n(form.proof_rate, 7)) },
         discounts: form.discounts
           .filter((d) => d.label.trim() && Number(d.rate) > 0)
@@ -130,7 +133,7 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
         </section>
 
         <section className="space-y-2">
-          <p className="text-xs font-semibold">自動計算行</p>
+          <p className="text-xs font-semibold">自動計算行（ここは追加時の初期値。見積ごとに%を変えることもできます）</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl">
             <div className="space-y-1.5">
               <Label className="text-xs">コンセプト設計費</Label>
@@ -140,6 +143,15 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
             <div className="space-y-1.5">
               <Label className="text-xs">切り上げ単位</Label>
               <NumInput value={form.round_concept} onChange={(v) => set("round_concept", v)} step="1000" suffix="円" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">ディレクション費</Label>
+              <NumInput value={form.direction_rate} onChange={(v) => set("direction_rate", v)} step="0.1" suffix="%" />
+              <p className="text-[10px] text-muted-foreground">印刷費を除く合計に対して</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">切り上げ単位</Label>
+              <NumInput value={form.round_direction} onChange={(v) => set("round_direction", v)} step="1000" suffix="円" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">校正費</Label>

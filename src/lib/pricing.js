@@ -7,6 +7,7 @@
 //   印刷費      : 出し値 = 原価 × 掛け率（パッケージ 1.3 / それ以外 1.35）
 //   外注        : 売価   = 仕入 ÷ 率（デザイン 0.6 / 構築 0.75 / 撮影 0.6）を 5,000円単位で切り上げ
 //   コンセプト設計費: 印刷費を除く合計 × 20% を 5,000円単位で切り上げ
+//   ディレクション費: 印刷費を除く合計 × 10% を 5,000円単位で切り上げ
 //   校正費      : デザイン費合計 × 7% を 1,000円単位で切り上げ
 //   CV割引      : デザイン費合計 × 5% / 10% / 20%、Draw up 事業割引 25%（マイナス行）
 // ============================================================================
@@ -20,9 +21,10 @@ export const DEFAULT_PRICING_RULES = {
   // 外注: 売価 = 仕入 ÷ 率
   outsourcing: { design: 0.6, build: 0.75, photo: 0.6 },
   // 切り上げの単位（円）
-  rounding: { outsourcing: 5000, concept: 5000, proofreading: 1000 },
+  rounding: { outsourcing: 5000, concept: 5000, proofreading: 1000, direction: 5000 },
   // 自動計算行
   concept_fee: { rate: 0.2 },
+  direction_fee: { rate: 0.1 },
   proofreading_fee: { rate: 0.07 },
   discounts: [
     { key: "cv5", label: "CV割引（5%）", rate: 0.05 },
@@ -70,6 +72,7 @@ export function mergePricingRules(saved, legacyMarkup) {
     outsourcing: { ...d.outsourcing, ...(s.outsourcing || {}) },
     rounding: { ...d.rounding, ...(s.rounding || {}) },
     concept_fee: { ...d.concept_fee, ...(s.concept_fee || {}) },
+    direction_fee: { ...d.direction_fee, ...(s.direction_fee || {}) },
     proofreading_fee: { ...d.proofreading_fee, ...(s.proofreading_fee || {}) },
     discounts: Array.isArray(s.discounts) && s.discounts.length > 0 ? s.discounts : d.discounts,
     hourly: { ...d.hourly, ...(s.hourly || {}) },
@@ -111,8 +114,10 @@ export function outsourcingPrice(rules, kind, cost) {
 // line_items の中に source_type: "rule" の行を置くと、他の行の合計から
 // 金額が決まる。見積の明細が変わるたびに recomputeRuleRows で計算し直す。
 //   rule: "concept_fee"      印刷費を除く合計 × rate
+//   rule: "direction_fee"    印刷費を除く合計 × rate
 //   rule: "proofreading_fee" デザイン費合計 × rate
 //   rule: "discount"         デザイン費合計 × rate のマイナス
+// 行の rate は個別の見積で書き換えられる（システム設定の%は追加時の初期値）。
 // ----------------------------------------------------------------------------
 const PRINT_CATEGORY = /印刷費/;
 const DESIGN_CATEGORY = "デザイン費";
@@ -127,6 +132,7 @@ function sumAmount(items) {
 export function ruleRowLabel(rule, rate, discountLabel) {
   const pct = `${Math.round(Number(rate) * 1000) / 10}%`;
   if (rule === "concept_fee") return `コンセプト設計費（印刷費を除く合計の${pct}）`;
+  if (rule === "direction_fee") return `ディレクション費（印刷費を除く合計の${pct}）`;
   if (rule === "proofreading_fee") return `校正費（デザイン費の${pct}）`;
   return discountLabel || `割引（デザイン費の${pct}）`;
 }
@@ -136,6 +142,9 @@ export function makeRuleRow(rules, rule, discount) {
   const r = rules || DEFAULT_PRICING_RULES;
   if (rule === "concept_fee") {
     return { category: "コンセプト設計費", name: ruleRowLabel(rule, r.concept_fee.rate), quantity: 1, unit: "式", unit_price: 0, amount: 0, source_type: "rule", rule, rate: r.concept_fee.rate };
+  }
+  if (rule === "direction_fee") {
+    return { category: "ディレクション費", name: ruleRowLabel(rule, r.direction_fee.rate), quantity: 1, unit: "式", unit_price: 0, amount: 0, source_type: "rule", rule, rate: r.direction_fee.rate };
   }
   if (rule === "proofreading_fee") {
     return { category: "校正費", name: ruleRowLabel(rule, r.proofreading_fee.rate), quantity: 1, unit: "式", unit_price: 0, amount: 0, source_type: "rule", rule, rate: r.proofreading_fee.rate };
@@ -160,13 +169,18 @@ export function recomputeRuleRows(lineItems, rules) {
       li.amount = li.unit_price;
     }
   }
-  // 2) コンセプト設計費（印刷費と割引・自分自身を除く合計に依存。校正費は含む）
+  // 2) コンセプト設計費・ディレクション費（印刷費と割引・自動計算の2行を除く合計に依存。校正費は含む）
   const conceptBase = sumAmount(rows.filter((li) =>
-    !PRINT_CATEGORY.test(li.category || "") && !(isRuleRow(li) && (li.rule === "concept_fee" || li.rule === "discount"))
+    !PRINT_CATEGORY.test(li.category || "") && !(isRuleRow(li) && (li.rule === "concept_fee" || li.rule === "direction_fee" || li.rule === "discount"))
   ).map((li) => items.find((x) => x.id === li.id) || li));
   for (const li of items) {
     if (isRuleRow(li) && li.rule === "concept_fee") {
       li.unit_price = ceilTo(conceptBase * (Number(li.rate) || 0), r.rounding.concept);
+      li.quantity = 1;
+      li.amount = li.unit_price;
+    }
+    if (isRuleRow(li) && li.rule === "direction_fee") {
+      li.unit_price = ceilTo(conceptBase * (Number(li.rate) || 0), r.rounding.direction ?? r.rounding.concept);
       li.quantity = 1;
       li.amount = li.unit_price;
     }
@@ -203,7 +217,26 @@ export function recomputeSubtotals(lineItems) {
 /** 自動計算行の根拠を短く説明する（画面の注記用） */
 export function ruleRowHint(li) {
   if (li.rule === "concept_fee") return "印刷費を除く合計から自動計算";
+  if (li.rule === "direction_fee") return "印刷費を除く合計から自動計算";
   if (li.rule === "proofreading_fee") return "デザイン費の合計から自動計算";
   if (li.rule === "discount") return "デザイン費の合計から自動計算（値引き）";
   return "";
+}
+
+/**
+ * 自動計算行の%を書き換える（名称の「（…の20%）」も追随させる）。
+ * 見積ごとに%を変えたいときに使う。金額は recomputeRuleRows が入れ直す。
+ */
+export function withRuleRate(li, rate) {
+  const r = Number(rate);
+  if (!Number.isFinite(r) || r < 0) return li;
+  const oldLabel = ruleRowLabel(li.rule, li.rate, li.discount_label);
+  const newLabel = ruleRowLabel(li.rule, r, li.discount_label);
+  return { ...li, rate: r, name: !li.name || li.name === oldLabel ? newLabel : li.name };
+}
+
+/** 自動計算行を普通の行に変える（金額は手入力できるようになる） */
+export function unlockRuleRow(li) {
+  // 呼び出し側は { ...li, ...patch } でマージするので、消す項目は null を入れる
+  return { ...li, source_type: "manual", unlocked_from_rule: li.rule, rule: null, rate: null, discount_key: null };
 }

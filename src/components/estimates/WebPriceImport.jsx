@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
+import { PRICE_READ_NOTES, PRICE_TAX_MODES, toTaxExcluded, vendorTaxMode } from "@/lib/priceTax";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,6 +82,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
   const [loading, setLoading] = useState(null); // 'url' | 'file' | 'save'
   const [error, setError] = useState(null);
   const [picked, setPicked] = useState([]); // [{ rowIdx, cellIdx }]
+  const [taxMode, setTaxMode] = useState(null); // null = メーカーの設定に従う
 
   const { data: printVendors = [] } = useQuery({
     queryKey: ["printVendors"],
@@ -139,7 +141,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
       const { file_url } = await db.integrations.Core.UploadFile({ file });
       setScreenshotPath(file_url);
       const res = await db.integrations.Core.InvokeLLM({
-        prompt: "添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は税込の数値のみで返してください（カンマは除去）。",
+        prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は表示どおりの数値のみで返してください。${PRICE_READ_NOTES}`,
         file_urls: [file_url],
         response_json_schema: GRID_EXTRACT_SCHEMA,
       });
@@ -159,9 +161,11 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
   );
 
   const markup = markupRateFor(rules, category);
+  // ページの金額が税込表示なら、原価は税別に直して持つ（グラフィックなどは税込表示）
+  const effectiveTaxMode = taxMode || vendorTaxMode(printVendors, vendorName.trim());
   const pickedCells = picked.map(({ rowIdx, cellIdx }) => {
     const row = grid[rowIdx]; const cell = row.cells[cellIdx];
-    const costPerUnit = (Number(cell.price) || 0) / (Number(row.quantity) || 1);
+    const costPerUnit = toTaxExcluded(cell.price, effectiveTaxMode) / (Number(row.quantity) || 1);
     const unitPrice = applyMarkup(costPerUnit, markup);
     return { quantity: Number(row.quantity) || 1, label: cell.label, price: Number(cell.price) || 0, costPerUnit, unitPrice, amount: unitPrice * (Number(row.quantity) || 1) };
   });
@@ -190,6 +194,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
         price_grid: mergedGrid,
         last_updated: todayString(),
         source_url: url.trim() || (existing?.source_url ?? null),
+        price_tax_mode: effectiveTaxMode,
         ...(screenshotPath ? { screenshot_url: screenshotPath } : {}),
       };
       const master = existing
@@ -269,6 +274,13 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
         <div className="space-y-1.5">
           <Label className="text-xs">仕様（紙質・厚さ・面など）</Label>
           <Input value={specSummary} onChange={(e) => setSpecSummary(e.target.value)} placeholder="例: 両面・コート紙135kg" className="h-9 text-xs" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">ページの金額表示</Label>
+          <select value={effectiveTaxMode} onChange={(e) => setTaxMode(e.target.value)} className="h-9 w-full rounded-md border bg-background px-2 text-xs">
+            {Object.entries(PRICE_TAX_MODES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <p className="text-[10px] text-muted-foreground">税込表示なら原価は税別（÷1.1）に直して登録します。初期値は印刷所マスタの設定</p>
         </div>
       </div>
 

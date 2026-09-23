@@ -221,9 +221,12 @@ export default function ProjectDetail() {
                 <Field label="発注合計"><span className="tabular-nums">{yen(project.confirmed_cost)}</span></Field>
                 <Field label="粗利（実績）" className="col-span-2">
                   <span className="tabular-nums font-medium">{yen(project.actual_gross_profit)}</span>
+                  {Number(project.confirmed_revenue) > 0 && (
+                    <span className="text-[10px] text-muted-foreground ml-1">{Math.round((Number(project.actual_gross_profit) / Number(project.confirmed_revenue)) * 100)}%</span>
+                  )}
                 </Field>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-2">実績は今後、納品書・請求書の登録から自動で集計します。</p>
+              <p className="text-[10px] text-muted-foreground mt-2">受注合計・発注合計は案件の編集で入力します（受注合計は請求書の税抜額、発注合計は仕入先への支払額）。粗利（実績）＝受注合計−発注合計。</p>
             </div>
           </CardContent>
         </Card>

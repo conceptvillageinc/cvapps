@@ -3,9 +3,9 @@ import { sendMail, isMailConfigured } from './_lib/gmail.js';
 import { loadDocumentPdf } from './document-pdf.js';
 
 // ============================================================================
-// POST /api/send-document-email  { type: 'invoice'|'delivery', id, subject, body }
+// POST /api/send-document-email  { type: 'invoice'|'delivery'|'estimate', id, subject, body, stamp? }
 //
-// 納品書・請求書のPDFを添付して、クライアントへメールを送る。
+// 納品書・請求書・見積書のPDFを添付して、クライアントへメールを送る。
 // 宛先はクライアントマスタのメールアドレス（サーバー側で解決）。
 // 画面から任意のアドレスへは送れない（見積依頼メールと同じ方針）。
 // 差出人は操作した本人。GMAIL_ALWAYS_CC が設定されていれば控えがCCされる。
@@ -16,8 +16,8 @@ export default async function handler(req, res) {
   const user = await requireMember(req, res);
   if (!user) return;
 
-  const { type, id, subject, body } = req.body || {};
-  if (!['delivery', 'invoice'].includes(type) || !id || !subject || !body) {
+  const { type, id, subject, body, stamp } = req.body || {};
+  if (!['delivery', 'invoice', 'estimate'].includes(type) || !id || !subject || !body) {
     res.status(400).json({ error: '送信に必要な項目が足りません' });
     return;
   }
@@ -28,15 +28,15 @@ export default async function handler(req, res) {
 
   try {
     const admin = adminClient();
-    const { buffer, filename, doc } = await loadDocumentPdf(admin, type, id);
+    const { buffer, filename, doc } = await loadDocumentPdf(admin, type, id, { stamp: stamp !== false });
 
     // 宛先: クライアントマスタ（id があれば id、無ければ名前）から
     let client = null;
     if (doc.client_id) {
-      ({ data: client } = await admin.from('clients').select('id, name, email').eq('id', doc.client_id).maybeSingle());
+      ({ data: client } = await admin.from('clients').select('id, name, email, cc_emails').eq('id', doc.client_id).maybeSingle());
     }
     if (!client) {
-      ({ data: client } = await admin.from('clients').select('id, name, email').eq('name', doc.client_name).order('created_at').limit(1).maybeSingle());
+      ({ data: client } = await admin.from('clients').select('id, name, email, cc_emails').eq('name', doc.client_name).order('created_at').limit(1).maybeSingle());
     }
     if (!client) {
       res.status(404).json({ error: `「${doc.client_name}」がクライアント一覧に登録されていません` });
@@ -52,6 +52,8 @@ export default async function handler(req, res) {
       await sendMail({
         sendAs: user.email,
         to: client.email,
+        // クライアント一覧の CC（最大2件）。画面からは指定できない
+        cc: (Array.isArray(client.cc_emails) ? client.cc_emails : []).filter((a) => typeof a === 'string' && a.includes('@')).slice(0, 2).join(', '),
         subject,
         body,
         fromName: '株式会社コンセプト・ヴィレッジ',
@@ -64,7 +66,9 @@ export default async function handler(req, res) {
     const { data: log } = await admin
       .from('email_logs')
       .insert({
-        estimate_id: null,
+        // 見積書は見積の送信履歴（メール生成タブ）にも出す
+        estimate_id: type === 'estimate' ? id : null,
+        spec_label: type === 'estimate' ? '見積書PDFをクライアントへ送付' : null,
         document_type: type,
         document_id: id,
         recipient_company: client.name,

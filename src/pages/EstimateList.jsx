@@ -14,6 +14,20 @@ import { getDealProbabilityColor, getPhaseColor, PRINT_TYPES } from "@/lib/const
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
+/** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
+function estimateGross(e) {
+  if (e.schema_version !== 2) {
+    if (e.selling_price > 0 && e.cost_price > 0) return { profit: e.selling_price - e.cost_price, rate: Math.round(((e.selling_price - e.cost_price) / e.selling_price) * 100) };
+    return null;
+  }
+  const rows = (e.line_items || []).filter(li => li.row_type !== "text" && li.row_type !== "subtotal");
+  const subtotal = rows.reduce((s, li) => s + (Number(li.amount) || 0), 0);
+  if (!rows.some(li => li.cost_price != null) || subtotal <= 0) return null;
+  const cost = rows.filter(li => li.cost_price != null).reduce((s, li) => s + (Number(li.cost_price) || 0) * (Number(li.quantity) || 1), 0);
+  const profit = subtotal - cost;
+  return { profit, rate: Math.round((profit / subtotal) * 100) };
+}
+
 export default function EstimateList() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -261,6 +275,9 @@ export default function EstimateList() {
                             {est.is_final_submitted && (
                               <Badge className="text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">最終提出版</Badge>
                             )}
+                            {est.status === "review_pending" && est.review_requested_to_name && (
+                              <Badge variant="outline" className="text-[9px] font-normal text-amber-700 border-amber-200">レビュー: {est.review_requested_to_name}</Badge>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">{est.print_type || "—"}</TableCell>
@@ -276,6 +293,7 @@ export default function EstimateList() {
                         </TableCell>
                         <TableCell className="text-right text-sm font-medium tabular-nums">
                           {est.total_amount ? `¥${est.total_amount.toLocaleString()}` : "—"}
+                          {(() => { const g = estimateGross(est); return g ? <span className={`block text-[10px] font-normal ${g.rate < 50 ? "text-amber-700" : "text-muted-foreground"}`} title={`粗利 ¥${g.profit.toLocaleString()}（原価入力済みの明細から）`}>粗利率 {g.rate}%</span> : null; })()}
                         </TableCell>
                         <TableCell className="text-sm">
                           {est.desired_delivery_date || "—"}

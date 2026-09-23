@@ -9,12 +9,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Mail, Send, Loader2, Sparkles, Eye, Edit3, Printer } from "lucide-react";
 import { specLabel, specMissing } from "@/lib/printSpecs";
 import { db } from "@/api/db";
+import { useAuth } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import {
   defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA,
 } from "@/lib/estimateEmail";
 
 export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) {
+  const { user } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [emails, setEmails] = useState([]);
   const [editingIdx, setEditingIdx] = useState(null);
@@ -78,7 +80,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
     setGenerating(true);
     try {
       const result = await db.integrations.Core.InvokeLLM({
-        prompt: buildEmailPrompt(vendors, buildSpecText(estimate, selectedSpecs)),
+        prompt: buildEmailPrompt(vendors, buildSpecText(estimate, selectedSpecs), { senderName: user?.full_name || estimate.person_in_charge || "", senderEmail: user?.email || "" }),
         response_json_schema: EMAIL_SCHEMA,
       });
       const generated = result?.emails || [];
@@ -276,11 +278,10 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
         {emailLogs.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">送信履歴</p>
-            {emailLogs.map(log => (
-              <div key={log.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/30 text-xs">
+            {[...emailLogs].sort((a, b) => String(b.sent_at || b.created_date || "").localeCompare(String(a.sent_at || a.created_date || ""))).map(log => (
+              <div key={log.id} className={`flex items-center gap-3 p-2.5 rounded-lg text-xs ${log.status === "sent" ? "bg-emerald-50 border border-emerald-100" : log.status === "failed" ? "bg-red-50 border border-red-100" : "bg-muted/30"}`}>
                 <Badge
-                  variant={log.status === "failed" ? "destructive" : "secondary"}
-                  className="text-[9px]"
+                  className={`text-[9px] ${log.status === "sent" ? "bg-emerald-600 text-white hover:bg-emerald-600" : log.status === "failed" ? "bg-red-600 text-white hover:bg-red-600" : "bg-muted text-muted-foreground hover:bg-muted"}`}
                 >
                   {log.status === "sent" ? "送信済" : log.status === "failed" ? "送信失敗" : "下書き"}
                 </Badge>
@@ -290,9 +291,9 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                   <span className="text-muted-foreground">{log.recipient_email}</span>
                 )}
                 <span className="text-muted-foreground">{log.subject}</span>
-                {log.sent_at && (
-                  <span className="text-muted-foreground ml-auto">
-                    {new Date(log.sent_at).toLocaleDateString("ja-JP")}
+                {(log.sent_at || log.created_date) && (
+                  <span className="text-muted-foreground ml-auto whitespace-nowrap">
+                    {new Date(log.sent_at || log.created_date).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}
                   </span>
                 )}
               </div>

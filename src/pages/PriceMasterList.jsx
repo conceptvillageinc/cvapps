@@ -1,4 +1,5 @@
 import { db } from "@/api/db";
+import { PRICE_READ_NOTES, PRICE_TAX_MODES } from "@/lib/priceTax";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect, Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -306,7 +307,7 @@ function RefreshPanel({ record, onClose, onApplied }) {
     try {
       const { file_url } = await db.integrations.Core.UploadFile({ file });
       const res = await db.integrations.Core.InvokeLLM({
-        prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は税込の数値のみで返してください（カンマは除去）。`,
+        prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は表示どおりの数値のみで返してください。${PRICE_READ_NOTES}`,
         file_urls: [file_url],
         response_json_schema: GRID_EXTRACT_SCHEMA,
       });
@@ -399,7 +400,7 @@ function DialogAutoFill({ form, onDetected }) {
     try {
       const { file_url } = await db.integrations.Core.UploadFile({ file });
       const res = await db.integrations.Core.InvokeLLM({
-        prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は税込の数値のみで返してください（カンマは除去）。`,
+        prompt: `添付した印刷価格ページのスクリーンショットを読み取り、縦(枚数)×横(納期)の価格表全体と、紙質・厚さ・面などの仕様を抽出してください。価格は表示どおりの数値のみで返してください。${PRICE_READ_NOTES}`,
         file_urls: [file_url],
         response_json_schema: GRID_EXTRACT_SCHEMA,
       });
@@ -447,7 +448,7 @@ function DialogAutoFill({ form, onDetected }) {
 
 const emptyForm = {
   category: "", vendor_name: "", vendorSelectValue: "", paper_type_group: "紙",
-  spec_summary: "", price_grid: [], source_url: "", notes: "",
+  spec_summary: "", price_grid: [], source_url: "", notes: "", price_tax_mode: "included",
 };
 
 export default function PriceMasterList() {
@@ -604,7 +605,7 @@ export default function PriceMasterList() {
                       <TableRow key={r.id}>
                         <TableCell><Badge variant="secondary" className="text-[10px]">{r.category}</Badge></TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{r.paper_type_group || "紙"}</Badge></TableCell>
-                        <TableCell className="text-sm">{r.vendor_name}</TableCell>
+                        <TableCell className="text-sm">{r.vendor_name}<span className="block text-[10px] text-muted-foreground">{PRICE_TAX_MODES[r.price_tax_mode] || PRICE_TAX_MODES.included}</span></TableCell>
                         <TableCell className="text-xs text-muted-foreground max-w-[180px]">{r.spec_summary || "—"}</TableCell>
                         <TableCell>
                           <button
@@ -682,6 +683,16 @@ export default function PriceMasterList() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">価格表の金額表示</Label>
+              <Select value={form.price_tax_mode || "included"} onValueChange={v => setForm({ ...form, price_tax_mode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PRICE_TAX_MODES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">税込表示のマスタは、見積に入れるとき原価を税別（÷1.1）に直します</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">参照メーカー *</Label>

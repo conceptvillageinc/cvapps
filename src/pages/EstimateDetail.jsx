@@ -7,8 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer, ArrowRightLeft, Truck
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown
 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
+import { openBlob } from "@/lib/documents";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -64,6 +69,40 @@ export default function EstimateDetail() {
   });
 
   const [formData, setFormData] = useState(null);
+  // レビュー申請先を選ぶダイアログ
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewerId, setReviewerId] = useState("");
+  const { data: appUsers = [] } = useQuery({ queryKey: ["users"], queryFn: () => db.entities.User.list("full_name") });
+  const reviewerCandidates = appUsers.filter((u) => u.role === "admin" && u.id !== user?.id);
+
+  // 見積書PDF（印影あり／なし）とクライアントへのメール送付
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [mailOpen, setMailOpen] = useState(false);
+  const downloadPdf = async (withStamp) => {
+    setPdfLoading(true);
+    try {
+      // 直前の編集が保存されてから生成する（自動保存は1秒待ち）
+      await saveMutation.mutateAsync(formData);
+      const blob = await db.documents.pdf("estimate", estimateId, { stamp: withStamp });
+      const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
+      openBlob(blob, `【${clean(formData.client_name) || "クライアント"}】見積書_${clean(formData.estimate_title) || formData.estimate_number}.pdf`);
+    } catch (err) {
+      toast.error("PDFを作成できませんでした: " + err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // 短いリンク（/e/見積番号）をクリップボードへ
+  const copyLink = async () => {
+    const url = `${window.location.origin}/e/${encodeURIComponent(formData.estimate_number)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("リンクをコピーしました", { description: url });
+    } catch {
+      window.prompt("このリンクをコピーしてください", url);
+    }
+  };
   const [activeTab, setActiveTab] = useState(null);
   const skipAutosave = useRef(true);
 
@@ -102,10 +141,24 @@ export default function EstimateDetail() {
       toast.error("原価が出し値を上回っています。修正してからレビュー申請してください。");
       return;
     }
-    const updated = { ...formData, status: "review_pending" };
+    setReviewerId(formData.review_requested_to_id || reviewerCandidates[0]?.id || "");
+    setReviewDialogOpen(true);
+  };
+
+  // 申請先を決めてレビュー待ちにする（申請先は管理者から選ぶ。誰にも指定しない申請も可）
+  const submitReview = () => {
+    const reviewer = reviewerCandidates.find((u) => u.id === reviewerId) || null;
+    const updated = {
+      ...formData,
+      status: "review_pending",
+      review_requested_to_id: reviewer?.id || null,
+      review_requested_to_name: reviewer?.full_name || null,
+      review_requested_at: new Date().toISOString(),
+    };
     setFormData(updated);
     saveMutation.mutate(updated);
-    toast.success("レビュー申請を送信しました");
+    setReviewDialogOpen(false);
+    toast.success(reviewer ? `${reviewer.full_name} さんにレビューを申請しました` : "レビュー申請を送信しました");
   };
 
   const handleApprove = () => {
@@ -136,6 +189,8 @@ export default function EstimateDetail() {
     const newEstimate = await db.entities.Estimate.create({
       ...rest,
       estimate_number: estimateNumber,
+      // 複製したことが分かるように件名の先頭に印を付ける（後から書き換えてよい）
+      estimate_title: /^copy of /i.test(rest.estimate_title || "") ? rest.estimate_title : `copy of ${rest.estimate_title || ""}`.trim(),
       project_group_id: estimateNumber,
       parent_estimate_id: null,
       revision_label: "初回",
@@ -191,6 +246,9 @@ export default function EstimateDetail() {
             </div>
             <p className="text-xs text-muted-foreground">
               {formData.estimate_number} · {formData.print_type}
+              {formData.status === "review_pending" && formData.review_requested_to_name && (
+                <span className="ml-2 inline-flex items-center gap-1 text-amber-700"><UserCheck className="w-3 h-3" /> レビュー申請先: {formData.review_requested_to_name}</span>
+              )}
               {project && (
                 <>
                   {" · "}
@@ -204,10 +262,29 @@ export default function EstimateDetail() {
         </div>
         <div className="flex items-center gap-2">
           {formData.schema_version === 2 && (
-            <Button variant="outline" size="sm" onClick={() => navigate(`/delivery-notes/new?estimate=${estimateId}`)} className="gap-1.5 text-xs">
-              <Truck className="w-3.5 h-3.5" /> 納品書を作成
-            </Button>
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={pdfLoading}>
+                    {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} PDF <ChevronDown className="w-3 h-3 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(true)}>電子印鑑あり（メール送付用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false)}>電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" size="sm" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }} className="gap-1.5 text-xs">
+                <Mail className="w-3.5 h-3.5" /> 見積書を送付
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/delivery-notes/new?estimate=${estimateId}`)} className="gap-1.5 text-xs">
+                <Truck className="w-3.5 h-3.5" /> 納品書を作成
+              </Button>
+            </>
           )}
+          <Button variant="outline" size="sm" onClick={copyLink} className="gap-1.5 text-xs" title="この見積の短いリンクをコピー（Asana やチャットに貼る用）">
+            <Link2 className="w-3.5 h-3.5" /> リンクをコピー
+          </Button>
           <Button variant="outline" size="sm" onClick={handleDuplicate} className="gap-1.5 text-xs">
             <Copy className="w-3.5 h-3.5" /> 複製
           </Button>
@@ -296,6 +373,43 @@ export default function EstimateDetail() {
         </div>
       )}
 
+      {formData.schema_version === 2 && (
+        <DocumentEmailDialog
+          open={mailOpen}
+          onOpenChange={setMailOpen}
+          type="estimate"
+          doc={formData}
+          onSent={() => queryClient.invalidateQueries({ queryKey: ["emailLogs", estimateId] })}
+        />
+      )}
+
+      {/* レビュー申請先 */}
+      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>レビューを申請する</DialogTitle>
+            <DialogDescription className="text-xs">誰にレビューを頼むかを選びます。申請先は見積の見出しと一覧に表示されます</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-1">
+            <p className="text-xs font-medium">レビュー申請先（管理者）</p>
+            {reviewerCandidates.length === 0 ? (
+              <p className="text-xs text-muted-foreground">選べる管理者がいません（ユーザー管理で管理者を追加できます）。申請先なしで申請します</p>
+            ) : (
+              <Select value={reviewerId} onValueChange={setReviewerId}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="申請先を選ぶ" /></SelectTrigger>
+                <SelectContent>
+                  {reviewerCandidates.map((u) => <SelectItem key={u.id} value={u.id} className="text-xs">{u.full_name || u.email}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>キャンセル</Button>
+            <Button onClick={submitReview} className="gap-1.5"><Send className="w-4 h-4" /> 申請する</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* バージョン・商談ステータス */}
       <RevisionPanel estimate={formData} onUpdate={handleUpdate} project={project} />
 
@@ -309,7 +423,7 @@ export default function EstimateDetail() {
                   <FileOutput className="w-3.5 h-3.5" /> 見積書
                 </TabsTrigger>
                 <TabsTrigger value="specs" className="gap-1.5 text-xs">
-                  <Printer className="w-3.5 h-3.5" /> 印刷仕様
+                  <Printer className="w-3.5 h-3.5" /> 印刷見積依頼
                   {(formData.print_specs || []).length > 0 && (
                     <span className="ml-0.5 text-[10px] text-muted-foreground">{formData.print_specs.length}</span>
                   )}
@@ -332,7 +446,7 @@ export default function EstimateDetail() {
               </>
             )}
             <TabsTrigger value="email" className="gap-1.5 text-xs">
-              <Mail className="w-3.5 h-3.5" /> メール
+              <Mail className="w-3.5 h-3.5" /> メール生成
             </TabsTrigger>
             <TabsTrigger value="review" className="gap-1.5 text-xs">
               <CheckSquare className="w-3.5 h-3.5" /> レビュー
@@ -342,10 +456,10 @@ export default function EstimateDetail() {
 
         {formData.schema_version === 2 ? (
           <>
-            <TabsContent value="quote">
+            <TabsContent value="quote" forceMount className="data-[state=inactive]:hidden">
               <QuoteEditor estimate={formData} onUpdate={handleUpdate} />
             </TabsContent>
-            <TabsContent value="specs">
+            <TabsContent value="specs" forceMount className="data-[state=inactive]:hidden">
               <PrintSpecsPanel estimate={formData} onUpdate={handleUpdate} onGoToEmail={() => setActiveTab("email")} />
             </TabsContent>
           </>
@@ -370,7 +484,7 @@ export default function EstimateDetail() {
           </>
         )}
 
-        <TabsContent value="email">
+        <TabsContent value="email" forceMount className="data-[state=inactive]:hidden">
           <EmailPreview
             estimate={formData}
             emailLogs={emailLogs}
@@ -378,7 +492,7 @@ export default function EstimateDetail() {
           />
         </TabsContent>
 
-        <TabsContent value="review">
+        <TabsContent value="review" forceMount className="data-[state=inactive]:hidden">
           <ReviewPanel
             estimate={formData}
             onUpdate={handleUpdate}

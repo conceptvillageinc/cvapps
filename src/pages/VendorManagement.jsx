@@ -196,6 +196,19 @@ export default function VendorManagement() {
               <Label className="text-xs">WebサイトURL</Label>
               <Input value={form.website_url || ""} onChange={e => setForm({ ...form, website_url: e.target.value })} />
             </div>
+            {form.vendor_type === "web" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">価格ページの金額表示</Label>
+                <Select value={form.price_tax_mode || "included"} onValueChange={v => setForm({ ...form, price_tax_mode: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="included">税込表示（例: グラフィック）</SelectItem>
+                    <SelectItem value="excluded">税別表示</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">ネット印刷から取り込むとき、原価を税別に直すかどうかの初期値になります</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">担当者名</Label>
               <Input value={form.contact_person || ""} onChange={e => setForm({ ...form, contact_person: e.target.value })} />

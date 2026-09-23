@@ -3,7 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { FileUp, Download, Table2, AlertTriangle } from "lucide-react";
+import { FileUp, Download, Table2, AlertTriangle, Link2, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { db } from "@/api/db";
 import { toast } from "sonner";
 import { LINE_ITEM_CATEGORIES } from "@/lib/constants";
 import { parseSheetItems, templateCsv } from "@/lib/sheetImport";
@@ -18,6 +20,8 @@ const CATEGORY_LABELS = LINE_ITEM_CATEGORIES.map((c) => c.label);
  */
 export default function SheetImport({ onAdd, onClose }) {
   const [text, setText] = useState("");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
   const [parsed, setParsed] = useState(null);
   const [excluded, setExcluded] = useState(new Set());
   const [headings, setHeadings] = useState(true);
@@ -44,6 +48,26 @@ export default function SheetImport({ onAdd, onClose }) {
     setText(t);
     run(t);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  // Google スプレッドシートの URL から読む（ログイン中の本人が開けるシートに限る）
+  const fromUrl = async () => {
+    if (!sheetUrl.trim()) { toast.error("スプレッドシートの URL を貼ってください"); return; }
+    setUrlLoading(true);
+    try {
+      const { data } = await db.functions.invoke("readSheet", { url: sheetUrl.trim() });
+      const rows = data?.rows || [];
+      if (rows.length === 0) { toast.error(`「${data?.sheet_title || "シート"}」に値がありません`); return; }
+      const esc = (v) => { const s = String(v ?? ""); return /[\t\n"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const t = rows.map((r) => r.map(esc).join("\t")).join("\n");
+      setText(t);
+      run(t);
+      toast.success(`「${data.title}」の「${data.sheet_title}」を読み込みました`);
+    } catch (err) {
+      toast.error("読み込めませんでした: " + err.message);
+    } finally {
+      setUrlLoading(false);
+    }
   };
 
   const downloadTemplate = () => {
@@ -101,6 +125,13 @@ export default function SheetImport({ onAdd, onClose }) {
         <Button size="sm" variant="ghost" className="text-xs gap-1.5" onClick={downloadTemplate}><Download className="w-3.5 h-3.5" /> テンプレートCSV</Button>
         <span className="text-[10px] text-muted-foreground">Google スプレッドシート／Excel は、範囲を選んでコピー → 下に貼り付けでも取り込めます</span>
       </div>
+      <div className="flex gap-2">
+        <Input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="Google スプレッドシートの URL（タブの gid まで含めるとそのタブを読みます）" className="h-9 text-xs" />
+        <Button size="sm" variant="outline" className="h-9 text-xs gap-1.5 shrink-0" onClick={fromUrl} disabled={urlLoading}>
+          {urlLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />} URLから読み込む
+        </Button>
+      </div>
+      <p className="text-[10px] text-muted-foreground -mt-1">ログイン中のご自身のアカウントで開けるシートが対象です（CV 内で共有されていれば読めます。外部には公開不要）</p>
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}

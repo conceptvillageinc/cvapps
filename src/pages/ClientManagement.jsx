@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { normalizePostalCode, isValidPostalCode, formatPostalCode, formatPostalInput } from "@/lib/postalCode";
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 
-const emptyForm = { name: "", name_kana: "", contact_person: "", contact_person_kana: "", email: "", phone: "", postal_code: "", address: "", notes: "", invoice_delivery_method: "", invoice_delivery_notes: "", has_recurring_billing: false };
+const emptyForm = { name: "", name_kana: "", contact_person: "", contact_person_kana: "", email: "", phone: "", postal_code: "", address: "", notes: "", invoice_delivery_method: "", invoice_delivery_notes: "", has_recurring_billing: false, cc_emails: ["", ""] };
 
 // クリックしてその場で編集できるセル。フォーカスを外すと自動保存される。
 // normalize: 入力中に値を正規化（例: 郵便番号のハイフン除去）
@@ -115,7 +115,7 @@ export default function ClientManagement() {
 
   const openEdit = (client) => {
     setEditing(client);
-    setForm({ name: client.name || "", name_kana: client.name_kana || "", contact_person: client.contact_person || "", contact_person_kana: client.contact_person_kana || "", email: client.email || "", phone: client.phone || "", postal_code: client.postal_code || "", address: client.address || "", notes: client.notes || "", invoice_delivery_method: client.invoice_delivery_method || "", invoice_delivery_notes: client.invoice_delivery_notes || "", has_recurring_billing: !!client.has_recurring_billing });
+    setForm({ name: client.name || "", name_kana: client.name_kana || "", contact_person: client.contact_person || "", contact_person_kana: client.contact_person_kana || "", email: client.email || "", phone: client.phone || "", postal_code: client.postal_code || "", address: client.address || "", notes: client.notes || "", invoice_delivery_method: client.invoice_delivery_method || "", invoice_delivery_notes: client.invoice_delivery_notes || "", has_recurring_billing: !!client.has_recurring_billing, cc_emails: [0, 1].map((i) => (Array.isArray(client.cc_emails) ? client.cc_emails[i] : "") || "") });
     setDialogOpen(true);
   };
 
@@ -212,6 +212,9 @@ export default function ClientManagement() {
                           value={client.email}
                           onSave={(v) => inlineUpdateMutation.mutate({ id: client.id, field: "email", value: v })}
                         />
+                        {Array.isArray(client.cc_emails) && client.cc_emails.filter(Boolean).length > 0 && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">CC: {client.cc_emails.filter(Boolean).join(", ")}</div>
+                        )}
                       </td>
                       <td className="p-3 text-muted-foreground hidden lg:table-cell">
                         <InlineEditCell
@@ -287,7 +290,7 @@ export default function ClientManagement() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">メール</Label>
+                <Label className="text-xs">メール（To）</Label>
                 <Input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="info@example.com" />
               </div>
               <div className="space-y-1">
@@ -295,6 +298,19 @@ export default function ClientManagement() {
                 <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="03-0000-0000" />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[0, 1].map((i) => (
+                <div key={i} className="space-y-1">
+                  <Label className="text-xs">メール（CC {i + 1}）</Label>
+                  <Input
+                    value={form.cc_emails?.[i] || ""}
+                    onChange={e => setForm(f => { const cc = [...(f.cc_emails || ["", ""])]; cc[i] = e.target.value; return { ...f, cc_emails: cc }; })}
+                    placeholder="cc@example.com"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground -mt-2">納品書・請求書・見積書をメールで送るとき、To と CC（最大2件）に送ります</p>
             <div className="space-y-1">
               <Label className="text-xs">郵便番号</Label>
               <Input
@@ -348,7 +364,7 @@ export default function ClientManagement() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>キャンセル</Button>
-            <Button onClick={() => saveMutation.mutate({ ...form, invoice_delivery_method: form.invoice_delivery_method || null })} disabled={!form.name || (form.postal_code && !isValidPostalCode(form.postal_code)) || saveMutation.isPending}>
+            <Button onClick={() => saveMutation.mutate({ ...form, invoice_delivery_method: form.invoice_delivery_method || null, cc_emails: (form.cc_emails || []).map((v) => String(v || "").trim()).filter(Boolean).slice(0, 2) })} disabled={!form.name || (form.postal_code && !isValidPostalCode(form.postal_code)) || saveMutation.isPending}>
               {saveMutation.isPending ? "保存中..." : "保存"}
             </Button>
           </DialogFooter>

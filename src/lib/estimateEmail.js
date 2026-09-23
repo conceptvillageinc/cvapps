@@ -1,4 +1,4 @@
-import { EMAIL_VENDOR_MAP } from "@/lib/constants";
+import { EMAIL_VENDOR_MAP, COMPANY_INFO } from "@/lib/constants";
 import { specText } from "@/lib/printSpecs";
 
 // ============================================================================
@@ -100,7 +100,9 @@ export const EMAIL_SCHEMA = {
   },
 };
 
-export function buildEmailPrompt(recipients, specText) {
+export function buildEmailPrompt(recipients, specText, sender = {}) {
+  const senderLine = ["株式会社コンセプト・ヴィレッジ", sender.senderName].filter(Boolean).join("　");
+  const signature = ["株式会社コンセプト・ヴィレッジ", sender.senderName, sender.senderEmail, COMPANY_INFO.tel ? `tel ${COMPANY_INFO.tel}` : ""].filter(Boolean).join("\n");
   return `以下の印刷仕様に基づいて、印刷会社への見積依頼メールを生成してください。
 丁寧なビジネスメールの形式で、以下の情報を含めてください：
 - 件名
@@ -116,7 +118,12 @@ export function buildEmailPrompt(recipients, specText) {
 印刷仕様:
 ${specText}
 
-差出人: 株式会社コンセプト・ヴィレッジ
+差出人: ${senderLine}
+本文の冒頭の名乗りは「${senderLine}でございます。」のように担当者名まで入れ、末尾に次の署名をそのまま付けてください:
+${signature}
+
+注意: 仕様の文中に、送信先とは別の印刷会社名（例: 他社の見積から取り込んだ名称に含まれる社名）が入っていることがあります。
+その社名は送信先に見せるべきではないので、本文には出さず、仕様の内容（サイズ・色数・数量など）だけを書いてください。
 
 各社宛にカスタマイズしたメールをJSON配列で返してください。
 company_name には上記の会社名リストの表記をそのまま使ってください。`;

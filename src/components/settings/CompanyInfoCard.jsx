@@ -141,8 +141,8 @@ export default function CompanyInfoCard({ settings, upsertSetting }) {
         <section className="space-y-2">
           <p className="text-xs font-semibold flex items-center gap-1.5"><Stamp className="w-3.5 h-3.5" /> 電子印鑑</p>
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded border bg-white flex items-center justify-center overflow-hidden">
-              {stampUrl ? <img src={stampUrl} alt="印影" className="max-w-full max-h-full" /> : <span className="text-[10px] text-muted-foreground">未登録</span>}
+            <div className="w-32 h-32 rounded border bg-white flex items-center justify-center overflow-hidden">
+              {stampUrl ? <img src={stampUrl} alt="印影" style={{ width: `${(Number(form.stamp_width) || 52) * 1.33}px`, maxWidth: "100%", maxHeight: "100%" }} /> : <span className="text-[10px] text-muted-foreground">未登録</span>}
             </div>
             <div className="space-y-1.5">
               <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={uploadStamp} />
@@ -152,7 +152,12 @@ export default function CompanyInfoCard({ settings, upsertSetting }) {
               {form.stamp_path && (
                 <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => set("stamp_path", "")}>印影を外す</Button>
               )}
-              <p className="text-[10px] text-muted-foreground">背景が透過のPNGを推奨。納品書・請求書のPDFで自社欄に重ねて表示します</p>
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-[10px] whitespace-nowrap">印影の大きさ</Label>
+                <input type="range" min="24" max="120" step="2" value={Number(form.stamp_width) || 52} onChange={(e) => set("stamp_width", Number(e.target.value))} className="w-40" />
+                <span className="text-[10px] tabular-nums text-muted-foreground w-10">{Number(form.stamp_width) || 52}pt</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">背景が透過のPNGを推奨。見積書・納品書・請求書のPDFで自社欄の右端に重ねます（左のプレビューは実寸の目安）</p>
             </div>
           </div>
         </section>

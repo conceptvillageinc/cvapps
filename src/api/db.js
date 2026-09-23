@@ -80,7 +80,7 @@ const WRITABLE_COLUMNS = {
     'deal_probability', 'phase', 'lost_reason', 'is_final_submitted',
     'project_group_id', 'parent_estimate_id', 'revision_label', 'total_amount',
     'reviewer_id', 'reviewer_name', 'approved_date', 'review_comments',
-    'approval_checklist',
+    'approval_checklist', 'review_requested_to_id', 'review_requested_to_name', 'review_requested_at',
     // 旧方式（schema_version = 1）のみ使用
     'vendor_prices', 'selected_vendor', 'cost_price', 'selling_price',
     'gross_profit', 'markup_rate', 'proofreading_fee', 'other_fees',
@@ -89,15 +89,15 @@ const WRITABLE_COLUMNS = {
   clients: [
     'name', 'name_kana', 'contact_person', 'contact_person_kana',
     'email', 'phone', 'postal_code', 'address', 'notes', 'quote_count',
-    'invoice_delivery_method', 'invoice_delivery_notes', 'has_recurring_billing', 'bank_payee_names',
+    'invoice_delivery_method', 'invoice_delivery_notes', 'has_recurring_billing', 'bank_payee_names', 'cc_emails',
   ],
   print_vendors: [
     'name', 'vendor_type', 'print_types', 'email', 'phone',
-    'website_url', 'contact_person', 'notes',
+    'website_url', 'contact_person', 'notes', 'price_tax_mode',
   ],
   price_masters: [
     'category', 'paper_type_group', 'vendor_name', 'spec_summary',
-    'price_grid', 'last_updated', 'screenshot_url', 'source_url', 'notes',
+    'price_grid', 'last_updated', 'screenshot_url', 'source_url', 'notes', 'price_tax_mode',
   ],
   email_logs: [
     'estimate_id', 'recipient_company', 'recipient_email',
@@ -397,6 +397,7 @@ const FUNCTION_ROUTES = {
   sendEstimateEmail: 'send-estimate-email',
   sendDocumentEmail: 'send-document-email',
   exportScheduleSheet: 'export-schedule-sheet',
+  readSheet: 'read-sheet',
 };
 
 const functions = {
@@ -446,11 +447,11 @@ const documents = {
    * @param {'delivery'|'invoice'} type
    * @returns {Promise<Blob>}
    */
-  async pdf(type, id) {
+  async pdf(type, id, opts = {}) {
     const res = await fetch('/api/document-pdf', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await accessToken()}` },
-      body: JSON.stringify({ type, id }),
+      body: JSON.stringify({ type, id, ...opts }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

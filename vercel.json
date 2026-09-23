@@ -32,6 +32,9 @@
     },
     "api/export-schedule-sheet.js": {
       "maxDuration": 30
+    },
+    "api/read-sheet.js": {
+      "maxDuration": 30
     }
   },
   "crons": [

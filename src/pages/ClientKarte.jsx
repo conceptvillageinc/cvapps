@@ -57,7 +57,9 @@ export default function ClientKarte() {
     const thisFy = valid.filter((i) => i.invoice_date >= from && i.invoice_date <= to).reduce((s, i) => s + Number(i.subtotal || 0), 0);
     const unpaid = valid.filter((i) => i.status === "sent" || i.status === "draft");
     const last = [...valid].sort((a, b) => (b.invoice_date || "").localeCompare(a.invoice_date || ""))[0];
-    return { fy, total, thisFy, unpaidCount: unpaid.length, unpaidTotal: unpaid.reduce((s, i) => s + Number(i.total || 0), 0), openProjects: projects.filter((p) => p.status === "open").length, lastDate: last?.invoice_date || null };
+    const gross = projects.reduce((s, p) => s + Number(p.confirmed_revenue > 0 ? p.actual_gross_profit : p.expected_gross_profit) || 0, 0);
+    const grossBase = projects.reduce((s, p) => s + Number(p.confirmed_revenue > 0 ? p.confirmed_revenue : p.expected_revenue) || 0, 0);
+    return { fy, total, thisFy, gross, grossRate: grossBase > 0 ? Math.round((gross / grossBase) * 100) : null, unpaidCount: unpaid.length, unpaidTotal: unpaid.reduce((s, i) => s + Number(i.total || 0), 0), openProjects: projects.filter((p) => p.status === "open").length, lastDate: last?.invoice_date || null };
   }, [invoices, projects, fiscalYearStartMonth]);
 
   // 入稿先（一次情報）: 見積明細の価格マスタ・仕入先見積・複製元
@@ -101,10 +103,11 @@ export default function ClientKarte() {
       </div>
 
       {/* 要約 */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         {[
           ["累計売上（税抜）", yen(stats.total)],
           [`${fiscalYearLabel(stats.fy, fiscalYearStartMonth).split("（")[0]}売上`, yen(stats.thisFy)],
+          ["粗利（案件の合計）", `${yen(stats.gross)}${stats.grossRate != null ? ` / ${stats.grossRate}%` : ""}`],
           ["未入金", stats.unpaidCount ? `${stats.unpaidCount}件 ${yen(stats.unpaidTotal)}` : "なし"],
           ["進行中の案件", `${stats.openProjects}件`],
           ["最終請求日", stats.lastDate || "—"],

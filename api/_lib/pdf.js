@@ -98,7 +98,8 @@ function drawPage(pdf, { type, doc, company, stamp, items, page, pages, isLast }
 
   // 印影（自社情報に重ねる）
   if (stamp) {
-    try { pdf.image(stamp, 500, MARGIN - 6, { width: 52 }); } catch { /* 画像が読めなければ省略 */ }
+    const stampW = Math.max(24, Math.min(120, Number(company.stamp_width) || 52));
+    try { pdf.image(stamp, PAGE.width - MARGIN - stampW + 3, MARGIN - 6, { width: stampW }); } catch { /* 画像が読めなければ省略 */ }
   }
 
   // ---- 表題 ----

@@ -18,11 +18,12 @@ import {
   LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, TAX_RATE, applyMarkup,
 } from "@/lib/constants";
 import {
-  usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS, recomputeSubtotals,
+  usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS, recomputeSubtotals, withRuleRate, unlockRuleRow,
 } from "@/lib/pricing";
 import { DESIGN_FEE_MASTER, getDesignItemsByCategory } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import { formatPostalCode } from "@/lib/postalCode";
+import { toTaxExcluded } from "@/lib/priceTax";
 
 import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 import WebPriceImport from "@/components/estimates/WebPriceImport";
@@ -196,7 +197,8 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const pickPriceMasterCell = (entry, cell) => {
     const catDef = LINE_ITEM_CATEGORIES.find(c => c.key === addPanel);
     const quantity = cell.quantity || 1;
-    const costPerUnit = cell.price / quantity;
+    // 税込表示のマスタは原価を税別に直す
+    const costPerUnit = toTaxExcluded(cell.price, entry.price_tax_mode) / quantity;
     const markupRate = markupRateFor(rules, entry.category);
     const unitPrice = applyMarkup(costPerUnit, markupRate);
     addItem({
@@ -606,9 +608,12 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-72 p-1" align="start">
-                    <p className="text-[10px] text-muted-foreground px-2 py-1">他の明細の合計から金額が決まる行です。%はシステム設定で変更できます</p>
+                    <p className="text-[10px] text-muted-foreground px-2 py-1">他の明細の合計から金額が決まる行です。%は追加後に行ごとに変えられます（初期値はシステム設定）</p>
                     <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("concept_fee")}>
                       コンセプト設計費 <span className="text-muted-foreground">（印刷費を除く合計の{Math.round(rules.concept_fee.rate * 100)}%）</span>
+                    </button>
+                    <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("direction_fee")}>
+                      ディレクション費 <span className="text-muted-foreground">（印刷費を除く合計の{Math.round(rules.direction_fee.rate * 100)}%）</span>
                     </button>
                     <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("proofreading_fee")}>
                       校正費 <span className="text-muted-foreground">（デザイン費の{Math.round(rules.proofreading_fee.rate * 100)}%）</span>
@@ -991,7 +996,19 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
         <>
           <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">1</td>
           <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">式</td>
-          <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">自動</td>
+          <td className="px-3 py-2 text-right align-top">
+            <div className="flex items-center justify-end gap-0.5 text-xs">
+              <NumericField
+                value={Math.round((Number(item.rate) || 0) * 1000) / 10}
+                onCommit={(pct) => onChange(withRuleRate(item, (Number(pct) || 0) / 100))}
+                className={`${cellInputClass} text-right w-14`}
+              />
+              <span className="text-muted-foreground">%</span>
+            </div>
+            <button type="button" className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline mt-0.5" title="自動計算をやめて、金額を手入力できる普通の行にします" onClick={() => onChange(unlockRuleRow(item))}>
+              手入力にする
+            </button>
+          </td>
         </>
       ) : (
         <>

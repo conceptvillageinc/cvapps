@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { generateProjectNumber } from "@/lib/projectNumber";
 import { nextMonthEnd, todayString } from "@/lib/fiscal";
-import { PROJECT_STATUS_MAP } from "@/lib/constants";
 
 // 数値入力: 空は 0、カンマ入りも受け付ける
 const toNumber = (v) => {
@@ -29,8 +28,8 @@ function emptyForm(defaults = {}) {
   return {
     client_name: "",
     name: "",
-    deal_probability: "A",
-    phase: "引き合い",
+    deal_probability: "C",
+    phase: "未着手",
     status: "open",
     expected_revenue: "",
     expected_cost: "",
@@ -113,7 +112,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
         name: form.name.trim(),
         deal_probability: form.deal_probability,
         phase: form.phase,
-        status: form.status,
+        ...(project ? { status: form.status } : {}),
         expected_revenue: toNumber(form.expected_revenue),
         expected_cost: toNumber(form.expected_cost),
         other_cost: toNumber(form.other_cost),
@@ -213,7 +212,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">受注確度</Label>
               <Select value={form.deal_probability} onValueChange={(v) => set("deal_probability", v)}>
@@ -232,17 +231,6 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
                 <SelectContent>
                   {[...new Set([...phaseOptions, form.phase].filter(Boolean))].map((o) => (
                     <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">状態</Label>
-              <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PROJECT_STATUS_MAP).map(([k, v]) => (
-                    <SelectItem key={k} value={k} className="text-xs">{v.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

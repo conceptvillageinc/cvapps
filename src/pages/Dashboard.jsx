@@ -64,7 +64,7 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-0.5">印刷見積管理システム</p>
         </div>
         <Link to="/estimates/new">
-          <Button className="gap-2 shadow-sm">
+          <Button className="gap-2 shadow-sm hover:bg-emerald-600 hover:shadow-md transition-all">
             <Plus className="w-4 h-4" />
             新規見積作成
           </Button>

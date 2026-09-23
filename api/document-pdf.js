@@ -1,29 +1,50 @@
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { renderDocumentPdf } from './_lib/pdf.js';
+import { renderEstimatePdf, estimateFilename } from './_lib/estimatePdf.js';
 
 // ============================================================================
-// POST /api/document-pdf  { type: 'delivery' | 'invoice', id }
+// POST /api/document-pdf  { type: 'delivery' | 'invoice' | 'estimate', id, stamp?: boolean }
 //
-// 納品書・請求書のPDFを生成して返す。会社情報と印影は system_settings から。
+// 納品書・請求書・見積書のPDFを生成して返す。会社情報と印影は system_settings から。
 // 印影は非公開バケットにあり、service_role で読む（URLは外に出さない）。
+// stamp: false を渡すと印影を押さない（郵送・持参で押印する場合）。既定は押す。
 // ============================================================================
 
-export async function loadDocumentPdf(admin, type, id) {
+const TYPES = ['delivery', 'invoice', 'estimate'];
+
+async function loadCompany(admin) {
+  const { data: row } = await admin.from('system_settings').select('setting_value').eq('setting_key', 'company_info').maybeSingle();
+  let company = {};
+  try { company = row ? JSON.parse(row.setting_value) : {}; } catch { company = {}; }
+  return { name: '株式会社コンセプト・ヴィレッジ', locations: [], bank_accounts: [], ...company };
+}
+
+async function loadStamp(admin, company) {
+  if (!company.stamp_path) return null;
+  const { data: file } = await admin.storage.from('uploads').download(company.stamp_path);
+  return file ? Buffer.from(await file.arrayBuffer()) : null;
+}
+
+export async function loadDocumentPdf(admin, type, id, { stamp: withStamp = true } = {}) {
+  const company = await loadCompany(admin);
+  const stamp = withStamp ? await loadStamp(admin, company) : null;
+
+  if (type === 'estimate') {
+    const { data: est, error } = await admin.from('estimates').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!est) { const e = new Error('見積が見つかりません'); e.status = 404; throw e; }
+    let client = null;
+    if (est.client_name) {
+      ({ data: client } = await admin.from('clients').select('id, name, postal_code, address, email').eq('name', est.client_name).order('created_at').limit(1).maybeSingle());
+    }
+    const buffer = await renderEstimatePdf({ estimate: est, client, company, stamp });
+    return { buffer, filename: estimateFilename(est), doc: est, client };
+  }
+
   const table = type === 'invoice' ? 'invoices' : 'delivery_notes';
   const { data: doc, error } = await admin.from(table).select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!doc) { const e = new Error('帳票が見つかりません'); e.status = 404; throw e; }
-
-  const { data: row } = await admin.from('system_settings').select('setting_value').eq('setting_key', 'company_info').maybeSingle();
-  let company = {};
-  try { company = row ? JSON.parse(row.setting_value) : {}; } catch { company = {}; }
-  company = { name: '株式会社コンセプト・ヴィレッジ', locations: [], bank_accounts: [], ...company };
-
-  let stamp = null;
-  if (company.stamp_path) {
-    const { data: file } = await admin.storage.from('uploads').download(company.stamp_path);
-    if (file) stamp = Buffer.from(await file.arrayBuffer());
-  }
 
   const buffer = await renderDocumentPdf({ type, doc, company, stamp });
   const number = type === 'invoice' ? doc.invoice_number : doc.delivery_number;
@@ -36,14 +57,14 @@ export default async function handler(req, res) {
   const user = await requireMember(req, res);
   if (!user) return;
 
-  const { type, id } = req.body || {};
-  if (!['delivery', 'invoice'].includes(type) || !id) {
+  const { type, id, stamp } = req.body || {};
+  if (!TYPES.includes(type) || !id) {
     res.status(400).json({ error: 'type と id を指定してください' });
     return;
   }
 
   try {
-    const { buffer, filename } = await loadDocumentPdf(adminClient(), type, id);
+    const { buffer, filename } = await loadDocumentPdf(adminClient(), type, id, { stamp: stamp !== false });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(filename)}`);
     res.status(200).send(buffer);

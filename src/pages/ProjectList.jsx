@@ -268,7 +268,10 @@ export default function ProjectList() {
                           <Badge className={`text-[10px] whitespace-nowrap ${st.color}`}>{st.label}</Badge>
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
-                        <TableCell className={`text-right text-sm tabular-nums ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>{yen(p.expected_gross_profit)}</TableCell>
+                        <TableCell className={`text-right text-sm tabular-nums ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>
+                          {yen(p.expected_gross_profit)}
+                          {Number(p.expected_revenue) > 0 && <span className="block text-[10px] text-muted-foreground">{Math.round((Number(p.expected_gross_profit) / Number(p.expected_revenue)) * 100)}%</span>}
+                        </TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{p.due_date || "—"}</TableCell>
                         <TableCell className="text-xs whitespace-nowrap">{p.payment_due_date || "—"}</TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{p.registered_at}</TableCell>

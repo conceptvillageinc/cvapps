@@ -13,6 +13,7 @@ import Dashboard from '@/pages/Dashboard';
 import EstimateCreate from '@/pages/EstimateCreate';
 import EstimateList from '@/pages/EstimateList';
 import EstimateDetail from '@/pages/EstimateDetail';
+import EstimateShortLink from '@/pages/EstimateShortLink';
 import EstimateHistory from '@/pages/EstimateHistory';
 import VendorManagement from '@/pages/VendorManagement';
 import PriceMasterList from '@/pages/PriceMasterList';
@@ -72,6 +73,7 @@ const AuthenticatedApp = () => {
           <Route path="/delivery-notes/:id" element={<DeliveryNoteEdit />} />
           <Route path="/estimates/new" element={<EstimateCreate />} />
           <Route path="/estimates/:id" element={<EstimateDetail />} />
+          <Route path="/e/:number" element={<EstimateShortLink />} />
           <Route path="/estimates" element={<EstimateList />} />
           <Route path="/history" element={<EstimateHistory />} />
           <Route path="/vendors" element={<VendorManagement />} />

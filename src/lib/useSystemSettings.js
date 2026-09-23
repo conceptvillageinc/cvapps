@@ -7,7 +7,7 @@ import { db } from "@/api/db";
 import { DEFAULT_FISCAL_YEAR_START_MONTH } from "@/lib/constants";
 
 const DEFAULT_DEAL_PROBABILITY = ["A", "C", "A（定期売上）", "要注意（A）"];
-const DEFAULT_PHASE = ["引き合い", "着手中", "未着手", "受注済"];
+const DEFAULT_PHASE = ["未着手", "着手中", "受注済"];
 
 function parseList(settings, key, fallback) {
   const s = settings.find((x) => x.setting_key === key);
