@@ -140,7 +140,7 @@ export default function VendorRequestTool({ open, onOpenChange, estimate, onUpda
                   <p className="text-[11px] text-muted-foreground">届いた見積書（PDF・画像）を読み取って、原価付きの明細にします。メール以外（電話・FAX）でもらった見積書もここから読み込めます</p>
                 </div>
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs shrink-0" onClick={checkReplies} disabled={checking || status.sent === 0}>
-                  {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Gmail の受信を確認
+                  {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} メールの受信を確認
                 </Button>
               </div>
 
@@ -201,7 +201,7 @@ export default function VendorRequestTool({ open, onOpenChange, estimate, onUpda
                 </div>
               )}
               <p className="text-[10px] text-muted-foreground">
-                「Gmail の受信を確認」は、あなたが送ったメールのスレッドだけを読み、返信の有無・差出人・冒頭の一文を記録します（本文は保存しません）。他の人が送ったメールは、その人がログインして確認します。
+                「メールの受信を確認」は、あなたが送ったメールのスレッドだけを読み、返信の有無・差出人・冒頭の一文を記録します（本文は保存しません）。他の人が送ったメールは、その人がログインして確認します。
               </p>
             </div>
           )}
