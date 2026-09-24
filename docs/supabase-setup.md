@@ -69,10 +69,10 @@ Supabase ダッシュボード → 左メニュー **SQL Editor** → **New quer
 1. ダッシュボード → **Authentication → Sign In / Providers → Google**
 2. **Enable** をオンにして、上で控えたクライアントID・シークレットを貼り付け → Save
 3. **Authentication → URL Configuration**
-   - **Site URL**: `https://cvapps-delta.vercel.app`
+   - **Site URL**: `https://cv-ax.jp`
    - **Redirect URLs** に次の2つを追加:
      ```
-     https://cvapps-delta.vercel.app/**
+     https://cv-ax.jp/**
      http://localhost:5173/**
      ```
 
@@ -113,8 +113,8 @@ Supabase ダッシュボード → 左メニュー **SQL Editor** → **New quer
 
 **Authentication → URL Configuration** を開き、発行されたURLを設定します（手順3-2と同じ場所）:
 
-- **Site URL**: `https://cvapps-delta.vercel.app`
-- **Redirect URLs**: `https://cvapps-delta.vercel.app/**` を追加
+- **Site URL**: `https://cv-ax.jp`
+- **Redirect URLs**: `https://cv-ax.jp/**` を追加
 
 **これを忘れると、ログインは通るのに `localhost` へ飛ばされます。**
 

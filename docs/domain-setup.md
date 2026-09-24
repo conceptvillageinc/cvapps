@@ -1,5 +1,7 @@
 # 独自ドメイン（cv-ax.jp）の設定
 
+> 2026-09-24 設定完了。本番 URL は `https://cv-ax.jp`（旧 `https://cvapps-delta.vercel.app` も引き続き使える）。
+
 アプリの URL を `https://cvapps-delta.vercel.app` から `https://cv-ax.jp` にする手順。
 アプリのコードにドメインは書かれていない（ログイン後の戻り先や短いリンクは開いている URL から作る）ので、
 変更するのは Vercel・Value Domain・Supabase・Google Cloud の設定だけ。作業は 30 分程度、DNS の反映待ちが最大で数時間。
@@ -11,7 +13,7 @@ CoreServer（無料体験）はアプリには使わない。DNS を Vercel に�
 1. Vercel → プロジェクト `cvapps` → **Settings → Domains**
 2. `cv-ax.jp` を入力して **Add**。「www.cv-ax.jp も追加して cv-ax.jp にリダイレクトする」を選ぶ（推奨）
 3. 追加すると「Invalid Configuration」と出て、必要な DNS レコードが表示される。通常は次の 2 つ
-   - `cv-ax.jp` … **A レコード** `76.76.21.21`
+   - `cv-ax.jp` … **A レコード** `216.150.1.1`（Vercel の現在の推奨値。旧 `76.76.21.21` も動く）
    - `www.cv-ax.jp` … **CNAME** `cname.vercel-dns.com`
    ※ 画面に別の値が出た場合はそちらを使う
 
@@ -22,7 +24,7 @@ CoreServer（無料体験）はアプリには使わない。DNS を Vercel に�
 3. DNS レコード欄を次のようにする（既存の `a @` / `a www` / `a *` で CoreServer の IP を指す行は削除する。`mx` や `txt` の行があれば残す）
 
 ```
-a @ 76.76.21.21
+a @ 216.150.1.1
 cname www cname.vercel-dns.com.
 ```
 
