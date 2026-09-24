@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { db } from '@/api/db';
 import { supabase } from '@/lib/supabase';
 
@@ -13,9 +13,14 @@ export const AuthProvider = ({ children }) => {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  // onAuthStateChange のコールバックから最新のユーザーを見るための参照
+  const userRef = useRef(null);
+  useEffect(() => { userRef.current = user; }, [user]);
 
-  const checkUserAuth = useCallback(async () => {
-    setIsLoadingAuth(true);
+  // silent=true のときは画面全体のスピナーを出さずに裏で確認する
+  // （タブ復帰・トークン更新のたびに画面を作り直さないため）
+  const checkUserAuth = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setIsLoadingAuth(true);
     try {
       const currentUser = await db.auth.me();
       setUser(currentUser);
@@ -42,10 +47,18 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkUserAuth();
 
-    // ログイン／ログアウト／トークン更新を拾って状態を同期する
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
-        checkUserAuth();
+    // ログイン／ログアウト／トークン更新を拾って状態を同期する。
+    // Supabase は別タブから戻ってきたとき（タブが再表示されたとき）にも SIGNED_IN を出すので、
+    // すでに同じユーザーでログイン済みなら何もしない。それ以外の再確認も裏で静かに行う。
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        checkUserAuth({ silent: true });
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const current = userRef.current;
+        if (event === 'SIGNED_IN' && current && session?.user?.id === current.id) return;
+        checkUserAuth({ silent: true });
       }
     });
 
