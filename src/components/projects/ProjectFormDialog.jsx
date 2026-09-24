@@ -25,7 +25,7 @@ const toNumber = (v) => {
 const yen = (n) => `¥${Math.round(n).toLocaleString()}`;
 
 function emptyForm(defaults = {}) {
-  return {
+  const base = {
     client_name: "",
     name: "",
     deal_probability: "C",
@@ -43,11 +43,15 @@ function emptyForm(defaults = {}) {
     is_recurring: false,
     notes: "",
     ...defaults,
-    // 見積画面などから完了予定日付きで開いたときも、入金・支払予定日は翌月末を初期値にする
-    ...(defaults.due_date ? {
-      payment_due_date: defaults.payment_due_date || nextMonthEnd(defaults.due_date),
-      vendor_payment_date: defaults.vendor_payment_date || nextMonthEnd(defaults.due_date),
-    } : {}),
+  };
+  // 既定の日付: 完了予定日 = 案件登録日の翌月末、入金・仕入先支払予定日 = 完了予定日の翌月末
+  // （見積画面などから完了予定日付きで開いたときは、その日付を起点にする）
+  const due = base.due_date || nextMonthEnd(base.registered_at || todayString());
+  return {
+    ...base,
+    due_date: due,
+    payment_due_date: base.payment_due_date || nextMonthEnd(due),
+    vendor_payment_date: base.vendor_payment_date || nextMonthEnd(due),
   };
 }
 
@@ -67,6 +71,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
   const [form, setForm] = useState(() => emptyForm(defaults));
   const [clientOpen, setClientOpen] = useState(false);
   // 入金予定日を手で変えた後は、完了予定日を変えても自動で上書きしない
+  const [dueTouched, setDueTouched] = useState(false);
   const [paymentDueTouched, setPaymentDueTouched] = useState(false);
   const [vendorPaymentTouched, setVendorPaymentTouched] = useState(false);
 
@@ -88,10 +93,13 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
         ),
         is_recurring: !!project.is_recurring,
       });
+      setDueTouched(!!project.due_date);
       setPaymentDueTouched(!!project.payment_due_date);
       setVendorPaymentTouched(!!project.vendor_payment_date);
     } else {
       setForm(emptyForm(defaults));
+      // 見積画面から渡された完了予定日は「手で決めた日付」として扱う
+      setDueTouched(!!defaults.due_date);
       setPaymentDueTouched(false);
       setVendorPaymentTouched(false);
     }
@@ -101,14 +109,23 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
+  // 完了予定日を変えると、手で直していない入金予定日・仕入先支払予定日は翌月末に追随する
+  const withFollowingDates = (f, due) => ({
+    ...f,
+    due_date: due,
+    payment_due_date: paymentDueTouched ? f.payment_due_date : nextMonthEnd(due),
+    vendor_payment_date: vendorPaymentTouched ? f.vendor_payment_date : nextMonthEnd(due),
+  });
   const setDueDate = (value) => {
-    setForm((f) => ({
-      ...f,
-      due_date: value,
-      // 入金予定日・仕入先支払予定日は、手で直していなければ完了予定日の翌月末に追随する
-      payment_due_date: paymentDueTouched ? f.payment_due_date : nextMonthEnd(value),
-      vendor_payment_date: vendorPaymentTouched ? f.vendor_payment_date : nextMonthEnd(value),
-    }));
+    setDueTouched(true);
+    setForm((f) => withFollowingDates(f, value));
+  };
+  // 案件登録日を変えると、手で直していない完了予定日は登録日の翌月末に追随する（その先の予定日も連動）
+  const setRegisteredAt = (value) => {
+    setForm((f) => {
+      const next = { ...f, registered_at: value };
+      return dueTouched ? next : withFollowingDates(next, nextMonthEnd(value));
+    });
   };
 
   const expectedGross = toNumber(form.expected_revenue) - toNumber(form.expected_cost) - toNumber(form.other_cost);
@@ -304,11 +321,12 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">案件登録日</Label>
-              <Input type="date" value={form.registered_at} onChange={(e) => set("registered_at", e.target.value)} className="h-9" disabled={!!project} />
+              <Input type="date" value={form.registered_at} onChange={(e) => setRegisteredAt(e.target.value)} className="h-9" disabled={!!project} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">完了予定日</Label>
               <Input type="date" value={form.due_date} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
+              <p className="text-[10px] text-muted-foreground">既定: 案件登録日の翌月末</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">入金予定日</Label>
