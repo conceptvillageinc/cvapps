@@ -1125,6 +1125,20 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
                 <option value={8}>8%（軽減）</option>
               </select>
             </label>
+            {!isRule && (
+              <label className="flex items-center gap-1" title="仕入の単価（1枚・1式あたり、税別）。空にすると原価なしになります">
+                <span className="shrink-0">原価（仕入単価）</span>
+                <NumericField
+                  value={item.cost_price ?? ""}
+                  onCommit={(v) => onChange({ cost_price: Number(v) })}
+                  placeholder="—"
+                  className={`h-6 w-24 text-[10px] px-1.5 bg-white text-right ${noSpinner}`}
+                />
+                {hasCost && (
+                  <button type="button" className="text-muted-foreground hover:text-destructive" title="原価を外す" onClick={() => onChange({ cost_price: null, markup_rate: null })}><X className="w-3 h-3" /></button>
+                )}
+              </label>
+            )}
             <label className="flex items-center gap-1 min-w-[220px] flex-1">
               <Link2 className="w-3 h-3 shrink-0" />
               <Input
@@ -1149,12 +1163,22 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
           {hasCost && (
           <div className="p-2.5 rounded bg-amber-50 border border-amber-100 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <div className="text-[10px] text-amber-700">
-              原価 ¥{Number(item.cost_price).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}
+              原価 ¥{Number(item.cost_price).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}（仕入合計 ¥{Math.round(lineCostTotal).toLocaleString()}）
               <span className="mx-1.5">−</span>
               出し値 ¥{Number(item.unit_price || 0).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}
               <span className="mx-1.5">＝</span>
-              粗利 <strong>¥{lineProfit.toLocaleString()}</strong>（粗利率 <strong>{lineProfitRate}%</strong>）
+              粗利 <strong className={lineProfit < 0 ? "text-red-700" : ""}>¥{lineProfit.toLocaleString()}</strong>（粗利率 <strong>{lineProfitRate}%</strong>）
             </div>
+            {lineProfit < 0 && (Number(item.quantity) || 1) > 1 && (
+              <button
+                type="button"
+                className="text-[10px] text-red-700 underline underline-offset-2 hover:text-red-900"
+                title="原価に「仕入の合計」が入っている場合、数量で割って単価に直します"
+                onClick={() => onChange({ cost_price: Math.round((Number(item.cost_price) / (Number(item.quantity) || 1)) * 100) / 100 })}
+              >
+                原価が仕入合計なら数量で割る（→ ¥{Math.round(Number(item.cost_price) / (Number(item.quantity) || 1)).toLocaleString()}）
+              </button>
+            )}
             {item.outsourcing_kind ? (
               <div className="text-[10px] text-amber-700">外注（仕入 ÷ 率で売価を算出）</div>
             ) : (
