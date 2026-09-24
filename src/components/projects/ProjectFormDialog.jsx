@@ -43,6 +43,11 @@ function emptyForm(defaults = {}) {
     is_recurring: false,
     notes: "",
     ...defaults,
+    // 見積画面などから完了予定日付きで開いたときも、入金・支払予定日は翌月末を初期値にする
+    ...(defaults.due_date ? {
+      payment_due_date: defaults.payment_due_date || nextMonthEnd(defaults.due_date),
+      vendor_payment_date: defaults.vendor_payment_date || nextMonthEnd(defaults.due_date),
+    } : {}),
   };
 }
 
@@ -63,6 +68,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
   const [clientOpen, setClientOpen] = useState(false);
   // 入金予定日を手で変えた後は、完了予定日を変えても自動で上書きしない
   const [paymentDueTouched, setPaymentDueTouched] = useState(false);
+  const [vendorPaymentTouched, setVendorPaymentTouched] = useState(false);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
@@ -83,9 +89,11 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
         is_recurring: !!project.is_recurring,
       });
       setPaymentDueTouched(!!project.payment_due_date);
+      setVendorPaymentTouched(!!project.vendor_payment_date);
     } else {
       setForm(emptyForm(defaults));
       setPaymentDueTouched(false);
+      setVendorPaymentTouched(false);
     }
     // defaults はオブジェクトなので中身で比較する
      
@@ -97,7 +105,9 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
     setForm((f) => ({
       ...f,
       due_date: value,
+      // 入金予定日・仕入先支払予定日は、手で直していなければ完了予定日の翌月末に追随する
       payment_due_date: paymentDueTouched ? f.payment_due_date : nextMonthEnd(value),
+      vendor_payment_date: vendorPaymentTouched ? f.vendor_payment_date : nextMonthEnd(value),
     }));
   };
 
@@ -312,7 +322,13 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">仕入先 支払予定日</Label>
-              <Input type="date" value={form.vendor_payment_date} onChange={(e) => set("vendor_payment_date", e.target.value)} className="h-9" />
+              <Input
+                type="date"
+                value={form.vendor_payment_date}
+                onChange={(e) => { setVendorPaymentTouched(true); set("vendor_payment_date", e.target.value); }}
+                className="h-9"
+              />
+              <p className="text-[10px] text-muted-foreground">既定: 完了予定日の翌月末</p>
             </div>
           </div>
 
