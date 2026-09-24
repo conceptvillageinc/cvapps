@@ -25,7 +25,7 @@
    - Region: Northeast Asia (Tokyo)
    - Database password: 生成されたものを保存（パスワード管理ツールへ。共有シートには書かない）
 2. 作成後、**SQL Editor → New query** に `supabase/dev/all_migrations.sql` の中身を丸ごと貼り付けて **Run**
-   （0001〜0014 を1本にしたもの。約 60KB。冪等なので失敗したら直して再実行してよい）
+   （0001〜0015 を1本にしたもの。約 60KB。冪等なので失敗したら直して再実行してよい）
 3. **Authentication → Providers → Google** を有効にし、本番と同じ **Client ID / Client Secret** を入れる（Google Cloud の同じ OAuth クライアントを使い回す）。表示される **Callback URL**（`https://<dev-project>.supabase.co/auth/v1/callback`）を控える
 4. **Authentication → URL Configuration**
    - Site URL: `https://dev.cv-ax.jp`

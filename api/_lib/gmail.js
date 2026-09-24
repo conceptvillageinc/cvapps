@@ -311,5 +311,49 @@ export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, c
     throw new Error(`メールを送信できませんでした: ${data.error?.message || res.status}`);
   }
 
-  return { id: data.id, from: sender, cc: ccList };
+  return { id: data.id, threadId: data.threadId, from: sender, cc: ccList };
+}
+
+const SCOPE_READ = 'https://www.googleapis.com/auth/gmail.readonly';
+
+/**
+ * 送信メールのスレッドを本人の Gmail から読み、相手（差出人以外）からの返信を返す。
+ * ドメイン全体の委任に gmail.readonly のスコープが必要（docs/gmail-setup.md）。
+ *
+ * @param {string} owner     スレッドを持つ本人のアドレス（＝送信者）。必ずサーバーで検証済みの値を渡す
+ * @param {string} threadId  Gmail のスレッドID
+ * @returns {Promise<Array<{id:string, from:string, date:string, snippet:string}>>}
+ */
+export async function findReplies(owner, threadId) {
+  const token = await getAccessToken(owner, SCOPE_READ);
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(owner)}/threads/${encodeURIComponent(threadId)}?format=metadata&metadataHeaders=From&metadataHeaders=Date`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error?.message || String(res.status);
+    if (res.status === 403 || res.status === 401) {
+      throw new Error(`受信の確認に必要な権限がありません（gmail.readonly のスコープを委任してください）: ${msg}`);
+    }
+    if (res.status === 404) return [];
+    throw new Error(`受信を確認できませんでした: ${msg}`);
+  }
+  const me = owner.toLowerCase();
+  const out = [];
+  for (const m of data.messages || []) {
+    const headers = Object.fromEntries((m.payload?.headers || []).map((h) => [h.name.toLowerCase(), h.value]));
+    const from = headers.from || '';
+    const addr = (from.match(/<([^>]+)>/)?.[1] || from).trim().toLowerCase();
+    if (!addr || addr === me) continue;
+    // 自分の送信メール（SENT ラベル）は返信ではない
+    if ((m.labelIds || []).includes('SENT')) continue;
+    out.push({
+      id: m.id,
+      from,
+      date: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : (headers.date || ''),
+      snippet: m.snippet || '',
+    });
+  }
+  return out;
 }

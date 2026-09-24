@@ -35,6 +35,9 @@
     },
     "api/read-sheet.js": {
       "maxDuration": 30
+    },
+    "api/check-email-replies.js": {
+      "maxDuration": 30
     }
   },
   "crons": [

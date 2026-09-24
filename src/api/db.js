@@ -107,6 +107,8 @@ const WRITABLE_COLUMNS = {
   email_logs: [
     'estimate_id', 'recipient_company', 'recipient_email',
     'subject', 'body', 'status', 'sent_at', 'spec_label', 'document_type', 'document_id',
+    // 印刷所からの返答（手動の記録。自動検知の列はサーバーが書く）
+    'replied_at', 'replied_by', 'reply_note',
   ],
   system_settings: ['setting_key', 'setting_value', 'description'],
   faq_items: ['question', 'answer', 'sort_order'],
@@ -403,6 +405,7 @@ const FUNCTION_ROUTES = {
   sendDocumentEmail: 'send-document-email',
   exportScheduleSheet: 'export-schedule-sheet',
   readSheet: 'read-sheet',
+  checkEmailReplies: 'check-email-replies',
 };
 
 const functions = {

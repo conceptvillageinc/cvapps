@@ -59,8 +59,9 @@ export default async function handler(req, res) {
     }
 
     let sendError = null;
+    let sent = null;
     try {
-      await sendMail({
+      sent = await sendMail({
         // 操作した本人のアドレスから送る。返信は本人に直接届く。
         sendAs: user.email,
         to: vendor.email,
@@ -86,6 +87,10 @@ export default async function handler(req, res) {
         sent_at: sendError ? null : new Date().toISOString(),
         // どの印刷仕様の依頼かを履歴に残す（表示用の文字列。無くてもよい）
         spec_label: typeof specLabel === 'string' ? specLabel.slice(0, 200) : null,
+        // 返信の自動確認用（本人の Gmail のスレッドを後で読む）
+        sender_email: user.email,
+        gmail_message_id: sent?.id || null,
+        gmail_thread_id: sent?.threadId || null,
       })
       .select()
       .single();

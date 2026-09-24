@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, Printer, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +17,7 @@ import { openBlob, openPreviewTab, showBlobInTab } from "@/lib/documents";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
 import { useAuth } from "@/lib/AuthContext";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import SpecForm from "@/components/estimates/SpecForm";
 import PriceTable from "@/components/estimates/PriceTable";
 import CostCalculation from "@/components/estimates/CostCalculation";
@@ -24,11 +25,16 @@ import EmailPreview from "@/components/estimates/EmailPreview";
 import ReviewPanel from "@/components/estimates/ReviewPanel";
 import DesignFeeTable from "@/components/estimates/DesignFeeTable";
 import RevisionPanel from "@/components/estimates/RevisionPanel";
-import PrintSpecsPanel from "@/components/estimates/PrintSpecsPanel";
 import { convertLegacyEstimate, summarizeConversion } from "@/lib/convertLegacyEstimate";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
+import VendorRequestCard from "@/components/estimates/VendorRequestCard";
+import VendorRequestTool from "@/components/estimates/VendorRequestTool";
+import ReviewStep from "@/components/estimates/ReviewStep";
+import { autoChecks } from "@/components/estimates/ReviewStep";
+import { computeEstimateTotals } from "@/lib/estimateTotals";
+import { recomputeSubtotals, recomputeRuleRows, usePricingRules } from "@/lib/pricing";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -122,6 +128,12 @@ export default function EstimateDetail() {
     }
   };
   const [activeTab, setActiveTab] = useState(null);
+  // 新形式: ステップ（quote = 見積書を作る / review = レビュー・承認）と依頼ツール
+  const [step, setStep] = useState("quote");
+  const [toolOpen, setToolOpen] = useState(false);
+  const [toolStep, setToolStep] = useState(null);
+  const { rules: pricingRules } = usePricingRules();
+  const { grossMarginTarget } = useSystemSettings();
   const skipAutosave = useRef(true);
 
   useEffect(() => {
@@ -326,7 +338,7 @@ export default function EstimateDetail() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          {formData.status === "draft" || formData.status === "rejected" ? (
+          {formData.schema_version !== 2 && (formData.status === "draft" || formData.status === "rejected") ? (
             <Button size="sm" variant="outline" onClick={handleSubmitReview} className="gap-1.5 text-xs">
               <Send className="w-3.5 h-3.5" /> レビュー申請
             </Button>
@@ -432,23 +444,103 @@ export default function EstimateDetail() {
       {/* バージョン・商談ステータス */}
       <RevisionPanel estimate={formData} onUpdate={handleUpdate} project={project} />
 
-      {/* Tabs */}
-      <Tabs value={activeTab || (formData.schema_version === 2 ? "quote" : "spec")} onValueChange={setActiveTab} className="space-y-4">
+      {formData.schema_version === 2 ? (
+        <>
+          {/* ステップ表示: ① 見積書を作る → ② レビュー・承認 */}
+          {(() => {
+            const items = (formData.line_items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal");
+            const totals = computeEstimateTotals(items, { taxInclusive: !!formData.tax_inclusive });
+            const a = autoChecks(formData, grossMarginTarget);
+            const reviewDone = formData.status === "approved";
+            const reviewNote = reviewDone
+              ? `承認済み（${formData.reviewer_name || ""}）`
+              : formData.status === "review_pending" || formData.status === "review_in_progress"
+                ? `${formData.review_requested_to_name ? `${formData.review_requested_to_name} さんに` : ""}申請中`
+                : formData.status === "rejected" ? "差し戻し・直して再申請" : "未申請 ・ 明細ができたら申請する";
+            return (
+              <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-2.5">
+                <button type="button" onClick={() => setStep("quote")} className="flex items-center gap-3 flex-1 text-left">
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${step === "quote" ? "bg-primary text-primary-foreground" : items.length > 0 ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {step !== "quote" && items.length > 0 ? <CheckCircle2 className="w-4 h-4" /> : "1"}
+                  </span>
+                  <span>
+                    <span className={`block text-sm ${step === "quote" ? "font-bold" : "font-medium text-muted-foreground"}`}>見積書を作る</span>
+                    <span className="block text-[11px] text-muted-foreground">明細 {items.length}行 ・ 合計 ¥{totals.total.toLocaleString()}（税込）{a.cost > 0 ? ` ・ 粗利 ${Math.round(a.rate * 100)}%` : ""}</span>
+                  </span>
+                </button>
+                <span className={`h-0.5 w-12 shrink-0 ${step === "review" || reviewDone ? "bg-primary" : "bg-border"}`} />
+                <button type="button" onClick={() => setStep("review")} className="flex items-center gap-3 flex-1 text-left">
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${step === "review" ? "bg-primary text-primary-foreground" : reviewDone ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"}`}>
+                    {reviewDone && step !== "review" ? <CheckCircle2 className="w-4 h-4" /> : "2"}
+                  </span>
+                  <span>
+                    <span className={`block text-sm ${step === "review" ? "font-bold" : "font-medium text-muted-foreground"}`}>レビュー・承認</span>
+                    <span className="block text-[11px] text-muted-foreground">{reviewNote}</span>
+                  </span>
+                </button>
+                {step === "quote" ? (
+                  <Button size="sm" className="gap-1.5 text-xs shrink-0" onClick={() => setStep("review")}>次へ：レビュー <ChevronRight className="w-3.5 h-3.5" /></Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs shrink-0" onClick={() => setStep("quote")}><ArrowLeft className="w-3.5 h-3.5" /> 見積書に戻る</Button>
+                )}
+              </div>
+            );
+          })()}
+
+          {step === "quote" ? (
+            <div className="flex flex-col xl:flex-row gap-4">
+              <div className="flex-1 min-w-0">
+                <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
+              </div>
+              <div className="w-full xl:w-[300px] shrink-0 space-y-3">
+                <VendorRequestCard estimate={formData} emailLogs={emailLogs} onOpen={(n) => { setToolStep(n); setToolOpen(true); }} />
+                <div className="rounded-xl border bg-card p-4 space-y-1.5">
+                  <p className="text-xs font-bold">履歴</p>
+                  {emailLogs.filter((l) => l.status === "sent").length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">まだメールの送信はありません</p>
+                  ) : (
+                    <ul className="text-[11px] text-muted-foreground space-y-1 max-h-40 overflow-y-auto">
+                      {[...emailLogs].filter((l) => l.status === "sent").sort((x, y) => String(y.sent_at || "").localeCompare(String(x.sent_at || ""))).slice(0, 8).map((l) => (
+                        <li key={l.id}><span className="tabular-nums">{new Date(l.sent_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}</span>　{l.recipient_company} へ{l.document_type ? "見積書を送付" : "依頼メール送信"}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <ReviewStep
+              estimate={formData}
+              emailLogs={emailLogs}
+              onUpdate={handleUpdate}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onRequestReview={handleSubmitReview}
+              onOpenPdf={() => previewPdf(false)}
+            />
+          )}
+
+          <VendorRequestTool
+            open={toolOpen}
+            onOpenChange={setToolOpen}
+            initialStep={toolStep}
+            estimate={formData}
+            emailLogs={emailLogs}
+            onUpdate={handleUpdate}
+            onAddItems={(items) => {
+              const uid = () => `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+              const next = recomputeSubtotals(recomputeRuleRows([...(formData.line_items || []), ...items.map((it) => ({ id: uid(), row_type: "item", ...it }))], pricingRules));
+              const t = computeEstimateTotals(next, { taxInclusive: !!formData.tax_inclusive });
+              handleUpdate({ line_items: next, total_amount: t.total });
+              toast.success(`${items.length}件の明細を見積書に追加しました`);
+            }}
+          />
+        </>
+      ) : (
+      <Tabs value={activeTab || "spec"} onValueChange={setActiveTab} className="space-y-4">
         <div className="overflow-x-auto">
           <TabsList className="bg-muted/50 w-max">
-            {formData.schema_version === 2 ? (
-              <>
-                <TabsTrigger value="quote" className="gap-1.5 text-xs">
-                  <FileOutput className="w-3.5 h-3.5" /> 見積書
-                </TabsTrigger>
-                <TabsTrigger value="specs" className="gap-1.5 text-xs">
-                  <Printer className="w-3.5 h-3.5" /> 印刷見積依頼
-                  {(formData.print_specs || []).length > 0 && (
-                    <span className="ml-0.5 text-[10px] text-muted-foreground">{formData.print_specs.length}</span>
-                  )}
-                </TabsTrigger>
-              </>
-            ) : (
+            {(
               <>
                 <TabsTrigger value="spec" className="gap-1.5 text-xs">
                   <FileText className="w-3.5 h-3.5" /> 仕様
@@ -473,16 +565,7 @@ export default function EstimateDetail() {
           </TabsList>
         </div>
 
-        {formData.schema_version === 2 ? (
-          <>
-            <TabsContent value="quote" forceMount className="data-[state=inactive]:hidden">
-              <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
-            </TabsContent>
-            <TabsContent value="specs" forceMount className="data-[state=inactive]:hidden">
-              <PrintSpecsPanel estimate={formData} onUpdate={handleUpdate} onGoToEmail={() => setActiveTab("email")} />
-            </TabsContent>
-          </>
-        ) : (
+        {(
           <>
             <TabsContent value="spec">
               <SpecForm data={formData} onChange={setFormData} />
@@ -520,6 +603,7 @@ export default function EstimateDetail() {
           />
         </TabsContent>
       </Tabs>
+      )}
     </div>
   );
 }

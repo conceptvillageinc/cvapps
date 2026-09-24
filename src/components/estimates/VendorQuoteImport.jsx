@@ -23,7 +23,13 @@ import { extractVendorQuote, costPerUnit, lineName } from "@/lib/vendorQuote";
 
 const IMPORTABLE_CATEGORIES = LINE_ITEM_CATEGORIES.filter(c => c.key !== "design");
 
-export default function VendorQuoteImport({ onAdd, onClose }) {
+/**
+ * props:
+ *   onAdd(items)     読み取った明細を追加する
+ *   onClose()
+ *   defaultVendor    会社名の初期値（依頼ツールから「◯◯の見積書を読み込む」で開いたとき）
+ */
+export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }) {
   const { rules } = usePricingRules();
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
@@ -61,10 +67,12 @@ export default function VendorQuoteImport({ onAdd, onClose }) {
       cost: Math.round(costPerUnit(item) * 100) / 100,
     }));
 
+    // 依頼ツールから会社名付きで開いたときは、その会社名を優先する（読み取り結果の表記ゆれを避ける）
+    const vendorName = defaultVendor || result?.vendor_name || "";
     setDraft({
-      vendorName: result?.vendor_name || "",
+      vendorName,
       category: "print_paper",
-      markupRate: markupRateFor(rules, result?.vendor_name),
+      markupRate: markupRateFor(rules, vendorName),
       notes: result?.notes || "",
       rows: rows.length > 0 ? rows : [{ key: 0, selected: true, name: "", quantity: 1, cost: 0 }],
     });
