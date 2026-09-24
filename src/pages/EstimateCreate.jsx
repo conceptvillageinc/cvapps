@@ -157,9 +157,6 @@ export default function EstimateCreate() {
             <p className="text-xs text-muted-foreground mt-0.5">案件を選んで基本情報を入力後、見積書画面で明細を追加します</p>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          <Save className="w-4 h-4" /> 作成して明細入力へ
-        </Button>
       </div>
 
       {/* 案件 */}
@@ -319,6 +316,14 @@ export default function EstimateCreate() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 操作ボタンは入力の流れの最後（右下）に置く */}
+      <div className="flex items-center justify-end gap-2 pb-6">
+        <Button variant="outline" onClick={() => navigate(-1)} disabled={saving}>キャンセル</Button>
+        <Button onClick={handleSave} disabled={saving} className="gap-2" size="lg">
+          <Save className="w-4 h-4" /> 作成して明細入力へ
+        </Button>
+      </div>
     </div>
   );
 }
