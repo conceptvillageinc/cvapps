@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, UserSquare, ExternalLink, Save, FolderKanban, FileText, Truck, Receipt, Globe } from "lucide-react";
+import { ArrowLeft, Loader2, UserSquare, Save, FolderKanban, FileText, Truck, Receipt, Globe, Search, Link2, Image as ImageIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { INVOICE_DELIVERY_METHODS, STATUS_MAP, PROJECT_STATUS_MAP, getDealProbabilityColor } from "@/lib/constants";
 import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
@@ -15,6 +16,26 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
+
+/** 明細に貼った印刷所の見積スクショ（非公開バケットなので署名付きURLで表示） */
+function SourceScreenshot({ path }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (!path) { setUrl(null); return; }
+    db.storage.signedUrl(path).then((u) => alive && setUrl(u)).catch(() => alive && setUrl(null));
+    return () => { alive = false; };
+  }, [path]);
+  if (!path) return null;
+  const isImage = /\.(png|jpe?g|gif|webp)$/i.test(path);
+  return (
+    <a href={url || "#"} target="_blank" rel="noreferrer" className="shrink-0 inline-flex items-center gap-1.5 text-[10px] text-primary hover:underline" title="スクショを開く">
+      {url && isImage
+        ? <img src={url} alt="見積スクショ" className="h-16 w-auto max-w-[160px] rounded border object-cover bg-white" />
+        : <span className="inline-flex items-center gap-1 h-8 px-2 rounded border bg-muted/30"><ImageIcon className="w-3.5 h-3.5" /> {isImage ? "スクショ" : "PDF"}</span>}
+    </a>
+  );
+}
 
 function Field({ label, children }) {
   return (
@@ -62,30 +83,40 @@ export default function ClientKarte() {
     return { fy, total, thisFy, gross, grossRate: grossBase > 0 ? Math.round((gross / grossBase) * 100) : null, unpaidCount: unpaid.length, unpaidTotal: unpaid.reduce((s, i) => s + Number(i.total || 0), 0), openProjects: projects.filter((p) => p.status === "open").length, lastDate: last?.invoice_date || null };
   }, [invoices, projects, fiscalYearStartMonth]);
 
-  // 入稿先（一次情報）: 見積明細の価格マスタ・仕入先見積・複製元
-  const sources = useMemo(() => {
+  // 入稿先・仕入先（一次情報）: 見積ごとに、入稿先URL・スクショ・社内メモ・原価を持つ明細を並べる
+  // （ネット印刷取込・仕入先見積の行に加え、手入力の行でも URL／スクショ／メモがあれば対象）
+  const sourceGroups = useMemo(() => {
     const masterById = Object.fromEntries(masters.map((m) => [m.id, m]));
-    const map = new Map();
-    for (const e of estimates) {
+    const groups = [];
+    const sorted = [...estimates].sort((a, b) => String(b.created_date || "").localeCompare(String(a.created_date || "")));
+    for (const e of sorted) {
+      const rows = [];
       for (const li of e.line_items || []) {
         if (li.row_type === "text" || li.row_type === "subtotal" || li.source_type === "rule") continue;
-        let key, entry;
+        let kind = null, vendor = "", url = li.source_url || null, spec = "";
         if (li.source_type === "price_master") {
           const m = masterById[li.source_ref];
-          const url = li.source_url || m?.source_url || null;
-          key = `pm:${m?.vendor_name || ""}:${url || li.source_ref}`;
-          entry = { kind: "ネット印刷", vendor: m?.vendor_name || "価格マスタ", url, spec: m ? `${m.category} ${m.spec_summary || ""}` : "" };
+          kind = "ネット印刷"; vendor = m?.vendor_name || "価格マスタ"; url = url || m?.source_url || null;
+          spec = m ? `${m.category}${m.spec_summary ? ` ${m.spec_summary}` : ""}` : "";
         } else if (li.source_type === "vendor_quote") {
-          key = `vq:${li.source_ref || ""}`;
-          entry = { kind: "仕入先見積", vendor: li.source_ref || "（仕入先）", url: null, spec: "" };
+          kind = "仕入先見積"; vendor = li.source_ref || "（仕入先）";
+        } else if (li.source_url || li.screenshot_path || li.notes) {
+          kind = li.outsourcing_kind ? "外注" : "手入力"; vendor = li.source_ref || "";
         } else continue;
-        const cur = map.get(key) || { ...entry, items: [] };
-        cur.items.push({ estimate: e, name: li.name, quantity: li.quantity, unit: li.unit, cost_price: li.cost_price, unit_price: li.unit_price, copied_from: li.copied_from });
-        map.set(key, cur);
+        rows.push({ id: li.id, kind, vendor, url, spec, name: li.name, quantity: li.quantity, unit: li.unit, cost_price: li.cost_price, unit_price: li.unit_price, screenshot_path: li.screenshot_path || null, notes: li.notes || "", copied_from: li.copied_from || null });
       }
+      if (rows.length > 0) groups.push({ estimate: e, rows });
     }
-    return [...map.values()];
+    return groups;
   }, [estimates, masters]);
+  const [sourceFilter, setSourceFilter] = useState("");
+  const filteredGroups = useMemo(() => {
+    const q = sourceFilter.trim().toLowerCase();
+    if (!q) return sourceGroups;
+    return sourceGroups
+      .map((g) => ({ ...g, rows: g.rows.filter((r) => `${r.vendor} ${r.name} ${r.spec} ${r.notes} ${r.url || ""} ${g.estimate.estimate_title || ""}`.toLowerCase().includes(q)) }))
+      .filter((g) => g.rows.length > 0);
+  }, [sourceGroups, sourceFilter]);
 
   if (isLoading || !client) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -243,27 +274,55 @@ export default function ClientKarte() {
       {/* 入稿先 */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2"><Globe className="w-4 h-4" /> 入稿先・仕入先（一次情報）</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <CardTitle className="text-sm flex items-center gap-2"><Globe className="w-4 h-4" /> 入稿先・仕入先（一次情報）</CardTitle>
+              <p className="text-[10px] text-muted-foreground mt-0.5">見積ごとに、明細の入稿先URL・印刷所の見積スクショ・社内メモ・原価を並べています。明細のこれらの欄は見積書タブの「社内確認用」をONにすると編集できます</p>
+            </div>
+            <div className="relative sm:w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} placeholder="メーカー・品名・メモで絞り込み" className="h-8 pl-8 text-xs" />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          {sources.length === 0 ? <p className="text-xs text-muted-foreground">見積の明細に入稿先の記録がありません（ネット印刷取込・仕入先見積から作った明細が対象）</p> : (
-            <div className="space-y-3">
-              {sources.map((s, i) => (
-                <div key={i} className="text-xs">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[9px] font-normal">{s.kind}</Badge>
-                    <span className="font-medium">{s.vendor}</span>
-                    {s.spec && <span className="text-muted-foreground">{s.spec}</span>}
-                    {s.url && <a href={s.url} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5">価格ページ <ExternalLink className="w-3 h-3" /></a>}
+          {filteredGroups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">{sourceFilter ? "該当する明細がありません" : "見積の明細に入稿先の記録がありません（ネット印刷取込・仕入先見積の行、または入稿先URL・スクショ・社内メモを入れた行が対象）"}</p>
+          ) : (
+            <div className="space-y-4">
+              {filteredGroups.map(({ estimate: e, rows }) => (
+                <div key={e.id} className="border rounded-md overflow-hidden">
+                  <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 bg-muted/40 text-xs">
+                    <Link to={`/estimates/${e.id}`} className="font-mono text-primary hover:underline">{e.estimate_number}</Link>
+                    <span className="text-muted-foreground">{e.created_date ? String(e.created_date).slice(0, 10).replace(/-/g, "/") : ""}</span>
+                    <span className="font-medium truncate flex-1">{e.estimate_title || e.print_type || ""}</span>
+                    {e.is_final_submitted && <Badge className="text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">最終提出版</Badge>}
+                    {e.total_amount > 0 && <span className="tabular-nums text-muted-foreground">{yen(e.total_amount)}</span>}
                   </div>
-                  <div className="pl-3 mt-1 space-y-0.5">
-                    {s.items.slice(0, 5).map((it, j) => (
-                      <div key={j} className="flex items-center gap-2 text-muted-foreground">
-                        <Link to={`/estimates/${it.estimate.id}`} className="font-mono hover:underline">{it.estimate.estimate_number}</Link>
-                        <span className="truncate flex-1">{it.name}</span>
-                        <span className="tabular-nums">{Number(it.quantity || 0).toLocaleString()}{it.unit || ""}</span>
-                        {it.cost_price != null && <span className="tabular-nums">原価 ¥{Number(it.cost_price).toLocaleString()}</span>}
-                        <span className="tabular-nums">@¥{Number(it.unit_price || 0).toLocaleString()}</span>
+                  <div className="divide-y">
+                    {rows.map((r) => (
+                      <div key={r.id} className="px-3 py-2 text-xs grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <Badge variant="outline" className="text-[9px] font-normal">{r.kind}</Badge>
+                            {r.vendor && <span className="font-medium">{r.vendor}</span>}
+                            <span className="truncate">{r.name}</span>
+                            {r.spec && <span className="text-muted-foreground">{r.spec}</span>}
+                            {r.copied_from && <span className="text-[10px] text-muted-foreground">（{r.copied_from} から複製）</span>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground">
+                            <span className="tabular-nums">{Number(r.quantity || 0).toLocaleString()}{r.unit || ""}</span>
+                            {r.cost_price != null && <span className="tabular-nums text-amber-700">原価 ¥{Number(r.cost_price).toLocaleString()}</span>}
+                            <span className="tabular-nums">@¥{Number(r.unit_price || 0).toLocaleString()}</span>
+                            {r.url && (
+                              <a href={r.url} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5 max-w-[360px] truncate" title={r.url}>
+                                <Link2 className="w-3 h-3 shrink-0" /> <span className="truncate">{r.url.replace(/^https?:\/\//, "")}</span>
+                              </a>
+                            )}
+                          </div>
+                          {r.notes && <p className="text-[11px] text-foreground/80 bg-amber-50 border border-amber-200 rounded px-2 py-1 whitespace-pre-wrap">{r.notes}</p>}
+                        </div>
+                        <SourceScreenshot path={r.screenshot_path} />
                       </div>
                     ))}
                   </div>
