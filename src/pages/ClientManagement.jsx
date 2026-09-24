@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Pencil, Trash2, Users, UserSquare } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, UserSquare, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { normalizePostalCode, isValidPostalCode, formatPostalCode, formatPostalInput } from "@/lib/postalCode";
@@ -85,6 +85,35 @@ export default function ClientManagement() {
     queryKey: ["clients"],
     queryFn: () => db.entities.Client.list("-created_date"),
   });
+  // 並び順の既定「直近で案件を作った順」のために、案件の登録日をクライアントごとに集める
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => db.entities.Project.list("-registered_at"),
+  });
+  const lastProjectAt = useMemo(() => {
+    const map = {};
+    for (const p of projects) {
+      const d = p.registered_at || (p.created_date ? String(p.created_date).slice(0, 10) : "");
+      if (!d) continue;
+      for (const key of [p.client_id, p.client_name]) {
+        if (key && (!map[key] || map[key] < d)) map[key] = d;
+      }
+    }
+    return map;
+  }, [projects]);
+  const lastProjectOf = (c) => lastProjectAt[c.id] || lastProjectAt[c.name] || "";
+
+  // 並び替え（列見出しをクリック。既定は最終案件日の新しい順）
+  const [sort, setSort] = useState({ key: "last_project", dir: "desc" });
+  const toggleSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "last_project" ? "desc" : "asc" }));
+  const SortIcon = ({ col }) => sort.key !== col
+    ? <ArrowUpDown className="w-3 h-3 opacity-40" />
+    : sort.dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+  const SortHead = ({ col, children, className = "" }) => (
+    <th className={`text-left p-3 font-medium text-muted-foreground ${className}`}>
+      <button type="button" onClick={() => toggleSort(col)} className="inline-flex items-center gap-1 hover:text-foreground">{children} <SortIcon col={col} /></button>
+    </th>
+  );
 
   const saveMutation = useMutation({
     mutationFn: (data) =>
@@ -119,9 +148,27 @@ export default function ClientManagement() {
     setDialogOpen(true);
   };
 
-  const filtered = clients.filter(c =>
-    c.name?.includes(search) || c.contact_person?.includes(search) || c.email?.includes(search)
-  );
+  const filtered = useMemo(() => {
+    const list = clients.filter(c =>
+      c.name?.includes(search) || c.contact_person?.includes(search) || c.email?.includes(search)
+    );
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const str = (v) => String(v || "");
+    return [...list].sort((a, b) => {
+      let r = 0;
+      if (sort.key === "last_project") {
+        // 案件のないクライアントは並び順に関わらず最後
+        const da = lastProjectOf(a), dbb = lastProjectOf(b);
+        if (!da && !dbb) r = 0; else if (!da) return 1; else if (!dbb) return -1; else r = da.localeCompare(dbb);
+      } else if (sort.key === "name") {
+        r = str(a.name_kana || a.name).localeCompare(str(b.name_kana || b.name), "ja");
+      } else if (sort.key === "contact") {
+        r = str(a.contact_person_kana || a.contact_person).localeCompare(str(b.contact_person_kana || b.contact_person), "ja");
+      }
+      if (r === 0) r = str(a.name).localeCompare(str(b.name), "ja");
+      return r * dir;
+    });
+  }, [clients, search, sort, lastProjectAt]);
 
   return (
     <div className="space-y-6">
@@ -156,8 +203,10 @@ export default function ClientManagement() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
-                    <th className="text-left p-3 font-medium text-muted-foreground">クライアント名</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground hidden md:table-cell">担当者</th>
+                    <th className="p-3 w-10" title="カルテ"></th>
+                    <SortHead col="name">クライアント名</SortHead>
+                    <SortHead col="last_project" className="hidden md:table-cell w-28">最終案件</SortHead>
+                    <SortHead col="contact" className="hidden md:table-cell">担当者</SortHead>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden md:table-cell w-36">請求書送付</th>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden lg:table-cell">メール</th>
                     <th className="text-left p-3 font-medium text-muted-foreground hidden lg:table-cell">電話番号</th>
@@ -169,11 +218,19 @@ export default function ClientManagement() {
                 <tbody>
                   {filtered.map(client => (
                     <tr key={client.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="p-2 pl-3">
+                        <Button variant="outline" size="icon" className="h-7 w-7 text-primary border-primary/40 hover:bg-primary/10" title="クライアントカルテを開く" onClick={() => navigate(`/clients/${client.id}`)}>
+                          <UserSquare className="w-3.5 h-3.5" />
+                        </Button>
+                      </td>
                       <td className="p-3 font-medium">
                         <InlineEditCell
                           value={client.name}
                           onSave={(v) => inlineUpdateMutation.mutate({ id: client.id, field: "name", value: v })}
                         />
+                      </td>
+                      <td className="p-3 text-muted-foreground hidden md:table-cell text-xs tabular-nums">
+                        {lastProjectOf(client) ? lastProjectOf(client).replace(/-/g, "/") : <span className="text-muted-foreground/60">—</span>}
                       </td>
                       <td className="p-3 text-muted-foreground hidden md:table-cell">
                         <InlineEditCell
@@ -242,9 +299,6 @@ export default function ClientManagement() {
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-1 justify-end">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="カルテ" onClick={() => navigate(`/clients/${client.id}`)}>
-                            <UserSquare className="w-3.5 h-3.5" />
-                          </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(client)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
