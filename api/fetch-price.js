@@ -8,7 +8,8 @@ import { claude, MODEL, normalizeSchema, textOf } from './_lib/claude.js';
 // Base44 の fetchPriceFromUrl の移植。
 // ============================================================================
 
-const FETCH_TIMEOUT_MS = 20000;
+// 先方が応答しないときに画面が長く待たされないよう短めにする（2回試すので最大 30 秒ほど）
+const FETCH_TIMEOUT_MS = 12000;
 const SLICE_LEN = 60000;
 
 // ブラウザからの通常アクセスに見えるヘッダ。
@@ -204,8 +205,11 @@ export default async function handler(req, res) {
     if (!fetched.ok) {
       // 取得できないのは異常ではなく日常的に起きるので、200 で理由を返して
       // 画面側が「スクショで更新」へ誘導できるようにする
+      const why = fetched.status === 'タイムアウト'
+        ? 'ページが時間内に応答しませんでした。グラフィックなど一部のネット印刷は、サーバーからのアクセスを遅延・遮断したり、価格表を JavaScript で後から描画するため、URL からは読めないことがあります。'
+        : `ページの取得に失敗しました（${fetched.status}）。先方のボット対策でブロックされている可能性があります。`;
       res.status(200).json({
-        error: `ページの取得に失敗しました（${fetched.status}）。先方のボット対策でブロックされている可能性があります。スクショでの更新をお試しください。`,
+        error: `${why}価格表が見える状態でスクリーンショットを撮り、「スクショ/PDF」から読み込んでください（URL はそのまま根拠として保存されます）。`,
       });
       return;
     }
