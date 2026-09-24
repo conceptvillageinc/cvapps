@@ -95,6 +95,7 @@ export const DEFAULT_COMPANY_INFO = {
   locations: [],
   bank_accounts: [],
   stamp_path: "",
+  logo_path: "",
   stamp_width: 52,
   invoice_notes: "",
   delivery_notes: "",

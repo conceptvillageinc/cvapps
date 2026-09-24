@@ -20,15 +20,18 @@ async function loadCompany(admin) {
   return { name: '株式会社コンセプト・ヴィレッジ', locations: [], bank_accounts: [], ...company };
 }
 
-async function loadStamp(admin, company) {
-  if (!company.stamp_path) return null;
-  const { data: file } = await admin.storage.from('uploads').download(company.stamp_path);
+async function loadImage(admin, storagePath) {
+  if (!storagePath) return null;
+  const { data: file } = await admin.storage.from('uploads').download(storagePath);
   return file ? Buffer.from(await file.arrayBuffer()) : null;
 }
+const loadStamp = (admin, company) => loadImage(admin, company.stamp_path);
+const loadLogo = (admin, company) => loadImage(admin, company.logo_path);
 
 export async function loadDocumentPdf(admin, type, id, { stamp: withStamp = true } = {}) {
   const company = await loadCompany(admin);
   const stamp = withStamp ? await loadStamp(admin, company) : null;
+  const logo = await loadLogo(admin, company);
 
   if (type === 'estimate' || type === 'purchase_order') {
     const { data: est, error } = await admin.from('estimates').select('*').eq('id', id).maybeSingle();
@@ -43,7 +46,7 @@ export async function loadDocumentPdf(admin, type, id, { stamp: withStamp = true
       const buffer = await renderPurchaseOrderPdf({ estimate: est, client, company });
       return { buffer, filename: purchaseOrderFilename(est), doc: est, client };
     }
-    const buffer = await renderEstimatePdf({ estimate: est, client, company, stamp });
+    const buffer = await renderEstimatePdf({ estimate: est, client, company, stamp, logo });
     return { buffer, filename: estimateFilename(est), doc: est, client };
   }
 
@@ -52,7 +55,7 @@ export async function loadDocumentPdf(admin, type, id, { stamp: withStamp = true
   if (error) throw new Error(error.message);
   if (!doc) { const e = new Error('帳票が見つかりません'); e.status = 404; throw e; }
 
-  const buffer = await renderDocumentPdf({ type, doc, company, stamp });
+  const buffer = await renderDocumentPdf({ type, doc, company, stamp, logo });
   const number = type === 'invoice' ? doc.invoice_number : doc.delivery_number;
   const filename = `${type === 'invoice' ? '請求書' : '納品書'}_${number}_${doc.client_name}.pdf`;
   return { buffer, filename, doc };

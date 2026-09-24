@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Upload, Loader2, Stamp } from "lucide-react";
+import { Plus, Trash2, Upload, Loader2, Stamp, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { companyInfoFromSettings } from "@/lib/documents";
 
@@ -36,6 +36,17 @@ export default function CompanyInfoCard({ settings, upsertSetting }) {
     return () => { alive = false; };
   }, [form?.stamp_path]);
 
+  // ロゴのプレビュー
+  const logoRef = useRef(null);
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    if (!form?.logo_path) { setLogoUrl(null); return; }
+    db.storage.signedUrl(form.logo_path).then((u) => alive && setLogoUrl(u)).catch(() => alive && setLogoUrl(null));
+    return () => { alive = false; };
+  }, [form?.logo_path]);
+
   useEffect(() => {
     if (!form) return;
     if (skipAutosave.current) { skipAutosave.current = false; return; }
@@ -52,6 +63,23 @@ export default function CompanyInfoCard({ settings, upsertSetting }) {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setLoc = (i, patch) => set("locations", form.locations.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const setBank = (i, patch) => set("bank_accounts", form.bank_accounts.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/png|jpe?g/i.test(file.type)) { toast.error("PNG または JPEG の画像を選んでください"); return; }
+    setLogoUploading(true);
+    try {
+      const { file_url } = await db.integrations.Core.UploadFile({ file });
+      set("logo_path", file_url);
+      toast.success("ロゴを登録しました。見積書・納品書・請求書のPDFの自社欄に入ります");
+    } catch (err) {
+      toast.error("アップロードに失敗しました: " + err.message);
+    } finally {
+      setLogoUploading(false);
+      if (logoRef.current) logoRef.current.value = "";
+    }
+  };
 
   const uploadStamp = async (e) => {
     const file = e.target.files?.[0];
@@ -158,6 +186,25 @@ export default function CompanyInfoCard({ settings, upsertSetting }) {
                 <span className="text-[10px] tabular-nums text-muted-foreground w-10">{Number(form.stamp_width) || 52}pt</span>
               </div>
               <p className="text-[10px] text-muted-foreground">背景が透過のPNGを推奨。見積書・納品書・請求書のPDFで自社欄の右端に重ねます（左のプレビューは実寸の目安）</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <p className="text-xs font-semibold flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5" /> ロゴ（帳票用）</p>
+          <div className="flex items-center gap-4">
+            <div className="w-40 h-14 rounded border bg-white flex items-center justify-center overflow-hidden px-2">
+              {logoUrl ? <img src={logoUrl} alt="ロゴ" style={{ maxWidth: "100%", maxHeight: "100%" }} /> : <span className="text-[10px] text-muted-foreground">未登録</span>}
+            </div>
+            <div className="space-y-1.5">
+              <input ref={logoRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={uploadLogo} />
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => logoRef.current?.click()} disabled={logoUploading}>
+                {logoUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} ロゴの画像を選ぶ
+              </Button>
+              {form.logo_path && (
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => set("logo_path", "")}>ロゴを外す</Button>
+              )}
+              <p className="text-[10px] text-muted-foreground">横長の画像を推奨。PDFの自社情報（住所・電話）の下に高さ 14pt で入ります</p>
             </div>
           </div>
         </section>
