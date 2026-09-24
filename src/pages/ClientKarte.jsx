@@ -8,8 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
-  ArrowLeft, Loader2, UserSquare, Save, Search, Link2, Image as ImageIcon, ExternalLink, FileText, CopyPlus, Lock,
-  ChevronDown, ChevronUp, Pencil,
+  ArrowLeft, Loader2, UserSquare, Save, Search, Link2, Image as ImageIcon, ExternalLink, FileText, CopyPlus, Copy, Lock,
+  ChevronDown, ChevronUp, Pencil, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { INVOICE_DELIVERY_METHODS, STATUS_MAP, PROJECT_STATUS_MAP, getDealProbabilityColor } from "@/lib/constants";
@@ -73,7 +73,7 @@ const TABS = [
   { key: "deliveryNotes", label: "納品書" },
 ];
 
-const GRID = "grid-cols-[minmax(0,1fr)_64px_78px_44px_72px_86px_minmax(140px,180px)_64px]";
+const GRID = "grid-cols-[24px_minmax(0,1fr)_64px_78px_44px_72px_86px_minmax(140px,180px)_64px]";
 
 /**
  * クライアントカルテ: 左で見積（案件・請求書・納品書）を選び、右でその中身を見る。
@@ -339,6 +339,14 @@ export default function ClientKarte() {
 function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
   const { e, rows, subtotal, tax, total, cost, profit, profitRate, project } = view;
   const st = STATUS_MAP[e.status];
+  // 複製する明細の選択（見積を切り替えたら解除）
+  const [picked, setPicked] = useState(() => new Set());
+  useEffect(() => { setPicked(new Set()); }, [e.id]);
+  const toggle = (rowId) => setPicked((prev) => { const n = new Set(prev); n.has(rowId) ? n.delete(rowId) : n.add(rowId); return n; });
+  const itemRows = rows.filter((r) => r.kind === "item" && r.id !== "legacy");
+  const pickedRows = itemRows.filter((r) => picked.has(r.id));
+  const pickedTotal = pickedRows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const newUrl = (ids) => `/estimates/new?client=${encodeURIComponent(clientName)}&copy_from=${e.id}${ids ? `&lines=${encodeURIComponent(ids.join(","))}` : ""}`;
   return (
     <>
       <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b bg-muted/40">
@@ -355,15 +363,12 @@ function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
           </div>
         </div>
         <div className="flex gap-1.5 shrink-0">
-          <Link to={`/estimates/${e.id}`} className="inline-flex items-center gap-1 h-7 px-2 rounded-md border bg-background text-[11px] hover:bg-muted/50">
+          <a href={`/estimates/${e.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 h-7 px-2 rounded-md border bg-background text-[11px] hover:bg-muted/50">
             <ExternalLink className="w-3 h-3" /> 見積を開く
-          </Link>
+          </a>
           <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[11px] gap-1" onClick={onOpenPdf} disabled={pdfLoading}>
             {pdfLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} 見積書PDF
           </Button>
-          <Link to={`/estimates/new?client=${encodeURIComponent(clientName)}&copy_from=${e.id}`} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-[11px] font-semibold hover:bg-primary/90">
-            <CopyPlus className="w-3 h-3" /> この見積から新規見積
-          </Link>
         </div>
       </div>
 
@@ -375,24 +380,34 @@ function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
 
       <div className="flex-1 overflow-auto min-h-0">
         <div className={`grid ${GRID} gap-x-1.5 px-3 py-1.5 text-[10px] text-muted-foreground font-medium border-b sticky top-0 bg-background`}>
-          <div>品名</div><div className="text-right">数量</div><div className="text-right">原価</div><div className="text-right">掛率</div><div className="text-right">単価</div><div className="text-right">金額</div><div>入稿先・社内メモ</div><div>スクショ</div>
+          <div></div><div>品名</div><div className="text-right">数量</div><div className="text-right">原価</div><div className="text-right">掛率</div><div className="text-right">単価</div><div className="text-right">金額</div><div>入稿先・社内メモ</div><div>スクショ</div>
         </div>
         {rows.length === 0 && <p className="text-xs text-muted-foreground text-center py-10">明細がありません</p>}
         {rows.map((r, idx) => {
           if (r.kind === "text") return <div key={r.id || idx} className="px-3 py-1.5 text-xs font-semibold text-foreground/80 bg-muted/30 border-b">{r.text || "　"}</div>;
           if (r.kind === "subtotal") return (
             <div key={r.id || idx} className={`grid ${GRID} gap-x-1.5 px-3 py-1 text-[11px] text-muted-foreground border-b bg-muted/10`}>
-              <div className="col-span-5 text-right pr-2">{r.name}</div><div className="text-right font-medium tabular-nums">{yen(r.amount)}</div><div></div><div></div>
+              <div className="col-span-6 text-right pr-2">{r.name}</div><div className="text-right font-medium tabular-nums">{yen(r.amount)}</div><div></div><div></div>
             </div>
           );
           if (r.kind === "rule") return (
             <div key={r.id || idx} className={`grid ${GRID} gap-x-1.5 px-3 py-1.5 text-[11px] text-muted-foreground/80 border-b items-center`}>
-              <div className="flex items-center gap-1 truncate"><Lock className="w-3 h-3 shrink-0" /> {r.name} <span className="text-[9px]">（自動計算）</span></div>
+              <div><Lock className="w-3 h-3" /></div>
+              <div className="flex items-center gap-1 truncate">{r.name} <span className="text-[9px]">（自動計算・複製しない）</span></div>
               <div></div><div></div><div className="text-right">{r.rate}</div><div></div><div className="text-right tabular-nums">{yen(r.amount)}</div><div></div><div></div>
             </div>
           );
+          const on = picked.has(r.id);
+          const copyable = r.id !== "legacy";
           return (
-            <div key={r.id || idx} className={`grid ${GRID} gap-x-1.5 px-3 py-1.5 text-[11px] border-b items-start`}>
+            <div key={r.id || idx} className={`grid ${GRID} gap-x-1.5 px-3 py-1.5 text-[11px] border-b items-start ${on ? "bg-primary/5" : ""}`}>
+              <div className="pt-0.5">
+                {copyable && (
+                  <button type="button" onClick={() => toggle(r.id)} aria-label="複製する明細に選ぶ" className={`w-[15px] h-[15px] rounded border-[1.5px] inline-flex items-center justify-center ${on ? "bg-primary border-primary" : "border-muted-foreground/60 bg-background"}`}>
+                    {on && <Check className="w-2.5 h-2.5 text-primary-foreground" strokeWidth={3.5} />}
+                  </button>
+                )}
+              </div>
               <div className="min-w-0">
                 <div className="text-xs truncate" title={r.name}>{r.name}</div>
                 <div className="text-[10px] text-muted-foreground truncate">{[r.category, r.vendor, r.spec].filter(Boolean).join(" ・ ")}{r.copied_from ? `　（${r.copied_from} から複製）` : ""}</div>
@@ -430,6 +445,28 @@ function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
               <div className="flex justify-between text-[10px] text-amber-700"><span>仕入合計（原価入力分）</span><span>{yen(cost)}</span></div>
               <div className="flex justify-between text-[10px] text-amber-700 font-semibold"><span>粗利</span><span>{yen(profit)}（{profitRate}%）</span></div>
             </>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t px-4 py-2 flex items-center justify-between gap-3 bg-background">
+        <span className="text-xs text-muted-foreground">
+          選択中 <strong className="text-foreground">{pickedRows.length} 件</strong>
+          {pickedRows.length > 0 && <span className="text-muted-foreground/80">　出し値 合計 {yen(pickedTotal)}</span>}
+          <span className="ml-2 text-[10px]">（複製は新しいタブで新規見積として開きます）</span>
+        </span>
+        <div className="flex gap-2">
+          <a href={newUrl(null)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border bg-background text-xs hover:bg-muted/50">
+            <CopyPlus className="w-3.5 h-3.5" /> この見積をまるごと複製
+          </a>
+          {pickedRows.length > 0 ? (
+            <a href={newUrl(pickedRows.map((r) => r.id))} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90">
+              <Copy className="w-3.5 h-3.5" /> 選択した明細を複製
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary/40 text-primary-foreground text-xs font-semibold cursor-not-allowed" title="明細のチェックを付けてください">
+              <Copy className="w-3.5 h-3.5" /> 選択した明細を複製
+            </span>
           )}
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { db } from "@/api/db";
+import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ export default function EstimateCreate() {
   // クライアントカルテから来た場合: クライアント名の初期値と、複製元の見積
   const presetClient = searchParams.get("client") || "";
   const copyFromId = searchParams.get("copy_from");
+  // 選んだ明細だけ複製するとき（カルテの「選択した明細を複製」）
+  const copyLineIds = searchParams.get("lines");
   const { data: copyFrom } = useQuery({
     queryKey: ["estimate", copyFromId],
     queryFn: () => db.entities.Estimate.get(copyFromId),
@@ -108,9 +111,11 @@ export default function EstimateCreate() {
   useEffect(() => {
     if (!copyFrom) return;
     const uid = () => `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const items = copyFrom.schema_version === 2
-      ? (copyFrom.line_items || []).map((li) => ({ ...li, id: uid(), ...(li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" ? { copied_from: copyFrom.estimate_number, copied_from_id: copyFrom.id } : {}) }))
-      : [];
+    const wanted = copyLineIds ? new Set(copyLineIds.split(",").filter(Boolean)) : null;
+    const source = (copyFrom.schema_version === 2 ? (copyFrom.line_items || []) : [])
+      // 選択複製のときは選んだ行だけ（見出し行・小計・自動計算行は付けない）
+      .filter((li) => !wanted || wanted.has(li.id));
+    const items = source.map((li) => ({ ...li, id: uid(), ...(li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" ? { copied_from: copyFrom.estimate_number, copied_from_id: copyFrom.id } : {}) }));
     setFormData(prev => ({
       ...prev,
       client_name: prev.client_name || copyFrom.client_name || "",
@@ -119,9 +124,9 @@ export default function EstimateCreate() {
       print_specs: (copyFrom.print_specs || []).map((sp) => ({ ...sp, id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` })),
       line_items: items,
       tax_inclusive: !!copyFrom.tax_inclusive,
-      total_amount: copyFrom.total_amount || 0,
+      total_amount: computeEstimateTotals(items, { taxInclusive: !!copyFrom.tax_inclusive }).total,
     }));
-  }, [copyFrom]);
+  }, [copyFrom, copyLineIds]);
 
   const handleSave = async () => {
     if (!project) {
@@ -183,7 +188,7 @@ export default function EstimateCreate() {
             <h1 className="text-xl font-bold tracking-tight">新規見積作成</h1>
             <p className="text-xs text-muted-foreground mt-0.5">案件を選んで基本情報を入力後、見積書画面で明細を追加します</p>
             {copyFrom && (
-              <p className="text-xs text-primary mt-1">見積 {copyFrom.estimate_number}「{copyFrom.estimate_title || copyFrom.print_type || ""}」の件名・仕様・明細・備考を複製して作ります（作成後に見積書画面で直せます）</p>
+              <p className="text-xs text-primary mt-1">見積 {copyFrom.estimate_number}「{copyFrom.estimate_title || copyFrom.print_type || ""}」の{copyLineIds ? "選んだ明細" : "件名・仕様・明細・備考"}を複製して作ります（作成後に見積書画面で直せます）</p>
             )}
           </div>
         </div>
