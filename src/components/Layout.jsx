@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
+import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,8 +90,8 @@ export default function Layout() {
               <FileText className="w-4 h-4 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <span className="text-sm font-bold text-sidebar-foreground tracking-tight">CV見積管理</span>
-              <span className="block text-[10px] text-sidebar-foreground/50">Concept Village</span>
+              <span className="text-sm font-bold text-sidebar-foreground tracking-tight">{APP_NAME}</span>
+              <span className="block text-[10px] text-sidebar-foreground/50">（{APP_SUBTITLE}）</span>
             </div>
           </Link>
           <button

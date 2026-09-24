@@ -15,7 +15,7 @@ import { sendMail, isMailConfigured } from './_lib/gmail.js';
 const ALLOWED_DOMAIN = 'concept-village.co.jp';
 
 function inviteBody(appUrl, inviterName) {
-  return `CV見積アプリへご招待します。
+  return `AX CV KIT（CVアプリ）へご招待します。
 
 下記のURLを開き、会社のGoogleアカウント（@${ALLOWED_DOMAIN}）でログインしてください。
 ログインした時点で利用開始となります。パスワードの設定は不要です。
@@ -90,9 +90,9 @@ export default async function handler(req, res) {
         await sendMail({
           sendAs: user.email,
           to: email,
-          subject: 'CV見積アプリへの招待',
+          subject: 'AX CV KIT（CVアプリ）への招待',
           body: inviteBody(appUrl, user.email),
-          fromName: 'CV見積アプリ',
+          fromName: 'AX CV KIT',
         });
         mail = { sent: true };
       } catch (mailErr) {

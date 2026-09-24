@@ -1,3 +1,8 @@
+// アプリ名（画面のヘッダー・ログイン・招待メールなどで使う）
+export const APP_NAME = "AX CV KIT";
+export const APP_SUBTITLE = "CVアプリ";
+export const APP_FULL_NAME = `${APP_NAME}（${APP_SUBTITLE}）`;
+
 // 見積作成担当者
 export const PERSON_IN_CHARGE_OPTIONS = [
   "会田妃那子",

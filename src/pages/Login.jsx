@@ -1,3 +1,4 @@
+import { APP_FULL_NAME } from "@/lib/constants";
 import React, { useState } from "react";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export default function Login() {
   return (
     <AuthLayout
       icon={LogIn}
-      title="CV見積アプリ"
+      title={APP_FULL_NAME}
       subtitle="Googleアカウントでログインしてください"
       footer="株式会社コンセプト・ヴィレッジのアカウント（@concept-village.co.jp）でログインできます"
     >
