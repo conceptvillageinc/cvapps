@@ -361,3 +361,4 @@ S6 は他と依存が薄いので、Web案件の見積が先に必要なら前�
 セットアップは `supabase/migrations/0011_feedback_1.sql` と `0012_tax_inclusive.sql` の実行。
 
 独自ドメイン（cv-ax.jp）の設定手順は `docs/domain-setup.md`。
+dev 環境（dev.cv-ax.jp / develop ブランチ）と本番（cv-ax.jp / main）の運用は `docs/dev-environment.md`。
