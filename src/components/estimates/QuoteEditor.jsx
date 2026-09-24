@@ -751,7 +751,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
       {/* カテゴリ別の選択ダイアログ */}
       <Dialog open={!!addPanel} onOpenChange={(open) => !open && closeAddPanel()}>
-        <DialogContent className={`${addPanel === "vendor_quote" || addPanel === "web_price" || addPanel === "past_estimate" || addPanel === "sheet_import" ? "max-w-4xl" : "max-w-lg"} max-h-[80vh] overflow-y-auto`}>
+        <DialogContent className={`${addPanel === "past_estimate" ? "max-w-6xl" : addPanel === "vendor_quote" || addPanel === "web_price" || addPanel === "sheet_import" ? "max-w-4xl" : "max-w-lg"} max-h-[85vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
               {addPanel === "vendor_quote"
