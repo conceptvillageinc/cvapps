@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { companyInfoFromSettings } from "@/lib/documents";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
+import { useAuth } from "@/lib/AuthContext";
+import { greetingLine, senderSignature } from "@/lib/senderProfile";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -19,7 +21,7 @@ const LABELS = { invoice: "御請求書", delivery: "納品書", estimate: "御�
 const numberOf = (type, doc) => (type === "invoice" ? doc.invoice_number : type === "estimate" ? doc.estimate_number : doc.delivery_number);
 
 /** 見積書のメール本文: PDF の内容（件名・金額・主な項目・有効期限）に沿って組み立てる */
-function estimateTemplate(doc, company) {
+function estimateTemplate(doc, company, user) {
   const items = (doc.line_items || []).filter((li) => li.row_type !== "subtotal");
   const total = Number(doc.total_amount) || computeEstimateTotals(items, { taxInclusive: !!doc.tax_inclusive }).total;
   const headings = items.filter((li) => li.row_type === "text" && li.text).map((li) => `　・${li.text}`);
@@ -31,7 +33,7 @@ function estimateTemplate(doc, company) {
     `${doc.client_name} ${doc.client_honorific || "御中"}`,
     "",
     "いつもお世話になっております。",
-    `${company.name}${doc.person_in_charge ? `の${doc.person_in_charge}` : company.representative ? `の${company.representative}` : ""}です。`,
+    greetingLine(user, company),
     "",
     "ご依頼いただいておりました御見積書をお送りいたします。PDFを添付しておりますのでご確認ください。",
     "",
@@ -44,17 +46,13 @@ function estimateTemplate(doc, company) {
     "内容についてご不明な点やご要望がございましたら、お気軽にお知らせください。",
     "ご検討のほど、よろしくお願いいたします。",
     "",
-    "――――――――――――――――",
-    company.name,
-    doc.person_in_charge || company.representative || "",
-    ...(company.locations || []).slice(0, 1).map((l) => `〒${l.postal} ${l.address}`),
-    company.tel ? `tel ${company.tel}` : "",
+    senderSignature(user, company),
   ];
   return { subject, body: lines.join("\n") };
 }
 
-function defaultTemplate(type, doc, company) {
-  if (type === "estimate") return estimateTemplate(doc, company);
+function defaultTemplate(type, doc, company, user) {
+  if (type === "estimate") return estimateTemplate(doc, company, user);
   const label = LABELS[type];
   const number = numberOf(type, doc);
   const subject = `【${label}】${doc.title || number}（${company.name}）`;
@@ -62,7 +60,7 @@ function defaultTemplate(type, doc, company) {
     `${doc.client_name} ${doc.client_honorific || "御中"}`,
     "",
     "いつもお世話になっております。",
-    `${company.name}${company.representative ? `の${company.representative}` : ""}です。`,
+    greetingLine(user, company),
     "",
     `${label}をお送りいたします。PDFを添付しておりますのでご確認ください。`,
     "",
@@ -76,11 +74,7 @@ function defaultTemplate(type, doc, company) {
     "",
     "今後ともよろしくお願いいたします。",
     "",
-    "――――――――――――――――",
-    company.name,
-    company.representative || "",
-    ...(company.locations || []).slice(0, 1).map((l) => `〒${l.postal} ${l.address}`),
-    company.tel ? `tel ${company.tel}` : "",
+    senderSignature(user, company),
   ];
   return { subject, body: lines.join("\n") };
 }
@@ -92,6 +86,7 @@ function defaultTemplate(type, doc, company) {
 export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onSent }) {
   const queryClient = useQueryClient();
   const { settings } = useSystemSettings();
+  const { user } = useAuth();
   const company = useMemo(() => companyInfoFromSettings(settings), [settings]);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -107,7 +102,7 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
 
   useEffect(() => {
     if (!open) return;
-    const t = defaultTemplate(type, doc, company);
+    const t = defaultTemplate(type, doc, company, user);
     setSubject(t.subject);
     setBody(t.body);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -110,7 +110,7 @@ const WRITABLE_COLUMNS = {
   ],
   system_settings: ['setting_key', 'setting_value', 'description'],
   faq_items: ['question', 'answer', 'sort_order'],
-  users: ['full_name', 'role', 'department'],
+  users: ['full_name', 'role', 'department', 'short_name', 'email_signature'],
 };
 
 // 日付系カラムは空文字を渡すと Postgres がエラーになるため null に寄せる

@@ -1,5 +1,5 @@
 -- ============================================================================
--- dev 環境用: 全マイグレーション（0001〜0013）を順番につなげたもの。
+-- dev 環境用: 全マイグレーション（0001〜0014）を順番につなげたもの。
 -- 新しい Supabase プロジェクトの SQL Editor に丸ごと貼り付けて Run する（冪等）。
 -- 生成: scripts/build-all-migrations.sh（migrations を変えたら再生成する）
 -- ============================================================================
@@ -1384,3 +1384,22 @@ select * from (values
   ('写真撮影', 130, '写真撮影：出張ロケ撮影（50〜100カット・移動1時間〜2時間）', '', 3, 16000, 48000, 50000, 30)
 ) as v(category, category_order, name, detail, hours, unit_price, amount, selling_price, sort_order)
 where not exists (select 1 from public.design_fee_masters);
+
+-- >>>>>>>> supabase/migrations/0014_user_email_profile.sql
+-- ============================================================================
+-- メール用の個人設定（users）
+--
+-- 見積依頼メール・見積書／請求書送付メールの「名乗り」と「署名」をユーザーごとに持つ。
+--   short_name      名乗り用の名前（苗字）。例: 馬場 → 「コンセプト・ヴィレッジ　馬場です。」
+--   email_signature メール末尾の署名（複数行）。未設定なら会社名・氏名・メール・電話から組み立てる
+-- 各自が「自分の設定」画面（右上のユーザーメニュー）で編集する。
+--
+-- Supabase の SQL Editor に貼り付けて実行する（冪等）。
+-- ============================================================================
+
+alter table public.users
+  add column if not exists short_name      text,
+  add column if not exists email_signature text;
+
+comment on column public.users.short_name is 'メールの名乗りに使う名前（苗字）';
+comment on column public.users.email_signature is 'メール末尾の署名（未設定なら自動生成）';

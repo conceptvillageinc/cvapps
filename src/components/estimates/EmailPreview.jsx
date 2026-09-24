@@ -10,6 +10,9 @@ import { Mail, Send, Loader2, Sparkles, Eye, Edit3, Printer } from "lucide-react
 import { specLabel, specMissing } from "@/lib/printSpecs";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
+import { greetingLine, senderSignature } from "@/lib/senderProfile";
+import { useSystemSettings } from "@/lib/useSystemSettings";
+import { companyInfoFromSettings } from "@/lib/documents";
 import { toast } from "sonner";
 import {
   defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA,
@@ -17,6 +20,8 @@ import {
 
 export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) {
   const { user } = useAuth();
+  const { settings } = useSystemSettings();
+  const company = useMemo(() => companyInfoFromSettings(settings), [settings]);
   const [generating, setGenerating] = useState(false);
   const [emails, setEmails] = useState([]);
   const [editingIdx, setEditingIdx] = useState(null);
@@ -80,7 +85,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
     setGenerating(true);
     try {
       const result = await db.integrations.Core.InvokeLLM({
-        prompt: buildEmailPrompt(vendors, buildSpecText(estimate, selectedSpecs), { senderName: user?.full_name || estimate.person_in_charge || "", senderEmail: user?.email || "" }),
+        prompt: buildEmailPrompt(vendors, buildSpecText(estimate, selectedSpecs), { greeting: greetingLine(user, company), signature: senderSignature(user, company) }),
         response_json_schema: EMAIL_SCHEMA,
       });
       const generated = result?.emails || [];

@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, UserCircle
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
@@ -147,6 +147,12 @@ export default function Layout() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link to="/profile" className="cursor-pointer">
+                  <UserCircle className="w-4 h-4 mr-2" />
+                  自分の設定（名乗り・署名）
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                 <LogOut className="w-4 h-4 mr-2" />
                 ログアウト

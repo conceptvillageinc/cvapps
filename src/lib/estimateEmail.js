@@ -100,9 +100,14 @@ export const EMAIL_SCHEMA = {
   },
 };
 
+/**
+ * @param {string[]} recipients  送信先の印刷会社名
+ * @param {string} specText      印刷仕様の本文
+ * @param {{greeting?:string, signature?:string}} sender  名乗り（「コンセプト・ヴィレッジ　馬場です。」）と署名
+ */
 export function buildEmailPrompt(recipients, specText, sender = {}) {
-  const senderLine = ["株式会社コンセプト・ヴィレッジ", sender.senderName].filter(Boolean).join("　");
-  const signature = ["株式会社コンセプト・ヴィレッジ", sender.senderName, sender.senderEmail, COMPANY_INFO.tel ? `tel ${COMPANY_INFO.tel}` : ""].filter(Boolean).join("\n");
+  const senderLine = sender.greeting || "コンセプト・ヴィレッジです。";
+  const signature = sender.signature || COMPANY_INFO.name;
   return `以下の印刷仕様に基づいて、印刷会社への見積依頼メールを生成してください。
 丁寧なビジネスメールの形式で、以下の情報を含めてください：
 - 件名
@@ -118,8 +123,9 @@ export function buildEmailPrompt(recipients, specText, sender = {}) {
 印刷仕様:
 ${specText}
 
-差出人: ${senderLine}
-本文の冒頭の名乗りは「${senderLine}でございます。」のように担当者名まで入れ、末尾に次の署名をそのまま付けてください:
+差出人の名乗り: ${senderLine}
+本文の冒頭は「いつも大変お世話になっております。」の次の行に「${senderLine}」をそのまま書いてください（社名の前に「株式会社」は付けず、名前は苗字だけ）。
+末尾に次の署名を一字一句そのまま付けてください（追加・変更しない）:
 ${signature}
 
 注意: 仕様の文中に、送信先とは別の印刷会社名（例: 他社の見積から取り込んだ名称に含まれる社名）が入っていることがあります。

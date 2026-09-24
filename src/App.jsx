@@ -18,6 +18,7 @@ import EstimateHistory from '@/pages/EstimateHistory';
 import VendorManagement from '@/pages/VendorManagement';
 import PriceMasterList from '@/pages/PriceMasterList';
 import DesignFeeMasterList from '@/pages/DesignFeeMasterList';
+import MyProfile from '@/pages/MyProfile';
 import SystemSettingsPage from '@/pages/SystemSettings';
 import UserManagement from '@/pages/UserManagement';
 import ClientManagement from '@/pages/ClientManagement';
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
           <Route path="/vendors" element={<VendorManagement />} />
           <Route path="/price-master" element={<PriceMasterList />} />
           <Route path="/design-fee-master" element={<DesignFeeMasterList />} />
+          <Route path="/profile" element={<MyProfile />} />
           <Route path="/settings" element={<SystemSettingsPage />} />
           <Route path="/users" element={<UserManagement />} />
           <Route path="/clients" element={<ClientManagement />} />
