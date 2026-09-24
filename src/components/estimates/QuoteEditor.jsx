@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
@@ -31,7 +31,7 @@ import WebPriceImport from "@/components/estimates/WebPriceImport";
 import PastEstimateImport from "@/components/estimates/PastEstimateImport";
 import SheetImport from "@/components/estimates/SheetImport";
 
-const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: Printer, build: Hammer, other: Plus };
+const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: Printer, build: Hammer, system: Cpu, other: Plus };
 
 function uid() {
   return `li_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -171,6 +171,14 @@ export default function QuoteEditor({ estimate, onUpdate }) {
     const [moved] = items.splice(fromIdx, 1);
     items.splice(toIdx, 0, moved);
     commitItems(items);
+  };
+
+  // 大カテゴリのボタンから追加パネルを開く。手入力のカテゴリは初期値（数量・単位・単価）を入れておく
+  const openAddPanel = (cat) => {
+    setAddPanel(cat.key);
+    if (cat.source === "manual") {
+      setManualForm({ name: "", quantity: 1, unit: "式", unit_price: 0, cost: "", outsourcing: "", ...(cat.defaults || {}) });
+    }
   };
 
   const closeAddPanel = () => {
@@ -608,7 +616,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
                 {LINE_ITEM_CATEGORIES.map(cat => {
                   const Icon = CATEGORY_ICONS[cat.key];
                   return (
-                    <Button key={cat.key} size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel(cat.key)}>
+                    <Button key={cat.key} size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => openAddPanel(cat)}>
                       <Icon className="w-3.5 h-3.5" /> {cat.label}
                     </Button>
                   );
@@ -893,11 +901,11 @@ export default function QuoteEditor({ estimate, onUpdate }) {
             </div>
           )}
 
-          {(addPanel === "build" || addPanel === "other") && (
+          {LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.source === "manual" && (
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">名称</Label>
-                <Input value={manualForm.name} onChange={e => setManualForm({ ...manualForm, name: e.target.value })} placeholder="例: LP初期構築費" autoFocus />
+                <Input value={manualForm.name} onChange={e => setManualForm({ ...manualForm, name: e.target.value })} placeholder={LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.placeholder || "例: LP初期構築費"} autoFocus />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1.5">

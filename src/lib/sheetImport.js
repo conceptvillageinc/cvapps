@@ -99,7 +99,8 @@ export function parseTable(text) {
 export function guessCategory(text) {
   const s = String(text ?? "");
   if (/デザイン/.test(s)) return "デザイン費";
-  if (/構築|コーディング|CMS|開発|実装|システム|フロントエンド|移行/.test(s)) return "web構築費";
+  if (/システム|開発|要件定義|API|DB|データベース/.test(s)) return "システム構築費";
+  if (/構築|コーディング|CMS|実装|フロントエンド|移行/.test(s)) return "web構築費";
   if (/印刷/.test(s)) return /パッケージ|ラベル|のぼり|パネル/.test(s) ? "印刷費（紙以外）" : "印刷費（紙）";
   return "自由入力";
 }

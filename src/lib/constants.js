@@ -77,6 +77,8 @@ export const LINE_ITEM_CATEGORIES = [
   { key: "print_paper", label: "印刷費（紙）", source: "price_master", paperGroup: "紙" },
   { key: "print_nonpaper", label: "印刷費（紙以外）", source: "price_master", paperGroup: "紙以外" },
   { key: "build", label: "web構築費", source: "manual" },
+  // システム構築は人日単価が基本（初期値: 1人日 × 60,000円）
+  { key: "system", label: "システム構築費", source: "manual", defaults: { quantity: 1, unit: "人日", unit_price: 60000 }, placeholder: "例: 要件定義・設計" },
   { key: "other", label: "自由入力", source: "manual" },
 ];
 
