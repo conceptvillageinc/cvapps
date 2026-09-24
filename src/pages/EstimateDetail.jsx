@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
-import { openBlob } from "@/lib/documents";
+import { openBlob, openPreviewTab, showBlobInTab } from "@/lib/documents";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -88,6 +88,23 @@ export default function EstimateDetail() {
       const label = kind === "purchase_order" ? "発注書" : "見積書";
       openBlob(blob, `【${clean(formData.client_name) || "クライアント"}】${label}_${clean(formData.estimate_title) || formData.estimate_number}.pdf`);
     } catch (err) {
+      toast.error("PDFを作成できませんでした: " + err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // 印刷用に新しいタブで開く（保存してから、PDFをそのままタブに表示する）
+  const previewPdf = async (withStamp) => {
+    const tab = openPreviewTab();
+    setPdfLoading(true);
+    try {
+      await saveMutation.mutateAsync(formData);
+      const blob = await db.documents.pdf("estimate", estimateId, { stamp: withStamp });
+      const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
+      showBlobInTab(tab, blob, `【${clean(formData.client_name) || "クライアント"}】見積書_${clean(formData.estimate_title) || formData.estimate_number}.pdf`);
+    } catch (err) {
+      if (tab && !tab.closed) tab.close();
       toast.error("PDFを作成できませんでした: " + err.message);
     } finally {
       setPdfLoading(false);
@@ -459,7 +476,7 @@ export default function EstimateDetail() {
         {formData.schema_version === 2 ? (
           <>
             <TabsContent value="quote" forceMount className="data-[state=inactive]:hidden">
-              <QuoteEditor estimate={formData} onUpdate={handleUpdate} />
+              <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
             </TabsContent>
             <TabsContent value="specs" forceMount className="data-[state=inactive]:hidden">
               <PrintSpecsPanel estimate={formData} onUpdate={handleUpdate} onGoToEmail={() => setActiveTab("email")} />

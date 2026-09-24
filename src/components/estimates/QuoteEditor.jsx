@@ -9,8 +9,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X, Pencil,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X, Pencil, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -41,24 +42,13 @@ function uid() {
 // number入力の増減ボタン（スピンボタン）を非表示にし、数字との重なりを回避
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-function round(n) {
-  return Math.round(n || 0);
-}
-
 // 金額表示。割引行はマイナスになるので「-¥7,000」の形にする
 function yen(n) {
   const v = Number(n) || 0;
   return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString()}`;
 }
 
-
-function escapeHtml(str) {
-  return String(str || "").replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
-}
-
-export default function QuoteEditor({ estimate, onUpdate }) {
+export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
   const [showInternal, setShowInternal] = useState(true);
   const [addPanel, setAddPanel] = useState(null); // LINE_ITEM_CATEGORIES key
   const [priceMasterPick, setPriceMasterPick] = useState(null); // selected PriceMaster entry for tier selection
@@ -248,141 +238,6 @@ export default function QuoteEditor({ estimate, onUpdate }) {
     closeAddPanel();
   };
 
-  const openPrintable = () => {
-    const win = window.open("", "_blank");
-    if (!win) return;
-    const rows = lineItems.map(li => {
-      if (li.row_type === "text") {
-        return `<tr class="text-row"><td colspan="5">${escapeHtml(li.text)}</td></tr>`;
-      }
-      if (li.row_type === "subtotal") {
-        return `<tr class="subtotal-row"><td colspan="4" class="num">${escapeHtml(li.name || "小計")}</td><td class="num">${yen(li.amount).replace("¥", "")}</td></tr>`;
-      }
-      return `<tr>
-        <td>${escapeHtml(li.name)}${lineTaxRate(li) === 8 ? "（軽減8%）" : ""}</td>
-        <td class="num">${(li.quantity ?? "").toLocaleString ? li.quantity.toLocaleString() : li.quantity}</td>
-        <td class="num">${escapeHtml(li.unit)}</td>
-        <td class="num">${yen(li.unit_price).replace("¥", "")}</td>
-        <td class="num">${yen(li.amount).replace("¥", "")}</td>
-      </tr>`;
-    }).join("");
-
-    const html = `<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8" />
-<title>${escapeHtml(estimate.estimate_number)} 御見積書</title>
-<style>
-  @page { size: A4; margin: 18mm 16mm; }
-  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
-    color: #1e293b;
-    font-size: 12px;
-    line-height: 1.6;
-    padding: 70px 28px 28px;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-  tr.subtotal-row td { background: #f8fafc; font-weight: 600; border-top: 1px solid #94a3b8; }
-  tr { page-break-inside: avoid; }
-  thead { display: table-header-group; }
-  .print-btn {
-    position: fixed; top: 16px; right: 16px;
-    padding: 9px 18px; background: #1e293b; color: #fff; border: none;
-    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  }
-  @media print { .print-btn { display: none; } body { padding-top: 0; max-width: none; } }
-
-  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
-  .client-block p { margin: 1px 0; color: #64748b; }
-  .client-name { font-size: 17px; font-weight: 700; color: #1e293b; margin-top: 8px !important; border-bottom: 2px solid #1e293b; display: inline-block; padding-bottom: 3px; }
-  .company-block { text-align: right; flex-shrink: 0; }
-  .company-block p { margin: 1px 0; color: #64748b; }
-  .company-name { font-weight: 700; font-size: 13px; color: #1e293b; margin-bottom: 4px !important; }
-
-  .title { text-align: center; font-size: 24px; font-weight: 700; letter-spacing: 0.35em; color: #1e293b; margin: 8px 0 28px; padding-left: 0.35em; }
-
-  .meta-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 20px; }
-  .meta-row .subject-label { color: #64748b; font-size: 11px; }
-  .meta-table { border-collapse: collapse; }
-  .meta-table td { padding: 3px 0; font-size: 12px; }
-  .meta-table td:first-child { color: #64748b; padding-right: 16px; white-space: nowrap; }
-  .meta-table td:last-child { font-weight: 500; }
-
-  table.summary { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 24px; border: 1px solid #cbd5e1; }
-  table.summary td { text-align: center; padding: 10px 8px; border-right: 1px solid #cbd5e1; vertical-align: middle; }
-  table.summary td:last-child { border-right: none; background: #eef2ff; }
-  table.summary .label { display: block; font-size: 11px; color: #64748b; margin-bottom: 4px; }
-  table.summary .value { display: block; font-size: 16px; font-weight: 700; color: #1e293b; }
-  table.summary td:last-child .value { font-size: 21px; color: #4338ca; }
-
-  table.items { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-  table.items th { background: #1e293b; color: #fff; padding: 8px 10px; font-size: 11px; font-weight: 500; text-align: left; }
-  table.items th.num, table.items td.num { text-align: right; }
-  table.items td { padding: 9px 10px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
-  tr.text-row td { background: #f1f5f9; font-weight: 600; color: #334155; }
-
-  .breakdown { display: flex; justify-content: flex-end; margin: 10px 0 0; }
-  .breakdown table { border-collapse: collapse; }
-  .breakdown td { padding: 2px 4px; font-size: 11px; color: #64748b; }
-  .breakdown td.amt { text-align: right; padding-left: 16px; color: #1e293b; }
-
-  .notes { margin-top: 28px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 12px 14px; font-size: 11px; color: #475569; white-space: pre-wrap; }
-  .notes strong { display: block; margin-bottom: 6px; color: #1e293b; font-size: 12px; }
-</style></head>
-<body>
-  <button class="print-btn" onclick="window.print()">印刷 / PDF保存</button>
-  <div class="top">
-    <div class="client-block">
-      <p>${escapeHtml(client?.postal_code ? formatPostalCode(client.postal_code) : "")}</p>
-      <p>${escapeHtml(client?.address)}</p>
-      <p class="client-name">${escapeHtml(estimate.client_name)} ${escapeHtml(estimate.client_honorific || "御中")}</p>
-    </div>
-    <div class="company-block">
-      <p class="company-name">${escapeHtml(COMPANY_INFO.name)} ${escapeHtml(estimate.person_in_charge)}</p>
-      ${COMPANY_INFO.locations.map(loc => `<p>［${loc.label}］${loc.postal} ${escapeHtml(loc.address)}</p>`).join("")}
-      <p>tel ${COMPANY_INFO.tel}｜fax ${COMPANY_INFO.fax}</p>
-    </div>
-  </div>
-
-  <div class="title">御見積書</div>
-
-  <div class="meta-row">
-    <div><span class="subject-label">件名</span><br />${escapeHtml(estimate.estimate_title || estimate.print_type || "—")}</div>
-    <table class="meta-table">
-      <tr><td>見積日</td><td>${estimateDate}</td></tr>
-      <tr><td>見積書番号</td><td>${escapeHtml(estimate.estimate_number)}</td></tr>
-      <tr><td>有効期限</td><td>${validUntil}</td></tr>
-    </table>
-  </div>
-
-  <table class="summary">
-    <tr>
-      <td><span class="label">小計（税抜）</span><span class="value">${subtotal.toLocaleString()}円</span></td>
-      <td><span class="label">消費税</span><span class="value">${tax.toLocaleString()}円</span></td>
-      <td><span class="label">見積金額（税込）</span><span class="value">${total.toLocaleString()}円</span></td>
-    </tr>
-  </table>
-
-  <table class="items">
-    <thead><tr><th>名称</th><th class="num" style="width:70px;">数量</th><th class="num" style="width:56px;">単位</th><th class="num" style="width:90px;">${unitLabel}</th><th class="num" style="width:100px;">${amountLabel}</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-
-  <div class="breakdown">
-    <table>
-      ${breakdown.map(b => `<tr><td>${b.rate}%対象(税抜)</td><td class="amt">${b.taxable.toLocaleString()}円</td></tr><tr><td>${b.rate}%消費税</td><td class="amt">${b.tax.toLocaleString()}円</td></tr>`).join("")}
-      ${hasReduced ? `<tr><td colspan="2">（軽減8%）は軽減税率対象</td></tr>` : ""}
-    </table>
-  </div>
-
-  ${estimate.additional_notes ? `<div class="notes"><strong>備考</strong>${escapeHtml(estimate.additional_notes)}</div>` : ""}
-</body></html>`;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  };
 
   return (
     <div className="space-y-4">
@@ -399,9 +254,19 @@ export default function QuoteEditor({ estimate, onUpdate }) {
           <Label htmlFor="qe-internal" className="text-xs cursor-pointer">社内確認用（原価・掛け率を表示）</Label>
           <Switch id="qe-internal" checked={showInternal} onCheckedChange={setShowInternal} />
         </div>
-        <Button size="sm" onClick={openPrintable} className="gap-1.5 text-xs h-8">
-          <FileOutput className="w-3.5 h-3.5" /> 印刷用に新しいタブで開く
-        </Button>
+        {onPreview && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="gap-1.5 text-xs h-8">
+                <FileOutput className="w-3.5 h-3.5" /> 印刷用に新しいタブで開く <ChevronDown className="w-3 h-3 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem className="text-xs" onClick={() => onPreview(true)}>電子印鑑あり</DropdownMenuItem>
+              <DropdownMenuItem className="text-xs" onClick={() => onPreview(false)}>電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
