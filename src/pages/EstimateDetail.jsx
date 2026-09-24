@@ -168,14 +168,28 @@ export default function EstimateDetail() {
 
   const handleSubmitReview = () => {
     if (formData.schema_version !== 2 && formData.cost_price > 0 && formData.selling_price > 0 && formData.cost_price >= formData.selling_price) {
-      toast.error("原価が出し値を上回っています。修正してからレビュー申請してください。");
+      toast.error("原価が出し値を上回っています。修正してからレビューを相談してください。");
       return;
     }
     setReviewerId(formData.review_requested_to_id || reviewerCandidates[0]?.id || "");
     setReviewDialogOpen(true);
   };
 
-  // 申請先を決めてレビュー待ちにする（申請先は管理者から選ぶ。誰にも指定しない申請も可）
+  // レビューなしで確定する（相談せずにそのまま送付する見積）。取り消すと下書きに戻る
+  const handleFinalize = () => {
+    const updated = { ...formData, status: "finalized", finalized_at: new Date().toISOString(), finalized_by: user?.full_name || user?.email || "" };
+    setFormData(updated);
+    saveMutation.mutate(updated);
+    toast.success("レビューなしで確定しました。「見積書を送付」でクライアントへ送れます");
+  };
+  const handleUnfinalize = () => {
+    const updated = { ...formData, status: "draft", finalized_at: null, finalized_by: null };
+    setFormData(updated);
+    saveMutation.mutate(updated);
+    toast.success("確定を取り消し、下書きに戻しました");
+  };
+
+  // 相談先を決めてレビュー待ちにする（相談先は管理者から選ぶ。誰にも指定しない相談も可）
   const submitReview = () => {
     const reviewer = reviewerCandidates.find((u) => u.id === reviewerId) || null;
     const updated = {
@@ -188,7 +202,7 @@ export default function EstimateDetail() {
     setFormData(updated);
     saveMutation.mutate(updated);
     setReviewDialogOpen(false);
-    toast.success(reviewer ? `${reviewer.full_name} さんにレビューを申請しました` : "レビュー申請を送信しました");
+    toast.success(reviewer ? `${reviewer.full_name} さんにレビューを相談しました` : "レビュー相談を送信しました");
   };
 
   const handleApprove = () => {
@@ -277,7 +291,7 @@ export default function EstimateDetail() {
             <p className="text-xs text-muted-foreground">
               {formData.estimate_number} · {formData.print_type}
               {formData.status === "review_pending" && formData.review_requested_to_name && (
-                <span className="ml-2 inline-flex items-center gap-1 text-amber-700"><UserCheck className="w-3 h-3" /> レビュー申請先: {formData.review_requested_to_name}</span>
+                <span className="ml-2 inline-flex items-center gap-1 text-amber-700"><UserCheck className="w-3 h-3" /> 相談先: {formData.review_requested_to_name}</span>
               )}
               {project && (
                 <>
@@ -418,11 +432,11 @@ export default function EstimateDetail() {
       <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>レビューを申請する</DialogTitle>
-            <DialogDescription className="text-xs">誰にレビューを頼むかを選びます。申請先は見積の見出しと一覧に表示されます</DialogDescription>
+            <DialogTitle>レビューを相談する</DialogTitle>
+            <DialogDescription className="text-xs">誰に相談するかを選びます。相談先は見積の見出しと一覧に表示されます</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5 py-1">
-            <p className="text-xs font-medium">レビュー申請先（管理者）</p>
+            <p className="text-xs font-medium">相談先（管理者）</p>
             {reviewerCandidates.length === 0 ? (
               <p className="text-xs text-muted-foreground">選べる管理者がいません（ユーザー管理で管理者を追加できます）。申請先なしで申請します</p>
             ) : (
@@ -436,7 +450,7 @@ export default function EstimateDetail() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>キャンセル</Button>
-            <Button onClick={submitReview} className="gap-1.5"><Send className="w-4 h-4" /> 申請する</Button>
+            <Button onClick={submitReview} className="gap-1.5"><Send className="w-4 h-4" /> 相談する</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -446,17 +460,22 @@ export default function EstimateDetail() {
 
       {formData.schema_version === 2 ? (
         <>
-          {/* ステップ表示: ① 見積書を作る → ② レビュー・承認 */}
+          {/* ステップ表示: ① 見積書を作る → ② レビュー相談（必要なときだけ） */}
           {(() => {
             const items = (formData.line_items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal");
             const totals = computeEstimateTotals(items, { taxInclusive: !!formData.tax_inclusive });
             const a = autoChecks(formData, grossMarginTarget);
-            const reviewDone = formData.status === "approved";
-            const reviewNote = reviewDone
+            const reviewDone = formData.status === "approved" || formData.status === "finalized";
+            const hasBad = a.checks.some((c) => c.level === "bad");
+            const canDecide = formData.status === "draft" || formData.status === "rejected";
+            const fmtAt = (d) => (d ? new Date(d).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" }) : "");
+            const reviewNote = formData.status === "approved"
               ? `承認済み（${formData.reviewer_name || ""}）`
-              : formData.status === "review_pending" || formData.status === "review_in_progress"
-                ? `${formData.review_requested_to_name ? `${formData.review_requested_to_name} さんに` : ""}申請中`
-                : formData.status === "rejected" ? "差し戻し・直して再申請" : "未申請 ・ 明細ができたら申請する";
+              : formData.status === "finalized"
+                ? `レビューなしで確定（${formData.finalized_by || ""}・${fmtAt(formData.finalized_at)}）`
+                : formData.status === "review_pending" || formData.status === "review_in_progress"
+                  ? `${formData.review_requested_to_name ? `${formData.review_requested_to_name} さんに` : ""}相談中`
+                  : formData.status === "rejected" ? "差し戻し・直して再相談" : "相談したいときだけ ・ 相談せずに送付もできます";
             return (
               <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-2.5">
                 <button type="button" onClick={() => setStep("quote")} className="flex items-center gap-3 flex-1 text-left">
@@ -474,12 +493,19 @@ export default function EstimateDetail() {
                     {reviewDone && step !== "review" ? <CheckCircle2 className="w-4 h-4" /> : "2"}
                   </span>
                   <span>
-                    <span className={`block text-sm ${step === "review" ? "font-bold" : "font-medium text-muted-foreground"}`}>レビュー・承認</span>
+                    <span className={`block text-sm ${step === "review" ? "font-bold" : "font-medium text-muted-foreground"}`}>レビュー相談 <span className="text-[11px] font-normal text-muted-foreground">（必要なときだけ）</span></span>
                     <span className="block text-[11px] text-muted-foreground">{reviewNote}</span>
                   </span>
                 </button>
                 {step === "quote" ? (
-                  <Button size="sm" className="gap-1.5 text-xs shrink-0" onClick={() => setStep("review")}>次へ：レビュー <ChevronRight className="w-3.5 h-3.5" /></Button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {formData.status === "finalized" ? (
+                      <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleUnfinalize}>確定を取り消す</Button>
+                    ) : canDecide ? (
+                      <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleFinalize} disabled={hasBad || items.length === 0} title={hasBad ? "社内チェックに赤があるため、先に直してください" : "相談せずにそのまま送付できる状態にします"}>レビューなしで進む</Button>
+                    ) : null}
+                    <Button size="sm" className="gap-1.5 text-xs" onClick={() => setStep("review")}>レビューを相談する <ChevronRight className="w-3.5 h-3.5" /></Button>
+                  </div>
                 ) : (
                   <Button size="sm" variant="outline" className="gap-1.5 text-xs shrink-0" onClick={() => setStep("quote")}><ArrowLeft className="w-3.5 h-3.5" /> 見積書に戻る</Button>
                 )}
@@ -516,6 +542,8 @@ export default function EstimateDetail() {
               onApprove={handleApprove}
               onReject={handleReject}
               onRequestReview={handleSubmitReview}
+              onFinalize={handleFinalize}
+              onUnfinalize={handleUnfinalize}
               onOpenPdf={() => previewPdf(false)}
             />
           )}

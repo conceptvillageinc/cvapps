@@ -52,8 +52,8 @@ export default function ReviewPanel({ estimate, onUpdate, onApprove, onReject })
           <CardTitle className="text-base">承認チェックリスト</CardTitle>
           {estimate.review_requested_to_name && (
             <p className="text-xs text-muted-foreground">
-              レビュー申請先: <span className="font-medium text-foreground">{estimate.review_requested_to_name}</span>
-              {estimate.review_requested_at && <span className="ml-1">（{format(new Date(estimate.review_requested_at), "M/d HH:mm", { locale: ja })} 申請）</span>}
+              相談先: <span className="font-medium text-foreground">{estimate.review_requested_to_name}</span>
+              {estimate.review_requested_at && <span className="ml-1">（{format(new Date(estimate.review_requested_at), "M/d HH:mm", { locale: ja })} 相談）</span>}
             </p>
           )}
         </CardHeader>

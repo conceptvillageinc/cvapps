@@ -81,7 +81,7 @@ const WRITABLE_COLUMNS = {
     'deal_probability', 'phase', 'lost_reason', 'is_final_submitted',
     'project_group_id', 'parent_estimate_id', 'revision_label', 'total_amount',
     'reviewer_id', 'reviewer_name', 'approved_date', 'review_comments',
-    'approval_checklist', 'review_requested_to_id', 'review_requested_to_name', 'review_requested_at', 'tax_inclusive',
+    'approval_checklist', 'review_requested_to_id', 'review_requested_to_name', 'review_requested_at', 'tax_inclusive', 'finalized_at', 'finalized_by',
     // 旧方式（schema_version = 1）のみ使用
     'vendor_prices', 'selected_vendor', 'cost_price', 'selling_price',
     'gross_profit', 'markup_rate', 'proofreading_fee', 'other_fees',

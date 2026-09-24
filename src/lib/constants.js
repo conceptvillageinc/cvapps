@@ -112,6 +112,7 @@ export const STATUS_MAP = {
   review_pending: { label: "レビュー待ち", color: "bg-amber-100 text-amber-700" },
   review_in_progress: { label: "レビュー中", color: "bg-orange-100 text-orange-700" },
   approved: { label: "承認済み", color: "bg-emerald-100 text-emerald-700" },
+  finalized: { label: "確定（レビューなし）", color: "bg-emerald-100 text-emerald-700" },
   rejected: { label: "差し戻し", color: "bg-red-100 text-red-700" },
   sent_to_freee: { label: "freee連携済", color: "bg-teal-100 text-teal-700" },
 };

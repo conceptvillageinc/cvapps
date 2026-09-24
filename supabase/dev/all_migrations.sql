@@ -1,5 +1,5 @@
 -- ============================================================================
--- dev 環境用: 全マイグレーション（0001〜0015）を順番につなげたもの。
+-- dev 環境用: 全マイグレーション（0001〜0016）を順番につなげたもの。
 -- 新しい Supabase プロジェクトの SQL Editor に丸ごと貼り付けて Run する（冪等）。
 -- 生成: scripts/build-all-migrations.sh（migrations を変えたら再生成する）
 -- ============================================================================
@@ -1434,3 +1434,26 @@ alter table public.email_logs
 comment on column public.email_logs.gmail_thread_id is 'Gmail のスレッドID。返信の自動確認に使う';
 comment on column public.email_logs.replied_at is '「返答あり」を手で付けた日時';
 comment on column public.email_logs.reply_detected_at is 'Gmail で返信を検知した日時';
+
+-- >>>>>>>> supabase/migrations/0016_estimate_finalized.sql
+-- ============================================================================
+-- 見積の状態に「確定（レビューなし）」を追加
+--
+-- レビューは必須ではないので、相談せずにそのまま送付する見積を区別できるようにする。
+--   status = 'finalized'   レビューなしで確定
+--   finalized_at / finalized_by  誰がいつ確定したか
+--
+-- Supabase の SQL Editor に貼り付けて実行する（冪等）。
+-- ============================================================================
+
+alter table public.estimates drop constraint if exists estimates_status_check;
+alter table public.estimates
+  add constraint estimates_status_check
+  check (status in ('draft', 'collecting', 'calculating', 'review_pending', 'review_in_progress',
+                    'approved', 'rejected', 'sent_to_freee', 'finalized'));
+
+alter table public.estimates
+  add column if not exists finalized_at timestamptz,
+  add column if not exists finalized_by text;
+
+comment on column public.estimates.finalized_at is 'レビューなしで確定した日時';

@@ -63,7 +63,7 @@ const LEVEL = {
  * 左: 社内チェック（自動）＋ チェックリスト・コメント（ReviewPanel）
  * 右: 申請／承認カード、見積の要約、履歴
  */
-export default function ReviewStep({ estimate, onUpdate, onApprove, onReject, onRequestReview, onOpenPdf, emailLogs = [] }) {
+export default function ReviewStep({ estimate, onUpdate, onApprove, onReject, onRequestReview, onFinalize, onUnfinalize, onOpenPdf, emailLogs = [] }) {
   const { user } = useAuth();
   const { grossMarginTarget } = useSystemSettings();
   const a = useMemo(() => autoChecks(estimate, grossMarginTarget), [estimate, grossMarginTarget]);
@@ -78,8 +78,9 @@ export default function ReviewStep({ estimate, onUpdate, onApprove, onReject, on
     ...emailLogs.filter((l) => l.status === "sent").map((l) => ({ at: l.sent_at, text: l.document_type ? `${l.recipient_company} へ${l.document_type === "estimate" ? "見積書" : "書類"}を送付` : `${l.recipient_company} へ依頼メール送信` })),
     ...emailLogs.filter((l) => l.reply_detected_at).map((l) => ({ at: l.reply_detected_at, text: `${l.recipient_company} から返信（Gmail）` })),
     ...emailLogs.filter((l) => l.replied_at).map((l) => ({ at: l.replied_at, text: `${l.recipient_company} 返答あり（${l.replied_by || ""}）` })),
-    ...(estimate.review_requested_at ? [{ at: estimate.review_requested_at, text: `レビュー申請${estimate.review_requested_to_name ? `（→ ${estimate.review_requested_to_name}）` : ""}` }] : []),
+    ...(estimate.review_requested_at ? [{ at: estimate.review_requested_at, text: `レビュー相談${estimate.review_requested_to_name ? `（→ ${estimate.review_requested_to_name}）` : ""}` }] : []),
     ...(estimate.approved_date ? [{ at: estimate.approved_date, text: `承認（${estimate.reviewer_name || ""}）` }] : []),
+    ...(estimate.finalized_at ? [{ at: estimate.finalized_at, text: `レビューなしで確定（${estimate.finalized_by || ""}）` }] : []),
     ...(estimate.created_date ? [{ at: estimate.created_date, text: "見積を作成" }] : []),
   ].filter((h) => h.at).sort((x, y) => String(y.at).localeCompare(String(x.at)));
 
@@ -106,10 +107,15 @@ export default function ReviewStep({ estimate, onUpdate, onApprove, onReject, on
       </div>
 
       <div className="w-full lg:w-[320px] shrink-0 space-y-3">
-        <div className={`rounded-xl border-2 bg-card p-4 space-y-3 ${estimate.status === "approved" ? "border-emerald-300" : "border-primary"}`}>
-          <p className="text-sm font-bold">{estimate.status === "approved" ? "承認済み" : pending ? "承認" : "レビュー申請"}</p>
+        <div className={`rounded-xl border-2 bg-card p-4 space-y-3 ${estimate.status === "approved" || estimate.status === "finalized" ? "border-emerald-300" : "border-primary"}`}>
+          <p className="text-sm font-bold">{estimate.status === "approved" ? "承認済み" : estimate.status === "finalized" ? "確定（レビューなし）" : pending ? "承認" : "レビュー相談"}</p>
           {estimate.status === "approved" ? (
             <p className="text-[11px] text-muted-foreground leading-relaxed">{estimate.reviewer_name || ""} が {fmt(estimate.approved_date)} に承認しました。「見積書を送付」でクライアントへ送れます。</p>
+          ) : estimate.status === "finalized" ? (
+            <>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">{estimate.finalized_by || ""} が {fmt(estimate.finalized_at)} にレビューなしで確定しました。「見積書を送付」でクライアントへ送れます。</p>
+              <Button variant="outline" className="w-full gap-1.5 text-xs" onClick={onUnfinalize}>確定を取り消して下書きに戻す</Button>
+            </>
           ) : pending ? (
             <>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -132,9 +138,12 @@ export default function ReviewStep({ estimate, onUpdate, onApprove, onReject, on
             </>
           ) : (
             <>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">明細ができたら、レビュー担当を選んで申請します。社内チェックに赤があれば先に直してください。</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">金額や仕様に迷いがあるときは、担当者を選んで相談できます。相談せずに送付しても構いません。社内チェックに赤があれば先に直してください。</p>
               <Button className="w-full gap-1.5" onClick={onRequestReview} disabled={!canRequest || a.checks.some((c) => c.level === "bad")}>
-                <Send className="w-4 h-4" /> レビューを申請する
+                <Send className="w-4 h-4" /> レビューを相談する
+              </Button>
+              <Button variant="outline" className="w-full gap-1.5 text-xs" onClick={onFinalize} disabled={!canRequest || a.checks.some((c) => c.level === "bad")}>
+                レビューなしで進む
               </Button>
             </>
           )}

@@ -11,6 +11,7 @@ Supabase → SQL Editor → New query で、次を順に貼り付けて Run（�
 2. `supabase/migrations/0012_tax_inclusive.sql`（税込見積のスイッチ）
 3. `supabase/migrations/0013_design_fee_masters.sql`（デザイン費マスタ。左メニュー「デザイン費マスタ」で項目と金額を編集。初期データ入り）
 4. `supabase/migrations/0014_user_email_profile.sql`（メールの名乗り・署名をユーザーごとに持つ。右上のユーザーメニュー「自分の設定」）
+6. `supabase/migrations/0016_estimate_finalized.sql`（見積の状態「確定（レビューなし）」）
 5. `supabase/migrations/0015_email_replies.sql`（印刷所からの返答の記録。見積編集画面の「印刷所に見積を依頼する」ツール。Gmail の返信を自動確認するには docs/gmail-setup.md ② のスコープに gmail.readonly を追加）
 
 内容: 案件の既定値（受注確度 C・フェーズ 未着手・「引き合い」廃止）、クライアントの CC アドレス、
