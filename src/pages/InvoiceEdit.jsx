@@ -16,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Save, FileDown, Plus, Trash2, Loader2, Truck, Send, CircleCheck, Undo2 } from "lucide-react";
+import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, Truck, Send, CircleCheck, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import { Mail } from "lucide-react";
@@ -26,7 +26,7 @@ import { formatPostalCode } from "@/lib/postalCode";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import {
   newDocItem, computeDocTotals, generateDocumentNumber, defaultDueDate,
-  companyInfoFromSettings, INVOICE_STATUS_MAP, TAX_RATES, openBlob,
+  companyInfoFromSettings, INVOICE_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
@@ -272,6 +272,21 @@ export default function InvoiceEdit() {
     }
   };
 
+  // 印刷用に新しいタブで開く（ブラウザのPDF表示から印刷できる）
+  const previewPdf = async () => {
+    const tab = openPreviewTab();
+    setPdfLoading(true);
+    try {
+      const blob = await db.documents.pdf("invoice", id);
+      showBlobInTab(tab, blob, `請求書_${form.invoice_number}_${form.client_name}.pdf`);
+    } catch (err) {
+      if (tab && !tab.closed) tab.close();
+      toast.error(err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   if (!form || (!isNew && isLoading)) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -301,8 +316,11 @@ export default function InvoiceEdit() {
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {!isNew && (
             <>
+              <Button size="sm" className="gap-1.5 text-xs" onClick={previewPdf} disabled={pdfLoading}>
+                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileOutput className="w-3.5 h-3.5" />} 印刷用に新しいタブで開く
+              </Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={downloadPdf} disabled={pdfLoading}>
-                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} PDF
+                <FileDown className="w-3.5 h-3.5" /> PDF保存
               </Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}>
                 <Mail className="w-3.5 h-3.5" /> メール送付

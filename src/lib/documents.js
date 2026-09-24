@@ -125,6 +125,32 @@ export const INVOICE_STATUS_MAP = {
 };
 
 /** ブラウザでPDFを開く／保存する */
+/**
+ * PDF を新しいタブで開く（印刷プレビュー用）。
+ * ポップアップブロックを避けるため、クリック直後に空のタブを開いておき、PDF ができたらそこに表示する。
+ *   const tab = openPreviewTab();   // クリックハンドラの先頭で
+ *   showBlobInTab(tab, blob);       // 生成後
+ */
+export function openPreviewTab() {
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.title = "PDFを作成しています…";
+    win.document.body.innerHTML = '<p style="font-family:sans-serif;color:#64748b;padding:24px">PDFを作成しています…</p>';
+  }
+  return win;
+}
+export function showBlobInTab(tab, blob, filename) {
+  const url = URL.createObjectURL(blob);
+  if (tab && !tab.closed) {
+    tab.location.href = url;
+  } else {
+    // タブが開けなかった（ブロックされた）ときはダウンロードに切り替える
+    openBlob(blob, filename);
+    return;
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+}
+
 export function openBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
