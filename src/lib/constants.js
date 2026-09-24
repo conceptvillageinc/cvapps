@@ -76,7 +76,7 @@ export const LINE_ITEM_CATEGORIES = [
   { key: "design", label: "デザイン費", source: "design_master" },
   { key: "print_paper", label: "印刷費（紙）", source: "price_master", paperGroup: "紙" },
   { key: "print_nonpaper", label: "印刷費（紙以外）", source: "price_master", paperGroup: "紙以外" },
-  { key: "build", label: "構築費", source: "manual" },
+  { key: "build", label: "web構築費", source: "manual" },
   { key: "other", label: "自由入力", source: "manual" },
 ];
 
