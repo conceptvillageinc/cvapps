@@ -3,13 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Palette, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
-import { DESIGN_CATEGORIES, getDesignItemsByCategory } from "@/lib/designFees";
+import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 
 export default function DesignFeeTable({ estimate, onUpdate }) {
   const designFees = estimate.design_fees || [];
   const [selectedCategory, setSelectedCategory] = useState("");
   const [expandedCategories, setExpandedCategories] = useState({});
+  const { groups: designFeeGroups } = useDesignFeeMaster();
+  const DESIGN_CATEGORIES = designFeeGroups.map((g) => g.category);
+  const getDesignItemsByCategory = (category) => designFeeGroups.find((g) => g.category === category)?.items || [];
 
   const totalDesignFee = designFees.reduce((sum, item) => sum + (item.selling_price || 0) * (item.quantity || 1), 0);
 

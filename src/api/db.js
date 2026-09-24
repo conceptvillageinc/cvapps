@@ -19,6 +19,7 @@ const TABLES = {
   Client: 'clients',
   PrintVendor: 'print_vendors',
   PriceMaster: 'price_masters',
+  DesignFeeMaster: 'design_fee_masters',
   EmailLog: 'email_logs',
   SystemSettings: 'system_settings',
   FaqItem: 'faq_items',
@@ -98,6 +99,10 @@ const WRITABLE_COLUMNS = {
   price_masters: [
     'category', 'paper_type_group', 'vendor_name', 'spec_summary',
     'price_grid', 'last_updated', 'screenshot_url', 'source_url', 'notes', 'price_tax_mode',
+  ],
+  design_fee_masters: [
+    'category', 'category_order', 'name', 'detail', 'hours', 'unit_price', 'amount',
+    'selling_price', 'sort_order', 'is_active',
   ],
   email_logs: [
     'estimate_id', 'recipient_company', 'recipient_email',

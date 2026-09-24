@@ -10,9 +10,10 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import {
   LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, applyMarkup,
@@ -20,7 +21,7 @@ import {
 import {
   usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS, recomputeSubtotals, withRuleRate, unlockRuleRow,
 } from "@/lib/pricing";
-import { DESIGN_FEE_MASTER, getDesignItemsByCategory } from "@/lib/designFees";
+import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import { formatPostalCode } from "@/lib/postalCode";
 import { toTaxExcluded } from "@/lib/priceTax";
@@ -65,6 +66,7 @@ export default function QuoteEditor({ estimate, onUpdate }) {
   const [dragId, setDragId] = useState(null);
   const [manualForm, setManualForm] = useState({ name: "", quantity: 1, unit: "式", unit_price: 0, cost: "", outsourcing: "" });
   const { rules } = usePricingRules();
+  const { groups: designFeeGroups } = useDesignFeeMaster();
 
   const lineItems = estimate.line_items || [];
   const taxInclusive = !!estimate.tax_inclusive;
@@ -786,11 +788,17 @@ export default function QuoteEditor({ estimate, onUpdate }) {
 
           {addPanel === "design" && (
             <div className="space-y-3">
-              {DESIGN_FEE_MASTER.map(cat => (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] text-muted-foreground">項目と金額は「デザイン費マスタ」で編集できます</p>
+                <Link to="/design-fee-master" target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0">
+                  <Pencil className="w-3 h-3" /> マスタを編集
+                </Link>
+              </div>
+              {designFeeGroups.map(cat => (
                 <div key={cat.category}>
                   <p className="text-xs font-semibold text-muted-foreground mb-1">{cat.category}</p>
                   <div className="space-y-1">
-                    {getDesignItemsByCategory(cat.category).map((item, i) => (
+                    {cat.items.map((item, i) => (
                       <button
                         key={i}
                         onClick={() => pickDesignItem(cat.category, item)}
