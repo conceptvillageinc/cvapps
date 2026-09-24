@@ -4,18 +4,38 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, UserSquare, Save, FolderKanban, FileText, Truck, Receipt, Globe, Search, Link2, Image as ImageIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  ArrowLeft, Loader2, UserSquare, Save, Search, Link2, Image as ImageIcon, ExternalLink, FileText, CopyPlus, Lock,
+  ChevronDown, ChevronUp, Pencil,
+} from "lucide-react";
 import { toast } from "sonner";
 import { INVOICE_DELIVERY_METHODS, STATUS_MAP, PROJECT_STATUS_MAP, getDealProbabilityColor } from "@/lib/constants";
-import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
+import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP, openPreviewTab, showBlobInTab } from "@/lib/documents";
 import { formatPostalCode } from "@/lib/postalCode";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
+import { computeEstimateTotals } from "@/lib/estimateTotals";
+import { specLabel } from "@/lib/printSpecs";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
+const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
+const fmtDate = (d) => (d ? String(d).slice(0, 10).replace(/-/g, "/") : "");
+
+/** 一覧・見出しに出す印刷仕様の要約 */
+function specSummary(e) {
+  const specs = e.print_specs || [];
+  if (specs.length > 0) {
+    return specs.map((sp, i) => {
+      const q = (sp.quantities || []).map((n) => `${Number(n).toLocaleString()}枚`).join("/");
+      return [specLabel(sp, i), sp.paper_type, sp.color_count, q].filter(Boolean).join("・");
+    }).join("　");
+  }
+  const q = (e.quantities || []).map((n) => `${Number(n).toLocaleString()}枚`).join("/");
+  return [e.print_type, e.size, e.paper_type, e.color_count, q].filter(Boolean).join("・");
+}
 
 /** 明細に貼った印刷所の見積スクショ（非公開バケットなので署名付きURLで表示） */
 function SourceScreenshot({ path }) {
@@ -29,10 +49,10 @@ function SourceScreenshot({ path }) {
   if (!path) return null;
   const isImage = /\.(png|jpe?g|gif|webp)$/i.test(path);
   return (
-    <a href={url || "#"} target="_blank" rel="noreferrer" className="shrink-0 inline-flex items-center gap-1.5 text-[10px] text-primary hover:underline" title="スクショを開く">
+    <a href={url || "#"} target="_blank" rel="noreferrer" className="inline-flex items-center text-[10px] text-primary hover:underline" title="スクショを開く">
       {url && isImage
-        ? <img src={url} alt="見積スクショ" className="h-16 w-auto max-w-[160px] rounded border object-cover bg-white" />
-        : <span className="inline-flex items-center gap-1 h-8 px-2 rounded border bg-muted/30"><ImageIcon className="w-3.5 h-3.5" /> {isImage ? "スクショ" : "PDF"}</span>}
+        ? <img src={url} alt="見積スクショ" className="h-10 w-14 rounded border object-cover bg-white" />
+        : <span className="inline-flex items-center gap-1 h-7 px-2 rounded border bg-muted/30"><ImageIcon className="w-3.5 h-3.5" /> {isImage ? "画像" : "PDF"}</span>}
     </a>
   );
 }
@@ -46,8 +66,19 @@ function Field({ label, children }) {
   );
 }
 
+const TABS = [
+  { key: "estimates", label: "見積" },
+  { key: "projects", label: "案件" },
+  { key: "invoices", label: "請求書" },
+  { key: "deliveryNotes", label: "納品書" },
+];
+
+const GRID = "grid-cols-[minmax(0,1fr)_64px_78px_44px_72px_86px_minmax(140px,180px)_64px]";
+
 /**
- * クライアントカルテ: 1社の案件・見積・納品・請求・入金・入稿先を1画面に集約する。
+ * クライアントカルテ: 左で見積（案件・請求書・納品書）を選び、右でその中身を見る。
+ * 見積の右側は、これまでのスプレッドシートの「社内見積」に相当する情報
+ * （原価・掛け率・単価・金額・入稿先URL・スクショ・社内メモ）を1画面にそろえる。
  */
 export default function ClientKarte() {
   const { id } = useParams();
@@ -55,6 +86,11 @@ export default function ClientKarte() {
   const queryClient = useQueryClient();
   const { fiscalYearStartMonth } = useSystemSettings();
   const [notes, setNotes] = useState(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [tab, setTab] = useState("estimates");
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data: client, isLoading } = useQuery({ queryKey: ["client", id], queryFn: () => db.entities.Client.get(id), enabled: !!id });
   const name = client?.name;
@@ -63,6 +99,8 @@ export default function ClientKarte() {
   const { data: deliveryNotes = [] } = useQuery({ queryKey: ["deliveryNotes", "byClient", name], queryFn: () => db.entities.DeliveryNote.filter({ client_name: name }, "-delivery_date"), enabled: !!name });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "byClient", name], queryFn: () => db.entities.Invoice.filter({ client_name: name }, "-invoice_date"), enabled: !!name });
   const { data: masters = [] } = useQuery({ queryKey: ["priceMaster"], queryFn: () => db.entities.PriceMaster.list("-last_updated") });
+  const masterById = useMemo(() => Object.fromEntries(masters.map((m) => [m.id, m])), [masters]);
+  const projectById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
 
   const saveNotes = useMutation({
     mutationFn: () => db.entities.Client.update(id, { notes }),
@@ -83,255 +121,362 @@ export default function ClientKarte() {
     return { fy, total, thisFy, gross, grossRate: grossBase > 0 ? Math.round((gross / grossBase) * 100) : null, unpaidCount: unpaid.length, unpaidTotal: unpaid.reduce((s, i) => s + Number(i.total || 0), 0), openProjects: projects.filter((p) => p.status === "open").length, lastDate: last?.invoice_date || null };
   }, [invoices, projects, fiscalYearStartMonth]);
 
-  // 入稿先・仕入先（一次情報）: 見積ごとに、入稿先URL・スクショ・社内メモ・原価を持つ明細を並べる
-  // （ネット印刷取込・仕入先見積の行に加え、手入力の行でも URL／スクショ／メモがあれば対象）
-  const sourceGroups = useMemo(() => {
-    const masterById = Object.fromEntries(masters.map((m) => [m.id, m]));
-    const groups = [];
-    const sorted = [...estimates].sort((a, b) => String(b.created_date || "").localeCompare(String(a.created_date || "")));
-    for (const e of sorted) {
-      const rows = [];
-      for (const li of e.line_items || []) {
-        if (li.row_type === "text" || li.row_type === "subtotal" || li.source_type === "rule") continue;
-        let kind = null, vendor = "", url = li.source_url || null, spec = "";
-        if (li.source_type === "price_master") {
-          const m = masterById[li.source_ref];
-          kind = "ネット印刷"; vendor = m?.vendor_name || "価格マスタ"; url = url || m?.source_url || null;
-          spec = m ? `${m.category}${m.spec_summary ? ` ${m.spec_summary}` : ""}` : "";
-        } else if (li.source_type === "vendor_quote") {
-          kind = "仕入先見積"; vendor = li.source_ref || "（仕入先）";
-        } else if (li.source_url || li.screenshot_path || li.notes) {
-          kind = li.outsourcing_kind ? "外注" : "手入力"; vendor = li.source_ref || "";
-        } else continue;
-        rows.push({ id: li.id, kind, vendor, url, spec, name: li.name, quantity: li.quantity, unit: li.unit, cost_price: li.cost_price, unit_price: li.unit_price, screenshot_path: li.screenshot_path || null, notes: li.notes || "", copied_from: li.copied_from || null });
-      }
-      if (rows.length > 0) groups.push({ estimate: e, rows });
+  // ---- 左の一覧（タブごと） ----
+  const list = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const has = (...parts) => !q || parts.join(" ").toLowerCase().includes(q);
+    if (tab === "estimates") {
+      return estimates
+        .filter((e) => has(e.estimate_number, e.estimate_title, e.print_type, specSummary(e), (e.line_items || []).map((li) => li.name || li.text || "").join(" ")))
+        .map((e) => ({ id: e.id, number: e.estimate_number, date: fmtDate(e.created_date), title: e.estimate_title || e.print_type || "（件名なし）", total: e.total_amount, sub: specSummary(e), badge: e.is_final_submitted ? { label: "最終提出版", cls: "bg-amber-100 text-amber-700" } : STATUS_MAP[e.status] ? { label: STATUS_MAP[e.status].label, cls: STATUS_MAP[e.status].color } : null, raw: e }));
     }
-    return groups;
-  }, [estimates, masters]);
-  const [sourceFilter, setSourceFilter] = useState("");
-  const filteredGroups = useMemo(() => {
-    const q = sourceFilter.trim().toLowerCase();
-    if (!q) return sourceGroups;
-    return sourceGroups
-      .map((g) => ({ ...g, rows: g.rows.filter((r) => `${r.vendor} ${r.name} ${r.spec} ${r.notes} ${r.url || ""} ${g.estimate.estimate_title || ""}`.toLowerCase().includes(q)) }))
-      .filter((g) => g.rows.length > 0);
-  }, [sourceGroups, sourceFilter]);
+    if (tab === "projects") {
+      return projects
+        .filter((p) => has(p.project_number, p.name))
+        .map((p) => ({ id: p.id, number: p.project_number, date: fmtDate(p.registered_at), title: p.name || "（件名なし）", total: p.confirmed_revenue > 0 ? p.confirmed_revenue : p.expected_revenue, sub: `受注確度 ${p.deal_probability || "—"}　${p.phase || ""}`, badge: PROJECT_STATUS_MAP[p.status] ? { label: PROJECT_STATUS_MAP[p.status].label, cls: PROJECT_STATUS_MAP[p.status].color } : null, raw: p }));
+    }
+    if (tab === "invoices") {
+      return invoices
+        .filter((i) => has(i.invoice_number, i.title))
+        .map((i) => ({ id: i.id, number: i.invoice_number, date: fmtDate(i.invoice_date), title: i.title || "（件名なし）", total: i.total, sub: i.due_date ? `入金期日 ${fmtDate(i.due_date)}` : "", badge: INVOICE_STATUS_MAP[i.status] ? { label: INVOICE_STATUS_MAP[i.status].label, cls: INVOICE_STATUS_MAP[i.status].color } : null, raw: i }));
+    }
+    return deliveryNotes
+      .filter((n) => has(n.delivery_number, n.title))
+      .map((n) => ({ id: n.id, number: n.delivery_number, date: fmtDate(n.delivery_date), title: n.title || "（件名なし）", total: n.total, sub: "", badge: DELIVERY_STATUS_MAP[n.status] ? { label: DELIVERY_STATUS_MAP[n.status].label, cls: DELIVERY_STATUS_MAP[n.status].color } : null, raw: n }));
+  }, [tab, search, estimates, projects, invoices, deliveryNotes]);
+
+  useEffect(() => {
+    if (list.length === 0) { setSelectedId(null); return; }
+    if (!list.some((x) => x.id === selectedId)) setSelectedId(list[0].id);
+  }, [list, selectedId]);
+  const current = list.find((x) => x.id === selectedId) || null;
+
+  // ---- 見積の右側 ----
+  const estimateView = useMemo(() => {
+    if (tab !== "estimates" || !current) return null;
+    const e = current.raw;
+    const items = e.schema_version === 2 ? (e.line_items || []) : [];
+    const totals = computeEstimateTotals(items, { taxInclusive: !!e.tax_inclusive });
+    let cost = 0;
+    const rows = items.map((li) => {
+      if (li.row_type === "text") return { kind: "text", id: li.id, text: li.text || "" };
+      if (li.row_type === "subtotal") return { kind: "subtotal", id: li.id, name: li.name || "小計", amount: li.amount };
+      if (li.source_type === "rule") return { kind: "rule", id: li.id, name: li.name, amount: li.amount, rate: li.rate != null ? `${Math.round(Number(li.rate) * 100)}%` : "" };
+      const hasCost = li.cost_price != null && li.cost_price !== "";
+      if (hasCost) cost += (Number(li.cost_price) || 0) * (Number(li.quantity) || 1);
+      let vendor = "", url = li.source_url || null, spec = "";
+      if (li.source_type === "price_master") {
+        const m = masterById[li.source_ref];
+        vendor = m?.vendor_name || "価格マスタ"; url = url || m?.source_url || null; spec = m ? `${m.category}${m.spec_summary ? ` ${m.spec_summary}` : ""}` : "";
+      } else if (li.source_type === "vendor_quote") {
+        vendor = li.source_ref || "仕入先見積";
+      } else if (li.source_type === "design_master") {
+        vendor = "デザイン費マスタ";
+      } else if (li.outsourcing_kind) {
+        vendor = "外注";
+      }
+      return { kind: "item", id: li.id, name: li.name, category: li.category, quantity: li.quantity, unit: li.unit, cost_price: hasCost ? li.cost_price : null, markup_rate: li.markup_rate, unit_price: li.unit_price, amount: li.amount, vendor, url, spec, screenshot_path: li.screenshot_path || null, notes: li.notes || "", copied_from: li.copied_from || null };
+    });
+    // 旧形式（明細方式になる前）は印刷費1行として見せる
+    if (e.schema_version !== 2 && e.selling_price > 0) {
+      const qty = (e.quantities || [])[0] || 1;
+      rows.push({ kind: "item", id: "legacy", name: `${e.print_type || "印刷費"}${e.selected_vendor ? `（${e.selected_vendor}）` : ""}`, category: "印刷費（紙）", quantity: qty, unit: "枚", cost_price: e.cost_price ? Number(e.cost_price) / qty : null, markup_rate: e.markup_rate, unit_price: Math.round(Number(e.selling_price) / qty), amount: Number(e.selling_price), vendor: e.selected_vendor || "", url: null, spec: "", screenshot_path: null, notes: "", copied_from: null });
+      if (e.cost_price) cost += Number(e.cost_price);
+    }
+    const subtotal = e.schema_version === 2 ? totals.subtotal : Number(e.selling_price) || 0;
+    const tax = e.schema_version === 2 ? totals.tax : Math.round(subtotal * 0.1);
+    const project = projectById[e.project_id];
+    return { e, rows, subtotal, tax, total: subtotal + tax, cost, profit: subtotal - cost, profitRate: subtotal > 0 ? ((subtotal - cost) / subtotal * 100).toFixed(1) : "0.0", project };
+  }, [tab, current, masterById, projectById]);
+
+  const openPdf = async () => {
+    if (!estimateView) return;
+    const e = estimateView.e;
+    const tabWin = openPreviewTab();
+    setPdfLoading(true);
+    try {
+      const blob = await db.documents.pdf("estimate", e.id, { stamp: false });
+      const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
+      showBlobInTab(tabWin, blob, `【${clean(e.client_name) || "クライアント"}】見積書_${clean(e.estimate_title) || e.estimate_number}.pdf`);
+    } catch (err) {
+      if (tabWin && !tabWin.closed) tabWin.close();
+      toast.error("PDFを作成できませんでした: " + err.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   if (isLoading || !client) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
+  const counts = { estimates: estimates.length, projects: projects.length, invoices: invoices.length, deliveryNotes: deliveryNotes.length };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
-      <div className="flex items-start gap-3">
+    <div className="max-w-7xl mx-auto space-y-3">
+      {/* ヘッダー */}
+      <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/clients")} className="shrink-0"><ArrowLeft className="w-4 h-4" /></Button>
+        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><UserSquare className="w-5 h-5 text-primary" /></div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2"><UserSquare className="w-5 h-5 text-muted-foreground" /> {client.name}</h1>
-          <p className="text-xs text-muted-foreground">{client.name_kana || ""}　{client.contact_person && `担当: ${client.contact_person}`}</p>
+          <h1 className="text-xl font-bold tracking-tight truncate">{client.name}</h1>
+          <p className="text-[11px] text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+            {client.name_kana && <span>{client.name_kana}</span>}
+            {client.contact_person && <span>担当: {client.contact_person}</span>}
+            {client.email && <span>{client.email}</span>}
+            {client.phone && <span>{client.phone}</span>}
+            {(client.invoice_delivery_method || client.has_recurring_billing) && (
+              <span className="text-amber-700">請求書: {INVOICE_DELIVERY_METHODS[client.invoice_delivery_method] || "—"}{client.has_recurring_billing ? " ・ 定期" : ""}</span>
+            )}
+          </p>
         </div>
-        <Button variant="outline" size="sm" className="text-xs" onClick={() => navigate(`/estimates/new`)}>新規見積</Button>
+        <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => setShowInfo((v) => !v)}>
+          {showInfo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />} 基本情報・メモ
+        </Button>
+        <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => navigate("/clients")}><Pencil className="w-3.5 h-3.5" /> 編集</Button>
+        <Button size="sm" className="text-xs" onClick={() => navigate(`/estimates/new?client=${encodeURIComponent(client.name)}`)}>＋ 新規見積</Button>
       </div>
 
       {/* 要約 */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-2">
         {[
           ["累計売上（税抜）", yen(stats.total)],
           [`${fiscalYearLabel(stats.fy, fiscalYearStartMonth).split("（")[0]}売上`, yen(stats.thisFy)],
           ["粗利（案件の合計）", `${yen(stats.gross)}${stats.grossRate != null ? ` / ${stats.grossRate}%` : ""}`],
           ["未入金", stats.unpaidCount ? `${stats.unpaidCount}件 ${yen(stats.unpaidTotal)}` : "なし"],
           ["進行中の案件", `${stats.openProjects}件`],
-          ["最終請求日", stats.lastDate || "—"],
+          ["最終請求日", stats.lastDate ? fmtDate(stats.lastDate) : "—"],
         ].map(([label, value]) => (
-          <Card key={label}><CardContent className="pt-4 pb-3"><p className="text-[11px] text-muted-foreground">{label}</p><p className="text-lg font-bold tabular-nums">{value}</p></CardContent></Card>
+          <Card key={label}><CardContent className="pt-2.5 pb-2 px-3"><p className="text-[10px] text-muted-foreground">{label}</p><p className="text-base font-bold tabular-nums truncate">{value}</p></CardContent></Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm">基本情報</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <Field label="メール">{client.email}</Field>
-            <Field label="電話">{client.phone}</Field>
-            <Field label="住所">{client.postal_code ? `〒${formatPostalCode(client.postal_code)} ` : ""}{client.address}</Field>
-            <Field label="請求書の送付">
-              {INVOICE_DELIVERY_METHODS[client.invoice_delivery_method] || "—"}
-              {client.has_recurring_billing && <Badge className="ml-2 text-[9px] bg-teal-100 text-teal-700 hover:bg-teal-100">定期売上あり</Badge>}
-              {client.invoice_delivery_notes && <p className="text-xs text-amber-700 mt-0.5">{client.invoice_delivery_notes}</p>}
-            </Field>
-            <Field label="振込名義（入金確認で学習）">{(client.bank_payee_names || []).join(" / ")}</Field>
-            <p className="text-[10px] text-muted-foreground">項目の編集は <Link to="/clients" className="text-primary hover:underline">クライアント一覧</Link> で</p>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">メモ（カルテ）</CardTitle>
-              {notes !== null && <Button size="sm" className="h-7 text-xs gap-1" onClick={() => saveNotes.mutate()} disabled={saveNotes.isPending}><Save className="w-3 h-3" /> 保存</Button>}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Textarea value={notes ?? client.notes ?? ""} onChange={(e) => setNotes(e.target.value)} rows={6} placeholder="担当者の好み、納品のルール、過去のトラブル、支払サイトなど" />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 案件 */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><FolderKanban className="w-4 h-4" /> 案件（{projects.length}件）</CardTitle></CardHeader>
-        <CardContent>
-          {projects.length === 0 ? <p className="text-xs text-muted-foreground">案件がありません</p> : (
-            <div className="divide-y">
-              {projects.slice(0, 30).map((p) => {
-                const st = PROJECT_STATUS_MAP[p.status] || PROJECT_STATUS_MAP.open;
-                return (
-                  <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center gap-3 py-2 text-xs hover:bg-muted/40 -mx-2 px-2 rounded">
-                    <span className="font-mono text-muted-foreground w-24 shrink-0">{p.project_number}</span>
-                    <span className="text-muted-foreground w-20 shrink-0">{p.registered_at}</span>
-                    <span className="flex-1 truncate">{p.name}</span>
-                    <Badge className={`text-[9px] ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>
-                    <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
-                    <span className="tabular-nums w-24 text-right">{yen(p.expected_revenue)}</span>
-                  </Link>
-                );
-              })}
-              {projects.length > 30 && <p className="text-[10px] text-muted-foreground pt-2">他 {projects.length - 30}件は案件一覧で</p>}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><FileText className="w-4 h-4" /> 見積（{estimates.length}件）</CardTitle></CardHeader>
-          <CardContent>
-            {estimates.length === 0 ? <p className="text-xs text-muted-foreground">見積がありません</p> : (
-              <div className="divide-y">
-                {estimates.slice(0, 20).map((e) => {
-                  const st = STATUS_MAP[e.status] || STATUS_MAP.draft;
-                  return (
-                    <Link key={e.id} to={`/estimates/${e.id}`} className="flex items-center gap-2 py-2 text-xs hover:bg-muted/40 -mx-2 px-2 rounded">
-                      <span className="font-mono text-muted-foreground w-24 shrink-0">{e.estimate_number}</span>
-                      <span className="flex-1 truncate">{e.estimate_title || e.print_type || "（件名なし）"}</span>
-                      {e.is_final_submitted && <Badge className="text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">最終</Badge>}
-                      <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
-                      <span className="tabular-nums w-20 text-right">{e.total_amount ? yen(e.total_amount) : "—"}</span>
-                    </Link>
-                  );
-                })}
+      {/* 基本情報・メモ（開閉） */}
+      {showInfo && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <Card>
+            <CardContent className="pt-4 space-y-3">
+              <Field label="メール">{client.email}{Array.isArray(client.cc_emails) && client.cc_emails.filter(Boolean).length > 0 && <span className="block text-[10px] text-muted-foreground">CC: {client.cc_emails.filter(Boolean).join(", ")}</span>}</Field>
+              <Field label="電話">{client.phone}</Field>
+              <Field label="住所">{client.postal_code ? `〒${formatPostalCode(client.postal_code)} ` : ""}{client.address}</Field>
+              <Field label="請求書の送付">
+                {INVOICE_DELIVERY_METHODS[client.invoice_delivery_method] || "—"}
+                {client.has_recurring_billing && <Badge className="ml-2 text-[9px] bg-teal-100 text-teal-700 hover:bg-teal-100">定期売上あり</Badge>}
+                {client.invoice_delivery_notes && <p className="text-xs text-amber-700 mt-0.5">{client.invoice_delivery_notes}</p>}
+              </Field>
+              <Field label="振込名義（入金確認で学習）">{(client.bank_payee_names || []).join(" / ")}</Field>
+              <p className="text-[10px] text-muted-foreground">項目の編集は <Link to="/clients" className="text-primary hover:underline">クライアント一覧</Link> で</p>
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardContent className="pt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold">メモ（カルテ）</p>
+                {notes !== null && <Button size="sm" className="h-7 text-xs gap-1" onClick={() => saveNotes.mutate()} disabled={saveNotes.isPending}><Save className="w-3 h-3" /> 保存</Button>}
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <Textarea value={notes ?? client.notes ?? ""} onChange={(e) => setNotes(e.target.value)} rows={6} placeholder="担当者の好み、納品のルール、過去のトラブル、支払サイトなど" />
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><Receipt className="w-4 h-4" /> 請求書（{invoices.length}件）</CardTitle></CardHeader>
-          <CardContent>
-            {invoices.length === 0 ? <p className="text-xs text-muted-foreground">請求書がありません</p> : (
-              <div className="divide-y">
-                {invoices.slice(0, 20).map((inv) => {
-                  const st = INVOICE_STATUS_MAP[inv.status] || INVOICE_STATUS_MAP.draft;
-                  return (
-                    <Link key={inv.id} to={`/invoices/${inv.id}`} className="flex items-center gap-2 py-2 text-xs hover:bg-muted/40 -mx-2 px-2 rounded">
-                      <span className="font-mono text-muted-foreground w-24 shrink-0 truncate">{inv.invoice_number}</span>
-                      <span className="text-muted-foreground w-20 shrink-0">{inv.invoice_date}</span>
-                      <span className="flex-1 truncate">{inv.title || "（件名なし）"}</span>
-                      <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
-                      <span className="tabular-nums w-20 text-right">{yen(inv.total)}</span>
-                    </Link>
-                  );
-                })}
-                {invoices.length > 20 && <p className="text-[10px] text-muted-foreground pt-2">他 {invoices.length - 20}件は請求書一覧で</p>}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><Truck className="w-4 h-4" /> 納品書（{deliveryNotes.length}件）</CardTitle></CardHeader>
-        <CardContent>
-          {deliveryNotes.length === 0 ? <p className="text-xs text-muted-foreground">納品書がありません</p> : (
-            <div className="divide-y">
-              {deliveryNotes.slice(0, 20).map((n) => {
-                const st = DELIVERY_STATUS_MAP[n.status] || DELIVERY_STATUS_MAP.draft;
-                return (
-                  <Link key={n.id} to={`/delivery-notes/${n.id}`} className="flex items-center gap-2 py-2 text-xs hover:bg-muted/40 -mx-2 px-2 rounded">
-                    <span className="font-mono text-muted-foreground w-24 shrink-0">{n.delivery_number}</span>
-                    <span className="text-muted-foreground w-20 shrink-0">{n.delivery_date}</span>
-                    <span className="flex-1 truncate">{n.title || "（件名なし）"}</span>
-                    <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
-                    <span className="tabular-nums w-20 text-right">{yen(n.total)}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 入稿先 */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <CardTitle className="text-sm flex items-center gap-2"><Globe className="w-4 h-4" /> 入稿先・仕入先（一次情報）</CardTitle>
-              <p className="text-[10px] text-muted-foreground mt-0.5">見積ごとに、明細の入稿先URL・印刷所の見積スクショ・社内メモ・原価を並べています。明細のこれらの欄は見積書タブの「社内確認用」をONにすると編集できます</p>
-            </div>
-            <div className="relative sm:w-64">
+      {/* 左右2分割 */}
+      <div className="flex gap-3 h-[calc(100vh-260px)] min-h-[460px]">
+        {/* 左：一覧 */}
+        <div className="w-[320px] shrink-0 bg-card border rounded-lg overflow-hidden flex flex-col">
+          <div className="flex gap-1 p-2 border-b">
+            {TABS.map((t) => (
+              <button key={t.key} type="button" onClick={() => { setTab(t.key); setSelectedId(null); }} className={`flex-1 h-7 rounded-md text-[11px] ${tab === t.key ? "bg-slate-800 text-white font-semibold" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}>
+                {t.label} {counts[t.key]}
+              </button>
+            ))}
+          </div>
+          <div className="p-2 border-b">
+            <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} placeholder="メーカー・品名・メモで絞り込み" className="h-8 pl-8 text-xs" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === "estimates" ? "件名・番号・仕様・明細名で絞り込み" : "件名・番号で絞り込み"} className="h-8 pl-8 text-xs" />
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {filteredGroups.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{sourceFilter ? "該当する明細がありません" : "見積の明細に入稿先の記録がありません（ネット印刷取込・仕入先見積の行、または入稿先URL・スクショ・社内メモを入れた行が対象）"}</p>
+          <div className="overflow-y-auto flex-1">
+            {list.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-10">{search ? "該当がありません" : "まだありません"}</p>
+            ) : list.map((row) => {
+              const on = row.id === selectedId;
+              return (
+                <button key={row.id} type="button" onClick={() => setSelectedId(row.id)} className={`w-full text-left px-3 py-2 border-b border-l-[3px] ${on ? "bg-primary/5 border-l-primary" : "border-l-transparent hover:bg-muted/30"}`}>
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="font-mono text-muted-foreground">{row.number}</span>
+                    <span className="text-muted-foreground/70">{row.date}</span>
+                    {row.badge && <Badge className={`ml-auto text-[9px] px-1.5 py-0 ${row.badge.cls} hover:${row.badge.cls}`}>{row.badge.label}</Badge>}
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-[12.5px] font-medium truncate flex-1">{row.title}</span>
+                    {row.total > 0 && <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">{yen(row.total)}</span>}
+                  </div>
+                  {row.sub && <div className="text-[10px] text-muted-foreground/80 truncate mt-0.5">{row.sub}</div>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 右：中身 */}
+        <div className="flex-1 min-w-0 bg-card border rounded-lg flex flex-col overflow-hidden">
+          {!current ? (
+            <p className="text-xs text-muted-foreground text-center py-16">左の一覧から選んでください</p>
+          ) : tab === "estimates" && estimateView ? (
+            <EstimatePane view={estimateView} onOpenPdf={openPdf} pdfLoading={pdfLoading} clientName={client.name} />
           ) : (
-            <div className="space-y-4">
-              {filteredGroups.map(({ estimate: e, rows }) => (
-                <div key={e.id} className="border rounded-md overflow-hidden">
-                  <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 bg-muted/40 text-xs">
-                    <Link to={`/estimates/${e.id}`} className="font-mono text-primary hover:underline">{e.estimate_number}</Link>
-                    <span className="text-muted-foreground">{e.created_date ? String(e.created_date).slice(0, 10).replace(/-/g, "/") : ""}</span>
-                    <span className="font-medium truncate flex-1">{e.estimate_title || e.print_type || ""}</span>
-                    {e.is_final_submitted && <Badge className="text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">最終提出版</Badge>}
-                    {e.total_amount > 0 && <span className="tabular-nums text-muted-foreground">{yen(e.total_amount)}</span>}
-                  </div>
-                  <div className="divide-y">
-                    {rows.map((r) => (
-                      <div key={r.id} className="px-3 py-2 text-xs grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <Badge variant="outline" className="text-[9px] font-normal">{r.kind}</Badge>
-                            {r.vendor && <span className="font-medium">{r.vendor}</span>}
-                            <span className="truncate">{r.name}</span>
-                            {r.spec && <span className="text-muted-foreground">{r.spec}</span>}
-                            {r.copied_from && <span className="text-[10px] text-muted-foreground">（{r.copied_from} から複製）</span>}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-muted-foreground">
-                            <span className="tabular-nums">{Number(r.quantity || 0).toLocaleString()}{r.unit || ""}</span>
-                            {r.cost_price != null && <span className="tabular-nums text-amber-700">原価 ¥{Number(r.cost_price).toLocaleString()}</span>}
-                            <span className="tabular-nums">@¥{Number(r.unit_price || 0).toLocaleString()}</span>
-                            {r.url && (
-                              <a href={r.url} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5 max-w-[360px] truncate" title={r.url}>
-                                <Link2 className="w-3 h-3 shrink-0" /> <span className="truncate">{r.url.replace(/^https?:\/\//, "")}</span>
-                              </a>
-                            )}
-                          </div>
-                          {r.notes && <p className="text-[11px] text-foreground/80 bg-amber-50 border border-amber-200 rounded px-2 py-1 whitespace-pre-wrap">{r.notes}</p>}
-                        </div>
-                        <SourceScreenshot path={r.screenshot_path} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <SimplePane tab={tab} row={current} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** 右側: 見積の中身（社内見積相当） */
+function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
+  const { e, rows, subtotal, tax, total, cost, profit, profitRate, project } = view;
+  const st = STATUS_MAP[e.status];
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b bg-muted/40">
+        <div className="min-w-0">
+          <p className="text-sm font-bold truncate">{e.estimate_title || e.print_type || "（件名なし）"}</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+            <span className="font-mono">{e.estimate_number}</span>
+            <span>作成 {fmtDate(e.created_date)}</span>
+            {e.person_in_charge && <span>担当 {e.person_in_charge}</span>}
+            {e.is_final_submitted ? <span className="text-amber-700 font-medium">最終提出版</span> : st ? <span>{st.label}</span> : null}
+            {e.deal_probability && <span>受注確度 {e.deal_probability}</span>}
+            {e.tax_inclusive && <span className="text-primary">税込見積</span>}
+            {project && <Link to={`/projects/${project.id}`} className="text-primary hover:underline">案件 {project.project_number} {project.name}</Link>}
+          </div>
+        </div>
+        <div className="flex gap-1.5 shrink-0">
+          <Link to={`/estimates/${e.id}`} className="inline-flex items-center gap-1 h-7 px-2 rounded-md border bg-background text-[11px] hover:bg-muted/50">
+            <ExternalLink className="w-3 h-3" /> 見積を開く
+          </Link>
+          <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[11px] gap-1" onClick={onOpenPdf} disabled={pdfLoading}>
+            {pdfLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} 見積書PDF
+          </Button>
+          <Link to={`/estimates/new?client=${encodeURIComponent(clientName)}&copy_from=${e.id}`} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-[11px] font-semibold hover:bg-primary/90">
+            <CopyPlus className="w-3 h-3" /> この見積から新規見積
+          </Link>
+        </div>
+      </div>
+
+      <div className="px-4 py-1.5 border-b flex items-center gap-2 text-[11px]">
+        <span className="text-muted-foreground font-medium shrink-0">印刷仕様</span>
+        <span className="text-foreground/80 truncate" title={specSummary(e)}>{specSummary(e) || "（未入力）"}</span>
+        <span className="ml-auto text-[10px] text-muted-foreground shrink-0">社内見積（原価・掛け率・入稿先を表示）</span>
+      </div>
+
+      <div className="flex-1 overflow-auto min-h-0">
+        <div className={`grid ${GRID} gap-x-1.5 px-3 py-1.5 text-[10px] text-muted-foreground font-medium border-b sticky top-0 bg-background`}>
+          <div>品名</div><div className="text-right">数量</div><div className="text-right">原価</div><div className="text-right">掛率</div><div className="text-right">単価</div><div className="text-right">金額</div><div>入稿先・社内メモ</div><div>スクショ</div>
+        </div>
+        {rows.length === 0 && <p className="text-xs text-muted-foreground text-center py-10">明細がありません</p>}
+        {rows.map((r, idx) => {
+          if (r.kind === "text") return <div key={r.id || idx} className="px-3 py-1.5 text-xs font-semibold text-foreground/80 bg-muted/30 border-b">{r.text || "　"}</div>;
+          if (r.kind === "subtotal") return (
+            <div key={r.id || idx} className={`grid ${GRID} gap-x-1.5 px-3 py-1 text-[11px] text-muted-foreground border-b bg-muted/10`}>
+              <div className="col-span-5 text-right pr-2">{r.name}</div><div className="text-right font-medium tabular-nums">{yen(r.amount)}</div><div></div><div></div>
+            </div>
+          );
+          if (r.kind === "rule") return (
+            <div key={r.id || idx} className={`grid ${GRID} gap-x-1.5 px-3 py-1.5 text-[11px] text-muted-foreground/80 border-b items-center`}>
+              <div className="flex items-center gap-1 truncate"><Lock className="w-3 h-3 shrink-0" /> {r.name} <span className="text-[9px]">（自動計算）</span></div>
+              <div></div><div></div><div className="text-right">{r.rate}</div><div></div><div className="text-right tabular-nums">{yen(r.amount)}</div><div></div><div></div>
+            </div>
+          );
+          return (
+            <div key={r.id || idx} className={`grid ${GRID} gap-x-1.5 px-3 py-1.5 text-[11px] border-b items-start`}>
+              <div className="min-w-0">
+                <div className="text-xs truncate" title={r.name}>{r.name}</div>
+                <div className="text-[10px] text-muted-foreground truncate">{[r.category, r.vendor, r.spec].filter(Boolean).join(" ・ ")}{r.copied_from ? `　（${r.copied_from} から複製）` : ""}</div>
+              </div>
+              <div className="text-right tabular-nums whitespace-nowrap">{Number(r.quantity || 0).toLocaleString()}{r.unit || ""}</div>
+              <div className="text-right tabular-nums whitespace-nowrap text-amber-700">{r.cost_price != null ? yenCost(r.cost_price) : ""}</div>
+              <div className="text-right tabular-nums text-muted-foreground">{r.markup_rate ? Number(r.markup_rate).toFixed(2) : ""}</div>
+              <div className="text-right tabular-nums whitespace-nowrap">@{yen(r.unit_price)}</div>
+              <div className="text-right text-xs font-medium tabular-nums whitespace-nowrap">{yen(r.amount)}</div>
+              <div className="min-w-0 space-y-1">
+                {r.url && (
+                  <a href={r.url} target="_blank" rel="noreferrer" className="text-[10px] text-primary hover:underline inline-flex items-center gap-0.5 max-w-full" title={r.url}>
+                    <Link2 className="w-3 h-3 shrink-0" /> <span className="truncate">{r.url.replace(/^https?:\/\//, "")}</span>
+                  </a>
+                )}
+                {r.notes && <p className="text-[10px] text-foreground/80 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 whitespace-pre-wrap leading-snug">{r.notes}</p>}
+              </div>
+              <div><SourceScreenshot path={r.screenshot_path} /></div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t px-4 py-2.5 flex gap-4 bg-muted/10">
+        <div className="flex-1 min-w-0 space-y-1">
+          <p className="text-[10px] text-muted-foreground font-medium">備考（見積書に載る）</p>
+          <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-line max-h-16 overflow-y-auto">{e.additional_notes || "（なし）"}</p>
+        </div>
+        <div className="w-[230px] shrink-0 text-[11px] tabular-nums space-y-0.5">
+          <div className="flex justify-between text-muted-foreground"><span>小計（税別）</span><span>{yen(subtotal)}</span></div>
+          <div className="flex justify-between text-muted-foreground"><span>消費税</span><span>{yen(tax)}</span></div>
+          <div className="flex justify-between text-sm font-bold border-t pt-1 mt-1"><span>合計（税込）</span><span>{yen(total)}</span></div>
+          {cost > 0 && (
+            <>
+              <div className="flex justify-between text-[10px] text-amber-700"><span>仕入合計（原価入力分）</span><span>{yen(cost)}</span></div>
+              <div className="flex justify-between text-[10px] text-amber-700 font-semibold"><span>粗利</span><span>{yen(profit)}（{profitRate}%）</span></div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** 右側: 案件・請求書・納品書の要点（詳細は各画面で） */
+function SimplePane({ tab, row }) {
+  const r = row.raw;
+  const link = tab === "projects" ? `/projects/${r.id}` : tab === "invoices" ? `/invoices/${r.id}` : `/delivery-notes/${r.id}`;
+  const lines = tab === "projects" ? [] : (r.line_items || []);
+  const fields = tab === "projects"
+    ? [["案件番号", r.project_number], ["登録日", fmtDate(r.registered_at)], ["完了予定日", fmtDate(r.due_date)], ["入金予定日", fmtDate(r.payment_due_date)], ["受注確度", r.deal_probability], ["フェーズ", r.phase], ["見込売上", yen(r.expected_revenue)], ["見込原価", yen(r.expected_cost)], ["確定売上", r.confirmed_revenue > 0 ? yen(r.confirmed_revenue) : "—"], ["確定原価", r.confirmed_cost > 0 ? yen(r.confirmed_cost) : "—"]]
+    : tab === "invoices"
+      ? [["請求書番号", r.invoice_number], ["請求日", fmtDate(r.invoice_date)], ["入金期日", fmtDate(r.due_date)], ["状態", INVOICE_STATUS_MAP[r.status]?.label], ["送付方法", INVOICE_DELIVERY_METHODS[r.delivery_method]], ["担当", r.person_in_charge]]
+      : [["納品書番号", r.delivery_number], ["納品日", fmtDate(r.delivery_date)], ["状態", DELIVERY_STATUS_MAP[r.status]?.label], ["担当", r.person_in_charge]];
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b bg-muted/40">
+        <div className="min-w-0">
+          <p className="text-sm font-bold truncate">{row.title}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5"><span className="font-mono">{row.number}</span>　{row.date}</p>
+        </div>
+        <Link to={link} className="inline-flex items-center gap-1 h-7 px-2 rounded-md border bg-background text-[11px] hover:bg-muted/50 shrink-0"><ExternalLink className="w-3 h-3" /> 開く</Link>
+      </div>
+      <div className="p-4 space-y-4 overflow-auto">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {fields.map(([k, v]) => (
+            <div key={k}><p className="text-[10px] text-muted-foreground">{k}</p><p className="text-xs">{v || "—"}</p></div>
+          ))}
+        </div>
+        {tab === "projects" && r.deal_probability && <Badge className={`text-[9px] ${getDealProbabilityColor(r.deal_probability)}`}>受注確度 {r.deal_probability}</Badge>}
+        {tab === "projects" && r.notes && <div><p className="text-[10px] text-muted-foreground">メモ</p><p className="text-xs whitespace-pre-wrap">{r.notes}</p></div>}
+        {lines.length > 0 && (
+          <div className="border rounded-md overflow-hidden">
+            <div className="grid grid-cols-[minmax(0,1fr)_70px_90px_100px] gap-x-2 px-3 py-1.5 text-[10px] text-muted-foreground font-medium border-b bg-muted/30"><div>摘要</div><div className="text-right">数量</div><div className="text-right">単価</div><div className="text-right">金額</div></div>
+            {lines.map((li, i) => (
+              <div key={li.id || i} className="grid grid-cols-[minmax(0,1fr)_70px_90px_100px] gap-x-2 px-3 py-1.5 text-[11px] border-b last:border-0">
+                <div className="truncate">{li.name}</div><div className="text-right tabular-nums">{Number(li.quantity || 0).toLocaleString()}{li.unit || ""}</div><div className="text-right tabular-nums">{yen(li.unit_price)}</div><div className="text-right tabular-nums font-medium">{yen(li.amount)}</div>
+              </div>
+            ))}
+            <div className="flex justify-end gap-6 px-3 py-1.5 text-[11px] bg-muted/10"><span className="text-muted-foreground">小計 {yen(r.subtotal)}</span><span className="text-muted-foreground">消費税 {yen(r.tax)}</span><span className="font-bold">合計 {yen(r.total)}</span></div>
+          </div>
+        )}
+        {tab !== "projects" && r.notes && <div><p className="text-[10px] text-muted-foreground">備考</p><p className="text-xs whitespace-pre-wrap">{r.notes}</p></div>}
+      </div>
+    </>
   );
 }

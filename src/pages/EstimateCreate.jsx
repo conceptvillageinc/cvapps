@@ -30,6 +30,14 @@ export default function EstimateCreate() {
 
   // 案件詳細の「この案件の見積を作成」から来た場合は、その案件を固定する
   const lockedProjectId = searchParams.get("project");
+  // クライアントカルテから来た場合: クライアント名の初期値と、複製元の見積
+  const presetClient = searchParams.get("client") || "";
+  const copyFromId = searchParams.get("copy_from");
+  const { data: copyFrom } = useQuery({
+    queryKey: ["estimate", copyFromId],
+    queryFn: () => db.entities.Estimate.get(copyFromId),
+    enabled: !!copyFromId,
+  });
   const { data: lockedProject } = useQuery({
     queryKey: ["project", lockedProjectId],
     queryFn: () => db.entities.Project.get(lockedProjectId),
@@ -57,7 +65,7 @@ export default function EstimateCreate() {
   });
 
   const [formData, setFormData] = useState({
-    client_name: "",
+    client_name: presetClient,
     estimate_title: "",
     desired_delivery_date: "",
     estimate_date: format(new Date(), "yyyy-MM-dd"),
@@ -95,6 +103,25 @@ export default function EstimateCreate() {
     if (lockedProject) applyProject(lockedProject);
      
   }, [lockedProject?.id]);
+
+  // 複製元の見積から件名・仕様・明細・備考を引き継ぐ（明細の id は振り直し、複製元を残す）
+  useEffect(() => {
+    if (!copyFrom) return;
+    const uid = () => `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const items = copyFrom.schema_version === 2
+      ? (copyFrom.line_items || []).map((li) => ({ ...li, id: uid(), ...(li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" ? { copied_from: copyFrom.estimate_number, copied_from_id: copyFrom.id } : {}) }))
+      : [];
+    setFormData(prev => ({
+      ...prev,
+      client_name: prev.client_name || copyFrom.client_name || "",
+      estimate_title: prev.estimate_title || copyFrom.estimate_title || "",
+      additional_notes: copyFrom.additional_notes || "",
+      print_specs: (copyFrom.print_specs || []).map((sp) => ({ ...sp, id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` })),
+      line_items: items,
+      tax_inclusive: !!copyFrom.tax_inclusive,
+      total_amount: copyFrom.total_amount || 0,
+    }));
+  }, [copyFrom]);
 
   const handleSave = async () => {
     if (!project) {
@@ -155,6 +182,9 @@ export default function EstimateCreate() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">新規見積作成</h1>
             <p className="text-xs text-muted-foreground mt-0.5">案件を選んで基本情報を入力後、見積書画面で明細を追加します</p>
+            {copyFrom && (
+              <p className="text-xs text-primary mt-1">見積 {copyFrom.estimate_number}「{copyFrom.estimate_title || copyFrom.print_type || ""}」の件名・仕様・明細・備考を複製して作ります（作成後に見積書画面で直せます）</p>
+            )}
           </div>
         </div>
       </div>
