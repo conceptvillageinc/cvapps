@@ -10,6 +10,9 @@ export const DEFAULT_MEETING_TYPES = [
   { key: "other", label: "その他" },
 ];
 
+/** 社内の打ち合わせ（クライアントなし）を表す名前 */
+export const INTERNAL_CLIENT = "CV自社";
+
 export const MEETING_STATUS = {
   recording: { label: "録音中", color: "bg-red-100 text-red-700" },
   uploaded: { label: "処理待ち", color: "bg-muted text-muted-foreground" },

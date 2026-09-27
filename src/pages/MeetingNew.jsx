@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
-import { useMeetingSettings } from "@/lib/meetings";
+import { useMeetingSettings, INTERNAL_CLIENT } from "@/lib/meetings";
 import { todayString } from "@/lib/fiscal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,7 @@ export default function MeetingNew() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const uniqueClients = useMemo(() => [...new Map(clients.map((c) => [c.name, c])).values()], [clients]);
-  const defaultTitle = `${form.client_name ? `${form.client_name} ` : ""}${typeLabel(form.meeting_type)} ${form.held_at.replace(/-/g, "/")}`;
+  const defaultTitle = `${form.client_name === INTERNAL_CLIENT ? "社内 " : form.client_name ? `${form.client_name} ` : ""}${typeLabel(form.meeting_type)} ${form.held_at.replace(/-/g, "/")}`;
 
   const buildPayload = (source) => {
     const client = uniqueClients.find((c) => c.name === form.client_name);
@@ -147,9 +147,17 @@ export default function MeetingNew() {
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">クライアント</Label>
-            <Input list="meeting-client-options" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="クライアント名" className="h-10" />
-            <datalist id="meeting-client-options">{uniqueClients.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">クライアント</Label>
+              <button type="button" onClick={() => setForm({ ...form, client_name: form.client_name === INTERNAL_CLIENT ? "" : INTERNAL_CLIENT, project_id: "" })} className={`text-[11px] px-2 py-0.5 rounded-full border ${form.client_name === INTERNAL_CLIENT ? "bg-slate-800 text-white border-slate-800" : "bg-muted/40 hover:bg-muted"}`}>
+                {form.client_name === INTERNAL_CLIENT ? "✓ 社内の打ち合わせ（CV自社）" : "社内の打ち合わせ（CV自社）"}
+              </button>
+            </div>
+            <Input list="meeting-client-options" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="クライアント名（社内なら「CV自社」）" className="h-10" />
+            <datalist id="meeting-client-options">
+              <option value={INTERNAL_CLIENT}>社内の打ち合わせ</option>
+              {uniqueClients.filter((c) => c.name !== INTERNAL_CLIENT).map((c) => <option key={c.id} value={c.name} />)}
+            </datalist>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">案件（任意）</Label>

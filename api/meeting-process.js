@@ -132,7 +132,7 @@ async function summarizeStep(admin, meeting, transcript) {
 打ち合わせの種類: ${typeLabel(types, meeting.meeting_type)}
 件名: ${meeting.title || '（未入力）'}
 日付: ${meeting.held_at || '（未入力）'}
-クライアント: ${meeting.client_name || '（未入力）'}
+クライアント: ${meeting.client_name === 'CV自社' ? '（社内の打ち合わせ。クライアントは同席していない）' : meeting.client_name || '（未入力）'}
 出席者: ${known.length ? known.join('、') : '（未入力）'}
 
 書き方:
