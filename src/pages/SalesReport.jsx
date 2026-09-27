@@ -158,6 +158,8 @@ export default function SalesReport() {
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
   const [chart, setChart] = useState("sales"); // sales | gross
+  // 「計」の集計範囲: both=実績＋着地見込 / forecast=着地見込だけ / actual=実績だけ
+  const [totalMode, setTotalMode] = useState("both");
   const [targetsOpen, setTargetsOpen] = useState(false);
   const fy = Number(fiscalYear);
 
@@ -172,6 +174,29 @@ export default function SalesReport() {
     [fy, fiscalYearStartMonth, projects, invoices, bankTxs, targets, grossMarginTarget],
   );
   const { rows, annual, months } = report;
+
+  // 表示モードに応じた「計」の値（月ごと・年計とも同じ形にそろえる）
+  const totalOf = (r) => {
+    if (totalMode === "forecast") {
+      const f = r.forecast;
+      return { sales: f.sales, purchase: f.cost, gross: f.gross, margin: f.margin, need_sales: f.need_sales, need_gross_must: f.need_gross_must, need_gross: f.need_gross, need_gross_jump: f.need_gross_jump, margin_ok: f.margin === null ? null : f.margin >= grossMarginTarget };
+    }
+    if (totalMode === "actual") {
+      const a = r.actual;
+      return { sales: a.sales, purchase: a.purchase + a.other_cost, gross: a.gross, margin: a.margin, need_sales: a.need_sales, need_gross_must: a.need_gross_must, need_gross: a.need_gross, need_gross_jump: a.need_gross_jump, margin_ok: a.margin === null ? null : a.margin >= grossMarginTarget };
+    }
+    return r.total;
+  };
+  const annualTotal = totalOf(annual);
+  const TOTAL_MODES = [["both", "実績＋着地見込"], ["forecast", "着地見込のみ"], ["actual", "実績のみ"]];
+  const totalLabel = TOTAL_MODES.find(([k]) => k === totalMode)[1];
+  const TotalModeSwitch = ({ className = "" }) => (
+    <div className={`inline-flex gap-0.5 p-0.5 rounded-full bg-muted ${className}`} role="group" aria-label="計の集計範囲">
+      {TOTAL_MODES.map(([k, label]) => (
+        <button key={k} type="button" onClick={() => setTotalMode(k)} className={`h-6 px-2.5 rounded-full text-[11px] whitespace-nowrap ${totalMode === k ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
+      ))}
+    </div>
+  );
   const hasTargets = !!targets && annual.target.sales > 0;
   const years = [];
   for (let y = currentFy + 1; y >= currentFy - 3; y--) years.push(y);
@@ -181,7 +206,7 @@ export default function SalesReport() {
     実績売上: r.actual.sales,
     見込売上: r.forecast.sales,
     目標売上: r.target.sales,
-    粗利計: r.total.gross,
+    粗利計: totalOf(r).gross,
     目標粗利: r.target.gross,
     必達粗利: r.target.gross_must,
     ジャンプ目標: r.target.gross_jump,
@@ -210,17 +235,22 @@ export default function SalesReport() {
       </div>
 
       {/* 要約 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted-foreground">「計」の集計範囲:</span>
+        <TotalModeSwitch />
+        <span className="text-[11px] text-muted-foreground">要約・グラフの粗利・表の「計」に反映されます</span>
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          ["売上（実績＋見込）", annual.total.sales, `目標 ${man(annual.target.sales)}`],
-          ["粗利（実績＋見込）", annual.total.gross, `目標 ${man(annual.target.gross)} / 必達 ${man(annual.target.gross_must)}`],
-          ["粗利率", annual.total.margin, null, "pct"],
-          ["必要粗利（目標まで）", annual.total.need_gross, annual.total.need_gross >= 0 ? "達成" : "不足"],
+          [`売上（${totalLabel}）`, annualTotal.sales, `目標 ${man(annual.target.sales)}`],
+          [`粗利（${totalLabel}）`, annualTotal.gross, `目標 ${man(annual.target.gross)} / 必達 ${man(annual.target.gross_must)}`],
+          ["粗利率", annualTotal.margin, null, "pct"],
+          ["必要粗利（目標まで）", annualTotal.need_gross, annualTotal.need_gross >= 0 ? "達成" : "不足"],
         ].map(([label, value, sub, kind]) => (
           <Card key={label}>
             <CardContent className="pt-4 pb-3">
               <p className="text-[11px] text-muted-foreground">{label}</p>
-              <p className={`text-xl font-bold tabular-nums ${kind === "pct" ? (annual.total.margin_ok === false ? "text-red-700" : "text-emerald-700") : Number(value) < 0 ? "text-red-700" : ""}`}>
+              <p className={`text-xl font-bold tabular-nums ${kind === "pct" ? (annualTotal.margin_ok === false ? "text-red-700" : "text-emerald-700") : Number(value) < 0 ? "text-red-700" : ""}`}>
                 {kind === "pct" ? pct(value) : `¥${yen(value)}`}
               </p>
               {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
@@ -234,7 +264,7 @@ export default function SalesReport() {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <CardTitle className="text-sm">{chart === "sales" ? "月別の売上（実績・見込）と目標" : "月別の粗利（実績＋見込）と目標"}</CardTitle>
+              <CardTitle className="text-sm">{chart === "sales" ? "月別の売上（実績・見込）と目標" : `月別の粗利（${totalLabel}）と目標`}</CardTitle>
               <CardDescription className="text-xs">税別・円。実績は請求書、見込は案件（請求済み分を除く）から</CardDescription>
             </div>
             <Tabs value={chart} onValueChange={setChart}>
@@ -321,10 +351,13 @@ export default function SalesReport() {
                     ]],
                   ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false], i) => (
                     <tr key={`${block}-${key}`} className={`border-t ${i === 0 ? "border-t-2 border-t-slate-300" : ""} ${block === "計" ? "bg-muted/30" : ""}`}>
-                      <td className="px-2 py-1 font-medium text-muted-foreground whitespace-nowrap">{i === 0 ? block : ""}</td>
-                      <td className="px-2 py-1 whitespace-nowrap">{label}</td>
+                      <td className="px-2 py-1 font-medium text-muted-foreground whitespace-nowrap align-top">{i === 0 ? block : ""}</td>
+                      <td className="px-2 py-1 whitespace-nowrap">
+                        {label}
+                        {block === "計" && i === 0 && <TotalModeSwitch className="ml-2 align-middle" />}
+                      </td>
                       {rows.map((r) => {
-                        const v = r[b][key];
+                        const v = b === "total" ? totalOf(r)[key] : r[b][key];
                         const isMargin = kind === "pct";
                         return (
                           <Cell
@@ -334,7 +367,7 @@ export default function SalesReport() {
                           />
                         );
                       })}
-                      {(() => { const v = annual[b][key]; const isMargin = kind === "pct"; return (
+                      {(() => { const v = b === "total" ? annualTotal[key] : annual[b][key]; const isMargin = kind === "pct"; return (
                         <Cell v={v} kind={kind} muted={muted} warn={isMargin && v !== null && v < grossMarginTarget} ok={isMargin && v !== null && v >= grossMarginTarget} />
                       ); })()}
                     </tr>
