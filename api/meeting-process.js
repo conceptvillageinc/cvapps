@@ -121,6 +121,12 @@ function guessMime(path) {
 
 async function summarizeStep(admin, meeting, transcript) {
   const types = await loadTypes(admin);
+  // 紐づけた案件（社内の打ち合わせでクライアント案件を扱うときの文脈に使う）
+  let project = null;
+  if (meeting.project_id) {
+    const { data } = await admin.from('projects').select('project_number, name, client_name, phase, due_date').eq('id', meeting.project_id).maybeSingle();
+    project = data || null;
+  }
   const { data: checks } = await admin.from('meeting_checklists').select('key, label').eq('meeting_type', meeting.meeting_type).eq('is_active', true).order('sort_order');
   const checklist = checks || [];
   const known = Array.isArray(meeting.participants) ? meeting.participants.filter(Boolean) : [];
@@ -133,6 +139,7 @@ async function summarizeStep(admin, meeting, transcript) {
 件名: ${meeting.title || '（未入力）'}
 日付: ${meeting.held_at || '（未入力）'}
 クライアント: ${meeting.client_name === 'CV自社' ? '（社内の打ち合わせ。クライアントは同席していない）' : meeting.client_name || '（未入力）'}
+${project ? `対象の案件: ${project.project_number} ${project.name}（クライアント: ${project.client_name || '—'}${project.phase ? `・${project.phase}` : ''}${project.due_date ? `・完了予定 ${project.due_date}` : ''}）` : ''}
 出席者: ${known.length ? known.join('、') : '（未入力）'}
 
 書き方:

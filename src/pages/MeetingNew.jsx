@@ -43,6 +43,7 @@ export default function MeetingNew() {
   const selectedProject = projects.find((p) => p.id === form.project_id);
   useEffect(() => {
     if (selectedProject && !form.client_name) setForm((f) => ({ ...f, client_name: selectedProject.client_name || "" }));
+    // 社内（CV自社）のまま案件だけ紐づけた場合は、クライアント名は CV自社 のままにする
   }, [selectedProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 出席者の初期値: ログイン中の本人
@@ -149,7 +150,7 @@ export default function MeetingNew() {
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <Label className="text-xs">クライアント</Label>
-              <button type="button" onClick={() => setForm({ ...form, client_name: form.client_name === INTERNAL_CLIENT ? "" : INTERNAL_CLIENT, project_id: "" })} className={`text-[11px] px-2 py-0.5 rounded-full border ${form.client_name === INTERNAL_CLIENT ? "bg-slate-800 text-white border-slate-800" : "bg-muted/40 hover:bg-muted"}`}>
+              <button type="button" onClick={() => setForm({ ...form, client_name: form.client_name === INTERNAL_CLIENT ? "" : INTERNAL_CLIENT })} className={`text-[11px] px-2 py-0.5 rounded-full border ${form.client_name === INTERNAL_CLIENT ? "bg-slate-800 text-white border-slate-800" : "bg-muted/40 hover:bg-muted"}`}>
                 {form.client_name === INTERNAL_CLIENT ? "✓ 社内の打ち合わせ（CV自社）" : "社内の打ち合わせ（CV自社）"}
               </button>
             </div>
@@ -160,10 +161,12 @@ export default function MeetingNew() {
             </datalist>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">案件（任意）</Label>
+            <Label className="text-xs">案件（任意）{form.client_name === INTERNAL_CLIENT && <span className="text-muted-foreground font-normal">　社内の打ち合わせでも、対象のクライアント案件を紐づけられます</span>}</Label>
             <select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
               <option value="">（紐づけない）</option>
-              {projects.filter((p) => !form.client_name || p.client_name === form.client_name).map((p) => <option key={p.id} value={p.id}>{p.project_number} {p.name}</option>)}
+              {projects
+                .filter((p) => !form.client_name || form.client_name === INTERNAL_CLIENT || p.client_name === form.client_name)
+                .map((p) => <option key={p.id} value={p.id}>{form.client_name === INTERNAL_CLIENT && p.client_name ? `${p.client_name}｜` : ""}{p.project_number} {p.name}</option>)}
             </select>
           </div>
           <div className="space-y-1">
