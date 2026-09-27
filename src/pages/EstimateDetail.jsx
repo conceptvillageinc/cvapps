@@ -260,9 +260,16 @@ export default function EstimateDetail() {
   };
 
   const handleDelete = async () => {
-    await db.entities.Estimate.delete(estimateId);
-    toast.success("見積を削除しました");
-    navigate("/estimates");
+    try {
+      await db.entities.Estimate.delete(estimateId);
+      // 一覧はキャッシュされているので、消した見積が残って見えないように更新する
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("見積を削除しました");
+      navigate("/estimates");
+    } catch (err) {
+      toast.error("削除できませんでした: " + (err?.message || "不明なエラー"));
+    }
   };
 
   if (isLoading || !formData) {

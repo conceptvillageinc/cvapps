@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
@@ -37,6 +38,7 @@ export default function ProjectDetail() {
   const queryClient = useQueryClient();
   const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteDocs, setDeleteDocs] = useState(false); // 紐づく見積・納品書・請求書も一緒に消す
 
   const { data: project, isLoading } = useQuery({
     queryKey: ["project", id],
@@ -84,10 +86,21 @@ export default function ProjectDetail() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => db.entities.Project.delete(id),
+    mutationFn: async () => {
+      if (deleteDocs) {
+        // 案件を消すだけだと書類は残る（紐づけが外れるだけ）ので、テストデータなどはここでまとめて消す
+        for (const inv of invoices) await db.entities.Invoice.delete(inv.id);
+        for (const dn of deliveryNotes) await db.entities.DeliveryNote.delete(dn.id);
+        for (const est of estimates) await db.entities.Estimate.delete(est.id);
+      }
+      return db.entities.Project.delete(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("案件を削除しました");
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success(deleteDocs ? "案件と紐づく書類を削除しました" : "案件を削除しました");
       navigate("/projects");
     },
     onError: (err) => toast.error("削除できませんでした: " + (err?.message || "不明なエラー")),
@@ -144,9 +157,18 @@ export default function ProjectDetail() {
               <AlertDialogHeader>
                 <AlertDialogTitle>案件を削除しますか？</AlertDialogTitle>
                 <AlertDialogDescription>
-                  紐付いている見積（{estimates.length}件）は削除されず、案件との紐付けだけが外れます。この操作は取り消せません。
+                  紐付いている見積（{estimates.length}件）・納品書（{deliveryNotes.length}件）・請求書（{invoices.length}件）は、そのままでは削除されず案件との紐付けだけが外れます。この操作は取り消せません。
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              {(estimates.length + deliveryNotes.length + invoices.length) > 0 && (
+                <label className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50/60 p-3 text-sm cursor-pointer">
+                  <Checkbox checked={deleteDocs} onCheckedChange={(v) => setDeleteDocs(!!v)} className="mt-0.5" />
+                  <span>
+                    <span className="font-medium text-red-800">紐づく見積・納品書・請求書も一緒に削除する</span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">テストデータの片付けなど、案件ごとまるごと消したいときに使います</span>
+                  </span>
+                </label>
+              )}
               <AlertDialogFooter>
                 <AlertDialogCancel>キャンセル</AlertDialogCancel>
                 <AlertDialogAction onClick={() => deleteMutation.mutate()} className="bg-destructive text-destructive-foreground">削除</AlertDialogAction>

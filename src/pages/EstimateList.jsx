@@ -1,5 +1,5 @@
 import { db } from "@/api/db";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,7 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, ArrowRight, Loader2, FileText } from "lucide-react";
+import { Plus, Search, ArrowRight, Loader2, FileText, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PRINT_TYPES } from "@/lib/constants";
@@ -30,9 +36,12 @@ function estimateGross(e) {
 
 export default function EstimateList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [columnFilters, setColumnFilters] = useState({});
   const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
+  const [picked, setPicked] = useState(() => new Set()); // まとめて削除する見積の id
+  const [deleting, setDeleting] = useState(false);
 
   const { data: estimates = [], isLoading } = useQuery({
     queryKey: ["estimates"],
@@ -59,6 +68,23 @@ export default function EstimateList() {
   const projectById = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects]);
   const probabilityOf = (e) => (e.project_id && projectById[e.project_id]?.deal_probability) || e.deal_probability || "";
   const phaseOf = (e) => (e.project_id && projectById[e.project_id]?.phase) || e.phase || "";
+
+  const togglePick = (id) => setPicked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const deletePicked = async () => {
+    setDeleting(true);
+    let ok = 0;
+    try {
+      for (const id of picked) { await db.entities.Estimate.delete(id); ok++; }
+      toast.success(`${ok}件の見積を削除しました`);
+      setPicked(new Set());
+    } catch (err) {
+      toast.error(`${ok}件削除したところで失敗しました: ` + (err?.message || "不明なエラー"));
+    } finally {
+      setDeleting(false);
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    }
+  };
 
   // 列ごとの値取得・表示整形
   const columnDefs = useMemo(() => ({
@@ -158,11 +184,32 @@ export default function EstimateList() {
             )}
           </p>
         </div>
-        <Link to="/estimates/new">
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" /> 新規作成
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {picked.size > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:text-destructive" disabled={deleting}>
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} 選択した{picked.size}件を削除
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{picked.size}件の見積を削除しますか？</AlertDialogTitle>
+                  <AlertDialogDescription>見積本体とメール履歴が消えます。紐づく納品書・議事録は残り、見積との紐づけだけが外れます。この操作は取り消せません。</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction onClick={deletePicked} className="bg-destructive text-destructive-foreground">削除する</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          <Link to="/estimates/new">
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" /> 新規作成
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Search */}
@@ -193,6 +240,14 @@ export default function EstimateList() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
+                    <TableHead className="w-8 px-2">
+                      <Checkbox
+                        aria-label="すべて選択"
+                        className="border-white/60 data-[state=checked]:bg-white data-[state=checked]:text-slate-800"
+                        checked={sorted.length > 0 && sorted.every((e) => picked.has(e.id))}
+                        onCheckedChange={(v) => setPicked(v ? new Set(sorted.map((e) => e.id)) : new Set())}
+                      />
+                    </TableHead>
                     {Object.entries(columnDefs).map(([key, def]) => (
                       <TableHead key={key} className="text-xs text-white whitespace-nowrap">
                         {def.label}
@@ -254,7 +309,10 @@ export default function EstimateList() {
                     const gid = est.project_group_id || est.id;
                     const isLatest = latestIdByGroup[gid]?.id === est.id;
                     return (
-                      <TableRow key={est.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/estimates/${est.id}`)}>
+                      <TableRow key={est.id} className={`group cursor-pointer hover:bg-muted/40 ${picked.has(est.id) ? "bg-red-50/60" : ""}`} onClick={() => navigate(`/estimates/${est.id}`)}>
+                        <TableCell className="w-8 px-2" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox aria-label="選択" checked={picked.has(est.id)} onCheckedChange={() => togglePick(est.id)} />
+                        </TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground">
                           {est.estimate_number}
                         </TableCell>
