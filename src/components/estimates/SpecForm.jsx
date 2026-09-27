@@ -1,3 +1,4 @@
+import SizeInput from "@/components/estimates/SizeInput";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -76,15 +77,11 @@ export default function SpecForm({ data, onChange, showPersonInCharge = true }) 
         </div>
 
         {/* Size & Paper */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">サイズ</Label>
+          <SizeInput value={data.size || ""} onChange={(v) => update("size", v)} />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">サイズ</Label>
-            <Input
-              value={data.size || ""}
-              onChange={e => update("size", e.target.value)}
-              placeholder="例: A4, 100mm×80mm"
-            />
-          </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">紙質・素材</Label>
             <Input

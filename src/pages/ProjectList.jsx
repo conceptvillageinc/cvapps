@@ -14,13 +14,19 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
+import { DailyView, NextActionView } from "@/components/projects/ProjectViews";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const ALL_YEARS = "all";
+const VIEWS = [
+  { key: "standard", label: "標準" },
+  { key: "daily", label: "速報デイリー" },
+  { key: "next", label: "案件別ネクストアクション" },
+];
 
 export default function ProjectList() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { dealProbabilityOptions, phaseOptions, fiscalYearStartMonth } = useSystemSettings();
 
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
@@ -30,6 +36,9 @@ export default function ProjectList() {
   const [columnFilters, setColumnFilters] = useState({ status: [PROJECT_STATUS_MAP.open.label] });
   const [sortConfig, setSortConfig] = useState({ key: "registered_at", direction: "desc" });
   const [createOpen, setCreateOpen] = useState(false);
+  // 表示ビュー（標準／速報デイリー／案件別ネクストアクション）。URL の ?view= で共有できる
+  const view = VIEWS.some((v) => v.key === searchParams.get("view")) ? searchParams.get("view") : "standard";
+  const setView = (key) => setSearchParams((prev) => { const n = new URLSearchParams(prev); if (key === "standard") n.delete("view"); else n.set("view", key); return n; }, { replace: true });
 
   const range = fiscalYear === ALL_YEARS ? null : fiscalYearRange(Number(fiscalYear), fiscalYearStartMonth);
 
@@ -38,6 +47,13 @@ export default function ProjectList() {
     queryFn: () => range
       ? db.entities.Project.between("registered_at", range.from, range.to, "-registered_at")
       : db.entities.Project.list("-registered_at"),
+  });
+
+  // ネクストアクションは期に関係なく「進行中」の案件すべてを見る
+  const { data: openProjects = [], isLoading: openLoading } = useQuery({
+    queryKey: ["projects", "open", "all"],
+    queryFn: () => db.entities.Project.filter({ status: "open" }, "due_date"),
+    enabled: view === "next",
   });
 
   const { data: clients = [] } = useQuery({
@@ -138,6 +154,15 @@ export default function ProjectList() {
     return list;
   }, [filtered, sortConfig, clientKanaMap]);
 
+  const matchesSearch = (p) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [p.project_number, p.client_name, p.name, p.notes, p.next_action].filter(Boolean).join(" ").toLowerCase().includes(q);
+  };
+  // 速報デイリー: 取消・失注は含めない
+  const dailyRows = useMemo(() => projects.filter((p) => p.status !== "cancelled" && p.status !== "lost").filter(matchesSearch), [projects, search]);
+  const nextRows = useMemo(() => openProjects.filter(matchesSearch), [openProjects, search]);
+
   const totals = useMemo(() => ({
     revenue: filtered.reduce((s, p) => s + Number(p.expected_revenue || 0), 0),
     gross: filtered.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
@@ -161,8 +186,12 @@ export default function ProjectList() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">案件一覧</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {filtered.length}件 / {fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)} {projects.length}件
-            {activeFilterCount > 0 && (
+            {view === "daily"
+              ? `${dailyRows.length}件 / ${fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}`
+              : view === "next"
+                ? `進行中 ${nextRows.length}件（すべての期）`
+                : `${filtered.length}件 / ${fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)} ${projects.length}件`}
+            {view === "standard" && activeFilterCount > 0 && (
               <button onClick={() => setColumnFilters({})} className="ml-2 text-primary hover:underline">
                 列フィルターをすべて解除（{activeFilterCount}件適用中）
               </button>
@@ -190,6 +219,22 @@ export default function ProjectList() {
         </div>
       </div>
 
+      <div className="flex items-center gap-1 border-b">
+        {VIEWS.map((v) => (
+          <button
+            key={v.key}
+            type="button"
+            onClick={() => setView(v.key)}
+            className={`px-3.5 py-2 text-sm border-b-2 -mb-px transition-colors ${view === v.key ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            {v.label}
+          </button>
+        ))}
+        <span className="ml-auto text-[11px] text-muted-foreground pr-1">
+          {view === "daily" ? "案件登録日の新しい順（取消・失注は含まない）" : view === "next" ? "完了予定日の近い順（進行中の案件のみ・期をまたいで表示）" : ""}
+        </span>
+      </div>
+
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
@@ -200,6 +245,11 @@ export default function ProjectList() {
         />
       </div>
 
+      {view === "daily" ? (
+        <DailyView projects={dailyRows} isLoading={isLoading} />
+      ) : view === "next" ? (
+        <NextActionView projects={nextRows} isLoading={openLoading} />
+      ) : (
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -295,6 +345,7 @@ export default function ProjectList() {
           )}
         </CardContent>
       </Card>
+      )}
 
       <ProjectFormDialog
         open={createOpen}

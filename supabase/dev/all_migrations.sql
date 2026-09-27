@@ -1,5 +1,5 @@
 -- ============================================================================
--- dev 環境用: 全マイグレーション（0001〜0017）を順番につなげたもの。
+-- dev 環境用: 全マイグレーション（0001〜0018）を順番につなげたもの。
 -- 新しい Supabase プロジェクトの SQL Editor に丸ごと貼り付けて Run する（冪等）。
 -- 生成: scripts/build-all-migrations.sh（migrations を変えたら再生成する）
 -- ============================================================================
@@ -1600,3 +1600,18 @@ on conflict (setting_key) do nothing;
 
 -- 音声ファイルの取り込み（ボイスメモなど）は 25MB を超えるので上限を 200MB に
 update storage.buckets set file_size_limit = 209715200 where id = 'uploads';
+
+-- >>>>>>>> supabase/migrations/0018_project_next_action.sql
+-- ============================================================================
+-- 0018: 案件の「ネクストアクション」（案件一覧のネクストアクションビュー用）
+-- 冪等。Supabase の SQL Editor に貼って実行する。
+-- ============================================================================
+
+alter table public.projects
+  add column if not exists next_action            text,
+  add column if not exists next_action_updated_at timestamptz,
+  add column if not exists next_action_updated_by text;
+
+comment on column public.projects.next_action is '次にやること（自由記述。案件一覧のネクストアクションビューで編集）';
+comment on column public.projects.next_action_updated_at is 'ネクストアクションを最後に書き換えた日時';
+comment on column public.projects.next_action_updated_by is 'ネクストアクションを最後に書き換えた人（表示名）';

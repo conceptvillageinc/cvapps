@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X, Copy, Trash2, Printer, AlertTriangle, ChevronDown, ChevronRight, Mail } from "lucide-react";
 import { PRINT_TYPES } from "@/lib/constants";
 import { newPrintSpec, specLabel, specMissing } from "@/lib/printSpecs";
+import SizeInput from "@/components/estimates/SizeInput";
 
 function QuantityEditor({ values, onChange }) {
   const [input, setInput] = useState("");
@@ -93,11 +94,12 @@ function SpecCard({ spec, index, onChange, onDuplicate, onRemove, defaultOpen })
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">サイズ</Label>
-              <Input value={spec.size || ""} onChange={(e) => set("size", e.target.value)} placeholder="例: A4, 100mm×80mm" className="h-9" />
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">サイズ <span className="text-muted-foreground font-normal">（数字だけ入れると 000mm×000mm の形になります）</span></Label>
+            <SizeInput value={spec.size || ""} onChange={(v) => set("size", v)} />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">紙質・素材</Label>
               <Input value={spec.paper_type || ""} onChange={(e) => set("paper_type", e.target.value)} placeholder="例: コート紙135kg、PETフィルム" className="h-9" />

@@ -20,6 +20,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP, STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import ProjectTasks from "@/components/projects/ProjectTasks";
+import { NextActionCell } from "@/components/projects/ProjectViews";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 
@@ -216,6 +217,10 @@ export default function ProjectDetail() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5 sm:col-span-3">
+            <p className="text-xs text-muted-foreground">ネクストアクション <span className="text-[10px]">（案件一覧の「案件別ネクストアクション」にも出ます）</span></p>
+            <NextActionCell project={project} />
           </div>
         </CardContent>
       </Card>
