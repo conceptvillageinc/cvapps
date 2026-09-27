@@ -38,12 +38,22 @@
     },
     "api/check-email-replies.js": {
       "maxDuration": 30
+    },
+    "api/meeting-process.js": {
+      "maxDuration": 300
+    },
+    "api/meetings-cleanup.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
     {
       "path": "/api/recurring-projects",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/meetings-cleanup",
+      "schedule": "0 18 * * *"
     }
   ]
 }

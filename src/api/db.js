@@ -20,6 +20,9 @@ const TABLES = {
   PrintVendor: 'print_vendors',
   PriceMaster: 'price_masters',
   DesignFeeMaster: 'design_fee_masters',
+  Meeting: 'meetings',
+  MeetingSegment: 'meeting_segments',
+  MeetingChecklist: 'meeting_checklists',
   EmailLog: 'email_logs',
   SystemSettings: 'system_settings',
   FaqItem: 'faq_items',
@@ -100,6 +103,13 @@ const WRITABLE_COLUMNS = {
     'category', 'paper_type_group', 'vendor_name', 'spec_summary',
     'price_grid', 'last_updated', 'screenshot_url', 'source_url', 'notes', 'price_tax_mode',
   ],
+  meetings: [
+    'title', 'held_at', 'meeting_type', 'client_id', 'client_name', 'project_id', 'estimate_id', 'participants',
+    'audio_path', 'audio_duration_sec', 'audio_size', 'source', 'status', 'error_message',
+    'transcript', 'summary', 'checkpoints', 'finalized_at', 'created_by',
+  ],
+  meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
+  meeting_checklists: ['meeting_type', 'key', 'label', 'sort_order', 'is_active'],
   design_fee_masters: [
     'category', 'category_order', 'name', 'detail', 'hours', 'unit_price', 'amount',
     'selling_price', 'sort_order', 'is_active',
@@ -374,8 +384,8 @@ const integrations = {
      * 返す file_url はバケット内のパス。公開URLではない（URLが漏れても読めない）。
      * サーバー側の /api/llm がこのパスを受け取り、service_role で実体を読む。
      */
-    async UploadFile({ file }) {
-      const path = storagePath(file);
+    async UploadFile({ file, path: givenPath }) {
+      const path = givenPath || storagePath(file);
       const { error } = await supabase.storage
         .from(UPLOAD_BUCKET)
         .upload(path, file, { contentType: file.type || undefined, upsert: false });
@@ -406,6 +416,7 @@ const FUNCTION_ROUTES = {
   exportScheduleSheet: 'export-schedule-sheet',
   readSheet: 'read-sheet',
   checkEmailReplies: 'check-email-replies',
+  meetingProcess: 'meeting-process',
 };
 
 const functions = {
@@ -446,6 +457,13 @@ const storage = {
     const { data, error } = await supabase.storage.from(UPLOAD_BUCKET).createSignedUrl(path, expiresIn);
     if (error) throw new Error(`ファイルのURLを取得できませんでした: ${error.message}`);
     return data.signedUrl;
+  },
+  /** 非公開バケットのファイルを削除する（議事録の音声など） */
+  async remove(paths) {
+    const list = (Array.isArray(paths) ? paths : [paths]).filter(Boolean);
+    if (list.length === 0) return;
+    const { error } = await supabase.storage.from(UPLOAD_BUCKET).remove(list);
+    if (error) throw new Error(`ファイルを削除できませんでした: ${error.message}`);
   },
 };
 

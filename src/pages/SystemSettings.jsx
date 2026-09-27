@@ -10,6 +10,7 @@ import { Settings, Plus, X, ArrowUp, ArrowDown, FileText, GripVertical, Trash2, 
 import { toast } from "sonner";
 import PricingRulesCard from "@/components/settings/PricingRulesCard";
 import CompanyInfoCard from "@/components/settings/CompanyInfoCard";
+import MeetingSettingsCard from "@/components/settings/MeetingSettingsCard";
 
 // 設定1件をupsert（存在すれば更新、無ければ新規作成）
 async function upsertSetting(existingList, key, value, description) {
@@ -235,6 +236,8 @@ export default function SystemSettingsPage() {
       <CompanyInfoCard settings={settings} upsertSetting={upsertSetting} />
 
       <PricingRulesCard settings={settings} upsertSetting={upsertSetting} />
+
+      <MeetingSettingsCard settings={settings} upsertSetting={upsertSetting} />
 
       <Card>
         <CardHeader>

@@ -10,7 +10,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic } from "lucide-react";
+import { MEETING_STATUS } from "@/lib/meetings";
 import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -46,6 +47,12 @@ export default function ProjectDetail() {
   const { data: estimates = [] } = useQuery({
     queryKey: ["estimates", "byProject", id],
     queryFn: () => db.entities.Estimate.filter({ project_id: id }, "-created_date"),
+    enabled: !!id,
+  });
+
+  const { data: meetings = [] } = useQuery({
+    queryKey: ["meetings", "byProject", id],
+    queryFn: () => db.entities.Meeting.filter({ project_id: id }, "-held_at"),
     enabled: !!id,
   });
 
@@ -280,6 +287,34 @@ export default function ProjectDetail() {
 
       {/* 工程 */}
       <ProjectTasks project={project} />
+
+      {/* 議事録 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2"><Mic className="w-4 h-4" /> 議事録（{meetings.length}件）</CardTitle>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/meetings/new?project=${project.id}&client=${encodeURIComponent(project.client_name || "")}`)}>
+              <Mic className="w-3.5 h-3.5" /> 打ち合わせを録音
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {meetings.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">まだ議事録がありません</p>
+          ) : (
+            <div className="divide-y">
+              {meetings.map((m) => (
+                <Link key={m.id} to={`/meetings/${m.id}`} className="flex items-center gap-3 py-2 text-xs hover:bg-muted/40 -mx-2 px-2 rounded">
+                  <span className="text-muted-foreground w-20 shrink-0">{m.held_at ? String(m.held_at).replace(/-/g, "/") : ""}</span>
+                  <span className="flex-1 truncate">{m.title || "（件名なし）"}</span>
+                  <Badge className={`text-[9px] ${MEETING_STATUS[m.status]?.color || ""}`}>{MEETING_STATUS[m.status]?.label || m.status}</Badge>
+                  {(m.summary?.todos || []).filter((t) => !t.done).length > 0 && <Badge variant="outline" className="text-[9px] font-normal">ToDo {(m.summary.todos).filter((t) => !t.done).length}</Badge>}
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 見積 */}
       <Card>

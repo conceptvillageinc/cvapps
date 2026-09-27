@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, UserCircle
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, UserCircle, Mic
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
@@ -18,6 +18,7 @@ const navItems = [
   { path: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { path: "/projects", label: "案件一覧", icon: FolderKanban },
   { path: "/estimates/new", label: "新規見積作成", icon: Plus },
+  { path: "/meetings", label: "議事録", icon: Mic },
   { path: "/estimates", label: "見積一覧", icon: FileText },
   { path: "/history", label: "提出見積履歴", icon: History },
   { path: "/delivery-notes", label: "納品書", icon: Truck },

@@ -19,6 +19,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { specLabel } from "@/lib/printSpecs";
+import { MEETING_STATUS } from "@/lib/meetings";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
@@ -71,6 +72,7 @@ const TABS = [
   { key: "projects", label: "案件" },
   { key: "invoices", label: "請求書" },
   { key: "deliveryNotes", label: "納品書" },
+  { key: "meetings", label: "議事録" },
 ];
 
 const GRID = "grid-cols-[24px_minmax(0,1fr)_64px_78px_44px_72px_86px_minmax(140px,180px)_64px]";
@@ -99,6 +101,7 @@ export default function ClientKarte() {
   const { data: deliveryNotes = [] } = useQuery({ queryKey: ["deliveryNotes", "byClient", name], queryFn: () => db.entities.DeliveryNote.filter({ client_name: name }, "-delivery_date"), enabled: !!name });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "byClient", name], queryFn: () => db.entities.Invoice.filter({ client_name: name }, "-invoice_date"), enabled: !!name });
   const { data: masters = [] } = useQuery({ queryKey: ["priceMaster"], queryFn: () => db.entities.PriceMaster.list("-last_updated") });
+  const { data: meetings = [] } = useQuery({ queryKey: ["meetings", "byClient", name], queryFn: () => db.entities.Meeting.filter({ client_name: name }, "-held_at"), enabled: !!name });
   const masterById = useMemo(() => Object.fromEntries(masters.map((m) => [m.id, m])), [masters]);
   const projectById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
 
@@ -140,10 +143,15 @@ export default function ClientKarte() {
         .filter((i) => has(i.invoice_number, i.title))
         .map((i) => ({ id: i.id, number: i.invoice_number, date: fmtDate(i.invoice_date), title: i.title || "（件名なし）", total: i.total, sub: i.due_date ? `入金期日 ${fmtDate(i.due_date)}` : "", badge: INVOICE_STATUS_MAP[i.status] ? { label: INVOICE_STATUS_MAP[i.status].label, cls: INVOICE_STATUS_MAP[i.status].color } : null, raw: i }));
     }
+    if (tab === "meetings") {
+      return meetings
+        .filter((m) => has(m.title, m.summary?.overview))
+        .map((m) => ({ id: m.id, number: "", date: fmtDate(m.held_at), title: m.title || "（件名なし）", total: 0, sub: [m.summary?.overview].filter(Boolean).join("").slice(0, 60), badge: MEETING_STATUS[m.status] ? { label: MEETING_STATUS[m.status].label, cls: MEETING_STATUS[m.status].color } : null, raw: m }));
+    }
     return deliveryNotes
       .filter((n) => has(n.delivery_number, n.title))
       .map((n) => ({ id: n.id, number: n.delivery_number, date: fmtDate(n.delivery_date), title: n.title || "（件名なし）", total: n.total, sub: "", badge: DELIVERY_STATUS_MAP[n.status] ? { label: DELIVERY_STATUS_MAP[n.status].label, cls: DELIVERY_STATUS_MAP[n.status].color } : null, raw: n }));
-  }, [tab, search, estimates, projects, invoices, deliveryNotes]);
+  }, [tab, search, estimates, projects, invoices, deliveryNotes, meetings]);
 
   useEffect(() => {
     if (list.length === 0) { setSelectedId(null); return; }
@@ -210,7 +218,7 @@ export default function ClientKarte() {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const counts = { estimates: estimates.length, projects: projects.length, invoices: invoices.length, deliveryNotes: deliveryNotes.length };
+  const counts = { estimates: estimates.length, projects: projects.length, invoices: invoices.length, deliveryNotes: deliveryNotes.length, meetings: meetings.length };
 
   return (
     <div className="max-w-7xl mx-auto space-y-3">
@@ -326,6 +334,8 @@ export default function ClientKarte() {
             <p className="text-xs text-muted-foreground text-center py-16">左の一覧から選んでください</p>
           ) : tab === "estimates" && estimateView ? (
             <EstimatePane view={estimateView} onOpenPdf={openPdf} pdfLoading={pdfLoading} clientName={client.name} />
+          ) : tab === "meetings" ? (
+            <MeetingPane meeting={current.raw} />
           ) : (
             <SimplePane tab={tab} row={current} />
           )}
@@ -469,6 +479,34 @@ function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
             </span>
           )}
         </div>
+      </div>
+    </>
+  );
+}
+
+/** 右側: 議事録（概要・決定事項・ToDo・確認事項） */
+function MeetingPane({ meeting: m }) {
+  const s = m.summary || {};
+  const unconfirmed = (m.checkpoints || []).filter((c) => c.status === "unconfirmed");
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b bg-muted/40">
+        <div className="min-w-0">
+          <p className="text-sm font-bold truncate">{m.title || "（件名なし）"}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{fmtDate(m.held_at)}　{(m.participants || []).join("、")}</p>
+        </div>
+        <a href={`/meetings/${m.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 h-7 px-2 rounded-md border bg-background text-[11px] hover:bg-muted/50 shrink-0"><ExternalLink className="w-3 h-3" /> 開く</a>
+      </div>
+      <div className="p-4 space-y-3 overflow-auto text-xs">
+        {!m.summary ? <p className="text-muted-foreground">{MEETING_STATUS[m.status]?.label || ""}（議事録はまだできていません）</p> : (
+          <>
+            <div><p className="text-[10px] text-muted-foreground font-medium">概要</p><p className="whitespace-pre-line leading-relaxed">{s.overview || "—"}</p></div>
+            <div><p className="text-[10px] text-muted-foreground font-medium">決定事項</p>{(s.decisions || []).length ? <ul className="list-disc pl-4 space-y-0.5">{s.decisions.map((d, i) => <li key={i}>{d}</li>)}</ul> : <p className="text-muted-foreground">—</p>}</div>
+            <div><p className="text-[10px] text-muted-foreground font-medium">ToDo</p>{(s.todos || []).length ? <ul className="space-y-0.5">{s.todos.map((t, i) => <li key={i} className={t.done ? "line-through text-muted-foreground" : ""}>・{t.text}{t.owner ? `（${t.owner}）` : ""}{t.due ? ` 期限 ${t.due}` : ""}</li>)}</ul> : <p className="text-muted-foreground">—</p>}</div>
+            {unconfirmed.length > 0 && <div><p className="text-[10px] text-amber-700 font-medium">未確認の項目</p><p className="text-amber-800">{unconfirmed.map((c) => c.label).join("・")}</p></div>}
+            {s.notes && <div><p className="text-[10px] text-muted-foreground font-medium">補足メモ</p><p className="whitespace-pre-line">{s.notes}</p></div>}
+          </>
+        )}
       </div>
     </>
   );

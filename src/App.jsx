@@ -19,6 +19,9 @@ import VendorManagement from '@/pages/VendorManagement';
 import PriceMasterList from '@/pages/PriceMasterList';
 import DesignFeeMasterList from '@/pages/DesignFeeMasterList';
 import MyProfile from '@/pages/MyProfile';
+import MeetingList from '@/pages/MeetingList';
+import MeetingNew from '@/pages/MeetingNew';
+import MeetingDetail from '@/pages/MeetingDetail';
 import SystemSettingsPage from '@/pages/SystemSettings';
 import UserManagement from '@/pages/UserManagement';
 import ClientManagement from '@/pages/ClientManagement';
@@ -82,6 +85,9 @@ const AuthenticatedApp = () => {
           <Route path="/price-master" element={<PriceMasterList />} />
           <Route path="/design-fee-master" element={<DesignFeeMasterList />} />
           <Route path="/profile" element={<MyProfile />} />
+          <Route path="/meetings" element={<MeetingList />} />
+          <Route path="/meetings/new" element={<MeetingNew />} />
+          <Route path="/meetings/:id" element={<MeetingDetail />} />
           <Route path="/settings" element={<SystemSettingsPage />} />
           <Route path="/users" element={<UserManagement />} />
           <Route path="/clients" element={<ClientManagement />} />
