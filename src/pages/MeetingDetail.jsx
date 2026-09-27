@@ -16,6 +16,9 @@ import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
 
+// useQuery の既定値に毎回新しい配列を渡すと、effect が無限に走るので固定の空配列を使う
+const EMPTY = [];
+
 const CHECK_STYLE = {
   confirmed: { label: "確認済み", cls: "border-emerald-200 bg-emerald-50 text-emerald-800" },
   unconfirmed: { label: "未確認", cls: "border-red-200 bg-red-50 text-red-800" },
@@ -44,7 +47,7 @@ export default function MeetingDetail() {
     enabled: !!id,
     refetchInterval: (q) => (q.state.data && PROCESSING.has(q.state.data.status) ? 5000 : false),
   });
-  const { data: segments = [] } = useQuery({
+  const { data: segments = EMPTY } = useQuery({
     queryKey: ["meetingSegments", id],
     queryFn: () => db.entities.MeetingSegment.filter({ meeting_id: id }, "seq"),
     enabled: !!id,
@@ -65,7 +68,9 @@ export default function MeetingDetail() {
   }, [meeting?.audio_path]);
   useEffect(() => {
     let alive = true;
-    Promise.all(segments.filter((s) => s.storage_path).map((s) => db.storage.signedUrl(s.storage_path, 3600).then((u) => ({ seq: s.seq, url: u, duration: Number(s.duration_sec) || 0 })).catch(() => null)))
+    const withAudio = segments.filter((s) => s.storage_path);
+    if (withAudio.length === 0) { setSegmentUrls((cur) => (cur.length === 0 ? cur : EMPTY)); return; }
+    Promise.all(withAudio.map((s) => db.storage.signedUrl(s.storage_path, 3600).then((u) => ({ seq: s.seq, url: u, duration: Number(s.duration_sec) || 0 })).catch(() => null)))
       .then((list) => alive && setSegmentUrls(list.filter(Boolean)));
     return () => { alive = false; };
   }, [segments]);
@@ -183,10 +188,14 @@ export default function MeetingDetail() {
               <MeetingRecorder meetingId={meeting.id} startSeq={segments.length} onFinish={async ({ totalSec }) => { await db.entities.Meeting.update(id, { status: "uploaded", audio_duration_sec: Math.round((Number(meeting.audio_duration_sec) || 0) + totalSec) }); setResumeRecording(false); queryClient.invalidateQueries({ queryKey: ["meeting", id] }); }} />
             ) : (
               <>
-                <p className="text-sm font-semibold flex items-center gap-2"><Mic className="w-4 h-4 text-red-600" /> 録音が途中で終わっています</p>
-                <p className="text-xs text-muted-foreground">保存済みの断片: {segments.length} 本（約 {fmtClock(segments.reduce((s, x) => s + (Number(x.duration_sec) || 0), 0))}）。続きを録るか、このまま議事録を作れます。</p>
+                <p className="text-sm font-semibold flex items-center gap-2"><Mic className="w-4 h-4 text-red-600" /> {segments.length === 0 ? "録音はまだ始まっていません" : "録音が途中で終わっています"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {segments.length === 0
+                    ? "録音ボタンを押す前に画面を離れたようです。ここから録音を始めるか、右上の「削除」でこの議事録を消せます。"
+                    : `保存済みの断片: ${segments.length} 本（約 ${fmtClock(segments.reduce((s, x) => s + (Number(x.duration_sec) || 0), 0))}）。続きを録るか、このまま議事録を作れます。`}
+                </p>
                 <div className="flex gap-2">
-                  <Button className="bg-red-600 hover:bg-red-700 gap-1.5" onClick={() => setResumeRecording(true)}><Mic className="w-4 h-4" /> 続きを録る</Button>
+                  <Button className="bg-red-600 hover:bg-red-700 gap-1.5" onClick={() => setResumeRecording(true)}><Mic className="w-4 h-4" /> {segments.length === 0 ? "録音を始める" : "続きを録る"}</Button>
                   <Button variant="outline" onClick={async () => { if (segments.length === 0) { toast.error("保存済みの録音がありません"); return; } await db.entities.Meeting.update(id, { status: "uploaded" }); queryClient.invalidateQueries({ queryKey: ["meeting", id] }); }} disabled={segments.length === 0}>このまま議事録を作る</Button>
                 </div>
               </>
