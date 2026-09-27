@@ -7,7 +7,10 @@
 // ============================================================================
 
 const API = 'https://generativelanguage.googleapis.com';
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// モデルは世代交代が早い。環境変数で指定できるほか、「もう使えない」と言われたら
+// エラー文に書かれた推奨モデルや下の候補で自動的にやり直す。
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const MODEL_CANDIDATES = [GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3-flash', 'gemini-2.5-flash'];
 const INLINE_LIMIT = 15 * 1024 * 1024;
 
 export function isGeminiConfigured() {
@@ -102,25 +105,41 @@ export async function transcribeAudio(bytes, mimeType, opts = {}) {
     opts.hint ? `補足: ${opts.hint}` : '',
   ].filter(Boolean).join('\n');
 
-  const res = await fetch(`${API}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key()}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [audioPart, { text: prompt }] }],
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: 'application/json',
-        responseSchema: TRANSCRIPT_SCHEMA,
-        maxOutputTokens: 65536,
-      },
-    }),
+  const body = JSON.stringify({
+    contents: [{ role: 'user', parts: [audioPart, { text: prompt }] }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+      responseSchema: TRANSCRIPT_SCHEMA,
+      maxOutputTokens: 65536,
+    },
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
+
+  // 使えないモデルなら、エラー文の推奨モデル → 候補の順にやり直す
+  const tried = new Set();
+  const queue = [...MODEL_CANDIDATES];
+  let data = null;
+  let res = null;
+  while (queue.length > 0) {
+    const model = queue.shift();
+    if (tried.has(model)) continue;
+    tried.add(model);
+    res = await fetch(`${API}/v1beta/models/${model}:generateContent?key=${key()}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+    });
+    data = await res.json().catch(() => ({}));
+    if (res.ok) break;
     const msg = data.error?.message || String(res.status);
     if (res.status === 400 && /API key/i.test(msg)) throw new Error('Gemini の API キーが無効です。Vercel の GEMINI_API_KEY を確認してください');
     if (res.status === 429) throw new Error('Gemini の利用上限に達しました。しばらくしてからもう一度お試しください');
-    throw new Error(`文字起こしに失敗しました: ${msg}`);
+    const unavailable = res.status === 404 || /no longer available|not found|not supported|deprecated/i.test(msg);
+    if (!unavailable) throw new Error(`文字起こしに失敗しました: ${msg}`);
+    const suggested = msg.match(/models\/([A-Za-z0-9._-]+)/g)?.map((m) => m.replace('models/', '')).find((m) => !tried.has(m));
+    if (suggested) queue.unshift(suggested);
+    console.warn(`[gemini] ${model} は使えません（${msg.slice(0, 120)}）。次の候補を試します`);
+  }
+  if (!res || !res.ok) {
+    throw new Error(`文字起こしに失敗しました: 使えるモデルがありません（${data?.error?.message || ''}）。Vercel の環境変数 GEMINI_MODEL に使えるモデル名を設定してください`);
   }
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
   let parsed;
