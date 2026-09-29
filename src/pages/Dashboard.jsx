@@ -25,7 +25,7 @@ const STATUS_MAP = {
 export default function Dashboard() {
   const { data: estimates = [], isLoading } = useQuery({
     queryKey: ["estimates"],
-    queryFn: () => db.entities.Estimate.list("-created_date", 50),
+    queryFn: () => db.entities.Estimate.listAll("-created_date"),
   });
 
   const stats = {

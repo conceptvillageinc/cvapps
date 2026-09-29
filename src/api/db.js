@@ -173,6 +173,18 @@ function sanitize(table, data) {
   return out;
 }
 
+// 1000 行ずつ読み足して全件にする。buildQuery(from, to) は range 付きの問い合わせを返す
+const PAGE = 1000;
+async function fetchAllPages(buildQuery) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const page = unwrap(await buildQuery(from, from + PAGE - 1));
+    rows.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return decorateAll(rows);
+}
+
 function unwrap({ data, error }) {
   if (error) {
     const err = new Error(error.message || 'データベース操作に失敗しました');
@@ -200,6 +212,41 @@ function createEntity(entityName) {
     },
 
     /**
+     * 全件を取る。Supabase は 1 回の問い合わせで最大 1000 行までしか返さないので、
+     * 1000 行ずつ続きを読んでつなげる（見積・納品書のように 1000 件を超える表向け）。
+     */
+    async listAll(sort, conditions = {}) {
+      return fetchAllPages((from, to) => {
+        let query = supabase.from(table).select('*');
+        for (const [field, value] of Object.entries(conditions)) {
+          query = value === null ? query.is(toColumn(field), null) : query.eq(toColumn(field), value);
+        }
+        const parsed = parseSort(sort);
+        if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
+        return query.order('id').range(from, to);
+      });
+    },
+
+    /** 件数だけ数える（行は取らない） */
+    async count(conditions = {}) {
+      let query = supabase.from(table).select('id', { count: 'exact', head: true });
+      for (const [field, value] of Object.entries(conditions)) {
+        query = value === null ? query.is(toColumn(field), null) : query.eq(toColumn(field), value);
+      }
+      const { count, error } = await query;
+      if (error) unwrap({ data: null, error });
+      return count || 0;
+    },
+
+    /** 前方一致など（pattern は SQL の like 形式。例: 'CV-2609-%'） */
+    async like(column, pattern, sort) {
+      let query = supabase.from(table).select('*').like(toColumn(column), pattern);
+      const parsed = parseSort(sort);
+      if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
+      return decorateAll(unwrap(await query.limit(1000)));
+    },
+
+    /**
      * @param {Object} conditions  例: { project_group_id: "CV-2607-001" }
      */
     async filter(conditions = {}, sort, limit) {
@@ -222,15 +269,17 @@ function createEntity(entityName) {
      * 全件を取ると多すぎる表に使う。from / to は省略可。
      */
     async between(column, from, to, sort, conditions = {}) {
-      let query = supabase.from(table).select('*');
-      if (from) query = query.gte(toColumn(column), from);
-      if (to) query = query.lte(toColumn(column), to);
-      for (const [field, value] of Object.entries(conditions)) {
-        query = value === null ? query.is(toColumn(field), null) : query.eq(toColumn(field), value);
-      }
-      const parsed = parseSort(sort);
-      if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
-      return decorateAll(unwrap(await query.limit(5000)));
+      return fetchAllPages((start, end) => {
+        let query = supabase.from(table).select('*');
+        if (from) query = query.gte(toColumn(column), from);
+        if (to) query = query.lte(toColumn(column), to);
+        for (const [field, value] of Object.entries(conditions)) {
+          query = value === null ? query.is(toColumn(field), null) : query.eq(toColumn(field), value);
+        }
+        const parsed = parseSort(sort);
+        if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });
+        return query.order('id').range(start, end);
+      });
     },
 
     /** 指定した列が配列のいずれかに一致する行 */

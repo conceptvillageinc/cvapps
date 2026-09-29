@@ -21,7 +21,7 @@ export default function EstimateHistory() {
 
   const { data: estimates = [], isLoading } = useQuery({
     queryKey: ["estimates-history"],
-    queryFn: () => db.entities.Estimate.list("-created_date", 200),
+    queryFn: () => db.entities.Estimate.listAll("-created_date"),
   });
 
   const approvedEstimates = estimates.filter(e =>

@@ -12,8 +12,8 @@ export async function generateEstimateNumber(db) {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const prefix = `CV-${yy}${mm}-`;
 
-  // 直近の見積を取得し、同月内の連番の最大値を調べる
-  const all = await db.entities.Estimate.list("-created_date", 500);
+  // 同じ月の番号だけを取り、連番の最大値を調べる（freee から取り込んだ Q- 番号などは対象外）
+  const all = await db.entities.Estimate.like("estimate_number", `${prefix}%`, "-created_date");
   const usedNumbers = new Set(all.map(e => e.estimate_number).filter(Boolean));
 
   const thisMonthSeqs = all

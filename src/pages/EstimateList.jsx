@@ -41,11 +41,13 @@ export default function EstimateList() {
   const [columnFilters, setColumnFilters] = useState({});
   const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
   const [picked, setPicked] = useState(() => new Set()); // まとめて削除する見積の id
+  const [showAll, setShowAll] = useState(false); // 1000件超でも重くならないよう、最初は 200 件だけ描画する
+  const PAGE_ROWS = 200;
   const [deleting, setDeleting] = useState(false);
 
   const { data: estimates = [], isLoading } = useQuery({
     queryKey: ["estimates"],
-    queryFn: () => db.entities.Estimate.list("-created_date", 100),
+    queryFn: () => db.entities.Estimate.listAll("-created_date"),
   });
 
   const { data: clients = [] } = useQuery({
@@ -168,6 +170,8 @@ export default function EstimateList() {
     }
   });
 
+  const visibleRows = showAll ? sorted : sorted.slice(0, PAGE_ROWS);
+
   const activeFilterCount = Object.values(columnFilters).filter(v => v !== null && v !== undefined).length;
 
   return (
@@ -244,8 +248,8 @@ export default function EstimateList() {
                       <Checkbox
                         aria-label="すべて選択"
                         className="border-white/60 data-[state=checked]:bg-white data-[state=checked]:text-slate-800"
-                        checked={sorted.length > 0 && sorted.every((e) => picked.has(e.id))}
-                        onCheckedChange={(v) => setPicked(v ? new Set(sorted.map((e) => e.id)) : new Set())}
+                        checked={visibleRows.length > 0 && visibleRows.every((e) => picked.has(e.id))}
+                        onCheckedChange={(v) => setPicked(v ? new Set(visibleRows.map((e) => e.id)) : new Set())}
                       />
                     </TableHead>
                     {Object.entries(columnDefs).map(([key, def]) => (
@@ -305,7 +309,7 @@ export default function EstimateList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sorted.map(est => {
+                  {visibleRows.map(est => {
                     const gid = est.project_group_id || est.id;
                     const isLatest = latestIdByGroup[gid]?.id === est.id;
                     return (
@@ -372,6 +376,12 @@ export default function EstimateList() {
                   })}
                 </TableBody>
               </Table>
+              {!showAll && sorted.length > PAGE_ROWS && (
+                <div className="flex items-center justify-center gap-3 py-3 border-t text-xs text-muted-foreground">
+                  最初の{PAGE_ROWS}件を表示しています（全{sorted.length}件）
+                  <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setShowAll(true)}>すべて表示</Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

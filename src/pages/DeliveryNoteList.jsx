@@ -28,7 +28,7 @@ export default function DeliveryNoteList() {
 
   const { data: notes = [], isLoading } = useQuery({
     queryKey: ["deliveryNotes"],
-    queryFn: () => db.entities.DeliveryNote.list("-delivery_date", 500),
+    queryFn: () => db.entities.DeliveryNote.listAll("-delivery_date"),
   });
 
   const filtered = useMemo(() => {
