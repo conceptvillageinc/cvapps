@@ -76,8 +76,22 @@ async function transcribeStep(admin, meeting, deadline) {
   const segments = segs || [];
   const known = Array.isArray(meeting.participants) ? meeting.participants.filter(Boolean) : [];
 
+  // 同じ断片を何度も途中で打ち切られていないかを見る。
+  // 関数が実行時間の上限で強制終了されると catch に来ないので、状態が「処理中」のまま止まる。
+  // それを「同じ断片の開始が 2 回続けて記録されている」ことで検知して、エラーにして知らせる。
+  const prog = meeting.progress || {};
+  const beginAttempt = async (seq, finished, total) => {
+    const attempt = prog.current_seq === seq ? (Number(prog.attempt) || 0) + 1 : 1;
+    if (attempt > 2) {
+      throw new Error(`録音の断片 ${seq + 1} の文字起こしが 2 回続けて時間内に終わりませんでした。1 回の処理が長すぎる可能性があります（Vercel の関数の実行時間上限。Hobby プランは 60 秒）`);
+    }
+    Object.assign(prog, { phase: 'transcribing', finished, total, current_seq: seq, attempt, started_at: new Date().toISOString() });
+    await admin.from('meetings').update({ progress: prog }).eq('id', meeting.id);
+  };
+
   if (segments.length === 0 && meeting.audio_path) {
     // アップロード音声 1 本
+    await beginAttempt(-1, 0, 1);
     const { data: file, error } = await admin.storage.from('uploads').download(meeting.audio_path);
     if (error || !file) throw new Error('音声ファイルを読み込めませんでした');
     const bytes = await file.arrayBuffer();
@@ -90,6 +104,7 @@ async function transcribeStep(admin, meeting, deadline) {
   for (const seg of segments) {
     if (seg.transcribed_at) continue;
     if (Date.now() > deadline) break;
+    await beginAttempt(seg.seq, finished, segments.length);
     const { data: file, error } = await admin.storage.from('uploads').download(seg.storage_path);
     if (error || !file) throw new Error(`録音の断片 ${seg.seq + 1} を読み込めませんでした`);
     const bytes = await file.arrayBuffer();
@@ -97,7 +112,9 @@ async function transcribeStep(admin, meeting, deadline) {
     const t = await transcribeAudio(bytes, mime, { knownSpeakers: known, hint: `${meeting.title}（${seg.seq + 1}/${segments.length} 番目の断片）` });
     await admin.from('meeting_segments').update({ transcript: t, transcribed_at: new Date().toISOString() }).eq('id', seg.id);
     finished += 1;
-    await admin.from('meetings').update({ progress: { phase: 'transcribing', finished, total: segments.length } }).eq('id', meeting.id);
+    delete prog.current_seq; delete prog.attempt; delete prog.started_at;
+    Object.assign(prog, { phase: 'transcribing', finished, total: segments.length });
+    await admin.from('meetings').update({ progress: prog }).eq('id', meeting.id);
   }
   if (finished < segments.length) return { transcript: null, done: false, total: segments.length, finished };
 
@@ -262,6 +279,12 @@ export default async function handler(req, res) {
       return;
     }
 
+    {
+      const p = meeting.progress || {};
+      const attempt = p.phase === 'summarizing' ? (Number(p.attempt) || 0) + 1 : 1;
+      if (attempt > 2) throw new Error('議事録の作成が 2 回続けて時間内に終わりませんでした。「処理をやり直す」でもう一度試すか、文字起こしが長すぎないか確認してください');
+      await admin.from('meetings').update({ progress: { phase: 'summarizing', attempt, started_at: new Date().toISOString() } }).eq('id', id);
+    }
     const { summary, checkpoints } = await summarizeStep(admin, meeting, transcript);
     const analysis = analyze(transcript, summary, checkpoints, duration);
     const retentionDays = await loadRetentionDays(admin);

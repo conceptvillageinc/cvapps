@@ -148,6 +148,9 @@ export default function MeetingDetail() {
   const st = MEETING_STATUS[meeting.status] || MEETING_STATUS.draft;
   const isProcessing = PROCESSING.has(meeting.status);
   const progress = meeting.progress || {};
+  // 3 分以上更新が無ければ「止まっている」とみなす（処理はブラウザから呼んで進めるため、画面を閉じると止まる）
+  const staleMinutes = Math.floor((Date.now() - new Date(meeting.updated_date || meeting.updated_at || 0).getTime()) / 60000);
+  const stale = isProcessing && !processing && staleMinutes >= 3;
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -205,15 +208,21 @@ export default function MeetingDetail() {
       )}
 
       {isProcessing && (
-        <Card className="border-blue-200 bg-blue-50/40">
+        <Card className={stale ? "border-amber-300 bg-amber-50/50" : "border-blue-200 bg-blue-50/40"}>
           <CardContent className="pt-4 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-600 shrink-0" />
-            <div className="text-sm">
-              <p className="font-semibold">{st.label}…</p>
+            {stale ? <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" /> : <Loader2 className="w-5 h-5 animate-spin text-blue-600 shrink-0" />}
+            <div className="text-sm flex-1 min-w-0">
+              <p className="font-semibold">{stale ? `${st.label}のまま止まっているようです` : `${st.label}…`}</p>
               <p className="text-xs text-muted-foreground">
-                {progress.phase === "transcribing" && progress.total ? `文字起こし ${progress.finished || 0} / ${progress.total} 本` : "数分かかります。この画面を閉じても、次に開いたときに続きから進みます"}
+                {progress.phase === "transcribing" && progress.total ? `文字起こし ${progress.finished || 0} / ${progress.total} 本` : "数分かかります。"}
+                {stale
+                  ? `　最終更新 ${staleMinutes} 分前。処理はこの画面を開いている間に進みます。「処理を再開する」を押してください`
+                  : "　この画面を閉じても、次に開いたときに続きから進みます"}
               </p>
             </div>
+            {!processing && (
+              <Button size="sm" variant="outline" className="text-xs gap-1 shrink-0" onClick={runProcessing}><RefreshCw className="w-3.5 h-3.5" /> 処理を再開する</Button>
+            )}
           </CardContent>
         </Card>
       )}

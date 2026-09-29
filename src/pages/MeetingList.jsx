@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,26 @@ export default function MeetingList() {
     queryFn: () => db.entities.Meeting.list("-held_at", 300),
     refetchInterval: (q) => ((q.state.data || []).some((m) => PROCESSING.has(m.status)) ? 8000 : false),
   });
+
+  // 処理中のまま 2 分以上更新が無い議事録（録音後に画面を閉じた等）は、一覧を開いたときに続きを進める
+  const queryClient = useQueryClient();
+  const resumingRef = useRef(false);
+  useEffect(() => {
+    if (resumingRef.current) return;
+    const stuck = meetings.find((m) => PROCESSING.has(m.status) && Date.now() - new Date(m.updated_date || 0).getTime() > 2 * 60 * 1000);
+    if (!stuck) return;
+    resumingRef.current = true;
+    (async () => {
+      try {
+        for (let i = 0; i < 20; i++) {
+          const { data } = await db.functions.invoke("meetingProcess", { meeting_id: stuck.id });
+          queryClient.invalidateQueries({ queryKey: ["meetings"] });
+          if (data.done) break;
+        }
+      } catch { /* 詳細画面で状況を出す */ }
+      finally { resumingRef.current = false; queryClient.invalidateQueries({ queryKey: ["meetings"] }); }
+    })();
+  }, [meetings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const list = useMemo(() => {
     const q = search.trim().toLowerCase();
