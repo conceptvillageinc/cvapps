@@ -145,15 +145,29 @@ export async function transcribeAudio(bytes, mimeType, opts = {}) {
   const finish = cand?.finishReason || '';
   const text = cand?.content?.parts?.map((p) => p.text || '').join('') || '';
   const segments = parseTranscriptJson(text);
-  if (segments && finish !== 'MAX_TOKENS') return segments;
+  if (segments && segments.length > 0 && finish !== 'MAX_TOKENS') return segments;
+  // 中身が無いときは、理由が分かるように返答の要点をログに残す
+  const why = describeEmpty(data, finish, text);
+  console.warn(`[gemini] 文字起こしが空か読めません: ${why}`);
 
   // JSON が壊れている（長い録音で出力が途中で切れた、余計な文が混ざった等）。
   // JSON より短く済む行形式でもう一度お願いして、そちらを使う。
-  console.warn(`[gemini] JSON を読めませんでした（finishReason=${finish || '-'}, 先頭: ${text.slice(0, 80).replace(/\s+/g, ' ')}）。行形式でやり直します`);
   const plain = await transcribePlain(audioPart, prompt, key(), model_used(res));
-  if (plain.length > 0) return plain;
+  if (plain.rows.length > 0) return plain.rows;
   if (segments && segments.length > 0) return segments; // 途中まででも残す
-  throw new Error(`文字起こしの結果を読み取れませんでした（${finish || '返答が空'}）`);
+  const err = new Error(`文字起こしの結果を読み取れませんでした（1回目: ${why} / 2回目: ${plain.why}）`);
+  err.code = 'TRANSCRIPT_EMPTY';
+  throw err;
+}
+
+/** 空の返答の理由を短く言葉にする（安全性ブロック・候補なし・空文字など） */
+function describeEmpty(data, finish, text) {
+  const block = data?.promptFeedback?.blockReason;
+  if (block) return `安全性の判定でブロック: ${block}`;
+  if (!Array.isArray(data?.candidates) || data.candidates.length === 0) return `候補なし（${JSON.stringify(data || {}).slice(0, 160)}）`;
+  if (finish && finish !== 'STOP') return `finishReason=${finish}`;
+  if (!text.trim()) return `返答が空（finishReason=${finish || '-'}, 出力トークン ${data?.usageMetadata?.candidatesTokenCount ?? '-'}）`;
+  return `JSON として読めない（先頭: ${text.slice(0, 80).replace(/\s+/g, ' ')}）`;
 }
 
 function model_used(res) {
@@ -187,14 +201,17 @@ async function transcribePlain(audioPart, basePrompt, apiKey, model) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`文字起こしに失敗しました: ${data.error?.message || res.status}`);
+  const finish = data.candidates?.[0]?.finishReason || '';
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
   const rows = [];
   for (const line of text.split(/\r?\n/)) {
     const m = line.match(/^\s*\[?\s*(\d+(?:\.\d+)?)\s*[-–〜~]\s*(\d+(?:\.\d+)?)\s*\]?\s*([^:：]{1,20})[:：]\s*(.+)$/);
     if (m) rows.push({ start: Number(m[1]), end: Number(m[2]), speaker: m[3].trim(), text: m[4].trim() });
   }
-  if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS' && rows.length > 0) {
+  if (finish === 'MAX_TOKENS' && rows.length > 0) {
     rows.push({ start: rows[rows.length - 1].end, end: rows[rows.length - 1].end, speaker: 'システム', text: '（この断片の後半は長すぎて文字起こしを取得できませんでした）' });
   }
-  return rows;
+  const why = rows.length > 0 ? 'ok' : describeEmpty(data, finish, text);
+  if (rows.length === 0) console.warn(`[gemini] 行形式でも空: ${why}`);
+  return { rows, why };
 }

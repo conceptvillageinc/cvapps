@@ -109,7 +109,17 @@ async function transcribeStep(admin, meeting, deadline) {
     if (error || !file) throw new Error(`録音の断片 ${seg.seq + 1} を読み込めませんでした`);
     const bytes = await file.arrayBuffer();
     const mime = seg.mime_type || file.type || guessMime(seg.storage_path);
-    const t = await transcribeAudio(bytes, mime, { knownSpeakers: known, hint: `${meeting.title}（${seg.seq + 1}/${segments.length} 番目の断片）` });
+    let t;
+    try {
+      t = await transcribeAudio(bytes, mime, { knownSpeakers: known, hint: `${meeting.title}（${seg.seq + 1}/${segments.length} 番目の断片）` });
+    } catch (err) {
+      if (err.code !== 'TRANSCRIPT_EMPTY') throw err;
+      // 2 回試しても中身が返らない断片は、そこだけ穴を空けて先に進める（議事録全体を止めない）。
+      // 音声は保存期間内なら残っているので、あとから聞き直せる。
+      console.error(`[api/meeting-process] 断片 ${seg.seq + 1} を飛ばします: ${err.message}`);
+      const sec = Number(seg.duration_sec) || 0;
+      t = [{ start: 0, end: sec, speaker: 'システム', text: `（${seg.seq + 1} 本目の断片（約 ${Math.round(sec / 60)} 分、${(seg.size / 1024 / 1024).toFixed(1)}MB）は文字起こしできませんでした: ${err.message}）` }];
+    }
     await admin.from('meeting_segments').update({ transcript: t, transcribed_at: new Date().toISOString() }).eq('id', seg.id);
     finished += 1;
     delete prog.current_seq; delete prog.attempt; delete prog.started_at;
