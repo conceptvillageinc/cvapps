@@ -50,6 +50,7 @@ function yen(n) {
 
 export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
   const [showInternal, setShowInternal] = useState(true);
+  const [showPreview, setShowPreview] = useState(true); // 左のプレビューを隠して編集側を広く使える
   const [addPanel, setAddPanel] = useState(null); // LINE_ITEM_CATEGORIES key
   const [priceMasterPick, setPriceMasterPick] = useState(null); // selected PriceMaster entry for tier selection
   const [pmCategory, setPmCategory] = useState(null); // 印刷費: 選んだ大カテゴリ（商品）
@@ -254,6 +255,10 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
           <Label htmlFor="qe-internal" className="text-xs cursor-pointer">社内確認用（原価・掛け率を表示）</Label>
           <Switch id="qe-internal" checked={showInternal} onCheckedChange={setShowInternal} />
         </div>
+        <div className="flex items-center gap-1.5" title="OFF にするとプレビューを隠し、編集欄を横いっぱいに広げます">
+          <Label htmlFor="qe-preview" className="text-xs cursor-pointer">プレビューを表示</Label>
+          <Switch id="qe-preview" checked={showPreview} onCheckedChange={setShowPreview} />
+        </div>
         {onPreview && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -269,9 +274,10 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className={`grid grid-cols-1 gap-4 items-start ${showPreview ? "lg:grid-cols-2" : ""}`}>
 
         {/* 左：クライアント提出用プレビュー（常にクリーン表示・自動同期） */}
+        {showPreview && (
         <div className="border rounded-lg p-6 bg-white space-y-4 lg:sticky lg:top-4">
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 -mt-1 mb-1">
             <Eye className="w-3.5 h-3.5" /> プレビュー（クライアント提出用・自動同期）
@@ -383,6 +389,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
             </div>
           )}
         </div>
+        )}
 
         {/* 右：入力（社内編集画面） */}
         <div className="space-y-4">
@@ -534,16 +541,28 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               </div>
             </div>
 
-            <table className="w-full text-sm">
+            {/* table-fixed: 数量・単価などの入力欄が幅を取りすぎて「名称」が縦長に潰れないよう、
+                各列の幅を固定し、残り幅をすべて名称に回す */}
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm table-fixed">
+              <colgroup>
+                <col className="w-5" />
+                <col />
+                <col className="w-16" />
+                <col className="w-12" />
+                <col className="w-24" />
+                <col className="w-24" />
+                <col className="w-7" />
+              </colgroup>
               <thead>
                 <tr className="bg-slate-800 text-white text-xs">
-                  <th className="w-6"></th>
+                  <th></th>
                   <th className="text-left px-3 py-2 font-medium">名称</th>
-                  <th className="text-right px-3 py-2 font-medium w-24">数量</th>
-                  <th className="text-right px-3 py-2 font-medium w-16">単位</th>
-                  <th className="text-right px-3 py-2 font-medium w-28">{unitLabel}</th>
-                  <th className="text-right px-3 py-2 font-medium w-32">{amountLabel}</th>
-                  <th className="w-16"></th>
+                  <th className="text-right px-2 py-2 font-medium">数量</th>
+                  <th className="text-right px-2 py-2 font-medium">単位</th>
+                  <th className="text-right px-2 py-2 font-medium whitespace-nowrap">{unitLabel}</th>
+                  <th className="text-right px-2 py-2 font-medium whitespace-nowrap">{amountLabel}</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -570,6 +589,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 ))}
               </tbody>
             </table>
+            </div>
 
             {estimate.additional_notes !== undefined && (
               <div>
@@ -960,29 +980,29 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
         </>
       ) : (
         <>
-          <td className="px-3 py-2 text-right align-top">
+          <td className="px-2 py-2 text-right align-top">
             <NumericField
               value={item.quantity}
               onCommit={(q) => onChange({ quantity: q, amount: q * (item.unit_price || 0) })}
-              className={`${cellInputClass} text-right`}
+              className={`${cellInputClass} text-right w-full`}
             />
           </td>
-          <td className="px-3 py-2 text-right align-top">
-            <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} className={`${cellInputClass} text-right`} />
+          <td className="px-2 py-2 text-right align-top">
+            <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} className={`${cellInputClass} text-right w-full`} />
           </td>
-          <td className="px-3 py-2 text-right align-top">
+          <td className="px-2 py-2 text-right align-top">
             <NumericField
               value={item.unit_price}
               onCommit={(p) => onChange({ unit_price: p, amount: p * (item.quantity || 1) })}
-              className={`${cellInputClass} text-right`}
+              className={`${cellInputClass} text-right w-full`}
             />
           </td>
         </>
       )}
-      <td className="px-3 py-2 text-right align-top font-medium">
+      <td className="px-2 py-2 text-right align-top font-medium whitespace-nowrap tabular-nums">
         {yen(item.amount)}
       </td>
-      <td className="px-2 py-2 align-top">
+      <td className="px-1 py-2 align-top text-center">
         <button onClick={onRemove} className="text-muted-foreground hover:text-destructive">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
