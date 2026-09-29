@@ -118,7 +118,7 @@ async function transcribeStep(admin, meeting, deadline) {
       // 音声は保存期間内なら残っているので、あとから聞き直せる。
       console.error(`[api/meeting-process] 断片 ${seg.seq + 1} を飛ばします: ${err.message}`);
       const sec = Number(seg.duration_sec) || 0;
-      t = [{ start: 0, end: sec, speaker: 'システム', text: `（${seg.seq + 1} 本目の断片（約 ${Math.round(sec / 60)} 分、${(seg.size / 1024 / 1024).toFixed(1)}MB）は文字起こしできませんでした: ${err.message}）` }];
+      t = [{ start: 0, end: sec, speaker: 'システム', text: `（${seg.seq + 1} 本目の断片（約 ${Math.round(sec / 60)} 分）は発話を取り出せませんでした。無音だったか、聞き取れない音声の可能性があります: ${err.message}）` }];
     }
     await admin.from('meeting_segments').update({ transcript: t, transcribed_at: new Date().toISOString() }).eq('id', seg.id);
     finished += 1;

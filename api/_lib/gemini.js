@@ -115,6 +115,7 @@ export async function transcribeAudio(bytes, rawMimeType, opts = {}) {
     '話者は声で区別し「話者A」「話者B」のように付けてください（名前が分かる場合はその名前）。',
     '「えー」「あの」などのフィラーは省き、固有名詞・金額・日付・数量・サイズはそのまま正確に残してください。',
     '聞き取れない箇所は「（聞き取れず）」と書いてください。要約はせず、発話をすべて書き起こしてください。',
+    '無音・雑音だけで発話が無い場合は、segments を 1 件だけにして、話者を「システム」、text を「（この区間は音声が入っていません）」としてください。空の配列は返さないでください。',
     opts.knownSpeakers?.length ? `出席者: ${opts.knownSpeakers.join('、')}` : '',
     opts.hint ? `補足: ${opts.hint}` : '',
   ].filter(Boolean).join('\n');
@@ -206,7 +207,7 @@ export function parseTranscriptJson(text) {
 /** 行形式（[開始秒-終了秒] 話者: 内容）で文字起こしする。JSON より崩れにくい */
 async function transcribePlain(audioPart, basePrompt, apiKey, model) {
   const prompt = basePrompt +
-    '\n\n出力は JSON ではなく、1 発話につき 1 行で、次の形だけで書いてください（前置きや説明は不要）:\n[開始秒-終了秒] 話者: 発話内容\n例: [12.5-18.0] 話者A: 来月の納品は10日でお願いします';
+    '\n\n出力は JSON ではなく、1 発話につき 1 行で、次の形だけで書いてください（前置きや説明は不要）:\n[開始秒-終了秒] 話者: 発話内容\n例: [12.5-18.0] 話者A: 来月の納品は10日でお願いします\n発話が無い場合は「[0-0] システム: （この区間は音声が入っていません）」の 1 行だけにしてください。';
   const res = await fetch(`${API}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -35,7 +35,9 @@ export default function MeetingRecorder({ meetingId, startSeq = 0, onSegment, on
   const [elapsed, setElapsed] = useState(0);
   const [level, setLevel] = useState(0);
   const [quiet, setQuiet] = useState(false); // 10 秒以上ずっと小さい音のときだけ true（会話の間で点滅させない）
+  const [silentLong, setSilentLong] = useState(false); // 60 秒以上音が無い（マイクが塞がれている・離れすぎ等）
   const lastLoudRef = useRef(Date.now());
+  const buzzedRef = useRef(false);
   const [segments, setSegments] = useState([]); // { seq, status: uploading|done|error, sec }
   const [error, setError] = useState(null);
   const [wakeLocked, setWakeLocked] = useState(false);
@@ -109,6 +111,13 @@ export default function MeetingRecorder({ meetingId, startSeq = 0, onSegment, on
     if (lv > 0.02) lastLoudRef.current = now;
     const isQuiet = now - lastLoudRef.current > 10000;
     setQuiet((prev) => (prev === isQuiet ? prev : isQuiet));
+    const isLong = now - lastLoudRef.current > 60000;
+    setSilentLong((prev) => (prev === isLong ? prev : isLong));
+    if (isLong && !buzzedRef.current) {
+      buzzedRef.current = true;
+      try { navigator.vibrate?.([200, 100, 200]); } catch { /* 対応していない端末 */ }
+    }
+    if (!isLong) buzzedRef.current = false;
     rafRef.current = requestAnimationFrame(meter);
   };
 
@@ -238,6 +247,11 @@ export default function MeetingRecorder({ meetingId, startSeq = 0, onSegment, on
         <div className="w-full max-w-xs h-2 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-red-500 transition-[width] duration-100" style={{ width: `${Math.round(level * 100)}%` }} />
         </div>
+        {state === "recording" && silentLong && (
+          <div className="w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 font-medium text-center">
+            1分以上、音を拾えていません。マイクが塞がれていないか、スマホが話し手の近くにあるか確認してください
+          </div>
+        )}
         <p className="text-[11px] text-muted-foreground">
           {state === "idle" && "赤いボタンを押すと録音が始まります"}
           {state === "recording" && (quiet ? "録音中（10秒以上、音が小さいままです。スマホを話し手に近づけてください）" : "録音中（音を拾っています）")}
