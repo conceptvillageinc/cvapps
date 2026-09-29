@@ -34,6 +34,8 @@ export default function MeetingRecorder({ meetingId, startSeq = 0, onSegment, on
   const [state, setState] = useState("idle"); // idle | recording | paused | finishing
   const [elapsed, setElapsed] = useState(0);
   const [level, setLevel] = useState(0);
+  const [quiet, setQuiet] = useState(false); // 10 秒以上ずっと小さい音のときだけ true（会話の間で点滅させない）
+  const lastLoudRef = useRef(Date.now());
   const [segments, setSegments] = useState([]); // { seq, status: uploading|done|error, sec }
   const [error, setError] = useState(null);
   const [wakeLocked, setWakeLocked] = useState(false);
@@ -101,7 +103,12 @@ export default function MeetingRecorder({ meetingId, startSeq = 0, onSegment, on
     a.getByteTimeDomainData(buf);
     let sum = 0;
     for (const v of buf) { const d = (v - 128) / 128; sum += d * d; }
-    setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 4));
+    const lv = Math.min(1, Math.sqrt(sum / buf.length) * 4);
+    setLevel(lv);
+    const now = Date.now();
+    if (lv > 0.02) lastLoudRef.current = now;
+    const isQuiet = now - lastLoudRef.current > 10000;
+    setQuiet((prev) => (prev === isQuiet ? prev : isQuiet));
     rafRef.current = requestAnimationFrame(meter);
   };
 
@@ -166,6 +173,7 @@ export default function MeetingRecorder({ meetingId, startSeq = 0, onSegment, on
       an.fftSize = 512;
       src.connect(an);
       analyserRef.current = an;
+      lastLoudRef.current = Date.now();
       rafRef.current = requestAnimationFrame(meter);
       segStartRef.current = elapsedRef.current;
       startRecorder();
@@ -232,7 +240,7 @@ export default function MeetingRecorder({ meetingId, startSeq = 0, onSegment, on
         </div>
         <p className="text-[11px] text-muted-foreground">
           {state === "idle" && "赤いボタンを押すと録音が始まります"}
-          {state === "recording" && (level > 0.02 ? "録音中（音を拾っています）" : "録音中（音が小さいようです。スマホを話し手に近づけてください）")}
+          {state === "recording" && (quiet ? "録音中（10秒以上、音が小さいままです。スマホを話し手に近づけてください）" : "録音中（音を拾っています）")}
           {state === "paused" && "一時停止中"}
           {state === "finishing" && "最後の録音を保存しています…"}
         </p>
