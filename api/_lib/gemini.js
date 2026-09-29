@@ -141,10 +141,60 @@ export async function transcribeAudio(bytes, mimeType, opts = {}) {
   if (!res || !res.ok) {
     throw new Error(`文字起こしに失敗しました: 使えるモデルがありません（${data?.error?.message || ''}）。Vercel の環境変数 GEMINI_MODEL に使えるモデル名を設定してください`);
   }
-  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
-  let parsed;
-  try { parsed = JSON.parse(text); } catch { throw new Error('文字起こしの結果を読み取れませんでした'); }
-  return (parsed.segments || [])
+  const cand = data.candidates?.[0];
+  const finish = cand?.finishReason || '';
+  const text = cand?.content?.parts?.map((p) => p.text || '').join('') || '';
+  const segments = parseTranscriptJson(text);
+  if (segments && finish !== 'MAX_TOKENS') return segments;
+
+  // JSON が壊れている（長い録音で出力が途中で切れた、余計な文が混ざった等）。
+  // JSON より短く済む行形式でもう一度お願いして、そちらを使う。
+  console.warn(`[gemini] JSON を読めませんでした（finishReason=${finish || '-'}, 先頭: ${text.slice(0, 80).replace(/\s+/g, ' ')}）。行形式でやり直します`);
+  const plain = await transcribePlain(audioPart, prompt, key(), model_used(res));
+  if (plain.length > 0) return plain;
+  if (segments && segments.length > 0) return segments; // 途中まででも残す
+  throw new Error(`文字起こしの結果を読み取れませんでした（${finish || '返答が空'}）`);
+}
+
+function model_used(res) {
+  const m = String(res?.url || '').match(/models\/([A-Za-z0-9._-]+):/);
+  return m ? m[1] : GEMINI_MODEL;
+}
+
+/** JSON を読む。途中で切れていたら、最後の完全な発話までを拾う */
+export function parseTranscriptJson(text) {
+  const clean = String(text || '').replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+  const toRows = (parsed) => (parsed?.segments || [])
     .filter((s) => s && typeof s.text === 'string' && s.text.trim())
     .map((s) => ({ start: Number(s.start) || 0, end: Number(s.end) || 0, speaker: String(s.speaker || '話者'), text: s.text.trim() }));
+  try { return toRows(JSON.parse(clean)); } catch { /* 続きで修復を試す */ }
+  const i = clean.indexOf('[');
+  const j = clean.lastIndexOf('}');
+  if (i < 0 || j < 0) return null;
+  try { return toRows({ segments: JSON.parse(clean.slice(i, j + 1) + ']') }); } catch { return null; }
+}
+
+/** 行形式（[開始秒-終了秒] 話者: 内容）で文字起こしする。JSON より崩れにくい */
+async function transcribePlain(audioPart, basePrompt, apiKey, model) {
+  const prompt = basePrompt +
+    '\n\n出力は JSON ではなく、1 発話につき 1 行で、次の形だけで書いてください（前置きや説明は不要）:\n[開始秒-終了秒] 話者: 発話内容\n例: [12.5-18.0] 話者A: 来月の納品は10日でお願いします';
+  const res = await fetch(`${API}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [audioPart, { text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 65536 },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`文字起こしに失敗しました: ${data.error?.message || res.status}`);
+  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+  const rows = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*\[?\s*(\d+(?:\.\d+)?)\s*[-–〜~]\s*(\d+(?:\.\d+)?)\s*\]?\s*([^:：]{1,20})[:：]\s*(.+)$/);
+    if (m) rows.push({ start: Number(m[1]), end: Number(m[2]), speaker: m[3].trim(), text: m[4].trim() });
+  }
+  if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS' && rows.length > 0) {
+    rows.push({ start: rows[rows.length - 1].end, end: rows[rows.length - 1].end, speaker: 'システム', text: '（この断片の後半は長すぎて文字起こしを取得できませんでした）' });
+  }
+  return rows;
 }
