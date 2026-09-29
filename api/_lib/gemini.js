@@ -90,7 +90,21 @@ const TRANSCRIPT_SCHEMA = {
  * @param {{ hint?: string, knownSpeakers?: string[] }} [opts]
  * @returns {Promise<Array<{start:number,end:number,speaker:string,text:string}>>}
  */
-export async function transcribeAudio(bytes, mimeType, opts = {}) {
+// 社内の打ち合わせ音声なので、安全性フィルタで文字起こしが空になるのを避ける
+// （「ブロック」ではなく通常の返答にしてもらう。内容は議事録として保存するだけ）
+const SAFETY_SETTINGS = [
+  'HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT',
+].map((category) => ({ category, threshold: 'BLOCK_NONE' }));
+
+/** "audio/webm;codecs=opus" のようなパラメータ付きは、Gemini には基本の型だけ渡す */
+function baseMime(mimeType) {
+  const m = String(mimeType || 'audio/webm').split(';')[0].trim().toLowerCase();
+  return m === 'audio/x-m4a' ? 'audio/mp4' : m;
+}
+
+export async function transcribeAudio(bytes, rawMimeType, opts = {}) {
+  const mimeType = baseMime(rawMimeType);
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
   const audioPart = buf.byteLength <= INLINE_LIMIT
     ? { inline_data: { mime_type: mimeType, data: buf.toString('base64') } }
@@ -107,6 +121,7 @@ export async function transcribeAudio(bytes, mimeType, opts = {}) {
 
   const body = JSON.stringify({
     contents: [{ role: 'user', parts: [audioPart, { text: prompt }] }],
+    safetySettings: SAFETY_SETTINGS,
     generationConfig: {
       temperature: 0.2,
       responseMimeType: 'application/json',
@@ -196,6 +211,7 @@ async function transcribePlain(audioPart, basePrompt, apiKey, model) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [audioPart, { text: prompt }] }],
+      safetySettings: SAFETY_SETTINGS,
       generationConfig: { temperature: 0.2, maxOutputTokens: 65536 },
     }),
   });
