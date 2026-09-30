@@ -86,6 +86,7 @@ const WRITABLE_COLUMNS = {
     'project_group_id', 'parent_estimate_id', 'revision_label', 'total_amount',
     'reviewer_id', 'reviewer_name', 'approved_date', 'review_comments',
     'approval_checklist', 'review_requested_to_id', 'review_requested_to_name', 'review_requested_at', 'tax_inclusive', 'finalized_at', 'finalized_by',
+    'meeting_id', 'meeting_budget',
     // 旧方式（schema_version = 1）のみ使用
     'vendor_prices', 'selected_vendor', 'cost_price', 'selling_price',
     'gross_profit', 'markup_rate', 'proofreading_fee', 'other_fees',
@@ -107,7 +108,7 @@ const WRITABLE_COLUMNS = {
   meetings: [
     'title', 'held_at', 'meeting_type', 'client_id', 'client_name', 'project_id', 'estimate_id', 'participants',
     'audio_path', 'audio_duration_sec', 'audio_size', 'source', 'status', 'error_message',
-    'transcript', 'summary', 'checkpoints', 'finalized_at', 'created_by',
+    'transcript', 'summary', 'checkpoints', 'finalized_at', 'created_by', 'estimate_conditions',
   ],
   meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
   meeting_checklists: ['meeting_type', 'key', 'label', 'sort_order', 'is_active'],

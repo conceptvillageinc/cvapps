@@ -274,6 +274,20 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
         )}
       </div>
 
+      {(estimate.meeting_id || estimate.meeting_budget) && (() => { const totals = computeEstimateTotals(lineItems, { taxInclusive }); return (
+        <div className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span className="font-semibold text-amber-900">打ち合わせでの予算（税別）</span>
+          <span className="text-base font-bold tabular-nums">{estimate.meeting_budget ? `¥${Math.round(Number(estimate.meeting_budget)).toLocaleString()}` : "—"}</span>
+          <span className="text-muted-foreground">この見積の合計（税別）</span>
+          <span className="text-base font-bold tabular-nums">¥{Math.round(totals.subtotal).toLocaleString()}</span>
+          {estimate.meeting_budget ? (() => {
+            const diff = Math.round(totals.subtotal) - Math.round(Number(estimate.meeting_budget));
+            return <span className={`font-semibold ${diff > 0 ? "text-red-700" : "text-emerald-700"}`}>{diff > 0 ? `予算より ¥${diff.toLocaleString()} 超過` : diff < 0 ? `予算まで ¥${Math.abs(diff).toLocaleString()} の余裕` : "予算どおり"}</span>;
+          })() : null}
+          <div className="flex-1" />
+          {estimate.meeting_id && <a href={`/meetings/${estimate.meeting_id}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">議事録から取込 ・ 議事録を開く</a>}
+        </div>
+      ); })()}
       <div className={`grid grid-cols-1 gap-4 items-start ${showPreview ? "lg:grid-cols-2" : ""}`}>
 
         {/* 左：クライアント提出用プレビュー（常にクリーン表示・自動同期） */}

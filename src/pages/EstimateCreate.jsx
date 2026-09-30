@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
+import { conditionsToEstimate } from "@/lib/meetingConditions";
 
 export default function EstimateCreate() {
   const navigate = useNavigate();
@@ -30,7 +31,14 @@ export default function EstimateCreate() {
   const [project, setProject] = useState(null);
 
   // 案件詳細の「この案件の見積を作成」から来た場合は、その案件を固定する
-  const lockedProjectId = searchParams.get("project");
+  const meetingId = searchParams.get("meeting");
+  const { data: meeting } = useQuery({
+    queryKey: ["meeting", meetingId],
+    queryFn: () => db.entities.Meeting.get(meetingId),
+    enabled: !!meetingId,
+  });
+  // 議事録から作るときは、議事録に紐づく案件をそのまま使う
+  const lockedProjectId = searchParams.get("project") || meeting?.project_id || null;
   // クライアントカルテから来た場合: クライアント名の初期値と、複製元の見積
   const presetClient = searchParams.get("client") || "";
   const copyFromId = searchParams.get("copy_from");
@@ -107,6 +115,23 @@ export default function EstimateCreate() {
      
   }, [lockedProject?.id]);
 
+  // 議事録の見積条件から、クライアント・件名・印刷仕様・明細・予算を引き継ぐ
+  useEffect(() => {
+    if (!meeting) return;
+    const from = conditionsToEstimate(meeting.estimate_conditions, meeting);
+    setFormData(prev => ({
+      ...prev,
+      client_name: prev.client_name || (meeting.client_name && meeting.client_name !== "CV自社" ? meeting.client_name : ""),
+      estimate_title: prev.estimate_title || from.estimate_title,
+      desired_delivery_date: prev.desired_delivery_date || from.desired_delivery_date,
+      print_specs: from.print_specs,
+      line_items: from.line_items,
+      meeting_id: meeting.id,
+      meeting_budget: from.meeting_budget,
+      total_amount: computeEstimateTotals(from.line_items).total,
+    }));
+  }, [meeting]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 複製元の見積から件名・仕様・明細・備考を引き継ぐ（明細の id は振り直し、複製元を残す）
   useEffect(() => {
     if (!copyFrom) return;
@@ -174,6 +199,10 @@ export default function EstimateCreate() {
     }
 
     toast.success("見積を作成しました");
+    // 議事録から作った場合は、議事録側にも見積を記録する
+    if (meeting?.id) {
+      try { await db.entities.Meeting.update(meeting.id, { estimate_id: created.id }); } catch (e) { console.error("議事録への紐づけに失敗しました", e); }
+    }
     navigate(`/estimates/${created.id}`);
   };
 
@@ -187,6 +216,11 @@ export default function EstimateCreate() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">新規見積作成</h1>
             <p className="text-xs text-muted-foreground mt-0.5">案件を選んで基本情報を入力後、見積書画面で明細を追加します</p>
+            {meeting && (
+              <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-1.5 mt-1 inline-block">
+                議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の見積条件から作ります。印刷物は印刷仕様に、制作・開発は明細に入ります
+              </p>
+            )}
             {copyFrom && (
               <p className="text-xs text-primary mt-1">見積 {copyFrom.estimate_number}「{copyFrom.estimate_title || copyFrom.print_type || ""}」の{copyLineIds ? "選んだ明細" : "件名・仕様・明細・備考"}を複製して作ります（作成後に見積書画面で直せます）</p>
             )}

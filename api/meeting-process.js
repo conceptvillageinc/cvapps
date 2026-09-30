@@ -56,8 +56,63 @@ function summarySchema() {
         description: '話者の仮名と推定される実名・立場（分かる範囲）',
         items: { type: 'object', properties: { label: { type: 'string' }, guess: { type: 'string' } }, required: ['label', 'guess'] },
       },
+      estimate_conditions: {
+        type: 'object',
+        description: '見積に流し込む条件。印刷物（prints）と、人日で見積る制作・開発（works）に分ける。発言に無い項目は空文字にする（推測で埋めない。ただし works.days は要件から推定してよく、その場合 evidence に「推定」と書く）',
+        properties: {
+          budget: { type: 'string', description: '全体の予算（税別・数字のみ。例 150000）。無ければ空' },
+          budget_evidence: { type: 'string', description: '予算の根拠の発言（短く引用）' },
+          prints: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                print_type: { type: 'string', description: '印刷物の種類（チラシ・フライヤー、シール・ラベル、パンフレット、名刺、箱 など）' },
+                quantities: { type: 'string', description: '部数。複数案は「2000 / 3000」、種類×枚数は「500 ×3種」' },
+                size: { type: 'string', description: 'サイズ（A4、210mm×297mm、100mm×80mm など）' },
+                paper_type: { type: 'string', description: '用紙・素材（コート紙 110kg、ユポ など）' },
+                color_count: { type: 'string', description: '色数（両面4C、片面4C、1C など）' },
+                finishing: { type: 'string', description: '加工（PP、ラミネート、折り、角丸 など）' },
+                due_date: { type: 'string', description: '納期 YYYY-MM-DD（打ち合わせ日を起点に直す）。無ければ空' },
+                usage: { type: 'string', description: '用途（店頭配布、商品貼付 など）' },
+                budget: { type: 'string', description: 'この印刷物の予算（税別・数字のみ）。無ければ空' },
+                evidence: {
+                  type: 'object',
+                  description: '各項目の根拠の発言（短く引用）。無い項目は空',
+                  properties: { print_type: { type: 'string' }, quantities: { type: 'string' }, size: { type: 'string' }, paper_type: { type: 'string' }, color_count: { type: 'string' }, finishing: { type: 'string' }, due_date: { type: 'string' }, budget: { type: 'string' } },
+                  required: ['print_type', 'quantities', 'size', 'paper_type', 'color_count', 'finishing', 'due_date', 'budget'],
+                },
+              },
+              required: ['print_type', 'quantities', 'size', 'paper_type', 'color_count', 'finishing', 'due_date', 'usage', 'budget', 'evidence'],
+            },
+          },
+          works: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                kind: { type: 'string', description: 'design（デザイン）/ system（システム構築）/ web（web構築）' },
+                description: { type: 'string', description: '内容（何を作るか。機能や範囲）' },
+                days: { type: 'string', description: '工数（人日・数字のみ）。発言に無ければ要件から推定し evidence に「推定」と書く。判断できなければ空' },
+                day_rate: { type: 'string', description: '人日単価（税別・数字のみ）。発言に無ければ空' },
+                owner: { type: 'string', description: 'internal（社内で作る）/ external（外注）/ 空' },
+                due_date: { type: 'string', description: '納期 YYYY-MM-DD。無ければ空' },
+                other_cost: { type: 'string', description: 'サーバー費・外注費などの実費（税別・数字のみ）。無ければ空' },
+                budget: { type: 'string', description: 'この制作の予算（税別・数字のみ）。無ければ空' },
+                evidence: {
+                  type: 'object',
+                  properties: { kind: { type: 'string' }, description: { type: 'string' }, days: { type: 'string' }, day_rate: { type: 'string' }, owner: { type: 'string' }, due_date: { type: 'string' }, other_cost: { type: 'string' }, budget: { type: 'string' } },
+                  required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget'],
+                },
+              },
+              required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget', 'evidence'],
+            },
+          },
+        },
+        required: ['budget', 'budget_evidence', 'prints', 'works'],
+      },
     },
-    required: ['overview', 'decisions', 'todos', 'open_items', 'notes', 'checkpoints', 'speakers'],
+    required: ['overview', 'decisions', 'todos', 'open_items', 'notes', 'checkpoints', 'speakers', 'estimate_conditions'],
   };
 }
 
@@ -175,6 +230,9 @@ ${project ? `対象の案件: ${project.project_number} ${project.name}（クラ
 - ToDo は担当・期限が発言に出ていればそのまま入れ、出ていなければ空にする（推測で埋めない）。side は自社（cv）か先方（client）か。
 - 期限は YYYY-MM-DD で書く。「来週」「月末」「金曜まで」のような言い方は、打ち合わせの日付（${meeting.held_at || '不明'}）を起点に日付へ直す。日付に直せない言い方はそのまま書く。
 - 見積・印刷に関わる数字（部数・サイズ・納期・予算・用紙・色数）は notes に必ず拾う。
+- estimate_conditions には、見積に使う条件を構造化して入れる。印刷物（チラシ・ラベル・パンフなど）は prints に 1 件ずつ、
+  デザイン・システム構築・web構築のように人日で見積るものは works に 1 件ずつ。発言に無い項目は空にし、根拠の発言を evidence に短く引用する。
+  works.days だけは要件から推定してよい（evidence に「推定」と明記）。予算が全体でしか出ていなければ budget に入れ、各項目の budget は空にする。
 - checkpoints は、下の「確認すべき項目」のそれぞれについて、文字起こしの中で確認できたか判定する。
   confirmed = 話題に出て内容が決まった／確認できた、unconfirmed = 話題に出ていない、または出たが決まっていない、n_a = この打ち合わせでは扱う必要がない。
   evidence には根拠になる発言を短く引用する。
@@ -214,7 +272,15 @@ ${lines}`;
     notes: out.notes || '',
     speakers: out.speakers || [],
   };
-  return { summary, checkpoints };
+  const ec = out.estimate_conditions || {};
+  const estimateConditions = {
+    budget: ec.budget || '',
+    budget_evidence: ec.budget_evidence || '',
+    prints: (ec.prints || []).filter((p) => p && (p.print_type || p.quantities || p.size)).map((p, i) => ({ id: `pc_ai_${i}`, ...p })),
+    works: (ec.works || []).filter((w) => w && (w.description || w.days)).map((w, i) => ({ id: `wc_ai_${i}`, ...w, day_rate: w.day_rate || '60000', owner: w.owner || 'internal' })),
+    generated_at: new Date().toISOString(),
+  };
+  return { summary, checkpoints, estimateConditions };
 }
 
 function fmtSec(s) {
@@ -296,12 +362,12 @@ export default async function handler(req, res) {
       if (attempt > 2) throw new Error('議事録の作成が 2 回続けて時間内に終わりませんでした。「処理をやり直す」でもう一度試すか、文字起こしが長すぎないか確認してください');
       await admin.from('meetings').update({ progress: { phase: 'summarizing', attempt, started_at: new Date().toISOString() } }).eq('id', id);
     }
-    const { summary, checkpoints } = await summarizeStep(admin, meeting, transcript);
+    const { summary, checkpoints, estimateConditions } = await summarizeStep(admin, meeting, transcript);
     const analysis = analyze(transcript, summary, checkpoints, duration);
     const retentionDays = await loadRetentionDays(admin);
     const retentionUntil = new Date(Date.now() + retentionDays * 86400_000).toISOString().slice(0, 10);
     await admin.from('meetings').update({
-      summary, checkpoints, analysis, status: 'draft', progress: { phase: 'done' }, error_message: null,
+      summary, checkpoints, analysis, estimate_conditions: estimateConditions, status: 'draft', progress: { phase: 'done' }, error_message: null,
       retention_until: meeting.retention_until || retentionUntil,
     }).eq('id', id);
     res.status(200).json({ done: true, status: 'draft' });

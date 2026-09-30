@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { useMeetingSettings, MEETING_STATUS, PROCESSING, fmtClock, meetingToText } from "@/lib/meetings";
 import { todayString } from "@/lib/fiscal";
+import EstimateConditions from "@/components/meetings/EstimateConditions";
+import { normalizeConditions } from "@/lib/meetingConditions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -110,6 +112,8 @@ export default function MeetingDetail() {
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState(null); // 編集中の議事録
   const [checkpoints, setCheckpoints] = useState(null);
+  const [conditions, setConditions] = useState(null); // 見積条件（印刷物・制作/開発・予算）
+  const [creatingEstimate, setCreatingEstimate] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
@@ -132,6 +136,7 @@ export default function MeetingDetail() {
     if (!meeting || dirty) return;
     setSummary(meeting.summary || { overview: "", decisions: [], todos: [], open_items: [], notes: "" });
     setCheckpoints(meeting.checkpoints || []);
+    setConditions(normalizeConditions(meeting.estimate_conditions));
   }, [meeting, dirty]);
 
   // 音声（署名付きURL）
@@ -177,7 +182,7 @@ export default function MeetingDetail() {
     onSuccess: () => { setDirty(false); queryClient.invalidateQueries({ queryKey: ["meeting", id] }); queryClient.invalidateQueries({ queryKey: ["meetings"] }); },
     onError: (e) => toast.error("保存できませんでした: " + e.message),
   });
-  const saveSummary = (extra = {}) => save.mutate({ summary, checkpoints, ...extra }, { onSuccess: () => toast.success(extra.status === "finalized" ? "確定しました" : "保存しました") });
+  const saveSummary = (extra = {}) => save.mutate({ summary, checkpoints, estimate_conditions: conditions, ...extra }, { onSuccess: () => toast.success(extra.status === "finalized" ? "確定しました" : "保存しました") });
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -191,6 +196,21 @@ export default function MeetingDetail() {
   });
 
   const upd = (patch) => { setSummary((s) => ({ ...s, ...patch })); setDirty(true); };
+  const updConditions = (next) => { setConditions(next); setDirty(true); };
+  // 条件を保存してから、新しい見積を新しいタブで開く（見積側が議事録を読んで印刷仕様・明細を埋める）
+  const createEstimateFromConditions = async () => {
+    setCreatingEstimate(true);
+    try {
+      await db.entities.Meeting.update(id, { summary, checkpoints, estimate_conditions: conditions });
+      setDirty(false);
+      queryClient.invalidateQueries({ queryKey: ["meeting", id] });
+      window.open(`/estimates/new?meeting=${id}`, "_blank", "noopener");
+    } catch (e) {
+      toast.error("保存できませんでした: " + e.message);
+    } finally {
+      setCreatingEstimate(false);
+    }
+  };
   const updList = (key, idx, value) => upd({ [key]: summary[key].map((x, i) => (i === idx ? value : x)) });
   const addTo = (key, value) => upd({ [key]: [...(summary[key] || []), value] });
   const removeFrom = (key, idx) => upd({ [key]: summary[key].filter((_, i) => i !== idx) });
@@ -340,6 +360,10 @@ export default function MeetingDetail() {
                 <Section title="打ち合わせメモ">
                   <AutoTextarea value={summary.notes || ""} onChange={(e) => upd({ notes: e.target.value })} minRows={4} className="text-xs leading-relaxed" placeholder="部数・サイズ・納期・予算など、見積に関わる数字や条件" />
                 </Section>
+
+                {conditions && (
+                  <EstimateConditions value={conditions} onChange={updConditions} meeting={meeting} onCreateEstimate={createEstimateFromConditions} creating={creatingEstimate} />
+                )}
 
                 <Section title="決定事項" onAdd={() => addTo("decisions", "")}>
                   {(summary.decisions || []).map((d, i) => (
