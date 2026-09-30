@@ -26,6 +26,18 @@ const CHECK_STYLE = {
 };
 
 /** 議事録の詳細（編集・確定・文字起こし・音声） */
+/** 内容に合わせて高さが自動で伸びるテキスト欄（概要・補足メモ用。スクロールせずに全文が見える） */
+function AutoTextarea({ value, minRows = 3, className = "", ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return <Textarea ref={ref} value={value} rows={minRows} className={`resize-none overflow-hidden ${className}`} {...props} />;
+}
+
 export default function MeetingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -259,7 +271,7 @@ export default function MeetingDetail() {
                 </div>
 
                 <Section title="概要">
-                  <Textarea value={summary.overview || ""} onChange={(e) => upd({ overview: e.target.value })} rows={4} className="text-sm" />
+                  <AutoTextarea value={summary.overview || ""} onChange={(e) => upd({ overview: e.target.value })} minRows={4} className="text-sm leading-relaxed" />
                 </Section>
 
                 <Section title="決定事項" onAdd={() => addTo("decisions", "")}>
@@ -288,7 +300,7 @@ export default function MeetingDetail() {
                 </Section>
 
                 <Section title="補足メモ">
-                  <Textarea value={summary.notes || ""} onChange={(e) => upd({ notes: e.target.value })} rows={4} className="text-sm" placeholder="部数・サイズ・納期・予算など、見積に関わる数字" />
+                  <AutoTextarea value={summary.notes || ""} onChange={(e) => upd({ notes: e.target.value })} minRows={4} className="text-sm leading-relaxed" placeholder="部数・サイズ・納期・予算など、見積に関わる数字" />
                 </Section>
               </CardContent>
             </Card>
