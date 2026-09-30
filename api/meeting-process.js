@@ -38,7 +38,7 @@ function summarySchema() {
         },
       },
       open_items: { type: 'array', items: { type: 'string' }, description: '保留・次回までの確認事項' },
-      notes: { type: 'string', description: '補足メモ。見積・印刷に関わる数字（部数・サイズ・納期・予算・用紙）は必ずここに拾う' },
+      notes: { type: 'string', description: '打ち合わせメモ。見積・印刷に関わる数字（部数・サイズ・納期・予算・用紙）は必ずここに拾う' },
       checkpoints: {
         type: 'array',
         items: {

@@ -58,13 +58,13 @@ export function meetingToText(m, typeLabel) {
     "",
     "■ 概要", s.overview || "",
     "",
+    "■ 打ち合わせメモ", s.notes || "",
+    "",
     "■ 決定事項", ...(s.decisions || []).map((d) => `・${d}`),
     "",
     "■ ToDo", ...(s.todos || []).map((t) => `・${t.done ? "[済] " : ""}${t.text}${t.owner ? `（担当: ${t.owner}）` : ""}${t.due ? `（期限: ${t.due}）` : ""}`),
     "",
     "■ 保留・次回までの確認事項", ...(s.open_items || []).map((o) => `・${o}`),
-    "",
-    "■ 補足メモ", s.notes || "",
   ];
   return lines.filter((l, i, arr) => !(l === "" && arr[i - 1] === "")).join("\n");
 }
