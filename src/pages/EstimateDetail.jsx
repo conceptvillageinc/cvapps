@@ -29,7 +29,7 @@ import { convertLegacyEstimate, summarizeConversion } from "@/lib/convertLegacyE
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
-import VendorRequestCard from "@/components/estimates/VendorRequestCard";
+import VendorRequestBar from "@/components/estimates/VendorRequestBar";
 import VendorRequestTool from "@/components/estimates/VendorRequestTool";
 import ReviewStep from "@/components/estimates/ReviewStep";
 import { autoChecks } from "@/components/estimates/ReviewStep";
@@ -521,25 +521,10 @@ export default function EstimateDetail() {
           })()}
 
           {step === "quote" ? (
-            <div className="flex flex-col xl:flex-row gap-4">
-              <div className="flex-1 min-w-0">
-                <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
-              </div>
-              <div className="w-full xl:w-[300px] shrink-0 space-y-3">
-                <VendorRequestCard estimate={formData} emailLogs={emailLogs} onOpen={(n) => { setToolStep(n); setToolOpen(true); }} />
-                <div className="rounded-xl border bg-card p-4 space-y-1.5">
-                  <p className="text-xs font-bold">履歴</p>
-                  {emailLogs.filter((l) => l.status === "sent").length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">まだメールの送信はありません</p>
-                  ) : (
-                    <ul className="text-[11px] text-muted-foreground space-y-1 max-h-40 overflow-y-auto">
-                      {[...emailLogs].filter((l) => l.status === "sent").sort((x, y) => String(y.sent_at || "").localeCompare(String(x.sent_at || ""))).slice(0, 8).map((l) => (
-                        <li key={l.id}><span className="tabular-nums">{new Date(l.sent_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}</span>　{l.recipient_company} へ{l.document_type ? "見積書を送付" : "依頼メール送信"}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
+            <div className="space-y-4">
+              {/* 依頼ツールは右の列ではなく 1 行の帯にして、プレビューと編集欄に横幅を全部使わせる */}
+              <VendorRequestBar estimate={formData} emailLogs={emailLogs} onOpen={(n) => { setToolStep(n); setToolOpen(true); }} />
+              <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
             </div>
           ) : (
             <ReviewStep
