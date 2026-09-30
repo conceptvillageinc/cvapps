@@ -102,7 +102,7 @@ export default function SheetImport({ onAdd, onClose }) {
       // 備考に URL が入っていれば「入稿先URL」に移す（ネット印刷の価格ページなど）。残りの文だけをメモに残す
       const urlMatch = String(r.notes || "").match(/https?:\/\/[^\s、。）)]+/);
       const sourceUrl = urlMatch ? urlMatch[0] : null;
-      const memo = String(r.notes || "").replace(sourceUrl || "", "").replace(/^[\s、,]+|[\s、,]+$/g, "").trim();
+      const memo = String(r.notes || "").replace(sourceUrl || "", "").replace(/\s+([、,])/g, "$1").replace(/^[\s、,]+|[\s、,]+$/g, "").trim();
       const item = {
         row_type: "item",
         category: catOverride[r.i] || r.category,

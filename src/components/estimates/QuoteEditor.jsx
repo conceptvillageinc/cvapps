@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, ClipboardPaste, Loader2, X, Pencil, ChevronDown,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -1160,12 +1160,14 @@ function LineScreenshot({ path, onChange }) {
           <button type="button" className="text-muted-foreground hover:text-destructive" title="スクショを外す" onClick={() => onChange(null)}><X className="w-3 h-3" /></button>
         </>
       ) : (
-        <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => inputRef.current?.click()} disabled={uploading}>
-          {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />} スクショを付ける
-        </button>
-        <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={pasteFromClipboard} disabled={uploading} title="コピーした画像（撮ったばかりのスクショなど）をそのまま付けます">
-          <ClipboardPaste className="w-3 h-3" /> 貼り付け
-        </button>
+        <>
+          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => inputRef.current?.click()} disabled={uploading}>
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />} スクショを付ける
+          </button>
+          <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={pasteFromClipboard} disabled={uploading} title="コピーした画像（撮ったばかりのスクショなど）をそのまま付けます">
+            <Clipboard className="w-3 h-3" /> 貼り付け
+          </button>
+        </>
       )}
     </span>
   );
