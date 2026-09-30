@@ -334,12 +334,12 @@ export default function MeetingDetail() {
                 </div>
 
                 <Section title="概要">
-                  <AutoTextarea value={summary.overview || ""} onChange={(e) => upd({ overview: e.target.value })} minRows={4} className="text-sm leading-relaxed" />
+                  <AutoTextarea value={summary.overview || ""} onChange={(e) => upd({ overview: e.target.value })} minRows={4} className="text-xs leading-relaxed" />
                 </Section>
 
                 <Section title="決定事項" onAdd={() => addTo("decisions", "")}>
                   {(summary.decisions || []).map((d, i) => (
-                    <Row key={i} onRemove={() => removeFrom("decisions", i)}><Input value={d} onChange={(e) => updList("decisions", i, e.target.value)} className="h-9 text-sm" /></Row>
+                    <Row key={i} onRemove={() => removeFrom("decisions", i)}><Input value={d} onChange={(e) => updList("decisions", i, e.target.value)} className="h-9 text-xs" /></Row>
                   ))}
                 </Section>
 
@@ -348,7 +348,7 @@ export default function MeetingDetail() {
                     <Row key={i} onRemove={() => removeFrom("todos", i)}>
                       <div className="flex-1 grid grid-cols-[auto_minmax(0,1fr)_110px_120px] gap-1.5 items-center">
                         <input type="checkbox" checked={!!t.done} onChange={(e) => updList("todos", i, { ...t, done: e.target.checked })} className="w-4 h-4" />
-                        <Input value={t.text} onChange={(e) => updList("todos", i, { ...t, text: e.target.value })} className={`h-9 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`} placeholder="内容" />
+                        <Input value={t.text} onChange={(e) => updList("todos", i, { ...t, text: e.target.value })} className={`h-9 text-xs ${t.done ? "line-through text-muted-foreground" : ""}`} placeholder="内容" />
                         <Input value={t.owner || ""} onChange={(e) => updList("todos", i, { ...t, owner: e.target.value })} className="h-9 text-xs" placeholder="担当" />
                         <DuePicker value={t.due || ""} baseDate={meeting.held_at} onChange={(v) => updList("todos", i, { ...t, due: v })} />
                       </div>
@@ -358,12 +358,12 @@ export default function MeetingDetail() {
 
                 <Section title="保留・次回までの確認事項" onAdd={() => addTo("open_items", "")}>
                   {(summary.open_items || []).map((o, i) => (
-                    <Row key={i} onRemove={() => removeFrom("open_items", i)}><Input value={o} onChange={(e) => updList("open_items", i, e.target.value)} className="h-9 text-sm" /></Row>
+                    <Row key={i} onRemove={() => removeFrom("open_items", i)}><Input value={o} onChange={(e) => updList("open_items", i, e.target.value)} className="h-9 text-xs" /></Row>
                   ))}
                 </Section>
 
                 <Section title="補足メモ">
-                  <AutoTextarea value={summary.notes || ""} onChange={(e) => upd({ notes: e.target.value })} minRows={4} className="text-sm leading-relaxed" placeholder="部数・サイズ・納期・予算など、見積に関わる数字" />
+                  <AutoTextarea value={summary.notes || ""} onChange={(e) => upd({ notes: e.target.value })} minRows={4} className="text-xs leading-relaxed" placeholder="部数・サイズ・納期・予算など、見積に関わる数字" />
                 </Section>
               </CardContent>
             </Card>
