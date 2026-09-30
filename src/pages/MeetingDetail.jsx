@@ -44,6 +44,20 @@ function AutoTextarea({ value, minRows = 3, className = "", ...props }) {
   return <Textarea ref={ref} value={value} rows={minRows} className={`resize-none overflow-hidden ${className}`} {...props} />;
 }
 
+/** 決定事項・ToDo・保留の 1 項目。長い文章は折り返して全文が見える（Enter で改行はしない） */
+function LineField({ value, onChange, className = "", ...props }) {
+  return (
+    <AutoTextarea
+      value={value || ""}
+      minRows={1}
+      onChange={(e) => onChange(e.target.value.replace(/\r?\n/g, " "))}
+      onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+      className={`min-h-0 py-2 text-xs leading-relaxed ${className}`}
+      {...props}
+    />
+  );
+}
+
 const addDays = (ymd, days) => {
   const d = new Date(`${ymd}T00:00:00`);
   d.setDate(d.getDate() + days);
@@ -368,16 +382,16 @@ export default function MeetingDetail() {
 
                 <Section title="決定事項" onAdd={() => addTo("decisions", "")}>
                   {(summary.decisions || []).map((d, i) => (
-                    <Row key={i} onRemove={() => removeFrom("decisions", i)}><Input value={d} onChange={(e) => updList("decisions", i, e.target.value)} className="h-9 text-xs" /></Row>
+                    <Row key={i} onRemove={() => removeFrom("decisions", i)}><LineField value={d} onChange={(v) => updList("decisions", i, v)} /></Row>
                   ))}
                 </Section>
 
                 <Section title="ToDo" onAdd={() => addTo("todos", { text: "", owner: "", due: "", side: "unknown", done: false })}>
                   {(summary.todos || []).map((t, i) => (
                     <Row key={i} onRemove={() => removeFrom("todos", i)}>
-                      <div className="flex-1 grid grid-cols-[auto_minmax(0,1fr)_110px_120px] gap-1.5 items-center">
+                      <div className="flex-1 grid grid-cols-[auto_minmax(0,1fr)_110px_120px] gap-1.5 items-start [&>input[type=checkbox]]:mt-2.5">
                         <input type="checkbox" checked={!!t.done} onChange={(e) => updList("todos", i, { ...t, done: e.target.checked })} className="w-4 h-4" />
-                        <Input value={t.text} onChange={(e) => updList("todos", i, { ...t, text: e.target.value })} className={`h-9 text-xs ${t.done ? "line-through text-muted-foreground" : ""}`} placeholder="内容" />
+                        <LineField value={t.text} onChange={(v) => updList("todos", i, { ...t, text: v })} className={t.done ? "line-through text-muted-foreground" : ""} placeholder="内容" />
                         <Input value={t.owner || ""} onChange={(e) => updList("todos", i, { ...t, owner: e.target.value })} className="h-9 text-xs" placeholder="担当" />
                         <DuePicker value={t.due || ""} baseDate={meeting.held_at} onChange={(v) => updList("todos", i, { ...t, due: v })} />
                       </div>
@@ -387,7 +401,7 @@ export default function MeetingDetail() {
 
                 <Section title="保留・次回までの確認事項" onAdd={() => addTo("open_items", "")}>
                   {(summary.open_items || []).map((o, i) => (
-                    <Row key={i} onRemove={() => removeFrom("open_items", i)}><Input value={o} onChange={(e) => updList("open_items", i, e.target.value)} className="h-9 text-xs" /></Row>
+                    <Row key={i} onRemove={() => removeFrom("open_items", i)}><LineField value={o} onChange={(v) => updList("open_items", i, v)} /></Row>
                   ))}
                 </Section>
 
@@ -504,9 +518,9 @@ function Section({ title, onAdd, children }) {
 
 function Row({ children, onRemove }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-start gap-1.5">
       {children}
-      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label="削除"><X className="w-3.5 h-3.5" /></Button>
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 mt-0.5 text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label="削除"><X className="w-3.5 h-3.5" /></Button>
     </div>
   );
 }
