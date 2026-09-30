@@ -263,7 +263,7 @@ export default function MeetingDetail() {
   const stale = isProcessing && !processing && staleMinutes >= 3;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex items-start gap-2">
         <Button variant="ghost" size="icon" onClick={() => navigate("/meetings")} className="shrink-0"><ArrowLeft className="w-4 h-4" /></Button>
         <div className="min-w-0 flex-1">
@@ -351,7 +351,7 @@ export default function MeetingDetail() {
       )}
 
       {(meeting.status === "draft" || meeting.status === "finalized") && (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-4">
           {/* 議事録（編集） */}
           <div className="space-y-4">
             <Card>
