@@ -84,7 +84,7 @@ JSONファイルがダウンロードされます。**このファイルはパ�
 | 項目 | 値 |
 |---|---|
 | クライアント ID | ①で控えた **`client_id`**（数字の羅列） |
-| OAuth スコープ | `https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/spreadsheets` |
+| OAuth スコープ | `https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/spreadsheets,https://www.googleapis.com/auth/drive.file` |
 
 **承認** を押します。
 
@@ -95,7 +95,9 @@ JSONファイルがダウンロードされます。**このファイルはパ�
 >   本文は保存しません。他の人が送ったメールは読みません（その人がログインして確認します）。
 > - `spreadsheets` … **スプレッドシートの読み書き**。見積明細の「スプレッドシートから取込（URL）」と
 >   「工程管理表の出力」で、操作した本人が開けるシートだけを本人として読み書きします。
-> - すでに Gmail のスコープだけで登録済みの場合は、その行を編集してスコープ欄に 3 つをカンマ区切りで入れ直してください。
+> - `drive.file` … 「工程管理表の出力」で作ったシートをクライアントに共有するときに使います。
+> - すでに一部のスコープだけで登録済みの場合は、その行を編集して 4 つすべてが入っているか確認してください
+>   （編集画面では 1 行に 1 スコープで表示されます。足りないものは末尾の空欄に追加して「承認」）。
 
 ---
 
