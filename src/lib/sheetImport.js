@@ -27,21 +27,39 @@ const HEADER_KEYS = {
 
 const norm = (s) => String(s ?? "").replace(/\s+/g, "").replace(/[（(]税別[)）]/g, "").toLowerCase();
 
+/**
+ * 見出しセルがどの列か判定する。まず完全一致、無ければ前方一致（長い名前を優先）。
+ * 例: 「備考（※赤文字は自由記述欄に記載）」→ notes、「単価\n（税別）」→ unit_price
+ */
+function matchKey(cell) {
+  if (!cell) return null;
+  for (const [key, names] of Object.entries(HEADER_KEYS)) {
+    if (names.map(norm).includes(cell)) return key;
+  }
+  let best = null;
+  for (const [key, names] of Object.entries(HEADER_KEYS)) {
+    for (const n of names.map(norm)) {
+      if (n.length >= 2 && cell.startsWith(n) && (!best || n.length > best.len)) best = { key, len: n.length };
+    }
+  }
+  return best ? best.key : null;
+}
+
 function detectHeader(rows) {
   for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const cells = rows[i].map(norm);
-    const hasName = cells.some((c) => HEADER_KEYS.name.map(norm).includes(c));
-    const hasQty = cells.some((c) => HEADER_KEYS.quantity.map(norm).includes(c));
-    const hasPrice = cells.some((c) => HEADER_KEYS.unit_price.map(norm).includes(c) || HEADER_KEYS.amount.map(norm).includes(c));
+    const keys = cells.map(matchKey);
+    const hasName = keys.includes("name");
+    const hasQty = keys.includes("quantity");
+    const hasPrice = keys.includes("unit_price") || keys.includes("amount");
     if (hasName && (hasQty || hasPrice)) {
       const map = {};
-      cells.forEach((c, col) => {
-        for (const [key, names] of Object.entries(HEADER_KEYS)) {
-          if (names.map(norm).includes(c) && map[key] === undefined) map[key] = col;
-        }
+      keys.forEach((key, col) => {
+        if (key && map[key] === undefined) map[key] = col;
       });
       // 「項目」の左に大カテゴリ列（見出し無し）がある形式（例: B列=カテゴリ, C列=項目）
-      if (map.category === undefined && map.name > 0 && !Object.values(map).includes(map.name - 1)) {
+      // 「No」列に大カテゴリ名（企画・進行 など）が書かれている形式も同じ扱いにする
+      if (map.category === undefined && map.name > 0 && (!Object.values(map).includes(map.name - 1) || map.no === map.name - 1)) {
         const left = map.name - 1;
         const leftHasText = rows.slice(i + 1, i + 40).some((r) => String(r[left] ?? "").trim() && !/^\d+(\.\d+)?$/.test(String(r[left]).trim()));
         if (leftHasText) map.category = left;
