@@ -16,8 +16,9 @@ const yen = (v) => {
 };
 
 /** 1 項目分の入力欄。空欄は黄色（未確認）、下に根拠の発言 */
-function Field({ label, value, onChange, evidence, type = "text", placeholder = "未確認", list, className = "", readOnly = false, children }) {
-  const empty = value === "" || value === null || value === undefined;
+function Field({ label, value, onChange, evidence, type = "text", placeholder = "未確認", list, className = "", readOnly = false, optional = false, children }) {
+  // 任意の項目（予算・実費）は空でも「未確認」にしない
+  const empty = !optional && (value === "" || value === null || value === undefined);
   return (
     <div className={`space-y-0.5 min-w-0 ${className}`}>
       <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
@@ -62,7 +63,7 @@ function PrintCard({ item, index, onChange, onRemove }) {
         <Field label={PRINT_FIELDS[4][1]} value={item.color_count} onChange={(v) => set("color_count", v)} evidence={ev.color_count} placeholder="例: 両面4C" />
         <Field label={PRINT_FIELDS[5][1]} value={item.finishing} onChange={(v) => set("finishing", v)} evidence={ev.finishing} placeholder="例: PP、折り" />
         <Field label={PRINT_FIELDS[6][1]} value={item.due_date} onChange={(v) => set("due_date", v)} evidence={ev.due_date} type="date" />
-        <Field label={PRINT_FIELDS[7][1]} value={item.budget} onChange={(v) => set("budget", v)} evidence={ev.budget} placeholder="任意" />
+        <Field label={PRINT_FIELDS[7][1]} value={item.budget} onChange={(v) => set("budget", v)} evidence={ev.budget} placeholder="任意" optional />
       </div>
     </div>
   );
@@ -103,8 +104,8 @@ function WorkCard({ item, index, onChange, onRemove }) {
         </Field>
         <Field label={WORK_FIELDS[5][1]} value={item.due_date} onChange={(v) => set("due_date", v)} evidence={ev.due_date} type="date" />
         <Field label="構築費（税別・自動）" value={build ? String(build) : ""} readOnly evidence={build ? `${item.days} 人日 × ¥${Number(String(item.day_rate).replace(/,/g, "")).toLocaleString()}` : ""} placeholder="人日 × 単価" />
-        <Field label={WORK_FIELDS[6][1]} value={item.other_cost} onChange={(v) => set("other_cost", v)} evidence={ev.other_cost} placeholder="任意（サーバー費など）" />
-        <Field label={WORK_FIELDS[7][1]} value={item.budget} onChange={(v) => set("budget", v)} evidence={ev.budget} placeholder="任意" />
+        <Field label={WORK_FIELDS[6][1]} value={item.other_cost} onChange={(v) => set("other_cost", v)} evidence={ev.other_cost} placeholder="任意（サーバー費など）" optional />
+        <Field label={WORK_FIELDS[7][1]} value={item.budget} onChange={(v) => set("budget", v)} evidence={ev.budget} placeholder="任意" optional />
       </div>
     </div>
   );
