@@ -3,10 +3,13 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { useMeetingSettings, MEETING_STATUS, PROCESSING, fmtClock, meetingToText } from "@/lib/meetings";
+import { todayString } from "@/lib/fiscal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarDays } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -36,6 +39,66 @@ function AutoTextarea({ value, minRows = 3, className = "", ...props }) {
     el.style.height = `${el.scrollHeight + 2}px`;
   }, [value]);
   return <Textarea ref={ref} value={value} rows={minRows} className={`resize-none overflow-hidden ${className}`} {...props} />;
+}
+
+const addDays = (ymd, days) => {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const monthEnd = (ymd) => {
+  const d = new Date(`${ymd}T00:00:00`);
+  const e = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+};
+const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+
+/**
+ * ToDo の期限。打ち合わせの日を起点にカレンダーで選ぶ。
+ * 「来週」のような文字のままの値も表示でき、カレンダーで日付に置き換えられる。
+ */
+function DuePicker({ value, baseDate, onChange }) {
+  const [open, setOpen] = useState(false);
+  const base = isYmd(baseDate) ? baseDate : todayString();
+  const quick = [
+    ["翌日", addDays(base, 1)], ["3日後", addDays(base, 3)], ["1週間後", addDays(base, 7)],
+    ["2週間後", addDays(base, 14)], ["月末", monthEnd(base)], ["1か月後", addDays(base, 30)],
+  ];
+  const label = isYmd(value) ? value.slice(5).replace("-", "/") : (value || "");
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`h-9 w-full px-2 rounded-md border bg-background text-xs text-left inline-flex items-center gap-1.5 hover:bg-muted/40 ${value ? "" : "text-muted-foreground"} ${value && !isYmd(value) ? "text-amber-800 bg-amber-50/60" : ""}`}
+          title={value && !isYmd(value) ? `「${value}」のまま。カレンダーで日付にできます` : "期限を選ぶ"}
+        >
+          <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">{label || "期限"}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-3 space-y-2">
+        <p className="text-[11px] text-muted-foreground">打ち合わせ日 {base.replace(/-/g, "/")} を起点にした目安</p>
+        <div className="flex flex-wrap gap-1">
+          {quick.map(([l, d]) => (
+            <button key={l} type="button" onClick={() => { onChange(d); setOpen(false); }} className={`h-7 px-2 rounded-full border text-[11px] hover:bg-muted ${value === d ? "bg-slate-800 text-white border-slate-800" : "bg-background"}`}>{l}<span className="ml-1 text-muted-foreground">{d.slice(5).replace("-", "/")}</span></button>
+          ))}
+        </div>
+        <input
+          type="date"
+          value={isYmd(value) ? value : ""}
+          min={base}
+          onChange={(e) => { if (e.target.value) { onChange(e.target.value); setOpen(false); } }}
+          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+          aria-label="期限の日付"
+        />
+        {value && !isYmd(value) && <p className="text-[11px] text-amber-800">今の値「{value}」は文字のままです。上で選ぶと日付に置き換わります</p>}
+        {value && (
+          <button type="button" onClick={() => { onChange(""); setOpen(false); }} className="text-[11px] text-muted-foreground hover:text-destructive">期限を消す</button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function MeetingDetail() {
@@ -287,7 +350,7 @@ export default function MeetingDetail() {
                         <input type="checkbox" checked={!!t.done} onChange={(e) => updList("todos", i, { ...t, done: e.target.checked })} className="w-4 h-4" />
                         <Input value={t.text} onChange={(e) => updList("todos", i, { ...t, text: e.target.value })} className={`h-9 text-sm ${t.done ? "line-through text-muted-foreground" : ""}`} placeholder="内容" />
                         <Input value={t.owner || ""} onChange={(e) => updList("todos", i, { ...t, owner: e.target.value })} className="h-9 text-xs" placeholder="担当" />
-                        <Input value={t.due || ""} onChange={(e) => updList("todos", i, { ...t, due: e.target.value })} className="h-9 text-xs" placeholder="期限" />
+                        <DuePicker value={t.due || ""} baseDate={meeting.held_at} onChange={(v) => updList("todos", i, { ...t, due: v })} />
                       </div>
                     </Row>
                   ))}
