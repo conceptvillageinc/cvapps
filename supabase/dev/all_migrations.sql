@@ -1,5 +1,5 @@
 -- ============================================================================
--- dev 環境用: 全マイグレーション（0001〜0018）を順番につなげたもの。
+-- dev 環境用: 全マイグレーション（0001〜0019）を順番につなげたもの。
 -- 新しい Supabase プロジェクトの SQL Editor に丸ごと貼り付けて Run する（冪等）。
 -- 生成: scripts/build-all-migrations.sh（migrations を変えたら再生成する）
 -- ============================================================================
@@ -1615,3 +1615,15 @@ alter table public.projects
 comment on column public.projects.next_action is '次にやること（自由記述。案件一覧のネクストアクションビューで編集）';
 comment on column public.projects.next_action_updated_at is 'ネクストアクションを最後に書き換えた日時';
 comment on column public.projects.next_action_updated_by is 'ネクストアクションを最後に書き換えた人（表示名）';
+
+-- >>>>>>>> supabase/migrations/0019_sales_simulation.sql
+-- ============================================================================
+-- 0019: 売上粗利管理表の「シミュレーション」（着地見込を月ごとに手で置き換えて試算する）
+-- 冪等。Supabase の SQL Editor に貼って実行する。
+-- ============================================================================
+
+alter table public.fiscal_targets
+  add column if not exists simulation jsonb not null default '{}'::jsonb;
+
+comment on column public.fiscal_targets.simulation is
+  'シミュレーション用の上書き値 { sales_a:[12], sales_a2:[12], cost_a:[12], cost_a2:[12], recurring:[12], updated_at, updated_by }。null の月は実データの着地見込を使う';

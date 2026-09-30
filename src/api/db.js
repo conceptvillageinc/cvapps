@@ -46,7 +46,7 @@ const WRITABLE_COLUMNS = {
   project_tasks: ['project_id', 'name', 'owner', 'start_date', 'end_date', 'status', 'notes', 'sort_order'],
   fiscal_targets: [
     'fiscal_year', 'sales', 'purchase', 'gross_jump', 'gross_must',
-    'actual_purchase', 'actual_other_cost', 'notes',
+    'actual_purchase', 'actual_other_cost', 'notes', 'simulation',
   ],
   bank_transactions: [
     'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',

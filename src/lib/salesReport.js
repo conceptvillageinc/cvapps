@@ -169,7 +169,12 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     return { ...m, target, forecast, actual, total };
   });
 
-  // 年計
+  const annual = buildAnnual(rows, marginTarget);
+  return { fiscalYear, startMonth, from, to, months, rows, annual, marginTarget };
+}
+
+/** 年計（各ブロックの数値を 12 か月ぶん足す。粗利率は合計から出し直す） */
+export function buildAnnual(rows, marginTarget) {
   const sumKey = (block, key) => rows.reduce((s, r) => s + n(r[block][key]), 0);
   const annual = {};
   for (const block of ["target", "forecast", "actual", "total"]) {
@@ -177,12 +182,53 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     for (const key of Object.keys(rows[0][block])) {
       if (typeof rows[0][block][key] === "number") b[key] = sumKey(block, key);
     }
-    if (block === "target") b.margin = b.sales > 0 ? b.gross / b.sales : null;
-    else b.margin = b.sales > 0 ? b.gross / b.sales : null;
+    b.margin = b.sales > 0 ? b.gross / b.sales : null;
     annual[block] = b;
   }
   annual.total.margin_ok = annual.total.margin === null ? null : annual.total.margin >= marginTarget;
   annual.total.achieved = annual.target.gross > 0 ? annual.total.gross >= annual.target.gross : null;
+  return annual;
+}
 
-  return { fiscalYear, startMonth, from, to, months, rows, annual, marginTarget };
+/** シミュレーションで手入力できる着地見込の項目 */
+export const SIM_KEYS = ["sales_a", "sales_a2", "cost_a", "cost_a2", "recurring"];
+
+/**
+ * 着地見込の一部を手入力の値に置き換えた表を作る（粗利・粗利率・必要額・計・年計は計算し直す）。
+ * @param {object} report   buildSalesReport の結果
+ * @param {object} sim      { sales_a:[12], ... } null/空の月は実データのまま
+ */
+export function applySimulation(report, sim, marginTarget) {
+  const rows = report.rows.map((r, i) => {
+    const forecast = { ...r.forecast, simulated: {} };
+    for (const k of SIM_KEYS) {
+      const v = sim?.[k]?.[i];
+      if (v !== null && v !== undefined && v !== "") {
+        forecast[k] = Math.round(Number(String(v).replace(/,/g, "")) || 0);
+        forecast.simulated[k] = true;
+      }
+    }
+    forecast.sales = forecast.sales_a + forecast.sales_a2;
+    forecast.cost = forecast.cost_a + forecast.cost_a2;
+    forecast.gross = forecast.sales - forecast.cost;
+    forecast.margin = forecast.sales > 0 ? forecast.gross / forecast.sales : null;
+    forecast.need_sales = forecast.sales - r.target.sales;
+    forecast.need_gross_jump = forecast.gross - r.target.gross_jump;
+    forecast.need_gross = forecast.gross - r.target.gross;
+    forecast.need_gross_must = forecast.gross - r.target.gross_must;
+    const total = {
+      sales: r.actual.sales + forecast.sales,
+      purchase: r.actual.purchase + r.actual.other_cost + forecast.cost,
+      gross: r.actual.gross + forecast.gross,
+    };
+    total.margin = total.sales > 0 ? total.gross / total.sales : null;
+    total.need_sales = total.sales - r.target.sales;
+    total.need_gross_jump = total.gross - r.target.gross_jump;
+    total.need_gross = total.gross - r.target.gross;
+    total.need_gross_must = total.gross - r.target.gross_must;
+    total.margin_ok = total.margin === null ? null : total.margin >= marginTarget;
+    total.achieved = r.target.gross > 0 ? total.gross >= r.target.gross : null;
+    return { ...r, forecast, total };
+  });
+  return { ...report, rows, annual: buildAnnual(rows, marginTarget) };
 }

@@ -17,7 +17,8 @@ import { BarChart3, Target, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearLabel, todayString } from "@/lib/fiscal";
-import { buildSalesReport, emptyTargets, splitAnnual } from "@/lib/salesReport";
+import { buildSalesReport, emptyTargets, splitAnnual, applySimulation, SIM_KEYS } from "@/lib/salesReport";
+import { useAuth } from "@/lib/AuthContext";
 
 // 検証済みの配色（dataviz の基準パレット: 青 / オレンジ / アクア / 黄）
 const C = { actual: "#2a78d6", forecast: "#eb6834", target: "#1baf7a", must: "#eda100", grid: "#e5e7eb", text: "#52514e" };
@@ -32,6 +33,35 @@ function Cell({ v, kind = "yen", warn, ok, muted }) {
   const neg = kind === "yen" && Number(v) < 0;
   const cls = warn ? "text-red-700 font-medium" : ok ? "text-emerald-700 font-medium" : neg ? "text-red-700" : muted ? "text-muted-foreground" : "";
   return <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap ${cls}`}>{text}</td>;
+}
+
+// シミュレーション用の入力セル。実データと違う値は色を付け、元の値をツールチップに出す
+function SimCell({ value, original, edited, onCommit }) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+  const [base, setBase] = useState(value);
+  if (value !== base) { setBase(value); setText(value == null ? "" : String(value)); }
+  const commit = () => {
+    const raw = text.replace(/[,¥￥円\s]/g, "");
+    if (raw === "" || raw === String(original)) { onCommit(null); return; }
+    const num = Number(raw);
+    if (!Number.isFinite(num)) { setText(String(value ?? "")); return; }
+    onCommit(Math.round(num));
+  };
+  return (
+    <td className="px-1 py-0.5 text-right">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+        onFocus={(e) => e.currentTarget.select()}
+        inputMode="numeric"
+        title={edited ? `実データ: ¥${yen(original)}（空にすると実データに戻ります）` : "数字を入れると試算に使います"}
+        aria-label="シミュレーションの値"
+        className={`w-[92px] h-6 px-1.5 text-right text-xs tabular-nums rounded border outline-none focus:border-primary ${edited ? "bg-amber-50 border-amber-300 font-medium text-amber-900" : "bg-background border-input hover:border-slate-400"}`}
+      />
+    </td>
+  );
 }
 
 function TooltipBox({ active, payload, label }) {
@@ -158,8 +188,13 @@ export default function SalesReport() {
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
   const [chart, setChart] = useState("sales"); // sales | gross
-  // 「計」の集計範囲: forecast=着地見込だけ / actual=実績だけ（実績＋見込の合算は使わない）
+  // 「計」の集計範囲: forecast=着地見込だけ / actual=実績だけ / simulation=着地見込を手で置き換えて試算
   const [totalMode, setTotalMode] = useState("forecast");
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  // シミュレーションの上書き値（期ごとに fiscal_targets.simulation へ保存）
+  const [sim, setSim] = useState({});
+  const [simDirty, setSimDirty] = useState(false);
   const [targetsOpen, setTargetsOpen] = useState(false);
   const fy = Number(fiscalYear);
 
@@ -173,11 +208,34 @@ export default function SalesReport() {
     () => buildSalesReport({ fiscalYear: fy, startMonth: fiscalYearStartMonth, projects, invoices, bankTxs, targets, marginTarget: grossMarginTarget }),
     [fy, fiscalYearStartMonth, projects, invoices, bankTxs, targets, grossMarginTarget],
   );
-  const { rows, annual, months } = report;
+  const savedSim = targets?.simulation || {};
+  useEffect(() => { setSim(savedSim); setSimDirty(false); }, [targets?.id, targets?.updated_date]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isSim = totalMode === "simulation";
+  const view = useMemo(() => (isSim ? applySimulation(report, sim, grossMarginTarget) : report), [isSim, report, sim, grossMarginTarget]);
+  const { rows, annual, months } = view;
+  const simEditedCount = SIM_KEYS.reduce((c, k) => c + (sim[k] || []).filter((v) => v !== null && v !== undefined && v !== "").length, 0);
+  const setSimValue = (key, monthIdx, value) => {
+    setSim((prev) => {
+      const arr = Array.from({ length: 12 }, (_, i) => prev[key]?.[i] ?? null);
+      arr[monthIdx] = value;
+      return { ...prev, [key]: arr };
+    });
+    setSimDirty(true);
+  };
+  const saveSim = useMutation({
+    mutationFn: async (next) => {
+      const payload = { simulation: { ...next, updated_at: new Date().toISOString(), updated_by: user?.full_name || user?.email || "" } };
+      if (targets?.id) return db.entities.FiscalTarget.update(targets.id, payload);
+      return db.entities.FiscalTarget.create({ ...emptyTargets(fy), ...payload });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["fiscalTargets"] }); setSimDirty(false); toast.success("シミュレーションを保存しました"); },
+    onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
+  });
+  const resetSim = () => { const empty = {}; setSim(empty); setSimDirty(true); saveSim.mutate(empty); };
 
   // 表示モードに応じた「計」の値（月ごと・年計とも同じ形にそろえる）
   const totalOf = (r) => {
-    if (totalMode === "forecast") {
+    if (totalMode === "forecast" || totalMode === "simulation") {
       const f = r.forecast;
       return { sales: f.sales, purchase: f.cost, gross: f.gross, margin: f.margin, need_sales: f.need_sales, need_gross_must: f.need_gross_must, need_gross: f.need_gross, need_gross_jump: f.need_gross_jump, margin_ok: f.margin === null ? null : f.margin >= grossMarginTarget };
     }
@@ -188,7 +246,7 @@ export default function SalesReport() {
     return r.total;
   };
   const annualTotal = totalOf(annual);
-  const TOTAL_MODES = [["forecast", "着地見込のみ"], ["actual", "実績のみ"]];
+  const TOTAL_MODES = [["forecast", "着地見込のみ"], ["actual", "実績のみ"], ["simulation", "シミュレーション"]];
   const totalLabel = TOTAL_MODES.find(([k]) => k === totalMode)[1];
   const TotalModeSwitch = ({ className = "" }) => (
     <div className={`inline-flex gap-0.5 p-0.5 rounded-full bg-muted ${className}`} role="group" aria-label="計の集計範囲">
@@ -240,6 +298,19 @@ export default function SalesReport() {
         <TotalModeSwitch />
         <span className="text-[11px] text-muted-foreground">要約・グラフの粗利・表の「計」に反映されます</span>
       </div>
+      {isSim && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <span className="font-semibold text-amber-900">シミュレーション</span>
+          <span className="text-muted-foreground">管理表の「着地見込」の売上（案件見込A・要注意A）・発注見込（A・要注意）・うち定期売上を月ごとに書き換えて試算できます。粗利・粗利率・必要額・年計・計は自動で計算し直します。実データの着地見込は変わりません。</span>
+          <span className="ml-auto text-muted-foreground whitespace-nowrap">
+            書き換え {simEditedCount} か所{savedSim.updated_at ? `　最終保存 ${new Date(savedSim.updated_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })} ${savedSim.updated_by || ""}` : ""}
+          </span>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={resetSim} disabled={saveSim.isPending || simEditedCount === 0}>実データに戻す</Button>
+          <Button size="sm" className="h-7 text-xs" onClick={() => saveSim.mutate(sim)} disabled={saveSim.isPending || !simDirty}>
+            {saveSim.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : simDirty ? "保存" : "保存済み"}
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           [`売上（${totalLabel}）`, annualTotal.sales, `目標 ${man(annual.target.sales)}`],
@@ -356,9 +427,20 @@ export default function SalesReport() {
                         {label}
                         {block === "計" && i === 0 && <TotalModeSwitch className="ml-2 align-middle" />}
                       </td>
-                      {rows.map((r) => {
+                      {rows.map((r, mi) => {
                         const v = b === "total" ? totalOf(r)[key] : r[b][key];
                         const isMargin = kind === "pct";
+                        if (isSim && b === "forecast" && SIM_KEYS.includes(key)) {
+                          return (
+                            <SimCell
+                              key={r.key}
+                              value={v}
+                              original={report.rows[mi].forecast[key]}
+                              edited={!!r.forecast.simulated?.[key]}
+                              onCommit={(val) => setSimValue(key, mi, val)}
+                            />
+                          );
+                        }
                         return (
                           <Cell
                             key={r.key} v={v} kind={kind} muted={muted}
