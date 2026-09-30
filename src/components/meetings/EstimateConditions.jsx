@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Printer, Hammer, FileText, ExternalLink, Loader2 } from "lucide-react";
+import { Plus, Trash2, Printer, Palette, FileText, ExternalLink, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PRINT_TYPES } from "@/lib/constants";
 import {
@@ -77,7 +77,7 @@ function WorkCard({ item, index, onChange, onRemove }) {
   return (
     <div className="rounded-lg border border-emerald-200 bg-card p-3 space-y-2">
       <div className="flex items-center gap-2">
-        <Hammer className="w-3.5 h-3.5 text-muted-foreground" />
+        <Palette className="w-3.5 h-3.5 text-muted-foreground" />
         <span className="text-xs font-bold">制作・開発 {index + 1}</span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${missing.length === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
           {missing.length === 0 ? "すべて入力済み" : `未確認 ${missing.length} 項目`}
