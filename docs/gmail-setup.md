@@ -27,9 +27,14 @@ DNS（SPF/DKIM）の設定も不要です。すでにGoogleでメールを運用
 [Google Cloud Console](https://console.cloud.google.com/) を開きます。
 Googleログインの設定で使ったプロジェクトをそのまま使って構いません。
 
-### 1-1. Gmail API を有効にする
+### 1-1. Gmail API と Google Sheets API を有効にする
 
 **APIとサービス → ライブラリ** → 「Gmail API」を検索 → **有効にする**
+
+同じ手順で **「Google Sheets API」** も有効にしてください。
+見積明細の「スプレッドシートから取込（URLから読み込む）」と「工程管理表の出力」で使います。
+有効にしていないと、URL から読み込むときに
+`Google Sheets API has not been used in project … before or it is disabled` というエラーになります。
 
 ### 1-2. サービスアカウントを作る
 
@@ -79,7 +84,7 @@ JSONファイルがダウンロードされます。**このファイルはパ�
 | 項目 | 値 |
 |---|---|
 | クライアント ID | ①で控えた **`client_id`**（数字の羅列） |
-| OAuth スコープ | `https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.readonly` |
+| OAuth スコープ | `https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/spreadsheets` |
 
 **承認** を押します。
 
@@ -88,7 +93,9 @@ JSONファイルがダウンロードされます。**このファイルはパ�
 >   見積編集画面の「印刷所に見積を依頼する」ツールで「受信を確認」を押すと、
 >   送った本人の Gmail の、そのメールのスレッドだけを読み、返信の有無・差出人・冒頭の一文を記録します。
 >   本文は保存しません。他の人が送ったメールは読みません（その人がログインして確認します）。
-> - すでに `gmail.send` だけで登録済みの場合は、その行を編集してスコープ欄に 2 つをカンマ区切りで入れ直してください。
+> - `spreadsheets` … **スプレッドシートの読み書き**。見積明細の「スプレッドシートから取込（URL）」と
+>   「工程管理表の出力」で、操作した本人が開けるシートだけを本人として読み書きします。
+> - すでに Gmail のスコープだけで登録済みの場合は、その行を編集してスコープ欄に 3 つをカンマ区切りで入れ直してください。
 
 ---
 
