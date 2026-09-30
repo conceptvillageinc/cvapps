@@ -1,5 +1,12 @@
-import { requireMember, requirePost } from './_lib/guard.js';
-import { adminClient } from './_lib/guard.js';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import { requireMember, requirePost, adminClient } from './_lib/guard.js';
+
+// 日本語フォント（PDF と同じ Noto Sans JP）。Vercel のブラウザには日本語フォントが無いので、
+// 起動前に読み込ませる（無いと日本語の文字が全部抜けたスクショになる）
+const FONT_DIR = path.join(process.cwd(), 'api', '_lib', 'fonts');
+const FONT_FILES = ['NotoSansJP-400.ttf', 'NotoSansJP-700.ttf'];
 
 // ============================================================================
 // POST /api/capture-url  { url }
@@ -38,10 +45,25 @@ async function launchBrowser() {
     return puppeteer.launch({ executablePath: process.env.CHROME_PATH, headless: true, args: ['--no-sandbox', '--disable-gpu', '--lang=ja-JP'] });
   }
   const chromium = (await import('@sparticuz/chromium')).default;
+  // executablePath() がブラウザ本体とフォント設定を /tmp に展開する。
+  // その後、フォント設定が見に行く /tmp/fonts に Noto Sans JP を置いてから起動する
+  const executablePath = await chromium.executablePath();
+  try {
+    const fontsDir = path.join(os.tmpdir(), 'fonts');
+    fs.mkdirSync(fontsDir, { recursive: true });
+    for (const f of FONT_FILES) {
+      const src = path.join(FONT_DIR, f);
+      const dst = path.join(fontsDir, f);
+      if (!fs.existsSync(src)) { console.warn('[capture-url] フォントが見つかりません', src); continue; }
+      if (!fs.existsSync(dst)) fs.copyFileSync(src, dst);
+    }
+  } catch (err) {
+    console.warn('[capture-url] フォントを配置できませんでした', err.message);
+  }
   return puppeteer.launch({
-    args: [...chromium.args, '--lang=ja-JP'],
+    args: [...chromium.args, '--lang=ja-JP', '--font-render-hinting=none'],
     defaultViewport: VIEWPORT,
-    executablePath: await chromium.executablePath(),
+    executablePath,
     headless: chromium.headless,
   });
 }

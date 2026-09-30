@@ -38,7 +38,8 @@
     },
     "api/capture-url.js": {
       "maxDuration": 60,
-      "memory": 2048
+      "memory": 2048,
+      "includeFiles": "api/_lib/fonts/**"
     },
     "api/check-email-replies.js": {
       "maxDuration": 30
