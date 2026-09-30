@@ -465,6 +465,7 @@ const FUNCTION_ROUTES = {
   sendDocumentEmail: 'send-document-email',
   exportScheduleSheet: 'export-schedule-sheet',
   readSheet: 'read-sheet',
+  captureUrl: 'capture-url',
   checkEmailReplies: 'check-email-replies',
   meetingProcess: 'meeting-process',
 };

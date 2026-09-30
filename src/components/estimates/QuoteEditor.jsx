@@ -1050,7 +1050,7 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
               />
               {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0">開く</a>}
             </label>
-            <LineScreenshot path={item.screenshot_path} onChange={(p) => onChange({ screenshot_path: p })} />
+            <LineScreenshot path={item.screenshot_path} sourceUrl={item.source_url} onChange={(p) => onChange({ screenshot_path: p })} />
             <label className="flex items-center gap-1 min-w-[200px] flex-1">
               <span className="shrink-0">メモ</span>
               <Input
@@ -1106,9 +1106,24 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
 }
 
 // 明細行のスクショ（入稿画面の控えなど）。非公開バケットに置き、署名付きURLで表示する
-function LineScreenshot({ path, onChange }) {
+function LineScreenshot({ path, sourceUrl, onChange }) {
   const [url, setUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  // 入稿先URL のページをサーバーで開いて撮る（手でスクショを撮る代わり）
+  const captureFromUrl = async () => {
+    if (!sourceUrl) return;
+    setCapturing(true);
+    try {
+      const { data } = await db.functions.invoke("captureUrl", { url: sourceUrl });
+      onChange(data.path);
+      toast.success(`スクショを撮りました（${Math.round((data.ms || 0) / 1000)}秒）`);
+    } catch (err) {
+      toast.error("スクショを撮れませんでした: " + err.message);
+    } finally {
+      setCapturing(false);
+    }
+  };
   const inputRef = useRef(null);
   useEffect(() => {
     let alive = true;
@@ -1167,6 +1182,11 @@ function LineScreenshot({ path, onChange }) {
           <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={pasteFromClipboard} disabled={uploading} title="コピーした画像（撮ったばかりのスクショなど）をそのまま付けます">
             <Clipboard className="w-3 h-3" /> 貼り付け
           </button>
+          {sourceUrl && (
+            <button type="button" className="inline-flex items-center gap-1 text-primary hover:underline" onClick={captureFromUrl} disabled={capturing || uploading} title="入稿先URLのページをサーバーで開いてスクショを撮ります（5〜15秒）">
+              {capturing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />} {capturing ? "撮影中…" : "URLからスクショを撮る"}
+            </button>
+          )}
         </>
       )}
     </span>

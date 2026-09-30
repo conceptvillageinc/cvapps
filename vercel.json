@@ -36,6 +36,10 @@
     "api/read-sheet.js": {
       "maxDuration": 30
     },
+    "api/capture-url.js": {
+      "maxDuration": 60,
+      "memory": 2048
+    },
     "api/check-email-replies.js": {
       "maxDuration": 30
     },

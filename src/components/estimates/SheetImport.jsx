@@ -26,6 +26,8 @@ export default function SheetImport({ onAdd, onClose }) {
   const [excluded, setExcluded] = useState(new Set());
   const [headings, setHeadings] = useState(true);
   const [subtotals, setSubtotals] = useState(true);
+  const [captureShots, setCaptureShots] = useState(false); // URL のある行はスクショも撮る（1行 5〜15 秒）
+  const [capturing, setCapturing] = useState(null); // { done, total }
   const [catOverride, setCatOverride] = useState({}); // rowIndex → category
   const fileRef = useRef(null);
 
@@ -82,7 +84,7 @@ export default function SheetImport({ onAdd, onClose }) {
   const included = visible.filter((r) => r.kind === "item" && !excluded.has(r.i));
   const total = included.reduce((s, r) => s + Number(r.amount || 0), 0);
 
-  const submit = () => {
+  const submit = async () => {
     if (included.length === 0) { toast.error("追加する明細を選んでください"); return; }
     const out = [];
     let groupItems = [];
@@ -117,6 +119,22 @@ export default function SheetImport({ onAdd, onClose }) {
       groupItems.push(item);
     }
     flush();
+    if (captureShots) {
+      const targets = out.filter((it) => it.row_type === "item" && it.source_url);
+      let failed = 0;
+      for (let i = 0; i < targets.length; i++) {
+        setCapturing({ done: i, total: targets.length });
+        try {
+          const { data } = await db.functions.invoke("captureUrl", { url: targets[i].source_url });
+          targets[i].screenshot_path = data.path;
+        } catch (err) {
+          failed++;
+          console.warn("[sheet-import] スクショ失敗", targets[i].source_url, err.message);
+        }
+      }
+      setCapturing(null);
+      if (failed > 0) toast.warning(`${failed}件のスクショを撮れませんでした（明細の「URLからスクショを撮る」で後から撮れます）`);
+    }
     onAdd(out);
     toast.success(`${included.length}行を明細に追加しました`);
     onClose();
@@ -157,6 +175,9 @@ export default function SheetImport({ onAdd, onClose }) {
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={headings} onCheckedChange={(v) => setHeadings(!!v)} /> 見出し行も追加する（テキスト行）</label>
             <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={subtotals} onCheckedChange={(v) => setSubtotals(!!v)} /> 見出しごとに小計行を付ける</label>
+            <label className="flex items-center gap-1.5 cursor-pointer" title="備考にURLがある行は、そのページをサーバーで開いてスクショを撮り、明細に付けます。1行あたり5〜15秒かかります">
+              <Checkbox checked={captureShots} onCheckedChange={(v) => setCaptureShots(!!v)} /> URLのある行はスクショも撮る{included.filter((r) => /https?:\/\//.test(String(r.notes || ""))).length > 0 && `（${included.filter((r) => /https?:\/\//.test(String(r.notes || ""))).length}行）`}
+            </label>
             <span className="ml-auto text-muted-foreground">{included.length}行　合計 {yen(total)}（税抜）</span>
           </div>
           <div className="max-h-[45vh] overflow-auto border rounded-md">
@@ -201,7 +222,9 @@ export default function SheetImport({ onAdd, onClose }) {
           <p className="text-[10px] text-muted-foreground">「コンセプト設計（全体予算の5%）」のような行は、シートの金額のまま取り込みます。追加後に自動計算行へ置き換えることもできます</p>
           <div className="flex justify-between">
             <Button size="sm" variant="ghost" className="text-xs" onClick={() => { setParsed(null); }}>読み取り直す</Button>
-            <Button size="sm" className="text-xs" onClick={submit} disabled={included.length === 0}>明細に追加（{included.length}行）</Button>
+            <Button size="sm" className="text-xs gap-1.5" onClick={submit} disabled={included.length === 0 || !!capturing}>
+              {capturing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> スクショ撮影中 {capturing.done + 1} / {capturing.total}</> : `明細に追加（${included.length}行）`}
+            </Button>
           </div>
         </>
       )}
