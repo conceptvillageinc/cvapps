@@ -99,13 +99,18 @@ export default function SheetImport({ onAdd, onClose }) {
         continue;
       }
       if (excluded.has(r.i)) continue;
+      // 備考に URL が入っていれば「入稿先URL」に移す（ネット印刷の価格ページなど）。残りの文だけをメモに残す
+      const urlMatch = String(r.notes || "").match(/https?:\/\/[^\s、。）)]+/);
+      const sourceUrl = urlMatch ? urlMatch[0] : null;
+      const memo = String(r.notes || "").replace(sourceUrl || "", "").replace(/^[\s、,]+|[\s、,]+$/g, "").trim();
       const item = {
         row_type: "item",
         category: catOverride[r.i] || r.category,
         name: r.level > 0 ? `${"　".repeat(r.level)}${r.name}` : r.name,
         quantity: r.quantity, unit: r.unit, unit_price: r.unit_price, amount: r.amount,
         ...(r.cost_price != null ? { cost_price: r.cost_price } : {}),
-        ...(r.notes ? { notes: r.notes } : {}),
+        ...(memo ? { notes: memo } : {}),
+        ...(sourceUrl ? { source_url: sourceUrl } : {}),
         source_type: "sheet_import",
       };
       out.push(item);

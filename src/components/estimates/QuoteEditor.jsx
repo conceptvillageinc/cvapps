@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Loader2, X, Pencil, ChevronDown,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, ClipboardPaste, Loader2, X, Pencil, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -1116,8 +1116,7 @@ function LineScreenshot({ path, onChange }) {
     db.storage.signedUrl(path).then((u) => alive && setUrl(u)).catch(() => alive && setUrl(null));
     return () => { alive = false; };
   }, [path]);
-  const upload = async (e) => {
-    const file = e.target.files?.[0];
+  const uploadFile = async (file) => {
     if (!file) return;
     setUploading(true);
     try {
@@ -1128,6 +1127,26 @@ function LineScreenshot({ path, onChange }) {
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+  const upload = (e) => uploadFile(e.target.files?.[0]);
+  // クリップボードの画像（スクショを撮った直後や、シートの画像をコピーした状態）をそのまま付ける
+  const pasteFromClipboard = async () => {
+    try {
+      if (!navigator.clipboard?.read) throw new Error("このブラウザは貼り付けに対応していません。「スクショを付ける」からファイルを選んでください");
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        const type = it.types.find((t) => t.startsWith("image/"));
+        if (!type) continue;
+        const blob = await it.getType(type);
+        const ext = type.split("/")[1].replace("jpeg", "jpg");
+        await uploadFile(new File([blob], `screenshot-${Date.now()}.${ext}`, { type }));
+        return;
+      }
+      toast.error("クリップボードに画像がありません。先にスクショを撮る（またはコピーする）してから押してください");
+    } catch (err) {
+      if (err?.name === "NotAllowedError") toast.error("クリップボードの読み取りが許可されていません。ブラウザのアドレスバーの権限から許可してください");
+      else toast.error(err.message || "貼り付けできませんでした");
     }
   };
   return (
@@ -1143,6 +1162,9 @@ function LineScreenshot({ path, onChange }) {
       ) : (
         <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => inputRef.current?.click()} disabled={uploading}>
           {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />} スクショを付ける
+        </button>
+        <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={pasteFromClipboard} disabled={uploading} title="コピーした画像（撮ったばかりのスクショなど）をそのまま付けます">
+          <ClipboardPaste className="w-3 h-3" /> 貼り付け
         </button>
       )}
     </span>
