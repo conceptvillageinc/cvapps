@@ -35,6 +35,20 @@ function Cell({ v, kind = "yen", warn, ok, muted }) {
   return <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap ${cls}`}>{text}</td>;
 }
 
+/** 保存されているシミュレーションを { scenarios, active_id } の形にそろえる（初期版の「値だけ」の形も読む） */
+function normalizeSimulation(raw) {
+  const doc = raw && typeof raw === "object" ? raw : {};
+  if (Array.isArray(doc.scenarios)) {
+    const scenarios = doc.scenarios.filter((sc) => sc && sc.id).map((sc) => ({ ...sc, values: sc.values || {} }));
+    return { scenarios, active_id: scenarios.some((sc) => sc.id === doc.active_id) ? doc.active_id : (scenarios[0]?.id || null) };
+  }
+  const hasValues = SIM_KEYS.some((k) => Array.isArray(doc[k]) && doc[k].some((v) => v !== null && v !== undefined && v !== ""));
+  if (!hasValues) return { scenarios: [], active_id: null };
+  const values = Object.fromEntries(SIM_KEYS.filter((k) => Array.isArray(doc[k])).map((k) => [k, doc[k]]));
+  const sc = { id: "legacy-1", name: "パターン1", values, updated_at: doc.updated_at || null, updated_by: doc.updated_by || "" };
+  return { scenarios: [sc], active_id: sc.id };
+}
+
 // シミュレーション用の入力セル。実データと違う値は色を付け、元の値をツールチップに出す
 function SimCell({ value, original, edited, onCommit }) {
   const [text, setText] = useState(value == null ? "" : String(value));
@@ -208,30 +222,69 @@ export default function SalesReport() {
     () => buildSalesReport({ fiscalYear: fy, startMonth: fiscalYearStartMonth, projects, invoices, bankTxs, targets, marginTarget: grossMarginTarget }),
     [fy, fiscalYearStartMonth, projects, invoices, bankTxs, targets, grossMarginTarget],
   );
-  const savedSim = targets?.simulation || {};
-  useEffect(() => { setSim(savedSim); setSimDirty(false); }, [targets?.id, targets?.updated_date]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 保存形式: { scenarios: [{ id, name, values: { sales_a:[12], ... }, updated_at, updated_by }], active_id }
+  // （最初の版は値を直接持っていたので、その形は「パターン1」として読み替える）
+  const simDoc = useMemo(() => normalizeSimulation(targets?.simulation), [targets?.simulation]);
+  useEffect(() => { setSim(simDoc); setSimDirty(false); }, [targets?.id, targets?.updated_date]); // eslint-disable-line react-hooks/exhaustive-deps
   const isSim = totalMode === "simulation";
-  const view = useMemo(() => (isSim ? applySimulation(report, sim, grossMarginTarget) : report), [isSim, report, sim, grossMarginTarget]);
+  const scenarios = sim.scenarios || [];
+  const active = scenarios.find((sc) => sc.id === sim.active_id) || scenarios[0] || null;
+  const activeValues = active?.values || {};
+  const view = useMemo(() => (isSim ? applySimulation(report, activeValues, grossMarginTarget) : report), [isSim, report, activeValues, grossMarginTarget]);
   const { rows, annual, months } = view;
-  const simEditedCount = SIM_KEYS.reduce((c, k) => c + (sim[k] || []).filter((v) => v !== null && v !== undefined && v !== "").length, 0);
-  const setSimValue = (key, monthIdx, value) => {
-    setSim((prev) => {
-      const arr = Array.from({ length: 12 }, (_, i) => prev[key]?.[i] ?? null);
-      arr[monthIdx] = value;
-      return { ...prev, [key]: arr };
-    });
+  const simEditedCount = SIM_KEYS.reduce((c, k) => c + (activeValues[k] || []).filter((v) => v !== null && v !== undefined && v !== "").length, 0);
+  const stamp = () => ({ updated_at: new Date().toISOString(), updated_by: user?.full_name || user?.email || "" });
+  const updateActive = (patch) => {
+    setSim((prev) => ({ ...prev, scenarios: (prev.scenarios || []).map((sc) => (sc.id === (active?.id) ? { ...sc, ...patch } : sc)) }));
     setSimDirty(true);
+  };
+  const setSimValue = (key, monthIdx, value) => {
+    const arr = Array.from({ length: 12 }, (_, i) => activeValues[key]?.[i] ?? null);
+    arr[monthIdx] = value;
+    updateActive({ values: { ...activeValues, [key]: arr } });
   };
   const saveSim = useMutation({
     mutationFn: async (next) => {
-      const payload = { simulation: { ...next, updated_at: new Date().toISOString(), updated_by: user?.full_name || user?.email || "" } };
+      const payload = { simulation: next };
       if (targets?.id) return db.entities.FiscalTarget.update(targets.id, payload);
       return db.entities.FiscalTarget.create({ ...emptyTargets(fy), ...payload });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["fiscalTargets"] }); setSimDirty(false); toast.success("シミュレーションを保存しました"); },
     onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
   });
-  const resetSim = () => { const empty = {}; setSim(empty); setSimDirty(true); saveSim.mutate(empty); };
+  const persist = (next) => { setSim(next); saveSim.mutate(next); };
+  const saveActive = () => {
+    const next = { ...sim, scenarios: scenarios.map((sc) => (sc.id === active?.id ? { ...sc, ...stamp() } : sc)) };
+    persist(next);
+  };
+  const newScenario = (copyFrom = null) => {
+    const name = window.prompt("パターンの名前", copyFrom ? `${copyFrom.name}のコピー` : `パターン${scenarios.length + 1}`);
+    if (!name || !name.trim()) return;
+    const sc = { id: crypto.randomUUID(), name: name.trim(), values: copyFrom ? JSON.parse(JSON.stringify(copyFrom.values || {})) : {}, ...stamp() };
+    persist({ ...sim, scenarios: [...scenarios, sc], active_id: sc.id });
+  };
+  const renameScenario = () => {
+    if (!active) return;
+    const name = window.prompt("パターンの名前", active.name);
+    if (!name || !name.trim() || name.trim() === active.name) return;
+    persist({ ...sim, scenarios: scenarios.map((sc) => (sc.id === active.id ? { ...sc, name: name.trim(), ...stamp() } : sc)) });
+  };
+  const deleteScenario = () => {
+    if (!active) return;
+    if (!window.confirm(`「${active.name}」を削除しますか？`)) return;
+    const rest = scenarios.filter((sc) => sc.id !== active.id);
+    persist({ ...sim, scenarios: rest, active_id: rest[0]?.id || null });
+  };
+  const resetSim = () => {
+    if (!active) return;
+    if (!window.confirm(`「${active.name}」の書き換えをすべて消して実データに戻しますか？`)) return;
+    persist({ ...sim, scenarios: scenarios.map((sc) => (sc.id === active.id ? { ...sc, values: {}, ...stamp() } : sc)) });
+  };
+  const selectScenario = (id) => {
+    if (simDirty && !window.confirm("保存していない書き換えがあります。切り替えると消えますがよいですか？")) return;
+    setSim({ ...simDoc, active_id: id }); setSimDirty(false);
+    saveSim.mutate({ ...simDoc, active_id: id });
+  };
 
   // 表示モードに応じた「計」の値（月ごと・年計とも同じ形にそろえる）
   const totalOf = (r) => {
@@ -299,16 +352,44 @@ export default function SalesReport() {
         <span className="text-[11px] text-muted-foreground">要約・グラフの粗利・表の「計」に反映されます</span>
       </div>
       {isSim && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-          <span className="font-semibold text-amber-900">シミュレーション</span>
-          <span className="text-muted-foreground">管理表の「着地見込」の売上（案件見込A・要注意A）・発注見込（A・要注意）・うち定期売上を月ごとに書き換えて試算できます。粗利・粗利率・必要額・年計・計は自動で計算し直します。実データの着地見込は変わりません。</span>
-          <span className="ml-auto text-muted-foreground whitespace-nowrap">
-            書き換え {simEditedCount} か所{savedSim.updated_at ? `　最終保存 ${new Date(savedSim.updated_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })} ${savedSim.updated_by || ""}` : ""}
-          </span>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={resetSim} disabled={saveSim.isPending || simEditedCount === 0}>実データに戻す</Button>
-          <Button size="sm" className="h-7 text-xs" onClick={() => saveSim.mutate(sim)} disabled={saveSim.isPending || !simDirty}>
-            {saveSim.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : simDirty ? "保存" : "保存済み"}
-          </Button>
+        <div className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-2.5 space-y-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="font-semibold text-amber-900">シミュレーション</span>
+            {scenarios.length > 0 ? (
+              <Select value={active?.id || ""} onValueChange={selectScenario}>
+                <SelectTrigger className="h-7 w-[220px] text-xs bg-background"><SelectValue placeholder="パターンを選ぶ" /></SelectTrigger>
+                <SelectContent>
+                  {scenarios.map((sc) => <SelectItem key={sc.id} value={sc.id} className="text-xs">{sc.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="text-muted-foreground">まだパターンがありません</span>
+            )}
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => newScenario(null)} disabled={saveSim.isPending}>＋ 新しいパターン</Button>
+            {active && (
+              <>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => newScenario(active)} disabled={saveSim.isPending}>複製</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={renameScenario} disabled={saveSim.isPending}>名前を変更</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={deleteScenario} disabled={saveSim.isPending}>削除</Button>
+              </>
+            )}
+            <span className="ml-auto text-muted-foreground whitespace-nowrap">
+              {active ? <>書き換え {simEditedCount} か所{active.updated_at ? `　最終保存 ${new Date(active.updated_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })} ${active.updated_by || ""}` : ""}</> : null}
+            </span>
+            {active && (
+              <>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={resetSim} disabled={saveSim.isPending || simEditedCount === 0}>実データに戻す</Button>
+                <Button size="sm" className="h-7 text-xs" onClick={saveActive} disabled={saveSim.isPending || !simDirty}>
+                  {saveSim.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : simDirty ? "保存" : "保存済み"}
+                </Button>
+              </>
+            )}
+          </div>
+          <p className="text-muted-foreground">
+            {active
+              ? "管理表の「着地見込」の売上（案件見込A・要注意A）・発注見込（A・要注意）・うち定期売上を月ごとに書き換えて試算できます。粗利・粗利率・必要額・年計・計は自動で計算し直します。実データの着地見込は変わりません。"
+              : "「＋ 新しいパターン」で名前を付けて始めてください。パターンごとに書き換えを保存して、切り替えて比べられます。"}
+          </p>
         </div>
       )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -430,7 +511,7 @@ export default function SalesReport() {
                       {rows.map((r, mi) => {
                         const v = b === "total" ? totalOf(r)[key] : r[b][key];
                         const isMargin = kind === "pct";
-                        if (isSim && b === "forecast" && SIM_KEYS.includes(key)) {
+                        if (isSim && active && b === "forecast" && SIM_KEYS.includes(key)) {
                           return (
                             <SimCell
                               key={r.key}
