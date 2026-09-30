@@ -158,8 +158,8 @@ export default function SalesReport() {
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
   const [chart, setChart] = useState("sales"); // sales | gross
-  // 「計」の集計範囲: both=実績＋着地見込 / forecast=着地見込だけ / actual=実績だけ
-  const [totalMode, setTotalMode] = useState("both");
+  // 「計」の集計範囲: forecast=着地見込だけ / actual=実績だけ（実績＋見込の合算は使わない）
+  const [totalMode, setTotalMode] = useState("forecast");
   const [targetsOpen, setTargetsOpen] = useState(false);
   const fy = Number(fiscalYear);
 
@@ -188,7 +188,7 @@ export default function SalesReport() {
     return r.total;
   };
   const annualTotal = totalOf(annual);
-  const TOTAL_MODES = [["both", "実績＋着地見込"], ["forecast", "着地見込のみ"], ["actual", "実績のみ"]];
+  const TOTAL_MODES = [["forecast", "着地見込のみ"], ["actual", "実績のみ"]];
   const totalLabel = TOTAL_MODES.find(([k]) => k === totalMode)[1];
   const TotalModeSwitch = ({ className = "" }) => (
     <div className={`inline-flex gap-0.5 p-0.5 rounded-full bg-muted ${className}`} role="group" aria-label="計の集計範囲">
