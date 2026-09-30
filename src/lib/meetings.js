@@ -1,6 +1,7 @@
 // 議事録の共通定義
 import { useMemo } from "react";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { formatOverview, formatNotes } from "@/lib/meetingText";
 
 export const DEFAULT_MEETING_TYPES = [
   { key: "first", label: "初回ヒアリング" },
@@ -56,9 +57,9 @@ export function meetingToText(m, typeLabel) {
     m.client_name ? `クライアント: ${m.client_name}` : "",
     (m.participants || []).length ? `出席者: ${(m.participants || []).join("、")}` : "",
     "",
-    "■ 概要", s.overview || "",
+    "■ 概要", formatOverview(s.overview),
     "",
-    "■ 打ち合わせメモ", s.notes || "",
+    "■ 打ち合わせメモ", formatNotes(s.notes),
     "",
     "■ 決定事項", ...(s.decisions || []).map((d) => `・${d}`),
     "",

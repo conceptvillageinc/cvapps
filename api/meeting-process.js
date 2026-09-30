@@ -1,6 +1,7 @@
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { transcribeAudio, isGeminiConfigured } from './_lib/gemini.js';
 import { claude, MODEL, normalizeSchema, textOf } from './_lib/claude.js';
+import { formatOverview, formatNotes } from '../src/lib/meetingText.js';
 
 // ============================================================================
 // POST /api/meeting-process  { meeting_id }
@@ -230,6 +231,7 @@ ${project ? `対象の案件: ${project.project_number} ${project.name}（クラ
 - ToDo は担当・期限が発言に出ていればそのまま入れ、出ていなければ空にする（推測で埋めない）。side は自社（cv）か先方（client）か。
 - 期限は YYYY-MM-DD で書く。「来週」「月末」「金曜まで」のような言い方は、打ち合わせの日付（${meeting.held_at || '不明'}）を起点に日付へ直す。日付に直せない言い方はそのまま書く。
 - 見積・印刷に関わる数字（部数・サイズ・納期・予算・用紙・色数）は notes に必ず拾う。
+- overview は 1 文ごとに改行する。notes は【見出し】で話題ごとに分け、見出しは 1 行にして本文を続け、話題の間は空行で区切る。
 - estimate_conditions には、見積に使う条件を構造化して入れる。印刷物（チラシ・ラベル・パンフなど）は prints に 1 件ずつ、
   デザイン・システム構築・web構築のように人日で見積るものは works に 1 件ずつ。発言に無い項目は空にし、根拠の発言を evidence に短く引用する。
   works.days だけは要件から推定してよい（evidence に「推定」と明記）。予算が全体でしか出ていなければ budget に入れ、各項目の budget は空にする。
@@ -261,7 +263,7 @@ ${lines}`;
     evidence: byKey[c.key]?.evidence || '',
   }));
   const summary = {
-    overview: out.overview || '',
+    overview: formatOverview(out.overview || ''),
     decisions: out.decisions || [],
     todos: (out.todos || []).map((t) => ({ text: t.text, owner: t.owner || '', due: t.due || '', side: t.side || 'unknown', done: false })),
     open_items: [
@@ -269,7 +271,7 @@ ${lines}`;
       // 未確認の項目は「次回までの確認事項」に入れる
       ...checkpoints.filter((c) => c.status === 'unconfirmed').map((c) => `【未確認】${c.label}`),
     ],
-    notes: out.notes || '',
+    notes: formatNotes(out.notes || ''),
     speakers: out.speakers || [],
   };
   const ec = out.estimate_conditions || {};

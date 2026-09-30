@@ -6,6 +6,7 @@ import { useMeetingSettings, MEETING_STATUS, PROCESSING, fmtClock, meetingToText
 import { todayString } from "@/lib/fiscal";
 import EstimateConditions from "@/components/meetings/EstimateConditions";
 import { normalizeConditions } from "@/lib/meetingConditions";
+import { formatSummaryText } from "@/lib/meetingText";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -134,7 +135,7 @@ export default function MeetingDetail() {
 
   useEffect(() => {
     if (!meeting || dirty) return;
-    setSummary(meeting.summary || { overview: "", decisions: [], todos: [], open_items: [], notes: "" });
+    setSummary(formatSummaryText(meeting.summary || { overview: "", decisions: [], todos: [], open_items: [], notes: "" }));
     setCheckpoints(meeting.checkpoints || []);
     setConditions(normalizeConditions(meeting.estimate_conditions));
   }, [meeting, dirty]);
