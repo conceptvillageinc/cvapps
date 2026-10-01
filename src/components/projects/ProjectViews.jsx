@@ -117,6 +117,11 @@ function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter
             <PopoverContent align="start" className="w-56 p-2 text-foreground">
               <p className="text-[11px] font-semibold mb-1">{col.label}：表示するもの</p>
               <div className="max-h-64 overflow-y-auto space-y-0.5">
+                <label className="flex items-center gap-2 text-xs py-0.5 cursor-pointer hover:bg-muted/60 rounded px-1 font-semibold">
+                  <input type="checkbox" className="w-3.5 h-3.5" checked={!selected} onChange={() => onFilter(col.key, null)} />
+                  <span>すべて</span>
+                </label>
+                <div className="border-t my-0.5" />
                 {candidates.map((v) => (
                   <label key={v} className="flex items-center gap-2 text-xs py-0.5 cursor-pointer hover:bg-muted/60 rounded px-1">
                     <input type="checkbox" className="w-3.5 h-3.5" checked={!!selected?.includes(v)} onChange={() => toggleValue(v)} />
@@ -126,7 +131,7 @@ function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter
               </div>
               <div className="flex items-center justify-between mt-2 pt-2 border-t text-[11px]">
                 <span className="text-muted-foreground">{selected ? `${selected.length} 件を表示` : "すべて表示"}</span>
-                <button type="button" className="text-primary hover:underline disabled:opacity-40" disabled={!selected} onClick={() => onFilter(col.key, null)}>解除</button>
+                <button type="button" className="text-primary hover:underline disabled:opacity-40" disabled={!selected} onClick={() => onFilter(col.key, null)}>すべてに戻す</button>
               </div>
             </PopoverContent>
           </Popover>
