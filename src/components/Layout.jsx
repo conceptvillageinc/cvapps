@@ -33,8 +33,8 @@ const navItems = [
 const adminItems = [
   { path: "/clients", label: "クライアント一覧", icon: UserSquare },
   { path: "/vendors", label: "印刷所情報", icon: Building2 },
-  { path: "/price-master", label: "価格マスタ", icon: Tag },
   { path: "/print-types", label: "印刷種別マスタ", icon: Printer },
+  { path: "/price-master", label: "価格マスタ", icon: Tag },
   { path: "/design-fee-master", label: "デザイン費マスタ", icon: Palette },
   { path: "/settings", label: "システム設定", icon: Settings },
   { path: "/users", label: "ユーザー管理", icon: Users },
