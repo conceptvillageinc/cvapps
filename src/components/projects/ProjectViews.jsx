@@ -6,11 +6,12 @@ import { useAuth } from "@/lib/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { toast } from "sonner";
-import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter } from "lucide-react";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -68,16 +69,68 @@ function optionComparator(sort, settings) {
   };
 }
 
-function SortableHead({ col, sort, onToggle, defaultMark, className = "" }) {
+const EMPTY_VALUE = "__empty__";
+
+/** 列ごとの「表示する値」（チェックで複数選択）。null = 絞り込みなし */
+function useColumnFilters() {
+  const [filters, setFilters] = useState({});
+  const setFilter = (key, values) => setFilters((cur) => ({ ...cur, [key]: values && values.length ? values : null }));
+  return [filters, setFilter];
+}
+
+/** 絞り込みに使う値の候補: システム設定の選択肢 + 実際に入っている値 + 空欄 */
+function filterCandidates(key, projects, settings) {
+  const options = settings[SORTABLE[key]] || [];
+  const present = new Set(projects.map((p) => p[key] || ""));
+  const extra = [...present].filter((v) => v && !options.includes(v)).sort((a, b) => a.localeCompare(b, "ja"));
+  return [...options, ...extra, EMPTY_VALUE];
+}
+
+function applyFilters(projects, filters) {
+  const keys = Object.keys(filters).filter((k) => filters[k]);
+  if (keys.length === 0) return projects;
+  return projects.filter((p) => keys.every((k) => filters[k].includes(p[k] || EMPTY_VALUE)));
+}
+
+function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter, onFilter, candidates = [] }) {
   const sortable = col.key in SORTABLE;
   const active = sort?.key === col.key;
+  const selected = filter || null;
+  const toggleValue = (v) => {
+    const cur = selected || [];
+    onFilter(col.key, cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]);
+  };
   return (
     <TableHead className={`text-xs text-white whitespace-nowrap ${col.num ? "text-right" : ""} ${className}`}>
       {sortable ? (
-        <button type="button" onClick={() => onToggle(col.key)} className="inline-flex items-center gap-1 hover:underline" title="クリックで並べ替え（昇順 → 降順 → 解除）">
-          {col.label}
-          {active ? (sort.dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
-        </button>
+        <span className="inline-flex items-center gap-1">
+          <button type="button" onClick={() => onToggle(col.key)} className="inline-flex items-center gap-1 hover:underline" title="クリックで並べ替え（昇順 → 降順 → 解除）">
+            {col.label}
+            {active ? (sort.dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
+          </button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button type="button" className={`inline-flex items-center rounded px-1 py-0.5 ${selected ? "bg-amber-400 text-slate-900" : "opacity-60 hover:opacity-100"}`} title="表示する値を選ぶ（複数可）" aria-label={`${col.label}で絞り込み`}>
+                <Filter className="w-3 h-3" />{selected && <span className="ml-0.5 text-[10px] font-bold">{selected.length}</span>}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-56 p-2 text-foreground">
+              <p className="text-[11px] font-semibold mb-1">{col.label}：表示するもの</p>
+              <div className="max-h-64 overflow-y-auto space-y-0.5">
+                {candidates.map((v) => (
+                  <label key={v} className="flex items-center gap-2 text-xs py-0.5 cursor-pointer hover:bg-muted/60 rounded px-1">
+                    <input type="checkbox" className="w-3.5 h-3.5" checked={!!selected?.includes(v)} onChange={() => toggleValue(v)} />
+                    <span className={v === EMPTY_VALUE ? "text-muted-foreground" : ""}>{v === EMPTY_VALUE ? "（空欄）" : v}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center justify-between mt-2 pt-2 border-t text-[11px]">
+                <span className="text-muted-foreground">{selected ? `${selected.length} 件を表示` : "すべて表示"}</span>
+                <button type="button" className="text-primary hover:underline disabled:opacity-40" disabled={!selected} onClick={() => onFilter(col.key, null)}>解除</button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </span>
       ) : (
         <>{col.label}{!sort && defaultMark === col.key ? (col.key === "registered_at" ? " ↓" : " ↑") : ""}</>
       )}
@@ -104,6 +157,8 @@ export function DailyView({ projects, isLoading }) {
   const today = todayString();
   const settings = useSystemSettings();
   const [sort, toggleSort] = useColumnSort();
+  const [filters, setFilter] = useColumnFilters();
+  const filtered = useMemo(() => applyFilters(projects, filters), [projects, filters]);
   const summary = useMemo(() => {
     const ws = weekStart(today);
     const ms = today.slice(0, 8) + "01";
@@ -119,7 +174,7 @@ export function DailyView({ projects, isLoading }) {
   }, [projects, today]);
 
   const groups = useMemo(() => {
-    const sorted = [...projects].sort((a, b) => (b.registered_at || "").localeCompare(a.registered_at || "") || (b.project_number || "").localeCompare(a.project_number || ""));
+    const sorted = [...filtered].sort((a, b) => (b.registered_at || "").localeCompare(a.registered_at || "") || (b.project_number || "").localeCompare(a.project_number || ""));
     const out = [];
     for (const p of sorted) {
       const key = p.registered_at || "";
@@ -134,7 +189,7 @@ export function DailyView({ projects, isLoading }) {
     const cmp = optionComparator(sort, settings);
     if (cmp) for (const g of out) g.rows.sort(cmp);
     return out;
-  }, [projects, sort, settings]);
+  }, [filtered, sort, settings]);
 
   const monthLabel = `${Number(today.slice(5, 7))}月`;
   const cards = [
@@ -163,7 +218,7 @@ export function DailyView({ projects, isLoading }) {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-          ) : groups.length === 0 ? (
+          ) : groups.length === 0 && !Object.values(filters).some(Boolean) ? (
             <Empty text="該当する案件がありません" />
           ) : (
             <div className="overflow-x-auto">
@@ -171,11 +226,15 @@ export function DailyView({ projects, isLoading }) {
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {DAILY_COLS.map((c) => (
-                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="registered_at" />
+                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="registered_at"
+                        filter={filters[c.key]} onFilter={setFilter} candidates={c.key in SORTABLE ? filterCandidates(c.key, projects, settings) : []} />
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {groups.length === 0 && (
+                    <TableRow><TableCell colSpan={DAILY_COLS.length} className="py-10 text-center text-sm text-muted-foreground">絞り込みに合う案件がありません。見出しの絞り込み（黄色のマーク）から解除できます</TableCell></TableRow>
+                  )}
                   {groups.map((g) => (
                     <GroupRows key={g.date || "none"} group={g} />
                   ))}
@@ -243,13 +302,14 @@ export function NextActionView({ projects, isLoading }) {
   const today = todayString();
   const settings = useSystemSettings();
   const [sort, toggleSort] = useColumnSort();
+  const [filters, setFilter] = useColumnFilters();
   const nextMonthStart = useMemo(() => {
     const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
     return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
   }, [today]);
 
   const groups = useMemo(() => {
-    const list = projects.filter((p) => !onlyEmpty || !(p.next_action || "").trim());
+    const list = applyFilters(projects, filters).filter((p) => !onlyEmpty || !(p.next_action || "").trim());
     const sorted = [...list].sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999") || (a.project_number || "").localeCompare(b.project_number || ""));
     const mk = (key, label) => ({ key, label, rows: [], sums: { expected_revenue: 0, expected_cost: 0, confirmed_cost: 0, other_cost: 0 } });
     const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
@@ -267,7 +327,7 @@ export function NextActionView({ projects, isLoading }) {
     const cmp = optionComparator(sort, settings);
     if (cmp) for (const g of gs) g.rows.sort(cmp);
     return gs;
-  }, [projects, onlyEmpty, today, nextMonthStart, sort, settings]);
+  }, [projects, filters, onlyEmpty, today, nextMonthStart, sort, settings]);
 
   const total = groups.reduce((s, g) => s + g.rows.length, 0);
   const emptyCount = projects.filter((p) => !(p.next_action || "").trim()).length;
@@ -288,7 +348,7 @@ export function NextActionView({ projects, isLoading }) {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-          ) : total === 0 ? (
+          ) : total === 0 && !Object.values(filters).some(Boolean) ? (
             <Empty text={onlyEmpty ? "ネクストアクションが空の案件はありません" : "進行中の案件がありません"} />
           ) : (
             <div className="overflow-x-auto">
@@ -296,11 +356,15 @@ export function NextActionView({ projects, isLoading }) {
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {NEXT_COLS.map((c) => (
-                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="due_date" className={c.key === "next_action" ? "min-w-[260px]" : ""} />
+                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="due_date" className={c.key === "next_action" ? "min-w-[260px]" : ""}
+                        filter={filters[c.key]} onFilter={setFilter} candidates={c.key in SORTABLE ? filterCandidates(c.key, projects, settings) : []} />
                     ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {total === 0 && (
+                    <TableRow><TableCell colSpan={NEXT_COLS.length} className="py-10 text-center text-sm text-muted-foreground">絞り込みに合う案件がありません。見出しの絞り込み（黄色のマーク）から解除できます</TableCell></TableRow>
+                  )}
                   {groups.filter((g) => g.rows.length > 0).map((g) => (
                     <NextGroupRows key={g.key} group={g} />
                   ))}
