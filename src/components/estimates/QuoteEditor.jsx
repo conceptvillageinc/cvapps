@@ -268,7 +268,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
         </div>
         {showPreview && (
           <div className="flex items-center gap-1.5" title="ON にするとプレビューを左、編集欄を右に並べます。この設定はこのブラウザに保存されます">
-            <Label htmlFor="qe-preview-left" className="text-xs cursor-pointer">プレビューを左に</Label>
+            <Label htmlFor="qe-preview-left" className="text-xs cursor-pointer">左右表示切り替え</Label>
             <Switch id="qe-preview-left" checked={previewLeft} onCheckedChange={togglePreviewLeft} />
           </div>
         )}
