@@ -130,10 +130,6 @@ export default function MeetingNew() {
       {mode !== "record" && (
         <div className="rounded-xl border bg-card p-4 space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs">件名</Label>
-            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder={defaultTitle} className="h-10" />
-          </div>
-          <div className="space-y-1">
             <div className="flex items-center justify-between">
               <Label className="text-xs">クライアント</Label>
               <button type="button" onClick={() => setForm({ ...form, client_name: form.client_name === INTERNAL_CLIENT ? "" : INTERNAL_CLIENT })} className={`text-[11px] px-2 py-0.5 rounded-full border ${form.client_name === INTERNAL_CLIENT ? "bg-slate-800 text-white border-slate-800" : "bg-muted/40 hover:bg-muted"}`}>
@@ -162,6 +158,10 @@ export default function MeetingNew() {
                 .filter((p) => !form.client_name || form.client_name === INTERNAL_CLIENT || p.client_name === form.client_name)
                 .map((p) => <option key={p.id} value={p.id}>{form.client_name === INTERNAL_CLIENT && p.client_name ? `${p.client_name}｜` : ""}{p.project_number} {p.name}</option>)}
             </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">ミーティングタイトル</Label>
+            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder={defaultTitle} className="h-10" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
