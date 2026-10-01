@@ -2,6 +2,8 @@ import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { transcribeAudio, isGeminiConfigured } from './_lib/gemini.js';
 import { claude, MODEL, normalizeSchema, textOf } from './_lib/claude.js';
 import { formatOverview, formatNotes } from '../src/lib/meetingText.js';
+import { DESIGN_FEE_MASTER } from '../src/lib/designFeeData.js';
+import { flattenDesignCatalog, findDesignCatalogItem } from '../src/lib/designCatalog.js';
 
 // ============================================================================
 // POST /api/meeting-process  { meeting_id }
@@ -100,13 +102,27 @@ function summarySchema() {
                 due_date: { type: 'string', description: '納期 YYYY-MM-DD。無ければ空' },
                 other_cost: { type: 'string', description: 'サーバー費・外注費などの実費（税別・数字のみ）。無ければ空' },
                 budget: { type: 'string', description: 'この制作の予算（税別・数字のみ）。無ければ空' },
+                design_items: {
+                  type: 'array',
+                  description: 'kind が design のとき、下の「デザイン費マスタ」から当てはまる項目（ベースデザイン＋必要なオプション）。category と name はマスタの表記をそのまま写す。当てはまるものが無ければ空の配列',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      category: { type: 'string', description: 'マスタのカテゴリ（例: チラシデザイン）' },
+                      name: { type: 'string', description: 'マスタの項目名（そのまま写す）' },
+                      quantity: { type: 'string', description: '数量（数字のみ）。通常 1。「1名あたり」「1案」のような項目は人数・案数' },
+                      reason: { type: 'string', description: 'この項目を選んだ根拠（発言を短く引用）' },
+                    },
+                    required: ['category', 'name', 'quantity', 'reason'],
+                  },
+                },
                 evidence: {
                   type: 'object',
-                  properties: { kind: { type: 'string' }, description: { type: 'string' }, days: { type: 'string' }, day_rate: { type: 'string' }, owner: { type: 'string' }, due_date: { type: 'string' }, other_cost: { type: 'string' }, budget: { type: 'string' } },
-                  required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget'],
+                  properties: { kind: { type: 'string' }, description: { type: 'string' }, days: { type: 'string' }, day_rate: { type: 'string' }, owner: { type: 'string' }, due_date: { type: 'string' }, other_cost: { type: 'string' }, budget: { type: 'string' }, design_items: { type: 'string', description: 'design で当てはまる項目が無かったとき、その理由（例: パッケージデザインの項目がマスタに無い）。あれば空' } },
+                  required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget', 'design_items'],
                 },
               },
-              required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget', 'evidence'],
+              required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget', 'design_items', 'evidence'],
             },
           },
         },
@@ -202,6 +218,27 @@ function guessMime(path) {
   return { webm: 'audio/webm', mp4: 'audio/mp4', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', aac: 'audio/aac' }[ext] || 'audio/mp4';
 }
 
+/** デザイン費マスタ（画面で編集した DB の内容。無ければアプリ内の固定一覧） */
+async function loadDesignCatalog(admin) {
+  try {
+    const { data } = await admin.from('design_fee_masters').select('id, category, name, detail, selling_price, amount, is_active, category_order, sort_order').order('category_order').order('sort_order');
+    if (data && data.length) return flattenDesignCatalog(data);
+  } catch { /* テーブルが無いときは固定一覧 */ }
+  return flattenDesignCatalog(DESIGN_FEE_MASTER);
+}
+
+/** AI が選んだ項目名をマスタの項目に当てる（名前が少し違っても拾う。見つからないものは捨てる） */
+function resolveDesignItems(catalog, picks) {
+  const out = [];
+  for (const [i, p] of (Array.isArray(picks) ? picks : []).entries()) {
+    const hit = findDesignCatalogItem(catalog, p);
+    if (!hit) continue;
+    const qty = Number(String(p.quantity || '').replace(/[^\d.]/g, '')) || 1;
+    out.push({ id: `di_ai_${i}`, master_id: hit.master_id, category: hit.category, name: hit.name, selling_price: hit.selling_price, quantity: qty, reason: p.reason || '' });
+  }
+  return out;
+}
+
 async function summarizeStep(admin, meeting, transcript) {
   const types = await loadTypes(admin);
   // 紐づけた案件（社内の打ち合わせでクライアント案件を扱うときの文脈に使う）
@@ -212,6 +249,7 @@ async function summarizeStep(admin, meeting, transcript) {
   }
   const { data: checks } = await admin.from('meeting_checklists').select('key, label').eq('meeting_type', meeting.meeting_type).eq('is_active', true).order('sort_order');
   const checklist = checks || [];
+  const catalog = await loadDesignCatalog(admin);
   const known = Array.isArray(meeting.participants) ? meeting.participants.filter(Boolean) : [];
   const lines = transcript.map((s) => `[${fmtSec(s.start)}] ${s.speaker}: ${s.text}`).join('\n');
 
@@ -235,6 +273,10 @@ ${project ? `対象の案件: ${project.project_number} ${project.name}（クラ
 - estimate_conditions には、見積に使う条件を構造化して入れる。印刷物（チラシ・ラベル・パンフなど）は prints に 1 件ずつ、
   デザイン・システム構築・web構築のように人日で見積るものは works に 1 件ずつ。発言に無い項目は空にし、根拠の発言を evidence に短く引用する。
   works.days だけは要件から推定してよい（evidence に「推定」と明記）。予算が全体でしか出ていなければ budget に入れ、各項目の budget は空にする。
+- works のうち kind が design のものは人日ではなく、下の「デザイン費マスタ」から当てはまる項目を design_items に選ぶ。
+  ベースデザイン 1 件に、発言から必要と分かるオプション（テキスト作成・イラストなど）を足す。サイズ・ページ数・面数（表面のみ／表裏）が
+  発言から分かればそれに合う項目を選び、分からなければ最も基本的な項目を選んで reason にその旨を書く。
+  マスタに無い種類（例: パッケージ、Web）で当てはまる項目が無いときは design_items を空にし、evidence.design_items に理由を書く。
 - checkpoints は、下の「確認すべき項目」のそれぞれについて、文字起こしの中で確認できたか判定する。
   confirmed = 話題に出て内容が決まった／確認できた、unconfirmed = 話題に出ていない、または出たが決まっていない、n_a = この打ち合わせでは扱う必要がない。
   evidence には根拠になる発言を短く引用する。
@@ -242,6 +284,9 @@ ${project ? `対象の案件: ${project.project_number} ${project.name}（クラ
 
 確認すべき項目（key: 表示名）:
 ${checklist.length ? checklist.map((c) => `- ${c.key}: ${c.label}`).join('\n') : '（なし）'}
+
+デザイン費マスタ（category | name | 税別金額）:
+${catalog.map((c) => `- ${c.category} | ${c.name} | ${c.selling_price}`).join('\n')}
 
 文字起こし:
 ${lines}`;
@@ -279,7 +324,16 @@ ${lines}`;
     budget: ec.budget || '',
     budget_evidence: ec.budget_evidence || '',
     prints: (ec.prints || []).filter((p) => p && (p.print_type || p.quantities || p.size)).map((p, i) => ({ id: `pc_ai_${i}`, ...p })),
-    works: (ec.works || []).filter((w) => w && (w.description || w.days)).map((w, i) => ({ id: `wc_ai_${i}`, ...w, day_rate: w.day_rate || '60000', owner: w.owner || 'internal' })),
+    works: (ec.works || []).filter((w) => w && (w.description || w.days || (w.design_items || []).length)).map((w, i) => {
+      const { design_items: picks, ...rest } = w;
+      const design_items = w.kind === 'design' ? resolveDesignItems(catalog, picks) : [];
+      return {
+        id: `wc_ai_${i}`, ...rest, day_rate: w.day_rate || '60000', owner: w.owner || 'internal',
+        pricing: w.kind === 'design' ? 'master' : 'days',
+        design_items,
+        design_note: w.kind === 'design' && design_items.length === 0 ? (w.evidence?.design_items || '') : '',
+      };
+    }),
     generated_at: new Date().toISOString(),
   };
   return { summary, checkpoints, estimateConditions };
