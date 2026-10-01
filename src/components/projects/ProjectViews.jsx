@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import { toast } from "sonner";
-import { Loader2, FolderKanban } from "lucide-react";
+import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -44,6 +45,47 @@ function Empty({ text }) {
 }
 
 /* ------------------------------------------------------------------------ */
+/* 並べ替え（受注確度・フェーズ）。システム設定の選択肢の順で並ぶ                 */
+/* ------------------------------------------------------------------------ */
+
+const SORTABLE = { deal_probability: "dealProbabilityOptions", phase: "phaseOptions" };
+
+/** 見出しクリックで 昇順 → 降順 → 解除 */
+function useColumnSort() {
+  const [sort, setSort] = useState(null); // { key, dir: "asc" | "desc" } | null
+  const toggle = (key) => setSort((cur) => (!cur || cur.key !== key ? { key, dir: "asc" } : cur.dir === "asc" ? { key, dir: "desc" } : null));
+  return [sort, toggle];
+}
+
+/** 選択肢の順で並べる比較関数。空は最後。並べ替えが無ければ null */
+function optionComparator(sort, settings) {
+  if (!sort) return null;
+  const options = settings[SORTABLE[sort.key]] || [];
+  const rank = (v) => { const i = options.indexOf(v || ""); return i < 0 ? (v ? options.length : options.length + 1) : i; };
+  return (a, b) => {
+    const d = rank(a[sort.key]) - rank(b[sort.key]) || String(a[sort.key] || "").localeCompare(String(b[sort.key] || ""), "ja");
+    return sort.dir === "asc" ? d : -d;
+  };
+}
+
+function SortableHead({ col, sort, onToggle, defaultMark, className = "" }) {
+  const sortable = col.key in SORTABLE;
+  const active = sort?.key === col.key;
+  return (
+    <TableHead className={`text-xs text-white whitespace-nowrap ${col.num ? "text-right" : ""} ${className}`}>
+      {sortable ? (
+        <button type="button" onClick={() => onToggle(col.key)} className="inline-flex items-center gap-1 hover:underline" title="クリックで並べ替え（昇順 → 降順 → 解除）">
+          {col.label}
+          {active ? (sort.dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
+        </button>
+      ) : (
+        <>{col.label}{!sort && defaultMark === col.key ? (col.key === "registered_at" ? " ↓" : " ↑") : ""}</>
+      )}
+    </TableHead>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
 /* 速報デイリー: 案件登録日の新しい順。日ごとに小計                              */
 /* ------------------------------------------------------------------------ */
 
@@ -53,12 +95,15 @@ const DAILY_COLS = [
   { key: "client_name", label: "顧客名称" },
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度" },
+  { key: "phase", label: "フェーズ" },
   { key: "expected_gross_profit", label: "粗利(見込)", num: true },
   { key: "actual_gross_profit", label: "粗利(実績)", num: true },
 ];
 
 export function DailyView({ projects, isLoading }) {
   const today = todayString();
+  const settings = useSystemSettings();
+  const [sort, toggleSort] = useColumnSort();
   const summary = useMemo(() => {
     const ws = weekStart(today);
     const ms = today.slice(0, 8) + "01";
@@ -85,8 +130,11 @@ export function DailyView({ projects, isLoading }) {
       g.gross += Number(p.expected_gross_profit || 0);
       g.actual += Number(p.actual_gross_profit || 0);
     }
+    // 受注確度・フェーズで並べ替えるときは、日ごとのまとまりはそのままで中の行だけ並べ替える
+    const cmp = optionComparator(sort, settings);
+    if (cmp) for (const g of out) g.rows.sort(cmp);
     return out;
-  }, [projects]);
+  }, [projects, sort, settings]);
 
   const monthLabel = `${Number(today.slice(5, 7))}月`;
   const cards = [
@@ -123,7 +171,7 @@ export function DailyView({ projects, isLoading }) {
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {DAILY_COLS.map((c) => (
-                      <TableHead key={c.key} className={`text-xs text-white whitespace-nowrap ${c.num ? "text-right" : ""}`}>{c.label}{c.key === "registered_at" ? " ↓" : ""}</TableHead>
+                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="registered_at" />
                     ))}
                   </TableRow>
                 </TableHeader>
@@ -159,12 +207,13 @@ function GroupRows({ group: g }) {
             <span className="block text-[10px] font-mono text-muted-foreground">{p.project_number}</span>
           </TableCell>
           <TableCell>{p.deal_probability && <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>}</TableCell>
+          <TableCell>{p.phase && <Badge className={`text-[10px] whitespace-nowrap ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}</TableCell>
           <TableCell className={`text-right text-sm tabular-nums ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>{yen(p.expected_gross_profit)}</TableCell>
           <TableCell className={`text-right text-sm tabular-nums ${Number(p.actual_gross_profit) ? "" : "text-muted-foreground/60"}`}>{yen(p.actual_gross_profit)}</TableCell>
         </TableRow>
       ))}
       <TableRow className="bg-blue-50/40 hover:bg-blue-50/40">
-        <TableCell colSpan={5} className="py-1.5 text-right text-[11px] text-slate-600">日計　受注見込 {yen(g.revenue)}</TableCell>
+        <TableCell colSpan={6} className="py-1.5 text-right text-[11px] text-slate-600">日計　受注見込 {yen(g.revenue)}</TableCell>
         <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.gross)}</TableCell>
         <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.actual)}</TableCell>
       </TableRow>
@@ -192,6 +241,8 @@ const NEXT_COLS = [
 export function NextActionView({ projects, isLoading }) {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const today = todayString();
+  const settings = useSystemSettings();
+  const [sort, toggleSort] = useColumnSort();
   const nextMonthStart = useMemo(() => {
     const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
     return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
@@ -213,8 +264,10 @@ export function NextActionView({ projects, isLoading }) {
       g.rows.push(p);
       for (const k of Object.keys(g.sums)) g.sums[k] += Number(p[k] || 0);
     }
+    const cmp = optionComparator(sort, settings);
+    if (cmp) for (const g of gs) g.rows.sort(cmp);
     return gs;
-  }, [projects, onlyEmpty, today, nextMonthStart]);
+  }, [projects, onlyEmpty, today, nextMonthStart, sort, settings]);
 
   const total = groups.reduce((s, g) => s + g.rows.length, 0);
   const emptyCount = projects.filter((p) => !(p.next_action || "").trim()).length;
@@ -243,7 +296,7 @@ export function NextActionView({ projects, isLoading }) {
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {NEXT_COLS.map((c) => (
-                      <TableHead key={c.key} className={`text-xs text-white whitespace-nowrap ${c.num ? "text-right" : ""} ${c.key === "next_action" ? "min-w-[260px]" : ""}`}>{c.label}{c.key === "due_date" ? " ↑" : ""}</TableHead>
+                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="due_date" className={c.key === "next_action" ? "min-w-[260px]" : ""} />
                     ))}
                   </TableRow>
                 </TableHeader>
