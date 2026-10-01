@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Printer, Palette, FileText, ExternalLink, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { PRINT_TYPES } from "@/lib/constants";
 import {
   WORK_KINDS, WORK_OWNERS, PRINT_FIELDS, WORK_FIELDS,
   newPrintCondition, newWorkCondition, workBuildCost, missingFields,
@@ -15,26 +15,42 @@ const yen = (v) => {
   return Number.isFinite(n) && n !== 0 ? `¥${Math.round(n).toLocaleString()}` : "";
 };
 
-/** 1 項目分の入力欄。空欄は黄色（未確認）、下に根拠の発言 */
-function Field({ label, value, onChange, evidence, type = "text", placeholder = "未確認", list, className = "", readOnly = false, optional = false, children }) {
+/** 内容に合わせて高さが伸びる 1 行入力（長い文章は折り返して全文が見える。Enter で改行はしない） */
+function GrowInput({ value, onChange, className = "", ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return (
+    <Textarea
+      ref={ref}
+      rows={1}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value.replace(/\r?\n/g, " "))}
+      onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+      className={`min-h-0 resize-none overflow-hidden px-2.5 py-1.5 text-xs leading-snug ${className}`}
+      {...props}
+    />
+  );
+}
+
+/** 1 項目分の入力欄。空欄は黄色（未確認）、下に根拠の発言（全文を折り返して表示） */
+function Field({ label, value, onChange, evidence, type = "text", placeholder = "未確認", className = "", readOnly = false, optional = false, children }) {
   // 任意の項目（予算・実費）は空でも「未確認」にしない
   const empty = !optional && (value === "" || value === null || value === undefined);
+  const tone = readOnly ? "bg-muted/60" : empty ? "bg-amber-50 border-amber-300 placeholder:text-amber-700/70" : "";
   return (
     <div className={`space-y-0.5 min-w-0 ${className}`}>
       <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
-      {children || (
-        <Input
-          type={type}
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          list={list}
-          readOnly={readOnly}
-          className={`h-8 text-xs ${readOnly ? "bg-muted/60" : empty ? "bg-amber-50 border-amber-300 placeholder:text-amber-700/70" : ""}`}
-        />
+      {children || (type === "text"
+        ? <GrowInput value={value} onChange={onChange} placeholder={placeholder} readOnly={readOnly} className={tone} />
+        : <Input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} readOnly={readOnly} className={`h-8 text-xs ${tone}`} />
       )}
-      <p className={`text-[10px] truncate ${empty && !readOnly ? "text-amber-700" : "text-muted-foreground"}`} title={evidence || ""}>
-        {evidence ? `「${evidence}」` : empty && !readOnly ? "発言なし" : " "}
+      <p className={`text-xs leading-snug break-words ${empty && !readOnly ? "text-amber-700" : "text-muted-foreground"}`}>
+        {evidence ? `「${evidence}」` : empty && !readOnly ? "発言なし" : " "}
       </p>
     </div>
   );
@@ -56,8 +72,8 @@ function PrintCard({ item, index, onChange, onRemove }) {
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label="この印刷物を削除"><Trash2 className="w-3.5 h-3.5" /></Button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <Field label={PRINT_FIELDS[0][1]} value={item.print_type} onChange={(v) => set("print_type", v)} evidence={ev.print_type} list="ec-print-types" placeholder="例: チラシ・フライヤー" />
-        <Field label={PRINT_FIELDS[1][1]} value={item.quantities} onChange={(v) => set("quantities", v)} evidence={ev.quantities} placeholder="例: 2000 / 3000、500 ×3種" />
+        <Field label={PRINT_FIELDS[0][1]} value={item.print_type} onChange={(v) => set("print_type", v)} evidence={ev.print_type} placeholder="例: チラシ・フライヤー" />
+        <Field label={PRINT_FIELDS[1][1]} value={item.quantities} onChange={(v) => set("quantities", v)} evidence={ev.quantities} placeholder="例: 2000 / 3000" />
         <Field label={PRINT_FIELDS[2][1]} value={item.size} onChange={(v) => set("size", v)} evidence={ev.size} placeholder="例: A4、100mm×80mm" />
         <Field label={PRINT_FIELDS[3][1]} value={item.paper_type} onChange={(v) => set("paper_type", v)} evidence={ev.paper_type} placeholder="例: コート紙 110kg" />
         <Field label={PRINT_FIELDS[4][1]} value={item.color_count} onChange={(v) => set("color_count", v)} evidence={ev.color_count} placeholder="例: 両面4C" />
@@ -104,7 +120,7 @@ function WorkCard({ item, index, onChange, onRemove }) {
         </Field>
         <Field label={WORK_FIELDS[5][1]} value={item.due_date} onChange={(v) => set("due_date", v)} evidence={ev.due_date} type="date" />
         <Field label="構築費（税別・自動）" value={build ? String(build) : ""} readOnly evidence={build ? `${item.days} 人日 × ¥${Number(String(item.day_rate).replace(/,/g, "")).toLocaleString()}` : ""} placeholder="人日 × 単価" />
-        <Field label={WORK_FIELDS[6][1]} value={item.other_cost} onChange={(v) => set("other_cost", v)} evidence={ev.other_cost} placeholder="任意（サーバー費など）" optional />
+        <Field label={WORK_FIELDS[6][1]} value={item.other_cost} onChange={(v) => set("other_cost", v)} evidence={ev.other_cost} placeholder="任意" optional />
         <Field label={WORK_FIELDS[7][1]} value={item.budget} onChange={(v) => set("budget", v)} evidence={ev.budget} placeholder="任意" optional />
       </div>
     </div>
@@ -127,7 +143,6 @@ export default function EstimateConditions({ value, onChange, meeting, onCreateE
 
   return (
     <div className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-3 space-y-2.5">
-      <datalist id="ec-print-types">{PRINT_TYPES.map((t) => <option key={t} value={t} />)}</datalist>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-semibold">見積条件</p>
         <p className="text-[11px] text-muted-foreground">打ち合わせから読み取った条件。直してから見積に流し込みます</p>
