@@ -222,11 +222,21 @@ function DailyTargetCard({ today }) {
             <button type="button" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={() => { setDraft(target ? String(target) : ""); setEditing(true); }}><Pencil className="w-3 h-3" /> {target > 0 ? "変更" : "設定する"}</button>
           </div>
         )}
-        <p className="text-[10px] text-muted-foreground mt-1">期が変わったら、その期の目標をここで入れ直します（期ごとに別の値を持ちます）</p>
+        <p className="text-[10px] text-muted-foreground mt-1">計上するのは、受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）です。期が変わったら、その期の目標をここで入れ直します</p>
       </CardContent>
     </Card>
   );
 }
+
+/**
+ * 粗利目標に計上する案件: 受注確度が A／要注意（A）／A（定期売上）のいずれか、かつ フェーズが「着手中」
+ */
+export function countsTowardTarget(p) {
+  const prob = String(p.deal_probability || "");
+  const probOk = prob === "A" || prob.includes("要注意") || prob.includes("定期");
+  return probOk && String(p.phase || "") === "着手中";
+}
+const TARGET_RULE = "計上: 受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）";
 
 /** 粗利（見込）が目標に届いているか */
 function TargetBadge({ gross, target }) {
@@ -266,10 +276,13 @@ export function DailyView({ projects, isLoading }) {
     const ms = today.slice(0, 8) + "01";
     const agg = (from) => {
       const rows = projects.filter((p) => (p.registered_at || "") >= from);
+      const counted = rows.filter(countsTowardTarget);
       return {
         count: rows.length,
         revenue: rows.reduce((s, p) => s + Number(p.expected_revenue || 0), 0),
         gross: rows.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
+        counted: counted.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
+        countedCount: counted.length,
       };
     };
     return { today: agg(today), week: { ...agg(ws), from: ws }, month: agg(ms) };
@@ -282,14 +295,15 @@ export function DailyView({ projects, isLoading }) {
     for (const p of sorted) {
       const key = p.registered_at || "";
       let g = out[out.length - 1];
-      if (!g || g.date !== key) { g = { date: key, rows: [], revenue: 0, gross: 0, actual: 0 }; out.push(g); }
+      if (!g || g.date !== key) { g = { date: key, rows: [], revenue: 0, gross: 0, actual: 0, counted: 0, countedCount: 0 }; out.push(g); }
       g.rows.push(p);
       g.revenue += Number(p.expected_revenue || 0);
       g.gross += Number(p.expected_gross_profit || 0);
+      if (countsTowardTarget(p)) { g.counted += Number(p.expected_gross_profit || 0); g.countedCount += 1; }
       g.actual += Number(p.actual_gross_profit || 0);
     }
     // 今日の案件が無くても「今日」のまとまりは出す（0 件・目標未達が分かるように）
-    if (!out.some((g) => g.date === today)) out.push({ date: today, rows: [], revenue: 0, gross: 0, actual: 0 });
+    if (!out.some((g) => g.date === today)) out.push({ date: today, rows: [], revenue: 0, gross: 0, actual: 0, counted: 0, countedCount: 0 });
     out.sort((a, b) => a.date.localeCompare(b.date));
     // 受注確度・フェーズで並べ替えるときは、日ごとのまとまりはそのままで中の行だけ並べ替える
     const cmp = optionComparator(sort, settings);
@@ -317,7 +331,8 @@ export function DailyView({ projects, isLoading }) {
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-1">
                 <span className="text-2xl font-bold tabular-nums">{c.v.count}<span className="text-sm font-medium ml-0.5">件</span></span>
                 <span className="text-xs text-muted-foreground tabular-nums">受注見込 {yen(c.v.revenue)}　粗利見込 {yen(c.v.gross)}</span>
-                {c.isToday && <TargetBadge gross={c.v.gross} target={target} />}
+                <span className="text-xs tabular-nums font-medium" title={TARGET_RULE}>計上 {yen(c.v.counted)}（{c.countedCount ?? c.v.countedCount}件）</span>
+                {c.isToday && <TargetBadge gross={c.v.counted} target={target} />}
               </div>
             </CardContent>
           </Card>
@@ -366,8 +381,8 @@ function GroupRows({ group: g, target, isToday }) {
       <TableRow className={`${isToday ? "bg-blue-100/70 hover:bg-blue-100/70" : "bg-slate-100 hover:bg-slate-100"}`} data-day={g.date}>
         <TableCell colSpan={DAILY_COLS.length} className="py-1.5 text-[11px] font-semibold text-slate-700">
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　粗利見込 {yen(g.gross)}</span>
-            <TargetBadge gross={g.gross} target={target} />
+            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
+            <TargetBadge gross={g.counted} target={target} />
           </span>
         </TableCell>
       </TableRow>
@@ -385,7 +400,10 @@ function GroupRows({ group: g, target, isToday }) {
           </TableCell>
           <TableCell>{p.deal_probability && <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>}</TableCell>
           <TableCell>{p.phase && <Badge className={`text-[10px] whitespace-nowrap ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}</TableCell>
-          <TableCell className={`text-right text-sm tabular-nums ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>{yen(p.expected_gross_profit)}</TableCell>
+          <TableCell className={`text-right text-sm tabular-nums whitespace-nowrap ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>
+            {countsTowardTarget(p) && <span className="mr-1 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-semibold text-emerald-800 align-middle" title={TARGET_RULE}>計上</span>}
+            {yen(p.expected_gross_profit)}
+          </TableCell>
           <TableCell className={`text-right text-sm tabular-nums ${Number(p.actual_gross_profit) ? "" : "text-muted-foreground/60"}`}>{yen(p.actual_gross_profit)}</TableCell>
         </TableRow>
       ))}
