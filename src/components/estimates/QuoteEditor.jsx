@@ -211,7 +211,9 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     const unitPrice = applyMarkup(costPerUnit, markupRate);
     addItem({
       category: catDef.label,
-      name: `${entry.category}（${entry.vendor_name}・${cell.label}納期）`,
+      // クライアント向けの名称には印刷会社・納期を出さず、社内メモに入れる
+      name: entry.category,
+      memo: `${entry.vendor_name}・${cell.label}納期`,
       quantity,
       unit: "枚",
       unit_price: unitPrice,

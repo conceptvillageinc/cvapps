@@ -258,7 +258,9 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
 
       onAdd(pickedCells.map((c) => ({
         category: payload.paper_type_group === "紙以外" ? "印刷費（紙以外）" : "印刷費（紙）",
-        name: `${category}（${vendorName.trim()}・${c.label}納期）`,
+        // クライアント向けの名称には印刷会社・納期を出さず、社内メモに入れる
+        name: category,
+        memo: `${vendorName.trim()}・${c.label}納期`,
         quantity: c.quantity,
         unit: "枚",
         unit_price: c.unitPrice,
