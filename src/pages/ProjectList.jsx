@@ -180,9 +180,10 @@ export default function ProjectList() {
     due_date: "date", payment_due_date: "date", registered_at: "date",
   };
 
+  const fixedTop = view === "daily" || view === "next"; // 上部を固定し、表だけをスクロールする
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className={`max-w-7xl mx-auto space-y-5 ${fixedTop ? "h-full flex flex-col" : ""}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">案件一覧</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -219,7 +220,7 @@ export default function ProjectList() {
         </div>
       </div>
 
-      <div className="flex items-center gap-1 border-b">
+      <div className="flex items-center gap-1 border-b shrink-0">
         {VIEWS.map((v) => (
           <button
             key={v.key}
@@ -235,7 +236,7 @@ export default function ProjectList() {
         </span>
       </div>
 
-      <div className="relative">
+      <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="案件番号・クライアント名・案件名・メモで検索"

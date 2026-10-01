@@ -82,8 +82,16 @@ function useColumnFilters(defaults = null) {
   return [applied, setFilter];
 }
 
-/** 画面のスクロール枠（Layout の main） */
-const scrollParent = (el) => el?.closest("main") || document.scrollingElement;
+/** いちばん近いスクロールする枠（表のカード。無ければ Layout の main） */
+const scrollParent = (el) => {
+  let cur = el?.parentElement;
+  while (cur) {
+    const oy = getComputedStyle(cur).overflowY;
+    if ((oy === "auto" || oy === "scroll") && cur.scrollHeight > cur.clientHeight) return cur;
+    cur = cur.parentElement;
+  }
+  return document.querySelector("main") || document.scrollingElement;
+};
 
 /** 読み込み後に 1 回だけ、指定の行が見出しの直下に来るようにスクロールする */
 function useScrollToRowOnce(ready, selector, headerSelector = "thead") {
@@ -107,7 +115,7 @@ function useScrollToRowOnce(ready, selector, headerSelector = "thead") {
   }, [ready, selector, headerSelector]);
 }
 
-const STICKY_HEAD = "sticky -top-4 lg:-top-6 z-10 bg-slate-800 shadow-[0_1px_0_0_rgba(255,255,255,0.15)]"; // main の余白ぶん上に寄せて、枠の上端にぴったり固定する
+const STICKY_HEAD = "sticky top-0 z-10 bg-slate-800 shadow-[0_1px_0_0_rgba(255,255,255,0.15)]"; // 表のカードの中で固定する
 
 /** 見出しを画面上部に固定するための素の table（共通の Table はスクロール枠で包むため固定が効かない） */
 const PlainTable = ({ children }) => <table className="w-full caption-bottom text-sm">{children}</table>;
@@ -321,8 +329,8 @@ export function DailyView({ projects, isLoading }) {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="flex flex-col h-full min-h-0 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <DailyTargetCard today={today} />
         {cards.map((c) => (
           <Card key={c.label}>
@@ -339,8 +347,8 @@ export function DailyView({ projects, isLoading }) {
         ))}
       </div>
 
-      <Card>
-        <CardContent className="p-0">
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : groups.length === 0 && !Object.values(filters).some(Boolean) ? (
@@ -477,8 +485,8 @@ export function NextActionView({ projects, isLoading }) {
   const emptyCount = projects.filter((p) => !(p.next_action || "").trim()).length;
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+    <div className="flex flex-col h-full min-h-0 gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground shrink-0">
         <span>
           進行中 {projects.length}件　／　表示 {total}件（先月以前 {groups[0].rows.length}・今月 {groups[1].rows.length}・来月以降 {groups[2].rows.length}・予定日なし {groups[3].rows.length}）
         </span>
@@ -488,8 +496,8 @@ export function NextActionView({ projects, isLoading }) {
         </label>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : projects.length === 0 ? (
@@ -516,7 +524,7 @@ export function NextActionView({ projects, isLoading }) {
           )}
         </CardContent>
       </Card>
-      <p className="text-[11px] text-muted-foreground">ネクストアクションは、書いて Enter か枠の外をクリックすると保存されます。案件詳細の「進捗」にも同じ欄があります。</p>
+      <p className="text-[11px] text-muted-foreground shrink-0">ネクストアクションは、書いて Enter か枠の外をクリックすると保存されます。案件詳細の「進捗」にも同じ欄があります。</p>
     </div>
   );
 }
