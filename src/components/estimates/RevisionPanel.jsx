@@ -214,7 +214,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
             <Label className="text-xs text-muted-foreground">改訂履歴（{allRevisions.length}件）</Label>
             <div className="space-y-1">
               {allRevisions.map((rev) => {
-                const st = STATUS_MAP[rev.status] || STATUS_MAP.draft;
+                const st = rev.status && rev.status !== "draft" ? (STATUS_MAP[rev.status] || null) : null;
                 const isSelf = rev.id === estimate.id;
                 return (
                   <div
@@ -226,7 +226,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
                     <span className="text-muted-foreground shrink-0">
                       {format(new Date(rev.created_date), "M/d HH:mm", { locale: ja })}
                     </span>
-                    <Badge className={`text-[9px] ${st.color} shrink-0`}>{st.label}</Badge>
+                    {st && <Badge className={`text-[9px] ${st.color} shrink-0`}>{st.label}</Badge>}
                     {rev.deal_probability && (
                       <Badge className={`text-[9px] ${getDealProbabilityColor(rev.deal_probability)} shrink-0`}>{rev.deal_probability}</Badge>
                     )}

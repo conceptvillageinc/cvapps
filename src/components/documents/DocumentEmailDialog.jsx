@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
+import { documentFilename } from "@/lib/docFilename";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -143,7 +144,7 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
             </div>
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground w-12">添付</span>
-              <Badge variant="outline" className="text-[10px] font-normal gap-1"><Paperclip className="w-3 h-3" /> {type === "estimate" ? `【${doc.client_name}】見積書_${doc.estimate_title || doc.estimate_number}.pdf` : `${LABELS[type]}_${numberOf(type, doc)}.pdf`}</Badge>
+              <Badge variant="outline" className="text-[10px] font-normal gap-1"><Paperclip className="w-3 h-3" /> {documentFilename(type, doc)}</Badge>
               <label className="flex items-center gap-1 text-[11px] cursor-pointer ml-2">
                 <input type="checkbox" checked={withStamp} onChange={(e) => setWithStamp(e.target.checked)} /> 電子印鑑あり
               </label>

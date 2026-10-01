@@ -2,6 +2,7 @@ import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { renderDocumentPdf } from './_lib/pdf.js';
 import { renderEstimatePdf, estimateFilename } from './_lib/estimatePdf.js';
 import { renderPurchaseOrderPdf, purchaseOrderFilename } from './_lib/purchaseOrderPdf.js';
+import { documentFilename } from '../src/lib/docFilename.js';
 
 // ============================================================================
 // POST /api/document-pdf  { type: 'delivery' | 'invoice' | 'estimate' | 'purchase_order', id, stamp?: boolean }
@@ -56,8 +57,7 @@ export async function loadDocumentPdf(admin, type, id, { stamp: withStamp = true
   if (!doc) { const e = new Error('帳票が見つかりません'); e.status = 404; throw e; }
 
   const buffer = await renderDocumentPdf({ type, doc, company, stamp, logo });
-  const number = type === 'invoice' ? doc.invoice_number : doc.delivery_number;
-  const filename = `${type === 'invoice' ? '請求書' : '納品書'}_${number}_${doc.client_name}.pdf`;
+  const filename = documentFilename(type, doc);
   return { buffer, filename, doc };
 }
 

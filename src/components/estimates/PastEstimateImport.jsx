@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/api/db";
+import { estimateFilename } from "@/lib/docFilename";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -179,8 +180,7 @@ export default function PastEstimateImport({ estimate, onAdd, onClose }) {
     setPdfLoading(true);
     try {
       const blob = await db.documents.pdf("estimate", e.id, { stamp: false });
-      const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
-      openBlob(blob, `【${clean(e.client_name) || "クライアント"}】見積書_${clean(e.estimate_title) || e.estimate_number}.pdf`);
+            openBlob(blob, estimateFilename(e));
     } catch (err) {
       toast.error("PDFを作成できませんでした: " + err.message);
     } finally {

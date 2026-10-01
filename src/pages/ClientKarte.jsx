@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
+import { estimateFilename } from "@/lib/docFilename";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -204,8 +205,7 @@ export default function ClientKarte() {
     setPdfLoading(true);
     try {
       const blob = await db.documents.pdf("estimate", e.id, { stamp: false });
-      const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
-      showBlobInTab(tabWin, blob, `【${clean(e.client_name) || "クライアント"}】見積書_${clean(e.estimate_title) || e.estimate_number}.pdf`);
+            showBlobInTab(tabWin, blob, estimateFilename(e));
     } catch (err) {
       if (tabWin && !tabWin.closed) tabWin.close();
       toast.error("PDFを作成できませんでした: " + err.message);

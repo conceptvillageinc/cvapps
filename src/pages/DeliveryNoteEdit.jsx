@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
+import { deliveryNoteFilename } from "@/lib/docFilename";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -195,7 +196,7 @@ export default function DeliveryNoteEdit() {
     setPdfLoading(true);
     try {
       const blob = await db.documents.pdf("delivery", id);
-      openBlob(blob, `納品書_${form.delivery_number}_${form.client_name}.pdf`);
+      openBlob(blob, deliveryNoteFilename(form));
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -209,7 +210,7 @@ export default function DeliveryNoteEdit() {
     setPdfLoading(true);
     try {
       const blob = await db.documents.pdf("delivery", id);
-      showBlobInTab(tab, blob, `納品書_${form.delivery_number}_${form.client_name}.pdf`);
+      showBlobInTab(tab, blob, deliveryNoteFilename(form));
     } catch (err) {
       if (tab && !tab.closed) tab.close();
       toast.error(err.message);

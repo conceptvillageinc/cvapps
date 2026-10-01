@@ -47,12 +47,8 @@ export function estimateTotals(lineItems, taxInclusive = false) {
   return { subtotal, tax, total: subtotal + tax, breakdown: breakdown.length ? breakdown : [{ rate: 10, taxable: 0, tax: 0 }] };
 }
 
-/** ダウンロード用のファイル名（【クライアント名】見積書_件名.pdf） */
-export function estimateFilename(estimate) {
-  const clean = (s) => String(s || '').replace(/[\\/:*?"<>|\r\n]/g, '_').trim();
-  const title = clean(estimate.estimate_title) || clean(estimate.estimate_number) || '見積書';
-  return `【${clean(estimate.client_name) || 'クライアント'}】見積書_${title}.pdf`;
-}
+/** ダウンロード用のファイル名（【クライアント名御中】見積書_件名.pdf）。画面側と同じ関数 */
+export { estimateFilename } from '../../src/lib/docFilename.js';
 
 /**
  * @param {object} opts

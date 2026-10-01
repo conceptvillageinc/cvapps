@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { normalizePostalCode, isValidPostalCode, formatPostalCode, formatPostalInput } from "@/lib/postalCode";
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
+import ClientImageReader from "@/components/clients/ClientImageReader";
 
 const emptyForm = { name: "", name_kana: "", contact_person: "", contact_person_kana: "", email: "", phone: "", postal_code: "", address: "", notes: "", invoice_delivery_method: "", invoice_delivery_notes: "", has_recurring_billing: false, cc_emails: ["", ""] };
 
@@ -317,11 +318,20 @@ export default function ClientManagement() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "クライアント編集" : "クライアント新規追加"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            <ClientImageReader
+              onResult={(r) => setForm((f) => {
+                // 読み取れた項目だけ入れる。既に入力してある項目は読み取り結果で上書きし、備考は末尾に足す
+                const next = { ...f };
+                for (const k of ["name", "name_kana", "contact_person", "contact_person_kana", "email", "phone", "postal_code", "address"]) if (r[k]) next[k] = r[k];
+                if (r.notes) next.notes = [f.notes, r.notes].filter(Boolean).join("\n");
+                return next;
+              })}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">クライアント名 <span className="text-destructive">*</span></Label>

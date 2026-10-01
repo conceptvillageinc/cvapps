@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { db } from "@/api/db";
+import { estimateFilename } from "@/lib/docFilename";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,8 +92,9 @@ export default function EstimateDetail() {
       await saveMutation.mutateAsync(formData);
       const blob = await db.documents.pdf(kind, estimateId, { stamp: withStamp });
       const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
-      const label = kind === "purchase_order" ? "発注書" : "見積書";
-      openBlob(blob, `【${clean(formData.client_name) || "クライアント"}】${label}_${clean(formData.estimate_title) || formData.estimate_number}.pdf`);
+      openBlob(blob, kind === "purchase_order"
+        ? `【${clean(formData.client_name) || "クライアント"}】発注書_${clean(formData.estimate_title) || formData.estimate_number}.pdf`
+        : estimateFilename(formData));
     } catch (err) {
       toast.error("PDFを作成できませんでした: " + err.message);
     } finally {
@@ -107,8 +109,7 @@ export default function EstimateDetail() {
     try {
       await saveMutation.mutateAsync(formData);
       const blob = await db.documents.pdf("estimate", estimateId, { stamp: withStamp });
-      const clean = (s) => String(s || "").replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
-      showBlobInTab(tab, blob, `【${clean(formData.client_name) || "クライアント"}】見積書_${clean(formData.estimate_title) || formData.estimate_number}.pdf`);
+      showBlobInTab(tab, blob, estimateFilename(formData));
     } catch (err) {
       if (tab && !tab.closed) tab.close();
       toast.error("PDFを作成できませんでした: " + err.message);
@@ -293,7 +294,7 @@ export default function EstimateDetail() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight">{formData.client_name}</h1>
-              <Badge className={`text-[10px] ${status.color}`}>{status.label}</Badge>
+              {formData.status !== "draft" && <Badge className={`text-[10px] ${status.color}`}>{status.label}</Badge>}
             </div>
             <p className="text-xs text-muted-foreground">
               {formData.estimate_number} · {formData.print_type}
