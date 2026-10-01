@@ -366,7 +366,7 @@ export function DailyView({ projects, isLoading }) {
                 </TableBody>
               </PlainTable>
               {/* 今日のまとまりを見出しの直下に置けるように、下に余白を取る */}
-              <div className="h-[60vh]" aria-hidden="true" />
+              <div className="h-[85vh]" aria-hidden="true" />
             </div>
           )}
         </CardContent>
@@ -511,7 +511,7 @@ export function NextActionView({ projects, isLoading }) {
                   ))}
                 </TableBody>
               </PlainTable>
-              <div className="h-[40vh]" aria-hidden="true" />
+              <div className="h-[60vh]" aria-hidden="true" />
             </div>
           )}
         </CardContent>

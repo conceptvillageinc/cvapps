@@ -166,8 +166,8 @@ export default function Layout() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="h-16 bg-card border-b border-border flex items-center px-4 lg:px-6 shrink-0">
+        {/* Top bar（狭い画面でサイドバーを開くメニューだけ。PC の幅では出さず、その分ページを広く使う） */}
+        <header className="h-14 bg-card border-b border-border flex items-center px-4 shrink-0 lg:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden mr-3 text-muted-foreground hover:text-foreground"
