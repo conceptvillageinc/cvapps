@@ -16,7 +16,7 @@ export default function RecordingBar() {
     <div className="shrink-0 bg-red-600 text-white px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" role="status" aria-live="polite">
       <span className="inline-flex items-center gap-2 font-semibold">
         <span className={`inline-block w-2.5 h-2.5 rounded-full bg-white ${recording ? "animate-pulse" : "opacity-50"}`} />
-        <Mic className="w-4 h-4" /> {rec.state === "finishing" ? "録音を保存中…" : recording ? "録音中" : "一時停止中"}
+        <Mic className="w-4 h-4" /> {rec.state === "finishing" ? "録音を保存中…" : recording ? "レコーディング中" : "一時停止中"}
         <span className="tabular-nums">{fmtClock(rec.elapsed)}</span>
       </span>
       <span className="truncate max-w-[40vw] text-white/90">{rec.session.title || "議事録"}</span>
