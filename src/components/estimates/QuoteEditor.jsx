@@ -535,7 +535,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               {/* 2. 外から読み込む（インポート）: 色を変えて「取り込み」だと分かるように。1 行に収める（3 等分） */}
               <div className="rounded-md border border-sky-200 bg-sky-50/70 px-2 py-1.5 -mx-0.5 space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-sky-800 w-20 shrink-0 inline-flex items-center gap-1"><Download className="w-3 h-3" /> 読み込む</span>
+                  <span className="text-[10px] font-bold text-sky-800 w-20 shrink-0 inline-flex items-center gap-1"><Download className="w-3 h-3" /> 読み込む</span>
                   <div className="flex-1 grid grid-cols-3 gap-1.5 min-w-0">
                     <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-1.5 min-w-0 bg-white text-sky-900 hover:bg-sky-100 hover:text-sky-900 border-sky-300" onClick={() => setAddPanel("web_price")} title="ネット印刷の価格ページを読み取って明細にします">
                       <Globe className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">ネット印刷</span>
