@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, X, Copy, Trash2, Printer, AlertTriangle, ChevronDown, ChevronRight, Mail } from "lucide-react";
-import { PRINT_TYPES } from "@/lib/constants";
+import { usePrintTypes } from "@/lib/printTypes";
 import { newPrintSpec, specLabel, specMissing } from "@/lib/printSpecs";
 import SizeInput from "@/components/estimates/SizeInput";
 
@@ -50,6 +50,7 @@ function QuantityEditor({ values, onChange }) {
 }
 
 function SpecCard({ spec, index, onChange, onDuplicate, onRemove, defaultOpen }) {
+  const { names: printTypeNames } = usePrintTypes();
   const [open, setOpen] = useState(defaultOpen);
   const missing = specMissing(spec);
   const set = (k, v) => onChange({ ...spec, [k]: v });
@@ -88,7 +89,8 @@ function SpecCard({ spec, index, onChange, onDuplicate, onRemove, defaultOpen })
               <Select value={spec.print_type || ""} onValueChange={(v) => set("print_type", v)}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="選択してください" /></SelectTrigger>
                 <SelectContent>
-                  {PRINT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {printTypeNames.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {spec.print_type && !printTypeNames.includes(spec.print_type) && <SelectItem value={spec.print_type}>{spec.print_type}</SelectItem>}
                 </SelectContent>
               </Select>
             </div>

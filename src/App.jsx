@@ -19,6 +19,7 @@ import EstimateHistory from '@/pages/EstimateHistory';
 import VendorManagement from '@/pages/VendorManagement';
 import PriceMasterList from '@/pages/PriceMasterList';
 import DesignFeeMasterList from '@/pages/DesignFeeMasterList';
+import PrintTypeMaster from '@/pages/PrintTypeMaster';
 import MyProfile from '@/pages/MyProfile';
 import MeetingList from '@/pages/MeetingList';
 import MeetingNew from '@/pages/MeetingNew';
@@ -85,6 +86,7 @@ const AuthenticatedApp = () => {
           <Route path="/vendors" element={<VendorManagement />} />
           <Route path="/price-master" element={<PriceMasterList />} />
           <Route path="/design-fee-master" element={<DesignFeeMasterList />} />
+          <Route path="/print-types" element={<PrintTypeMaster />} />
           <Route path="/profile" element={<MyProfile />} />
           <Route path="/meetings" element={<MeetingList />} />
           <Route path="/meetings/new" element={<MeetingNew />} />

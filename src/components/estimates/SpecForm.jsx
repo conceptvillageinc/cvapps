@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Plus, X } from "lucide-react";
-import { PRINT_TYPES, PERSON_IN_CHARGE_OPTIONS } from "@/lib/constants";
+import { PERSON_IN_CHARGE_OPTIONS } from "@/lib/constants";
+import { usePrintTypes } from "@/lib/printTypes";
 
 export default function SpecForm({ data, onChange, showPersonInCharge = true }) {
+  const { names: printTypeNames } = usePrintTypes();
   const [quantityInput, setQuantityInput] = useState("");
 
   const update = (field, value) => {
@@ -69,7 +71,7 @@ export default function SpecForm({ data, onChange, showPersonInCharge = true }) 
               <SelectValue placeholder="選択してください" />
             </SelectTrigger>
             <SelectContent>
-              {PRINT_TYPES.map(t => (
+              {printTypeNames.map(t => (
                 <SelectItem key={t} value={t}>{t}</SelectItem>
               ))}
             </SelectContent>

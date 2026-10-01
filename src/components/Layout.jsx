@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, UserCircle, Mic
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Receipt, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
@@ -34,6 +34,7 @@ const adminItems = [
   { path: "/clients", label: "クライアント一覧", icon: UserSquare },
   { path: "/vendors", label: "印刷所情報", icon: Building2 },
   { path: "/price-master", label: "価格マスタ", icon: Tag },
+  { path: "/print-types", label: "印刷種別マスタ", icon: Printer },
   { path: "/design-fee-master", label: "デザイン費マスタ", icon: Palette },
   { path: "/settings", label: "システム設定", icon: Settings },
   { path: "/users", label: "ユーザー管理", icon: Users },

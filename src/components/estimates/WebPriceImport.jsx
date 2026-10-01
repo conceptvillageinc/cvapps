@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Link2, FileUp, AlertTriangle, Check, Globe, Save, ArrowLeft, ArrowRight, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
-import { PRINT_TYPES, WEB_VENDORS, applyMarkup } from "@/lib/constants";
+import { WEB_VENDORS, applyMarkup } from "@/lib/constants";
+import { usePrintTypes } from "@/lib/printTypes";
 import { usePricingRules, markupRateFor } from "@/lib/pricing";
 import { todayString } from "@/lib/fiscal";
 
@@ -56,9 +57,6 @@ function guessVendor(url, printVendors) {
   return VENDOR_BY_HOST.find(([h]) => host.includes(h))?.[1] || "";
 }
 
-const PAPER_GROUP_BY_TYPE = {
-  "パッケージラベル印刷": "紙以外", "ラベル印刷": "紙以外", "のぼり旗印刷": "紙以外", "パネル印刷": "紙以外", "ユニフォーム": "紙以外",
-};
 
 const STEPS = [
   { n: 1, label: "価格ページの URL" },
@@ -103,6 +101,7 @@ function StepBar({ current }) {
  *   onClose()
  */
 export default function WebPriceImport({ defaultCategory = "", onAdd, onClose }) {
+  const { names: printTypeNames, groupOf } = usePrintTypes();
   const queryClient = useQueryClient();
   const { rules } = usePricingRules();
   const fileInputRef = useRef(null);
@@ -242,7 +241,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
       }
       const payload = {
         category,
-        paper_type_group: PAPER_GROUP_BY_TYPE[category] || "紙",
+        paper_type_group: groupOf(category),
         vendor_name: vendorName.trim(),
         spec_summary: specSummary,
         price_grid: mergedGrid,
@@ -328,7 +327,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="選択" /></SelectTrigger>
                 <SelectContent>
-                  {PRINT_TYPES.map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
+                  {printTypeNames.map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
