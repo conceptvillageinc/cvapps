@@ -43,7 +43,7 @@ export const PRINT_TYPES = [
 ];
 
 // 「印刷費（紙以外）」として扱う印刷物種別（印刷種別マスタで変更できる。これは初期値）
-export const NONPAPER_PRINT_TYPES = ["パッケージラベル印刷", "ラベル印刷", "のぼり旗印刷", "パネル印刷", "ユニフォーム"];
+export const NONPAPER_PRINT_TYPES = ["のぼり旗印刷", "パネル印刷", "ユニフォーム"]; // パッケージラベル印刷は「紙」
 
 // 紙質オプション
 export const PAPER_TYPES = [
