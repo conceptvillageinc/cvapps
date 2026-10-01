@@ -19,6 +19,9 @@ export default function MeetingList() {
     queryFn: () => db.entities.Meeting.list("-held_at", 300),
     refetchInterval: (q) => ((q.state.data || []).some((m) => PROCESSING.has(m.status)) ? 8000 : false),
   });
+  // 紐づけた案件の名前を出すための一覧
+  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => db.entities.Project.list("-registered_at") });
+  const projectOf = useMemo(() => { const map = {}; for (const p of projects) map[p.id] = p; return (id) => (id ? map[id] : null); }, [projects]);
 
   // 処理中のまま 2 分以上更新が無い議事録（録音後に画面を閉じた等）は、一覧を開いたときに続きを進める
   const queryClient = useQueryClient();
@@ -46,10 +49,11 @@ export default function MeetingList() {
       .sort((a, b) => String(b.held_at || "").localeCompare(String(a.held_at || "")) || String(b.created_date || "").localeCompare(String(a.created_date || "")))
       .filter((m) => {
         if (!q) return true;
-        const text = [m.title, m.client_name, typeLabel(m.meeting_type), m.summary?.overview, ...(m.transcript || []).map((t) => t.text)].filter(Boolean).join(" ").toLowerCase();
+        const pj = projectOf(m.project_id);
+        const text = [m.title, m.client_name, pj?.name, pj?.project_number, typeLabel(m.meeting_type), m.summary?.overview, ...(m.transcript || []).map((t) => t.text)].filter(Boolean).join(" ").toLowerCase();
         return text.includes(q);
       });
-  }, [meetings, search, typeLabel]);
+  }, [meetings, search, typeLabel, projectOf]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -63,7 +67,7 @@ export default function MeetingList() {
 
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="件名・クライアント・本文で検索" className="pl-9" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="タイトル・クライアント・案件・本文で検索" className="pl-9" />
       </div>
 
       <Card>
@@ -88,11 +92,15 @@ export default function MeetingList() {
                     <div className="w-20 shrink-0 text-xs text-muted-foreground tabular-nums">{m.held_at ? String(m.held_at).replace(/-/g, "/") : "—"}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">{m.title || "（件名なし）"}</p>
+                        <p className="text-sm font-medium truncate">{m.title || "（タイトルなし）"}</p>
                         <Badge className={`text-[9px] shrink-0 ${st.color} hover:${st.color}`}>{PROCESSING.has(m.status) ? <span className="inline-flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> {st.label}</span> : st.label}</Badge>
                       </div>
+                      <p className="text-xs truncate">
+                        <span className="font-medium">{m.client_name || <span className="text-muted-foreground">クライアント未設定</span>}</span>
+                        {projectOf(m.project_id) && <span className="text-muted-foreground">　｜　<span className="font-mono text-[10px]">{projectOf(m.project_id).project_number}</span> {projectOf(m.project_id).name}</span>}
+                      </p>
                       <p className="text-[11px] text-muted-foreground truncate">
-                        {[m.client_name, typeLabel(m.meeting_type), m.audio_duration_sec ? fmtClock(m.audio_duration_sec) : null, m.created_by].filter(Boolean).join(" ・ ")}
+                        {[typeLabel(m.meeting_type), m.audio_duration_sec ? fmtClock(m.audio_duration_sec) : null, m.created_by].filter(Boolean).join(" ・ ")}
                       </p>
                     </div>
                     <div className="shrink-0 flex items-center gap-1.5">
