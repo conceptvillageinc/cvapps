@@ -92,13 +92,13 @@ export default function MeetingList() {
                     <div className="w-20 shrink-0 text-xs text-muted-foreground tabular-nums">{m.held_at ? String(m.held_at).replace(/-/g, "/") : "—"}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">{m.title || "（タイトルなし）"}</p>
+                        <p className="text-sm font-medium truncate">
+                          {m.client_name || <span className="text-muted-foreground">クライアント未設定</span>}
+                          {projectOf(m.project_id) && <span className="font-normal text-muted-foreground">　｜　<span className="font-mono text-[10px]">{projectOf(m.project_id).project_number}</span> {projectOf(m.project_id).name}</span>}
+                        </p>
                         <Badge className={`text-[9px] shrink-0 ${st.color} hover:${st.color}`}>{PROCESSING.has(m.status) ? <span className="inline-flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> {st.label}</span> : st.label}</Badge>
                       </div>
-                      <p className="text-xs truncate">
-                        <span className="font-medium">{m.client_name || <span className="text-muted-foreground">クライアント未設定</span>}</span>
-                        {projectOf(m.project_id) && <span className="text-muted-foreground">　｜　<span className="font-mono text-[10px]">{projectOf(m.project_id).project_number}</span> {projectOf(m.project_id).name}</span>}
-                      </p>
+                      <p className="text-xs truncate">{m.title || <span className="text-muted-foreground">（タイトルなし）</span>}</p>
                       <p className="text-[11px] text-muted-foreground truncate">
                         {[typeLabel(m.meeting_type), m.audio_duration_sec ? fmtClock(m.audio_duration_sec) : null, m.created_by].filter(Boolean).join(" ・ ")}
                       </p>
