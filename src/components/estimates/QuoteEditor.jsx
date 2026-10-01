@@ -50,7 +50,7 @@ function yen(n) {
 
 export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
   const [showInternal, setShowInternal] = useState(true);
-  const [showPreview, setShowPreview] = useState(true); // 左のプレビューを隠して編集側を広く使える
+  const [showPreview, setShowPreview] = useState(true); // 右のプレビューを隠して編集側を広く使える
   const [addPanel, setAddPanel] = useState(null); // LINE_ITEM_CATEGORIES key
   const [priceMasterPick, setPriceMasterPick] = useState(null); // selected PriceMaster entry for tier selection
   const [pmCategory, setPmCategory] = useState(null); // 印刷費: 選んだ大カテゴリ（商品）
@@ -290,9 +290,9 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
       ); })()}
       <div className={`grid grid-cols-1 gap-4 items-start ${showPreview ? "lg:grid-cols-2" : ""}`}>
 
-        {/* 左：クライアント提出用プレビュー（常にクリーン表示・自動同期） */}
+        {/* 右：クライアント提出用プレビュー（常にクリーン表示・自動同期）。表示順は order-last で編集画面の後ろ */}
         {showPreview && (
-        <div className="border rounded-lg p-6 bg-white space-y-4 lg:sticky lg:top-4">
+        <div className="order-last border rounded-lg p-6 bg-white space-y-4 lg:sticky lg:top-4">
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 -mt-1 mb-1">
             <Eye className="w-3.5 h-3.5" /> プレビュー（クライアント提出用・自動同期）
           </p>
@@ -405,7 +405,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
         </div>
         )}
 
-        {/* 右：入力（社内編集画面） */}
+        {/* 左：入力（社内編集画面） */}
         <div className="space-y-4">
           <div className="border rounded-lg p-6 bg-white space-y-5">
             <div className="flex items-start justify-between">
