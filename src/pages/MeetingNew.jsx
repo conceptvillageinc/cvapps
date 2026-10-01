@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mic, FileUp, Loader2 } from "lucide-react";
+import { ArrowLeft, Mic, FileUp, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
+import ClientFormDialog from "@/components/clients/ClientFormDialog";
 
 /**
  * 新しい議事録: 基本情報 → 録音（主）／音声ファイル（補助）→ 処理へ
@@ -52,6 +53,8 @@ export default function MeetingNew() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const uniqueClients = useMemo(() => [...new Map(clients.map((c) => [c.name, c])).values()], [clients]);
+  const clientMatched = useMemo(() => uniqueClients.find((c) => c.name === form.client_name.trim()) || null, [uniqueClients, form.client_name]);
+  const [clientDialogOpen, setClientDialogOpen] = useState(false);
   const defaultTitle = `${form.client_name === INTERNAL_CLIENT ? "社内 " : form.client_name ? `${form.client_name} ` : ""}${typeLabel(form.meeting_type)} ${form.held_at.replace(/-/g, "/")}`;
 
   const buildPayload = (source) => {
@@ -130,19 +133,6 @@ export default function MeetingNew() {
             <Label className="text-xs">件名</Label>
             <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder={defaultTitle} className="h-10" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">日付</Label>
-              <Input type="date" value={form.held_at} onChange={(e) => setForm({ ...form, held_at: e.target.value })} className="h-10" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">種類</Label>
-              <Select value={form.meeting_type} onValueChange={(v) => setForm({ ...form, meeting_type: v })}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{types.map((t) => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <Label className="text-xs">クライアント</Label>
@@ -155,6 +145,14 @@ export default function MeetingNew() {
               <option value={INTERNAL_CLIENT}>社内の打ち合わせ</option>
               {uniqueClients.filter((c) => c.name !== INTERNAL_CLIENT).map((c) => <option key={c.id} value={c.name} />)}
             </datalist>
+            {form.client_name && form.client_name !== INTERNAL_CLIENT && !clientMatched && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                <span>「{form.client_name}」はクライアント一覧にありません。</span>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1 bg-white" onClick={() => setClientDialogOpen(true)}><UserPlus className="w-3.5 h-3.5" /> クライアント一覧に新規登録する</Button>
+                <span className="text-[11px] text-amber-700">登録すると議事録がそのクライアントに紐づきます（登録しなくても議事録は作れます）</span>
+              </div>
+            )}
+            {clientMatched && form.client_name !== INTERNAL_CLIENT && <p className="text-[11px] text-emerald-700">クライアント一覧の「{clientMatched.name}」に紐づきます</p>}
           </div>
           <div className="space-y-1">
             <Label className="text-xs">案件（任意）{form.client_name === INTERNAL_CLIENT && <span className="text-muted-foreground font-normal">　社内の打ち合わせでも、対象のクライアント案件を紐づけられます</span>}</Label>
@@ -164,6 +162,19 @@ export default function MeetingNew() {
                 .filter((p) => !form.client_name || form.client_name === INTERNAL_CLIENT || p.client_name === form.client_name)
                 .map((p) => <option key={p.id} value={p.id}>{form.client_name === INTERNAL_CLIENT && p.client_name ? `${p.client_name}｜` : ""}{p.project_number} {p.name}</option>)}
             </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">日付</Label>
+              <Input type="date" value={form.held_at} onChange={(e) => setForm({ ...form, held_at: e.target.value })} className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">種類</Label>
+              <Select value={form.meeting_type} onValueChange={(v) => setForm({ ...form, meeting_type: v })}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>{types.map((t) => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">出席者（「、」区切り）</Label>
@@ -189,6 +200,13 @@ export default function MeetingNew() {
           <p className="text-[11px] text-muted-foreground">録音は 5 分ごとに保存されるので、途中で切れてもそれまでの分は残ります。音声ファイルは 200MB まで（60 分で 30〜60MB が目安。Wi-Fi 推奨）。</p>
         </div>
       )}
+
+      <ClientFormDialog
+        open={clientDialogOpen}
+        onOpenChange={setClientDialogOpen}
+        initialName={form.client_name}
+        onSaved={(row) => { setForm((f) => ({ ...f, client_name: row?.name || f.client_name })); toast.success("クライアントを登録しました"); }}
+      />
 
       {mode === "record" && meeting && (
         <MeetingRecorder meetingId={meeting.id} title={meeting.title || ""} onFinish={onRecordFinish} />
