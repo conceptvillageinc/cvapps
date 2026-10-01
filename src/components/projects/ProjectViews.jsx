@@ -597,16 +597,27 @@ export function NextActionCell({ project, className = "" }) {
     ? `${fmtStamp(project.next_action_updated_at)} ${project.next_action_updated_by || ""}`.trim()
     : "";
 
+  // 内容に合わせて高さが伸びる（長い文章は折り返して全文が見える）
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [text]);
+
   return (
     <div className={`space-y-0.5 ${className}`}>
-      <input
+      <textarea
+        ref={ref}
+        rows={1}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => setText(e.target.value.replace(/\r?\n/g, " "))}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
-        placeholder="次にやることを書く…"
+        placeholder="ネクストアクションを記載"
         aria-label="ネクストアクション"
-        className={`w-full h-8 px-2 rounded-md border text-xs outline-none transition-colors ${text ? "bg-amber-50/70 border-transparent hover:border-input focus:bg-background focus:border-primary" : "bg-amber-50 border-transparent placeholder:text-amber-700/70 hover:border-input focus:bg-background focus:border-primary"}`}
+        className={`block w-full min-h-8 px-2 py-1.5 rounded-md border text-xs leading-snug resize-none overflow-hidden outline-none transition-colors ${text ? "bg-amber-50/70 border-transparent hover:border-input focus:bg-background focus:border-primary" : "bg-amber-50 border-transparent placeholder:text-amber-700/70 hover:border-input focus:bg-background focus:border-primary"}`}
       />
       <div className="text-[9px] text-muted-foreground whitespace-nowrap h-3">
         {save.isPending ? "保存中…" : stamp || (text ? "" : "未記入")}
