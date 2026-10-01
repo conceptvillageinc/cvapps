@@ -4,6 +4,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { RecordingProvider } from '@/lib/recording';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
 import Login from '@/pages/Login';
@@ -105,7 +106,9 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <AuthenticatedApp />
+          <RecordingProvider>
+            <AuthenticatedApp />
+          </RecordingProvider>
         </Router>
         <Toaster />
       </QueryClientProvider>

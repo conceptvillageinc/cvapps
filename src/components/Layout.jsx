@@ -7,6 +7,7 @@ import {
 import { useState } from "react";
 import { db } from "@/api/db";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
+import RecordingBar from "@/components/meetings/RecordingBar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -176,6 +177,8 @@ export default function Layout() {
           </button>
           <div className="flex-1" />
         </header>
+
+        <RecordingBar />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">

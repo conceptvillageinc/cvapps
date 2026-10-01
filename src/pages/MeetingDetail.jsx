@@ -21,6 +21,7 @@ import {
 import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save } from "lucide-react";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
+import { useRecording } from "@/lib/recording";
 
 // useQuery の既定値に毎回新しい配列を渡すと、effect が無限に走るので固定の空配列を使う
 const EMPTY = [];
@@ -134,6 +135,8 @@ export default function MeetingDetail() {
   const [audioUrl, setAudioUrl] = useState(null);
   const [segmentUrls, setSegmentUrls] = useState([]);
   const [resumeRecording, setResumeRecording] = useState(false);
+  // 録音はアプリ全体で続いているので、別の画面から戻ってきたときも録音欄を出す
+  const recordingThis = useRecording().session?.meetingId === id;
 
   const { data: meeting, isLoading } = useQuery({
     queryKey: ["meeting", id],
@@ -297,8 +300,8 @@ export default function MeetingDetail() {
       {meeting.status === "recording" && (
         <Card className="border-red-200">
           <CardContent className="pt-4 space-y-3">
-            {resumeRecording ? (
-              <MeetingRecorder meetingId={meeting.id} startSeq={segments.length} onFinish={async ({ totalSec }) => { await db.entities.Meeting.update(id, { status: "uploaded", audio_duration_sec: Math.round((Number(meeting.audio_duration_sec) || 0) + totalSec) }); setResumeRecording(false); queryClient.invalidateQueries({ queryKey: ["meeting", id] }); }} />
+            {(resumeRecording || recordingThis) ? (
+              <MeetingRecorder meetingId={meeting.id} title={meeting.title || ""} startSeq={segments.length} baseDuration={Number(meeting.audio_duration_sec) || 0} onFinish={() => setResumeRecording(false)} />
             ) : (
               <>
                 <p className="text-sm font-semibold flex items-center gap-2"><Mic className="w-4 h-4 text-red-600" /> {segments.length === 0 ? "録音はまだ始まっていません" : "録音が途中で終わっています"}</p>

@@ -89,13 +89,9 @@ export default function MeetingNew() {
     navigate(`/meetings/${m.id}`);
   };
 
-  const onRecordFinish = async ({ totalSec }) => {
-    try {
-      await db.entities.Meeting.update(meeting.id, { audio_duration_sec: Math.round(totalSec) });
-      await kickProcessing(meeting);
-    } catch (err) {
-      toast.error("保存に失敗しました: " + err.message);
-    }
+  // 録音を終えたときの保存（処理待ちにする・議事録の画面へ移る）は RecordingProvider が行う
+  const onRecordFinish = async () => {
+    queryClient.invalidateQueries({ queryKey: ["meetings"] });
   };
 
   const onFile = async (e) => {
@@ -195,7 +191,7 @@ export default function MeetingNew() {
       )}
 
       {mode === "record" && meeting && (
-        <MeetingRecorder meetingId={meeting.id} onFinish={onRecordFinish} />
+        <MeetingRecorder meetingId={meeting.id} title={meeting.title || ""} onFinish={onRecordFinish} />
       )}
     </div>
   );
