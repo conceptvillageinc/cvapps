@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import {
+import { Download,
   Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -512,11 +512,15 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               </div>
             )}
 
-            {/* 明細追加バー （表の直前に配置し、スクロールなしで触れるように） */}
+            {/* 明細追加バー （表の直前に配置し、スクロールなしで触れるように）
+                4 行: 大カテゴリ ／ 外から読み込む（インポート） ／ 自動計算行 ／ その他 */}
             <div className="border border-dashed border-emerald-300 rounded-lg p-3 bg-emerald-50/60 space-y-2">
-              <p className="text-xs text-emerald-700">+ 明細を追加 — 大カテゴリを選択</p>
-              <div className="flex gap-2 flex-wrap">
-                {LINE_ITEM_CATEGORIES.map(cat => {
+              <p className="text-xs font-semibold text-emerald-800">+ 明細を追加</p>
+
+              {/* 1. 大カテゴリ */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-emerald-700 w-24 shrink-0">大カテゴリから</span>
+                {LINE_ITEM_CATEGORIES.filter(cat => cat.key !== "other").map(cat => {
                   const Icon = CATEGORY_ICONS[cat.key];
                   return (
                     <Button key={cat.key} size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => openAddPanel(cat)}>
@@ -524,19 +528,30 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                     </Button>
                   );
                 })}
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("vendor_quote")}>
+              </div>
+
+              {/* 2. 外から読み込む（インポート）: 色を変えて「取り込み」だと分かるように */}
+              <div className="flex items-center gap-2 flex-wrap rounded-md border border-sky-200 bg-sky-50/70 px-2 py-1.5 -mx-0.5">
+                <span className="text-[10px] text-sky-800 w-24 shrink-0 inline-flex items-center gap-1"><Download className="w-3 h-3" /> 読み込む</span>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-sky-900 hover:bg-sky-100 hover:text-sky-900 border-sky-300" onClick={() => setAddPanel("web_price")}>
+                  <Globe className="w-3.5 h-3.5" /> ネット印刷から読込
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-sky-900 hover:bg-sky-100 hover:text-sky-900 border-sky-300" onClick={() => setAddPanel("vendor_quote")}>
                   <FileUp className="w-3.5 h-3.5" /> 仕入先見積から読込
                 </Button>
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("web_price")}>
-                  <Globe className="w-3.5 h-3.5" /> ネット印刷から取込
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-sky-900 hover:bg-sky-100 hover:text-sky-900 border-sky-300" onClick={() => setAddPanel("sheet_import")}>
+                  <Table2 className="w-3.5 h-3.5" /> スプレッドシートから読込
                 </Button>
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("past_estimate")}>
-                  <History className="w-3.5 h-3.5" /> 過去見積から複製
-                </Button>
+                <span className="text-[10px] text-sky-700">価格ページ・見積書PDF・シートの内容を読み取って明細にします</span>
+              </div>
+
+              {/* 3. 自動計算行 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-emerald-700 w-24 shrink-0">合計から計算</span>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200">
-                      <Calculator className="w-3.5 h-3.5" /> 自動計算行
+                      <Calculator className="w-3.5 h-3.5" /> 自動計算行（コンセプト・ディレクション・校正・割引）
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-72 p-1" align="start">
@@ -558,14 +573,24 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                     ))}
                   </PopoverContent>
                 </Popover>
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("sheet_import")}>
-                  <Table2 className="w-3.5 h-3.5" /> スプレッドシートから取込
+              </div>
+
+              {/* 4. その他 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-emerald-700 w-24 shrink-0">その他</span>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("past_estimate")}>
+                  <History className="w-3.5 h-3.5" /> 過去見積から複製
                 </Button>
-                <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 text-foreground hover:bg-emerald-100 hover:text-foreground" onClick={addTextRow}>
-                  <Type className="w-3.5 h-3.5" /> テキスト行（見出し・注記）
+                {(() => { const cat = LINE_ITEM_CATEGORIES.find(c => c.key === "other"); const Icon = CATEGORY_ICONS.other; return (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => openAddPanel(cat)}>
+                    <Icon className="w-3.5 h-3.5" /> 項目自由入力
+                  </Button>
+                ); })()}
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={addTextRow}>
+                  <Type className="w-3.5 h-3.5" /> テキスト行を追加
                 </Button>
-                <Button size="sm" variant="ghost" className="gap-1.5 text-xs h-9 text-foreground hover:bg-emerald-100 hover:text-foreground" onClick={() => commitItems([...lineItems, { id: uid(), row_type: "subtotal", name: "小計", amount: 0, source_type: "subtotal" }])}>
-                  <Sigma className="w-3.5 h-3.5" /> 小計行
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => commitItems([...lineItems, { id: uid(), row_type: "subtotal", name: "小計", amount: 0, source_type: "subtotal" }])}>
+                  <Sigma className="w-3.5 h-3.5" /> 小計行を追加
                 </Button>
               </div>
             </div>
