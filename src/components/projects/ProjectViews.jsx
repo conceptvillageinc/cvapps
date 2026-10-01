@@ -1,17 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
-import { todayString } from "@/lib/fiscal";
+import { todayString, fiscalYearOf, fiscalYearLabel } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { toast } from "sonner";
-import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter } from "lucide-react";
+import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check } from "lucide-react";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -72,11 +74,43 @@ function optionComparator(sort, settings) {
 const EMPTY_VALUE = "__empty__";
 
 /** 列ごとの「表示する値」（チェックで複数選択）。null = 絞り込みなし */
-function useColumnFilters() {
+function useColumnFilters(defaults = null) {
   const [filters, setFilters] = useState({});
   const setFilter = (key, values) => setFilters((cur) => ({ ...cur, [key]: values && values.length ? values : null }));
-  return [filters, setFilter];
+  // 初期値（まだ触っていない列だけに効く。「すべて」で解除すると null になり初期値も外れる）
+  const applied = useMemo(() => ({ ...(defaults || {}), ...filters }), [defaults, filters]);
+  return [applied, setFilter];
 }
+
+/** 画面のスクロール枠（Layout の main） */
+const scrollParent = (el) => el?.closest("main") || document.scrollingElement;
+
+/** 読み込み後に 1 回だけ、指定の行が見出しの直下に来るようにスクロールする */
+function useScrollToRowOnce(ready, selector, headerSelector = "thead") {
+  const done = useRef(false);
+  useEffect(() => {
+    if (!ready || done.current) return;
+    const row = document.querySelector(selector);
+    if (!row) return;
+    done.current = true;
+    const sc = scrollParent(row);
+    const head = row.closest("table")?.querySelector(headerSelector);
+    const offset = (head?.getBoundingClientRect().height || 0) + 4;
+    const top = row.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - offset;
+    sc.scrollTo({ top: Math.max(0, top) });
+    // 固定した見出しの下に行が隠れていたら、その分だけ戻す（見出しの固定位置は枠の余白で変わるため実測する）
+    requestAnimationFrame(() => {
+      if (!head) return;
+      const hidden = head.getBoundingClientRect().bottom + 4 - row.getBoundingClientRect().top;
+      if (hidden > 0) sc.scrollTo({ top: Math.max(0, sc.scrollTop - hidden) });
+    });
+  }, [ready, selector, headerSelector]);
+}
+
+const STICKY_HEAD = "sticky -top-4 lg:-top-6 z-10 bg-slate-800 shadow-[0_1px_0_0_rgba(255,255,255,0.15)]"; // main の余白ぶん上に寄せて、枠の上端にぴったり固定する
+
+/** 見出しを画面上部に固定するための素の table（共通の Table はスクロール枠で包むため固定が効かない） */
+const PlainTable = ({ children }) => <table className="w-full caption-bottom text-sm">{children}</table>;
 
 /** 絞り込みに使う値の候補: システム設定の選択肢 + 実際に入っている値 + 空欄 */
 function filterCandidates(key, projects, settings) {
@@ -137,14 +171,76 @@ function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter
           </Popover>
         </span>
       ) : (
-        <>{col.label}{!sort && defaultMark === col.key ? (col.key === "registered_at" ? " ↓" : " ↑") : ""}</>
+        <>{col.label}{!sort && defaultMark === col.key ? " ↑" : ""}</>
       )}
     </TableHead>
   );
 }
 
 /* ------------------------------------------------------------------------ */
-/* 速報デイリー: 案件登録日の新しい順。日ごとに小計                              */
+/* 1 日あたりの粗利目標（期ごと。システム設定 daily_gross_target_fy<期首年> に保存） */
+/* ------------------------------------------------------------------------ */
+
+const targetKey = (fy) => `daily_gross_target_fy${fy}`;
+
+function useDailyTarget(today) {
+  const { settings, fiscalYearStartMonth } = useSystemSettings();
+  const fy = fiscalYearOf(today, fiscalYearStartMonth);
+  const row = settings.find((x) => x.setting_key === targetKey(fy));
+  const target = row ? Number(row.setting_value) || 0 : 0;
+  return { fy, fiscalYearStartMonth, target, row };
+}
+
+function DailyTargetCard({ today }) {
+  const { fy, fiscalYearStartMonth, target, row } = useDailyTarget(today);
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const save = useMutation({
+    mutationFn: async () => {
+      const value = String(Math.max(0, Math.round(Number(String(draft).replace(/[,¥￥円\s]/g, "")) || 0)));
+      const data = { setting_key: targetKey(fy), setting_value: value, description: `${fy}年度 1日あたりの粗利目標（税抜）` };
+      if (row) await db.entities.SystemSettings.update(row.id, data);
+      else await db.entities.SystemSettings.create(data);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["settings"] }); setEditing(false); toast.success("粗利目標を保存しました"); },
+    onError: (e) => toast.error("保存できませんでした: " + e.message),
+  });
+  return (
+    <Card className="border-amber-200 bg-amber-50/40">
+      <CardContent className="p-4">
+        <p className="text-[11px] text-muted-foreground flex items-center gap-1"><Target className="w-3 h-3" /> 1日あたりの粗利目標（{fiscalYearLabel(fy, fiscalYearStartMonth)}）</p>
+        {editing ? (
+          <form className="flex items-center gap-2 mt-1" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+            <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="例: 150000" className="h-8 w-36 text-sm" inputMode="numeric" />
+            <Button type="submit" size="sm" className="h-8 text-xs gap-1" disabled={save.isPending}>{save.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} 保存</Button>
+            <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditing(false)}>やめる</Button>
+          </form>
+        ) : (
+          <div className="flex items-baseline gap-3 mt-1">
+            <span className="text-2xl font-bold tabular-nums">{target > 0 ? yen(target) : <span className="text-base text-muted-foreground">未設定</span>}</span>
+            <button type="button" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={() => { setDraft(target ? String(target) : ""); setEditing(true); }}><Pencil className="w-3 h-3" /> {target > 0 ? "変更" : "設定する"}</button>
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground mt-1">期が変わったら、その期の目標をここで入れ直します（期ごとに別の値を持ちます）</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** 粗利（見込）が目標に届いているか */
+function TargetBadge({ gross, target }) {
+  if (!target) return null;
+  const ok = gross >= target;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${ok ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+      {ok ? `目標達成（+${yen(gross - target)}）` : `目標まで あと ${yen(target - gross)}`}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+/* 速報デイリー: 案件登録日順。開いた日を先頭に表示し、上に戻ると前の日。日ごとに小計 */
 /* ------------------------------------------------------------------------ */
 
 const DAILY_COLS = [
@@ -164,6 +260,7 @@ export function DailyView({ projects, isLoading }) {
   const [sort, toggleSort] = useColumnSort();
   const [filters, setFilter] = useColumnFilters();
   const filtered = useMemo(() => applyFilters(projects, filters), [projects, filters]);
+  const { target } = useDailyTarget(today);
   const summary = useMemo(() => {
     const ws = weekStart(today);
     const ms = today.slice(0, 8) + "01";
@@ -179,7 +276,8 @@ export function DailyView({ projects, isLoading }) {
   }, [projects, today]);
 
   const groups = useMemo(() => {
-    const sorted = [...filtered].sort((a, b) => (b.registered_at || "").localeCompare(a.registered_at || "") || (b.project_number || "").localeCompare(a.project_number || ""));
+    // 古い日 → 新しい日の順（今日が一番下。開いたときに今日まで自動でスクロールする）
+    const sorted = [...filtered].sort((a, b) => (a.registered_at || "").localeCompare(b.registered_at || "") || (a.project_number || "").localeCompare(b.project_number || ""));
     const out = [];
     for (const p of sorted) {
       const key = p.registered_at || "";
@@ -190,29 +288,36 @@ export function DailyView({ projects, isLoading }) {
       g.gross += Number(p.expected_gross_profit || 0);
       g.actual += Number(p.actual_gross_profit || 0);
     }
+    // 今日の案件が無くても「今日」のまとまりは出す（0 件・目標未達が分かるように）
+    if (!out.some((g) => g.date === today)) out.push({ date: today, rows: [], revenue: 0, gross: 0, actual: 0 });
+    out.sort((a, b) => a.date.localeCompare(b.date));
     // 受注確度・フェーズで並べ替えるときは、日ごとのまとまりはそのままで中の行だけ並べ替える
     const cmp = optionComparator(sort, settings);
     if (cmp) for (const g of out) g.rows.sort(cmp);
     return out;
-  }, [filtered, sort, settings]);
+  }, [filtered, sort, settings, today]);
+
+  useScrollToRowOnce(!isLoading && groups.length > 0, `[data-day="${today}"]`);
 
   const monthLabel = `${Number(today.slice(5, 7))}月`;
   const cards = [
-    { label: `今日（${shortDate(today).replace("-", "/")}）の新規案件`, v: summary.today },
+    { label: `今日（${shortDate(today).replace("-", "/")}）の新規案件`, v: summary.today, isToday: true },
     { label: `今週（${shortDate(summary.week.from).replace("-", "/")}〜）の新規案件`, v: summary.week },
     { label: `今月（${monthLabel}）の新規案件`, v: summary.month },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <DailyTargetCard today={today} />
         {cards.map((c) => (
           <Card key={c.label}>
             <CardContent className="p-4">
               <p className="text-[11px] text-muted-foreground">{c.label}</p>
-              <div className="flex items-baseline gap-3 mt-1">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-1">
                 <span className="text-2xl font-bold tabular-nums">{c.v.count}<span className="text-sm font-medium ml-0.5">件</span></span>
                 <span className="text-xs text-muted-foreground tabular-nums">受注見込 {yen(c.v.revenue)}　粗利見込 {yen(c.v.gross)}</span>
+                {c.isToday && <TargetBadge gross={c.v.gross} target={target} />}
               </div>
             </CardContent>
           </Card>
@@ -226,9 +331,9 @@ export function DailyView({ projects, isLoading }) {
           ) : groups.length === 0 && !Object.values(filters).some(Boolean) ? (
             <Empty text="該当する案件がありません" />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
+            <div>
+              <PlainTable>
+                <TableHeader className={STICKY_HEAD}>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {DAILY_COLS.map((c) => (
                       <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="registered_at"
@@ -241,10 +346,12 @@ export function DailyView({ projects, isLoading }) {
                     <TableRow><TableCell colSpan={DAILY_COLS.length} className="py-10 text-center text-sm text-muted-foreground">絞り込みに合う案件がありません。見出しの絞り込み（黄色のマーク）から解除できます</TableCell></TableRow>
                   )}
                   {groups.map((g) => (
-                    <GroupRows key={g.date || "none"} group={g} />
+                    <GroupRows key={g.date || "none"} group={g} target={target} isToday={g.date === today} />
                   ))}
                 </TableBody>
-              </Table>
+              </PlainTable>
+              {/* 今日のまとまりを見出しの直下に置けるように、下に余白を取る */}
+              <div className="h-[60vh]" aria-hidden="true" />
             </div>
           )}
         </CardContent>
@@ -253,14 +360,20 @@ export function DailyView({ projects, isLoading }) {
   );
 }
 
-function GroupRows({ group: g }) {
+function GroupRows({ group: g, target, isToday }) {
   return (
     <>
-      <TableRow className="bg-slate-100 hover:bg-slate-100">
+      <TableRow className={`${isToday ? "bg-blue-100/70 hover:bg-blue-100/70" : "bg-slate-100 hover:bg-slate-100"}`} data-day={g.date}>
         <TableCell colSpan={DAILY_COLS.length} className="py-1.5 text-[11px] font-semibold text-slate-700">
-          {withWeekday(g.date)}　新規 {g.rows.length}件
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　粗利見込 {yen(g.gross)}</span>
+            <TargetBadge gross={g.gross} target={target} />
+          </span>
         </TableCell>
       </TableRow>
+      {g.rows.length === 0 && (
+        <TableRow><TableCell colSpan={DAILY_COLS.length} className="py-3 text-center text-xs text-muted-foreground">今日はまだ新規の案件がありません</TableCell></TableRow>
+      )}
       {g.rows.map((p) => (
         <TableRow key={p.id} className="group hover:bg-muted/40">
           <TableCell className="text-xs whitespace-nowrap text-muted-foreground">{withWeekday(p.registered_at)}</TableCell>
@@ -307,7 +420,13 @@ export function NextActionView({ projects, isLoading }) {
   const today = todayString();
   const settings = useSystemSettings();
   const [sort, toggleSort] = useColumnSort();
-  const [filters, setFilter] = useColumnFilters();
+  // 受注確度は「A」と「要注意（A）」を初期値にする（朝会で新規売上の進捗を見るため）
+  const defaultFilters = useMemo(() => {
+    const picks = (settings.dealProbabilityOptions || []).filter((v) => v === "A" || /要注意/.test(v));
+    return picks.length ? { deal_probability: picks } : null;
+  }, [settings.dealProbabilityOptions]);
+  const [filters, setFilter] = useColumnFilters(defaultFilters);
+  const monthStart = today.slice(0, 8) + "01";
   const nextMonthStart = useMemo(() => {
     const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
     return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
@@ -319,29 +438,31 @@ export function NextActionView({ projects, isLoading }) {
     const mk = (key, label) => ({ key, label, rows: [], sums: { expected_revenue: 0, expected_cost: 0, confirmed_cost: 0, other_cost: 0 } });
     const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
     const gs = [
+      mk("past", "先月以前（完了予定日を過ぎています）"),
       mk("month", `今月（${y}年${m}月）完了予定`),
       mk("later", `来月以降（${nextMonthStart.slice(0, 4)}年${Number(nextMonthStart.slice(5, 7))}月〜）`),
       mk("none", "完了予定日なし"),
     ];
     for (const p of sorted) {
       const d = p.due_date || "";
-      const g = !d ? gs[2] : d < nextMonthStart ? gs[0] : gs[1];
+      const g = !d ? gs[3] : d < monthStart ? gs[0] : d < nextMonthStart ? gs[1] : gs[2];
       g.rows.push(p);
       for (const k of Object.keys(g.sums)) g.sums[k] += Number(p[k] || 0);
     }
     const cmp = optionComparator(sort, settings);
     if (cmp) for (const g of gs) g.rows.sort(cmp);
     return gs;
-  }, [projects, filters, onlyEmpty, today, nextMonthStart, sort, settings]);
+  }, [projects, filters, onlyEmpty, today, monthStart, nextMonthStart, sort, settings]);
 
   const total = groups.reduce((s, g) => s + g.rows.length, 0);
+  useScrollToRowOnce(!isLoading && !settings.isLoading, '[data-group="month"]');
   const emptyCount = projects.filter((p) => !(p.next_action || "").trim()).length;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
-          進行中 {projects.length}件　／　今月完了予定 {groups[0].rows.length}件・来月以降 {groups[1].rows.length}件・予定日なし {groups[2].rows.length}件
+          進行中 {projects.length}件　／　表示 {total}件（先月以前 {groups[0].rows.length}・今月 {groups[1].rows.length}・来月以降 {groups[2].rows.length}・予定日なし {groups[3].rows.length}）
         </span>
         <label className="flex items-center gap-1.5 cursor-pointer select-none">
           <input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} className="w-3.5 h-3.5" />
@@ -353,12 +474,12 @@ export function NextActionView({ projects, isLoading }) {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-          ) : total === 0 && !Object.values(filters).some(Boolean) ? (
-            <Empty text={onlyEmpty ? "ネクストアクションが空の案件はありません" : "進行中の案件がありません"} />
+          ) : projects.length === 0 ? (
+            <Empty text="進行中の案件がありません" />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
+            <div>
+              <PlainTable>
+                <TableHeader className={STICKY_HEAD}>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {NEXT_COLS.map((c) => (
                       <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="due_date" className={c.key === "next_action" ? "min-w-[260px]" : ""}
@@ -367,14 +488,12 @@ export function NextActionView({ projects, isLoading }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {total === 0 && (
-                    <TableRow><TableCell colSpan={NEXT_COLS.length} className="py-10 text-center text-sm text-muted-foreground">絞り込みに合う案件がありません。見出しの絞り込み（黄色のマーク）から解除できます</TableCell></TableRow>
-                  )}
-                  {groups.filter((g) => g.rows.length > 0).map((g) => (
+                  {groups.filter((g) => g.rows.length > 0 || g.key === "month").map((g) => (
                     <NextGroupRows key={g.key} group={g} />
                   ))}
                 </TableBody>
-              </Table>
+              </PlainTable>
+              <div className="h-[40vh]" aria-hidden="true" />
             </div>
           )}
         </CardContent>
@@ -387,12 +506,15 @@ export function NextActionView({ projects, isLoading }) {
 function NextGroupRows({ group: g }) {
   return (
     <>
-      <TableRow className="bg-slate-100 hover:bg-slate-100">
+      <TableRow className={`${g.key === "month" ? "bg-blue-100/70 hover:bg-blue-100/70" : g.key === "past" ? "bg-rose-50 hover:bg-rose-50" : "bg-slate-100 hover:bg-slate-100"}`} data-group={g.key}>
         <TableCell colSpan={NEXT_COLS.length} className="py-1.5 text-[11px] font-semibold text-slate-700">
           {g.label}　{g.rows.length}件
           {g.key === "none" && <span className="ml-2 font-normal text-amber-700">完了予定日を入れると上のグループに移ります</span>}
         </TableCell>
       </TableRow>
+      {g.rows.length === 0 && (
+        <TableRow><TableCell colSpan={NEXT_COLS.length} className="py-3 text-center text-xs text-muted-foreground">表示する案件がありません（絞り込み中は見出しの黄色のマークから解除できます）</TableCell></TableRow>
+      )}
       {g.rows.map((p) => (
         <TableRow key={p.id} className="hover:bg-muted/40">
           <TableCell className="text-xs whitespace-nowrap">{p.due_date ? withWeekday(p.due_date).slice(5) : <span className="text-muted-foreground">—</span>}</TableCell>
