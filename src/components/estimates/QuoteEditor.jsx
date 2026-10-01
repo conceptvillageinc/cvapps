@@ -48,9 +48,16 @@ function yen(n) {
   return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString()}`;
 }
 
+const PREVIEW_LEFT_KEY = "cv.quoteEditor.previewLeft";
+const readPref = (k) => { try { return window.localStorage.getItem(k); } catch { return null; } };
+const writePref = (k, v) => { try { window.localStorage.setItem(k, v); } catch { /* 保存できない環境では今回だけ */ } };
+
 export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
   const [showInternal, setShowInternal] = useState(true);
-  const [showPreview, setShowPreview] = useState(true); // 右のプレビューを隠して編集側を広く使える
+  const [showPreview, setShowPreview] = useState(true); // プレビューを隠して編集側を広く使える
+  // プレビューを左に置く（人ごとの好み。このブラウザに保存して次回も同じ並びにする）
+  const [previewLeft, setPreviewLeft] = useState(() => readPref(PREVIEW_LEFT_KEY) === "1");
+  const togglePreviewLeft = (v) => { setPreviewLeft(v); writePref(PREVIEW_LEFT_KEY, v ? "1" : "0"); };
   const [addPanel, setAddPanel] = useState(null); // LINE_ITEM_CATEGORIES key
   const [priceMasterPick, setPriceMasterPick] = useState(null); // selected PriceMaster entry for tier selection
   const [pmCategory, setPmCategory] = useState(null); // 印刷費: 選んだ大カテゴリ（商品）
@@ -259,6 +266,12 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
           <Label htmlFor="qe-preview" className="text-xs cursor-pointer">プレビューを表示</Label>
           <Switch id="qe-preview" checked={showPreview} onCheckedChange={setShowPreview} />
         </div>
+        {showPreview && (
+          <div className="flex items-center gap-1.5" title="ON にするとプレビューを左、編集欄を右に並べます。この設定はこのブラウザに保存されます">
+            <Label htmlFor="qe-preview-left" className="text-xs cursor-pointer">プレビューを左に</Label>
+            <Switch id="qe-preview-left" checked={previewLeft} onCheckedChange={togglePreviewLeft} />
+          </div>
+        )}
         {onPreview && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -290,9 +303,9 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
       ); })()}
       <div className={`grid grid-cols-1 gap-4 items-start ${showPreview ? "lg:grid-cols-2" : ""}`}>
 
-        {/* 右：クライアント提出用プレビュー（常にクリーン表示・自動同期）。表示順は order-last で編集画面の後ろ */}
+        {/* クライアント提出用プレビュー（常にクリーン表示・自動同期）。通常は編集画面の右（order-last）、スイッチで左 */}
         {showPreview && (
-        <div className="order-last border rounded-lg p-6 bg-white space-y-4 lg:sticky lg:top-4">
+        <div className={`${previewLeft ? "order-first" : "order-last"} border rounded-lg p-6 bg-white space-y-4 lg:sticky lg:top-4`}>
           <p className="text-xs text-muted-foreground flex items-center gap-1.5 -mt-1 mb-1">
             <Eye className="w-3.5 h-3.5" /> プレビュー（クライアント提出用・自動同期）
           </p>
@@ -405,7 +418,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
         </div>
         )}
 
-        {/* 左：入力（社内編集画面） */}
+        {/* 入力（社内編集画面） */}
         <div className="space-y-4">
           <div className="border rounded-lg p-6 bg-white space-y-5">
             <div className="flex items-start justify-between">
