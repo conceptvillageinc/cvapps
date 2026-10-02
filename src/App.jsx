@@ -20,6 +20,7 @@ import VendorManagement from '@/pages/VendorManagement';
 import PriceMasterList from '@/pages/PriceMasterList';
 import DesignFeeMasterList from '@/pages/DesignFeeMasterList';
 import PrintTypeMaster from '@/pages/PrintTypeMaster';
+import Payables from '@/pages/Payables';
 import MyProfile from '@/pages/MyProfile';
 import MeetingList from '@/pages/MeetingList';
 import MeetingNew from '@/pages/MeetingNew';
@@ -71,6 +72,7 @@ const AuthenticatedApp = () => {
           <Route path="/cashflow" element={<Cashflow />} />
           <Route path="/clients/:id" element={<ClientKarte />} />
           <Route path="/payments" element={<Payments />} />
+          <Route path="/payables" element={<Payables />} />
           <Route path="/accounting-export" element={<AccountingExport />} />
           <Route path="/invoices" element={<InvoiceList />} />
           <Route path="/invoices/new" element={<InvoiceEdit />} />
