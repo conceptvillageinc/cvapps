@@ -81,7 +81,7 @@ export function normalizeClientForBank(client) {
   return { kana, name };
 }
 
-async function sha1Hex(text) {
+export async function sha1Hex(text) {
   const data = new TextEncoder().encode(text);
   const hash = await crypto.subtle.digest("SHA-1", data);
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -141,6 +141,16 @@ export async function parseBankCsv(text) {
 }
 
 export const BANK_LABELS = { toho: "東邦銀行", ryukyu: "琉球銀行", daito: "大東銀行", other: "その他" };
+
+/** 通帳の画像から読み取った行（{ transaction_date, payee_raw, amount_in, amount_out, balance }）を取込用の行にする */
+export async function rowsFromPassbook(bank, lines, accountLabel = "") {
+  const out = [];
+  for (const p of lines) {
+    const key = [bank, p.transaction_date, p.payee_raw, p.amount_in, p.amount_out, p.balance].join("|");
+    out.push({ bank, account_label: accountLabel || BANK_LABELS[bank] || bank, ...p, payee_normalized: normalizePayee(p.payee_raw), source_hash: await sha1Hex(key) });
+  }
+  return out;
+}
 export const BANK_CODES = ["toho", "ryukyu", "daito"];
 
 const H = {
