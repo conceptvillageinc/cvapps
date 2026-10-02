@@ -5,10 +5,96 @@ import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+} from "recharts";
 import { CalendarClock, Loader2 } from "lucide-react";
 import { todayString, nextMonthEnd } from "@/lib/fiscal";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
+// 売上粗利管理表と同じ配色（青=確定 / オレンジ=見込 / 赤=支払 / 緑=実績・差引）
+const C = { receivable: "#2a78d6", forecast: "#eb6834", payable: "#d64545", paid: "#1baf7a", net: "#1f2937", grid: "#e5e7eb", text: "#52514e" };
+
+function TooltipBox({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border bg-background p-2 text-xs shadow-sm">
+      <p className="font-medium mb-1">{label}</p>
+      {payload.map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-2">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />
+          <span className="text-muted-foreground">{p.name}</span>
+          <span className="ml-auto tabular-nums">¥{Math.round(p.value).toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 月別の入金・支払のグラフ（表と同じ数字。月別＝その月の入出金、累計＝差引の積み上がり） */
+function CashflowChart({ months, thisMonth }) {
+  const [mode, setMode] = useState("monthly"); // monthly | cumulative
+  const data = useMemo(() => {
+    let cum = 0;
+    return months.map((m) => {
+      cum += m.net;
+      return {
+        label: `${Number(m.key.slice(5, 7))}月${m.key === thisMonth ? "（今月）" : ""}`,
+        "入金予定（請求済）": m.sum_receivable,
+        "入金見込（未請求）": m.sum_forecast,
+        "支払予定": -m.sum_payable,
+        "入金実績": m.sum_paid,
+        "差引": m.net,
+        "差引の累計": cum,
+      };
+    });
+  }, [months, thisMonth]);
+  const empty = months.every((m) => !m.sum_receivable && !m.sum_forecast && !m.sum_payable && !m.sum_paid);
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <CardTitle className="text-sm">{mode === "monthly" ? "月別の入金予定・支払予定" : "差引の累計（入金 − 支払の積み上がり）"}</CardTitle>
+            <CardDescription className="text-xs">税込・円。上向きが入金（請求済＋未請求の見込）、下向きが支払予定。線は{mode === "monthly" ? "その月の差引" : "差引を今月から積み上げた額"}</CardDescription>
+          </div>
+          <Tabs value={mode} onValueChange={setMode}>
+            <TabsList className="h-8">
+              <TabsTrigger value="monthly" className="text-xs h-7">月別</TabsTrigger>
+              <TabsTrigger value="cumulative" className="text-xs h-7">累計</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="h-72" data-testid="cashflow-chart">
+          {empty ? (
+            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">この期間に入金・支払の予定はありません</div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }} barCategoryGap="30%" stackOffset="sign">
+                <CartesianGrid vertical={false} stroke={C.grid} strokeWidth={1} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: C.text }} axisLine={{ stroke: C.grid }} tickLine={false} />
+                <YAxis tickFormatter={(v) => `${Math.round(v / 10000).toLocaleString()}万`} tick={{ fontSize: 11, fill: C.text }} axisLine={false} tickLine={false} width={60} />
+                <Tooltip content={<TooltipBox />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <ReferenceLine y={0} stroke={C.text} strokeWidth={1} />
+                <Bar dataKey="入金予定（請求済）" stackId="c" fill={C.receivable} maxBarSize={28} />
+                <Bar dataKey="入金見込（未請求）" stackId="c" fill={C.forecast} maxBarSize={28} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="支払予定" stackId="c" fill={C.payable} maxBarSize={28} radius={[0, 0, 4, 4]} />
+                <Bar dataKey="入金実績" fill={C.paid} maxBarSize={12} radius={[4, 4, 0, 0]} />
+                {mode === "monthly"
+                  ? <Line type="linear" dataKey="差引" stroke={C.net} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
+                  : <Line type="linear" dataKey="差引の累計" stroke={C.net} strokeWidth={2.5} dot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />}
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 const ym = (d) => (d ? String(d).slice(0, 7) : null);
 const label = (k) => `${k.slice(0, 4)}年${Number(k.slice(5, 7))}月`;
 
@@ -110,6 +196,8 @@ export default function Cashflow() {
           </CardContent>
         </Card>
       )}
+
+      {!isLoading && <CashflowChart months={data.months} thisMonth={thisMonth} />}
 
       <Card>
         <CardContent className="p-0">
