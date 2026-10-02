@@ -21,8 +21,16 @@ import { flattenDesignCatalog, findDesignCatalogItem } from '../src/lib/designCa
 
 const TIME_BUDGET_MS = 240 * 1000; // maxDuration 300 秒に対する安全側
 
-function summarySchema() {
-  return {
+// 根拠の発言は { field, quote } の並び（項目ごとのオブジェクトにすると出力の型が大きくなりすぎるため）
+const EVIDENCE_LIST = {
+  type: 'array',
+  description: '項目ごとの根拠の発言。field は項目名（print_type, quantities, size, paper_type, color_count, finishing, due_date, budget / kind, description, days, day_rate, owner, due_date, other_cost, budget, design_items）、quote は発言の短い引用。発言に無い項目は入れない。design で当てはまるマスタの項目が無いときは field=design_items にその理由',
+  items: { type: 'object', properties: { field: { type: 'string' }, quote: { type: 'string' } }, required: ['field', 'quote'] },
+};
+
+/** withConditions=false のとき見積条件を省いた小さい型（出力の型が大きすぎて拒否されたときの保険） */
+function summarySchema(withConditions = true) {
+  const schema = {
     type: 'object',
     properties: {
       overview: { type: 'string', description: '打ち合わせの概要（3〜5 行。何の打ち合わせで、何が主に話され、どう着地したか）' },
@@ -79,12 +87,7 @@ function summarySchema() {
                 due_date: { type: 'string', description: '納期 YYYY-MM-DD（打ち合わせ日を起点に直す）。無ければ空' },
                 usage: { type: 'string', description: '用途（店頭配布、商品貼付 など）' },
                 budget: { type: 'string', description: 'この印刷物の予算（税別・数字のみ）。無ければ空' },
-                evidence: {
-                  type: 'object',
-                  description: '各項目の根拠の発言（短く引用）。無い項目は空',
-                  properties: { print_type: { type: 'string' }, quantities: { type: 'string' }, size: { type: 'string' }, paper_type: { type: 'string' }, color_count: { type: 'string' }, finishing: { type: 'string' }, due_date: { type: 'string' }, budget: { type: 'string' } },
-                  required: ['print_type', 'quantities', 'size', 'paper_type', 'color_count', 'finishing', 'due_date', 'budget'],
-                },
+                evidence: EVIDENCE_LIST,
               },
               required: ['print_type', 'quantities', 'size', 'paper_type', 'color_count', 'finishing', 'due_date', 'usage', 'budget', 'evidence'],
             },
@@ -104,23 +107,18 @@ function summarySchema() {
                 budget: { type: 'string', description: 'この制作の予算（税別・数字のみ）。無ければ空' },
                 design_items: {
                   type: 'array',
-                  description: 'kind が design のとき、下の「デザイン費マスタ」から当てはまる項目（ベースデザイン＋必要なオプション）。category と name はマスタの表記をそのまま写す。当てはまるものが無ければ空の配列',
+                  description: 'kind が design のとき、下の「デザイン費マスタ」から当てはまる項目（ベースデザイン＋必要なオプション）。name はマスタの項目名をそのまま写す。当てはまるものが無ければ空の配列',
                   items: {
                     type: 'object',
                     properties: {
-                      category: { type: 'string', description: 'マスタのカテゴリ（例: チラシデザイン）' },
                       name: { type: 'string', description: 'マスタの項目名（そのまま写す）' },
                       quantity: { type: 'string', description: '数量（数字のみ）。通常 1。「1名あたり」「1案」のような項目は人数・案数' },
                       reason: { type: 'string', description: 'この項目を選んだ根拠（発言を短く引用）' },
                     },
-                    required: ['category', 'name', 'quantity', 'reason'],
+                    required: ['name', 'quantity', 'reason'],
                   },
                 },
-                evidence: {
-                  type: 'object',
-                  properties: { kind: { type: 'string' }, description: { type: 'string' }, days: { type: 'string' }, day_rate: { type: 'string' }, owner: { type: 'string' }, due_date: { type: 'string' }, other_cost: { type: 'string' }, budget: { type: 'string' }, design_items: { type: 'string', description: 'design で当てはまる項目が無かったとき、その理由（例: パッケージデザインの項目がマスタに無い）。あれば空' } },
-                  required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget', 'design_items'],
-                },
+                evidence: EVIDENCE_LIST,
               },
               required: ['kind', 'description', 'days', 'day_rate', 'owner', 'due_date', 'other_cost', 'budget', 'design_items', 'evidence'],
             },
@@ -131,6 +129,16 @@ function summarySchema() {
     },
     required: ['overview', 'decisions', 'todos', 'open_items', 'notes', 'checkpoints', 'speakers', 'estimate_conditions'],
   };
+  if (!withConditions) {
+    delete schema.properties.estimate_conditions;
+    schema.required = schema.required.filter((k) => k !== 'estimate_conditions');
+  }
+  return schema;
+}
+
+/** 見積条件だけの型（議事録本体とは別の呼び出しで作る。1 回の出力の型を小さく保つため） */
+function conditionsSchema() {
+  return summarySchema(true).properties.estimate_conditions;
 }
 
 function typeLabel(types, key) {
@@ -291,14 +299,35 @@ ${catalog.map((c) => `- ${c.category} | ${c.name} | ${c.selling_price}`).join('\
 文字起こし:
 ${lines}`;
 
-  const message = await claude().messages.create({
+  const ask = (withConditions) => claude().messages.create({
     model: MODEL,
     max_tokens: 12000,
     messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
-    output_config: { format: { type: 'json_schema', schema: normalizeSchema(summarySchema()) } },
+    output_config: { format: { type: 'json_schema', schema: normalizeSchema(summarySchema(withConditions)) } },
   });
+  // 1 回目: 議事録本体（概要・決定事項・ToDo・保留・メモ・確認項目）
+  const message = await ask(false);
   if (message.stop_reason === 'refusal') throw new Error('AI が議事録の作成を控えました。内容を確認してください');
   const out = JSON.parse(textOf(message));
+
+  // 2 回目: 見積条件だけ（型を分けて、1 回あたりの出力の型を小さく保つ。失敗しても議事録は残す）
+  let conditionsSkipped = false;
+  let conditionsError = '';
+  try {
+    const m2 = await claude().messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      messages: [{ role: 'user', content: [{ type: 'text', text: `${prompt}\n\n（この回答では estimate_conditions の中身だけを JSON で返してください。prints と works が無ければ空の配列にします）` }] }],
+      output_config: { format: { type: 'json_schema', schema: normalizeSchema(conditionsSchema()) } },
+    });
+    if (m2.stop_reason === 'refusal') throw new Error('refusal');
+    out.estimate_conditions = JSON.parse(textOf(m2));
+  } catch (err) {
+    console.warn('[meeting-process] estimate_conditions skipped:', err?.message || err);
+    conditionsSkipped = true;
+    conditionsError = String(err?.message || err).slice(0, 200);
+    out.estimate_conditions = null;
+  }
 
   const byKey = Object.fromEntries((out.checkpoints || []).map((c) => [c.key, c]));
   const checkpoints = checklist.map((c) => ({
@@ -320,18 +349,24 @@ ${lines}`;
     speakers: out.speakers || [],
   };
   const ec = out.estimate_conditions || {};
-  const estimateConditions = {
+  const evidenceMap = (list) => {
+    const m = {};
+    for (const e of Array.isArray(list) ? list : []) if (e && e.field && e.quote) m[e.field] = e.quote;
+    return m;
+  };
+  const estimateConditions = conditionsSkipped ? { budget: '', budget_evidence: '', prints: [], works: [], generated_at: new Date().toISOString(), skipped: true, skipped_reason: conditionsError } : {
     budget: ec.budget || '',
     budget_evidence: ec.budget_evidence || '',
-    prints: (ec.prints || []).filter((p) => p && (p.print_type || p.quantities || p.size)).map((p, i) => ({ id: `pc_ai_${i}`, ...p })),
+    prints: (ec.prints || []).filter((p) => p && (p.print_type || p.quantities || p.size)).map((p, i) => ({ id: `pc_ai_${i}`, ...p, evidence: evidenceMap(p.evidence) })),
     works: (ec.works || []).filter((w) => w && (w.description || w.days || (w.design_items || []).length)).map((w, i) => {
       const { design_items: picks, ...rest } = w;
       const design_items = w.kind === 'design' ? resolveDesignItems(catalog, picks) : [];
+      const evidence = evidenceMap(w.evidence);
       return {
-        id: `wc_ai_${i}`, ...rest, day_rate: w.day_rate || '60000', owner: w.owner || 'internal',
+        id: `wc_ai_${i}`, ...rest, evidence, day_rate: w.day_rate || '60000', owner: w.owner || 'internal',
         pricing: w.kind === 'design' ? 'master' : 'days',
         design_items,
-        design_note: w.kind === 'design' && design_items.length === 0 ? (w.evidence?.design_items || '') : '',
+        design_note: w.kind === 'design' && design_items.length === 0 ? (evidence.design_items || '') : '',
       };
     }),
     generated_at: new Date().toISOString(),

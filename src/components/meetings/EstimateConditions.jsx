@@ -224,7 +224,8 @@ export default function EstimateConditions({ value, onChange, meeting, onCreateE
         <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" onClick={() => setPrints([...c.prints, newPrintCondition()])}><Plus className="w-3 h-3" /> 印刷物を追加</Button>
       </div>
 
-      {empty && <p className="text-[11px] text-muted-foreground">まだ条件がありません。議事録の作成時に自動で入るほか、上のボタンで手で足せます。</p>}
+      {empty && c.skipped && <p className="text-[11px] text-amber-700">自動作成のとき、見積条件の読み取りだけ失敗しました（{c.skipped_reason || "理由不明"}）。「処理をやり直す」でもう一度読み取るか、上のボタンで手で足してください。</p>}
+      {empty && !c.skipped && <p className="text-[11px] text-muted-foreground">まだ条件がありません。議事録の作成時に自動で入るほか、上のボタンで手で足せます。</p>}
       {c.prints.map((p, i) => (
         <PrintCard key={p.id} item={p} index={i} onChange={(next) => setPrints(c.prints.map((x) => (x.id === p.id ? next : x)))} onRemove={() => setPrints(c.prints.filter((x) => x.id !== p.id))} />
       ))}

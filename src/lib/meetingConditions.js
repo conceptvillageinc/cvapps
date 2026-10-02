@@ -76,7 +76,7 @@ export function normalizeConditions(raw) {
     pricing: w.pricing === "days" || w.pricing === "master" ? w.pricing
       : (w.kind === "design" && num(w.days) && !(Array.isArray(w.design_items) && w.design_items.length)) ? "days" : "master",
   }));
-  return { budget: c.budget ?? "", budget_evidence: c.budget_evidence || "", prints, works, generated_at: c.generated_at || null };
+  return { budget: c.budget ?? "", budget_evidence: c.budget_evidence || "", prints, works, generated_at: c.generated_at || null, skipped: !!c.skipped, skipped_reason: c.skipped_reason || "" };
 }
 
 /** 制作・開発 1 件の費用。デザインはマスタの項目の合計、それ以外は 人日 × 人日単価 */
