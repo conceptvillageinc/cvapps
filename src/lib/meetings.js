@@ -15,7 +15,7 @@ export const DEFAULT_MEETING_TYPES = [
 export const INTERNAL_CLIENT = "CV自社";
 
 export const MEETING_STATUS = {
-  recording: { label: "録音中", color: "bg-red-100 text-red-700" },
+  recording: { label: "レコーディング中", color: "bg-red-100 text-red-700" },
   uploaded: { label: "処理待ち", color: "bg-muted text-muted-foreground" },
   transcribing: { label: "文字起こし中", color: "bg-blue-100 text-blue-700" },
   summarizing: { label: "議事録を作成中", color: "bg-blue-100 text-blue-700" },

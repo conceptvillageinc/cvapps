@@ -108,7 +108,7 @@ const WRITABLE_COLUMNS = {
   meetings: [
     'title', 'held_at', 'meeting_type', 'client_id', 'client_name', 'project_id', 'estimate_id', 'participants',
     'audio_path', 'audio_duration_sec', 'audio_size', 'source', 'status', 'error_message',
-    'transcript', 'summary', 'checkpoints', 'finalized_at', 'created_by', 'estimate_conditions',
+    'transcript', 'summary', 'checkpoints', 'finalized_at', 'created_by', 'estimate_conditions', 'recording_heartbeat_at',
   ],
   meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
   meeting_checklists: ['meeting_type', 'key', 'label', 'sort_order', 'is_active'],

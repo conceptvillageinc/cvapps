@@ -66,6 +66,16 @@ export function RecordingProvider({ children }) {
   const buzzedRef = useRef(false);
   const onFinishRef = useRef(null);
   const stateRef = useRef("idle");
+  const heartbeatRef = useRef(null);
+
+  // 録音中の合図: 1 分ごとに meetings.recording_heartbeat_at を更新する（一覧の「レコーディング中」の帯に使う）
+  const beat = async () => {
+    const id = sessionRef.current?.meetingId;
+    if (!id) return;
+    try { await db.entities.Meeting.update(id, { recording_heartbeat_at: new Date().toISOString() }); } catch { /* 合図が送れなくても録音は続ける */ }
+  };
+  const startHeartbeat = () => { clearInterval(heartbeatRef.current); beat(); heartbeatRef.current = setInterval(beat, 60 * 1000); };
+  const stopHeartbeat = () => { clearInterval(heartbeatRef.current); heartbeatRef.current = null; };
   const setStateBoth = (s) => { stateRef.current = s; setState(s); };
 
   const requestWakeLock = useCallback(async () => {
@@ -227,6 +237,7 @@ export function RecordingProvider({ children }) {
       startTicker();
       await requestWakeLock();
       setStateBoth("recording");
+      startHeartbeat();
       return true;
     } catch (err) {
       sessionRef.current = null;
@@ -264,8 +275,9 @@ export function RecordingProvider({ children }) {
     releaseHardware();
     await Promise.all(uploadsRef.current);
     const totalSec = elapsedRef.current;
+    stopHeartbeat();
     try {
-      await db.entities.Meeting.update(s.meetingId, { status: "uploaded", audio_duration_sec: Math.round((Number(s.baseDuration) || 0) + totalSec) });
+      await db.entities.Meeting.update(s.meetingId, { status: "uploaded", audio_duration_sec: Math.round((Number(s.baseDuration) || 0) + totalSec), recording_heartbeat_at: null });
     } catch (err) {
       toast.error("録音の保存に失敗しました: " + err.message);
     }

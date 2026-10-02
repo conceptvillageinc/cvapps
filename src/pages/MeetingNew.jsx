@@ -13,6 +13,9 @@ import { ArrowLeft, Mic, FileUp, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
 import ClientFormDialog from "@/components/clients/ClientFormDialog";
+import LiveRecordingBanner from "@/components/meetings/LiveRecordingBanner";
+import { useLiveRecordings } from "@/lib/liveRecordings";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 /**
  * 新しい議事録: 基本情報 → 録音（主）／音声ファイル（補助）→ 処理へ
@@ -73,7 +76,27 @@ export default function MeetingNew() {
     };
   };
 
+  // ほかのメンバーが録音中なら、録音を始める前に確認する（同じ打ち合わせなら合流して録音しない）
+  const { live } = useLiveRecordings();
+  const others = live.filter((m) => (m.created_by || "") !== (user?.full_name || user?.email || ""));
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const sameAsInput = (m) => (form.project_id && m.project_id === form.project_id) || (form.client_name && form.client_name !== INTERNAL_CLIENT && m.client_name === form.client_name);
+  const onRecordClick = () => { if (others.length > 0) setConfirmOpen(true); else startRecording(); };
+  const joinLive = async (m) => {
+    const me = user?.full_name || user?.email || "";
+    const participants = Array.isArray(m.participants) ? m.participants : [];
+    try {
+      if (me && !participants.includes(me)) await db.entities.Meeting.update(m.id, { participants: [...participants, me] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast.success(`「${m.title || "議事録"}」に出席者として加わりました（録音は始めません）`);
+      navigate(`/meetings/${m.id}`);
+    } catch (err) {
+      toast.error("加われませんでした: " + err.message);
+    }
+  };
+
   const startRecording = async () => {
+    setConfirmOpen(false);
     setCreating(true);
     try {
       const m = await db.entities.Meeting.create(buildPayload("record"));
@@ -126,6 +149,10 @@ export default function MeetingNew() {
           <p className="text-xs text-muted-foreground">{mode === "record" ? "録音中は画面をロックせず、このタブを開いたままにしてください" : "基本情報を入れて、録音するか音声ファイルを選びます"}</p>
         </div>
       </div>
+
+      {mode !== "record" && (
+        <LiveRecordingBanner highlight={{ client_name: form.client_name !== INTERNAL_CLIENT ? form.client_name : "", project_id: form.project_id }} />
+      )}
 
       {mode !== "record" && (
         <div className="rounded-xl border bg-card p-4 space-y-3">
@@ -190,7 +217,7 @@ export default function MeetingNew() {
 
       {mode === null && (
         <div className="space-y-3">
-          <Button onClick={startRecording} disabled={creating} className="w-full h-14 text-base gap-2 bg-red-600 hover:bg-red-700">
+          <Button onClick={onRecordClick} disabled={creating} className="w-full h-14 text-base gap-2 bg-red-600 hover:bg-red-700">
             {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mic className="w-5 h-5" />} 録音する
           </Button>
           <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac" className="hidden" onChange={onFile} />
@@ -200,6 +227,32 @@ export default function MeetingNew() {
           <p className="text-[11px] text-muted-foreground">録音は 5 分ごとに保存されるので、途中で切れてもそれまでの分は残ります。音声ファイルは 200MB まで（60 分で 30〜60MB が目安。Wi-Fi 推奨）。</p>
         </div>
       )}
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Mic className="w-4 h-4 text-red-600" /> ほかのメンバーが録音中です</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>同じ打ち合わせなら録音は 1 本で十分です。合流すると、その議事録の出席者に加わります。</p>
+                <div className="space-y-1.5">
+                  {others.map((m) => (
+                    <div key={m.id} className={`rounded-md border px-3 py-2 ${sameAsInput(m) ? "border-red-400 bg-red-50" : "border-border"}`}>
+                      <p className="text-sm font-semibold text-foreground">{m.created_by || "メンバー"} が「{m.title || "議事録"}」を録音中{sameAsInput(m) && <span className="ml-2 text-[11px] text-red-700 font-semibold">いま入力している案件・クライアントと同じ</span>}</p>
+                      <p className="text-[11px] text-muted-foreground">{[m.client_name, (m.participants || []).length ? `出席: ${m.participants.join("、")}` : null].filter(Boolean).join(" ｜ ")}</p>
+                      <Button type="button" size="sm" className="mt-1.5 h-8 text-xs gap-1" onClick={() => joinLive(m)}><UserPlus className="w-3.5 h-3.5" /> 同じ打ち合わせなので合流する（録音しない）</Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>やめる</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={startRecording}>別の打ち合わせなので録音する</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ClientFormDialog
         open={clientDialogOpen}

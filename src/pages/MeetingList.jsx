@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Mic, Plus, Search, Loader2, Smartphone } from "lucide-react";
 import { MEETING_STATUS, PROCESSING, useMeetingSettings, fmtClock } from "@/lib/meetings";
+import { isLiveRecording } from "@/lib/liveRecordings";
+import LiveRecordingBanner from "@/components/meetings/LiveRecordingBanner";
 
 /** 議事録一覧 */
 export default function MeetingList() {
@@ -65,6 +67,8 @@ export default function MeetingList() {
         <Button onClick={() => navigate("/meetings/new")} className="gap-1.5 shrink-0"><Plus className="w-4 h-4" /> 新しい議事録</Button>
       </div>
 
+      <LiveRecordingBanner />
+
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="タイトル・クライアント・案件・本文で検索" className="pl-9" />
@@ -96,7 +100,11 @@ export default function MeetingList() {
                           {m.client_name || <span className="text-muted-foreground">クライアント未設定</span>}
                           {projectOf(m.project_id) && <span className="font-normal text-muted-foreground">　｜　<span className="font-mono text-[10px]">{projectOf(m.project_id).project_number}</span> {projectOf(m.project_id).name}</span>}
                         </p>
-                        <Badge className={`text-[9px] shrink-0 ${st.color} hover:${st.color}`}>{PROCESSING.has(m.status) ? <span className="inline-flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> {st.label}</span> : st.label}</Badge>
+                        <Badge className={`text-[9px] shrink-0 ${isLiveRecording(m) ? "bg-red-600 text-white hover:bg-red-600" : st.color} hover:${st.color}`}>
+                          {PROCESSING.has(m.status) ? <span className="inline-flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> {st.label}</span>
+                            : isLiveRecording(m) ? <span className="inline-flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> レコーディング中{m.created_by ? `（${m.created_by}）` : ""}</span>
+                            : m.status === "recording" ? "録音が途中" : st.label}
+                        </Badge>
                       </div>
                       <p className="text-xs truncate">{m.title || <span className="text-muted-foreground">（タイトルなし）</span>}</p>
                       <p className="text-[11px] text-muted-foreground truncate">
