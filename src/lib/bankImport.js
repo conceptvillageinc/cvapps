@@ -15,7 +15,7 @@ export async function decodeCsv(file) {
   }
 }
 
-function parseCsvText(text) {
+export function parseCsvText(text) {
   const rows = []; let row = []; let field = ""; let inQ = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];

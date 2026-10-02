@@ -137,7 +137,7 @@ function TargetsDialog({ open, onOpenChange, fiscalYear, months, targets, onSave
   const rowsDef = [
     ["sales", "売上目標"], ["purchase", "仕入目標"], ["gross_jump", "目標粗利（ジャンプ）"], ["gross_must", "必達粗利"],
   ];
-  const actualDef = [["actual_purchase", "実績 仕入（空欄=銀行明細の出金）"], ["actual_other_cost", "実績 その他原価（クレカ等）"]];
+  const actualDef = [["actual_purchase", "実績 仕入（空欄=支払い先まとめ。無い月は銀行明細の出金）"], ["actual_other_cost", "実績 その他原価（空欄=カード利用明細）"]];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -198,7 +198,7 @@ function TargetsDialog({ open, onOpenChange, fiscalYear, months, targets, onSave
 }
 
 export default function SalesReport() {
-  const { fiscalYearStartMonth, grossMarginTarget } = useSystemSettings();
+  const { fiscalYearStartMonth, grossMarginTarget, payablesMonthMode } = useSystemSettings();
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
   const [chart, setChart] = useState("sales"); // sales | gross
@@ -215,12 +215,14 @@ export default function SalesReport() {
   const { data: projects = [] } = useQuery({ queryKey: ["projects", "all"], queryFn: () => db.entities.Project.list("-registered_at") });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "all"], queryFn: () => db.entities.Invoice.list("-invoice_date") });
   const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000) });
+  const { data: payables = [] } = useQuery({ queryKey: ["payables", "all"], queryFn: () => db.entities.Payable.listAll("pay_month"), retry: false });
+  const { data: cardCharges = [] } = useQuery({ queryKey: ["cardCharges", "all"], queryFn: () => db.entities.CardCharge.listAll("charged_at"), retry: false });
   const { data: targetRows = [], isLoading } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list() });
   const targets = targetRows.find((t) => Number(t.fiscal_year) === fy) || null;
 
   const report = useMemo(
-    () => buildSalesReport({ fiscalYear: fy, startMonth: fiscalYearStartMonth, projects, invoices, bankTxs, targets, marginTarget: grossMarginTarget }),
-    [fy, fiscalYearStartMonth, projects, invoices, bankTxs, targets, grossMarginTarget],
+    () => buildSalesReport({ fiscalYear: fy, startMonth: fiscalYearStartMonth, projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets, marginTarget: grossMarginTarget }),
+    [fy, fiscalYearStartMonth, projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets, grossMarginTarget],
   );
   // 保存形式: { scenarios: [{ id, name, values: { sales_a:[12], ... }, updated_at, updated_by }], active_id }
   // （最初の版は値を直接持っていたので、その形は「パターン1」として読み替える）
@@ -571,7 +573,7 @@ export default function SalesReport() {
         </CardContent>
       </Card>
 
-      <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Pencil className="w-3 h-3" /> 実績の仕入は銀行明細の出金（入金確認で取り込んだもの）を使います。クレジットカード払いなどは「目標を編集」の「実績 その他原価」に月ごとに入力してください</p>
+      <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Pencil className="w-3 h-3" /> 実績の調達（仕入）は「支払い先まとめ」の合計（税込→税抜、{payablesMonthMode === "same" ? "支払月" : "支払月の前月＝請求月"}に計上）、その他原価は「カード利用明細」の合計（税抜）を使います。支払い先まとめが無い月は銀行明細の出金。「目標を編集」で月ごとに手入力すればそちらが優先です</p>
 
       <TargetsDialog open={targetsOpen} onOpenChange={setTargetsOpen} fiscalYear={fy} months={months} targets={targets} />
     </div>

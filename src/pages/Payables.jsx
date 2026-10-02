@@ -8,8 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { HandCoins, Upload, Download, Plus, Trash2, Loader2, Link2, ClipboardPaste, FileUp, Users, ListChecks, ArrowUp, ArrowDown, FileText, Paperclip } from "lucide-react";
+import { HandCoins, Upload, Download, Plus, Trash2, Loader2, Link2, ClipboardPaste, FileUp, Users, ListChecks, ArrowUp, ArrowDown, FileText, Paperclip, CreditCard } from "lucide-react";
 import InvoiceImportDialog from "@/components/payables/InvoiceImportDialog";
+import CardChargesTab from "@/components/payables/CardChargesTab";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import {
   PAY_ENTITIES, parsePayableSheet, rowTotal, sumPayables, downloadPayablesCsv, thisMonth, monthLabel, textToGrid, toAmount, rowsToInvoices, downloadInvoicesCsv,
 } from "@/lib/payables";
@@ -25,7 +27,7 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 export default function Payables() {
   const queryClient = useQueryClient();
   const [month, setMonth] = useState(thisMonth());
-  const [tab, setTab] = useState("list"); // list | payees
+  const [tab, setTab] = useState("list"); // list | card | payees
   const [importOpen, setImportOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -69,22 +71,32 @@ export default function Payables() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><HandCoins className="w-6 h-6" /> 支払い先まとめ</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">届いた請求書をスキャンして読み込み、翌月末に支払う一覧（支払い先ごと・会社別の振込金額）にまとめます。CSV に出せます</p>
+          <p className="text-sm text-muted-foreground mt-0.5">届いた請求書をスキャンして読み込み、翌月末に支払う一覧（支払い先ごと・会社別の振込金額）にまとめます。カードの利用明細も月ごとに保持し、どちらも売上粗利管理表の実績に入ります</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant={tab === "list" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("list")}><ListChecks className="w-4 h-4" /> 支払い一覧</Button>
+          <Button variant={tab === "card" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("card")}><CreditCard className="w-4 h-4" /> カード利用明細</Button>
           <Button variant={tab === "payees" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("payees")}><Users className="w-4 h-4" /> 支払い先マスタ（{payees.length}）</Button>
         </div>
       </div>
 
       {tab === "payees" ? (
         <PayeeMaster payees={payees} onChanged={invalidate} />
+      ) : tab === "card" ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Label className="text-xs">利用月</Label>
+            <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 w-40" />
+          </div>
+          <CardChargesTab month={month} />
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs">支払月（月末払）</Label>
             <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 w-40" />
             <span className="text-xs text-muted-foreground">{monthLabel(month)}</span>
+            <CostMonthSetting />
             <div className="flex-1" />
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAddOpen(true)}><Plus className="w-4 h-4" /> 行を追加</Button>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setImportOpen(true)}><Upload className="w-4 h-4" /> シートから取込</Button>
@@ -190,6 +202,30 @@ function PayableRow({ row, onChange, onRemove }) {
       <td className="px-3 py-1.5"><AttachmentLinks paths={row.file_paths} name={row.payee_name} /></td>
       <td className="px-1 py-1.5"><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></Button></td>
     </tr>
+  );
+}
+
+/** 売上粗利管理表の「実績 調達（仕入）」に、支払月をどの月として数えるか */
+function CostMonthSetting() {
+  const { settings, payablesMonthMode } = useSystemSettings();
+  const queryClient = useQueryClient();
+  const row = settings.find((x) => x.setting_key === "payables_cost_month");
+  const save = useMutation({
+    mutationFn: async (value) => {
+      const data = { setting_key: "payables_cost_month", setting_value: value, description: "支払い先まとめを売上粗利管理表のどの月に数えるか（prev=支払月の前月 / same=支払月）" };
+      if (row) await db.entities.SystemSettings.update(row.id, data); else await db.entities.SystemSettings.create(data);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["settings"] }); toast.success("売上粗利管理表への反映のしかたを保存しました"); },
+    onError: (e) => toast.error("保存できませんでした: " + e.message),
+  });
+  return (
+    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground ml-2">
+      売上粗利管理表の仕入に数える月:
+      <select value={payablesMonthMode} onChange={(e) => save.mutate(e.target.value)} className="h-7 rounded-md border bg-background px-1 text-[11px] text-foreground" aria-label="仕入に数える月">
+        <option value="prev">支払月の前月（請求月）</option>
+        <option value="same">支払月</option>
+      </select>
+    </label>
   );
 }
 

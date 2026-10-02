@@ -23,6 +23,7 @@ const TABLES = {
   Meeting: 'meetings',
   Payee: 'payees',
   Payable: 'payables',
+  CardCharge: 'card_charges',
   MeetingSegment: 'meeting_segments',
   MeetingChecklist: 'meeting_checklists',
   EmailLog: 'email_logs',
@@ -115,6 +116,7 @@ const WRITABLE_COLUMNS = {
   meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
   payees: ['name', 'bank_info', 'notes', 'sort_order', 'is_active'],
   payables: ['pay_month', 'payee_id', 'payee_name', 'bank_info', 'amount_coolagri', 'amount_cvdigital', 'amount_cv', 'paid', 'memo', 'sort_order', 'due_date', 'file_paths', 'invoices'],
+  card_charges: ['charged_at', 'charge_month', 'merchant', 'amount', 'holder', 'card_label', 'memo', 'entity', 'source', 'fingerprint'],
   meeting_checklists: ['meeting_type', 'key', 'label', 'sort_order', 'is_active'],
   design_fee_masters: [
     'category', 'category_order', 'name', 'detail', 'hours', 'unit_price', 'amount',
