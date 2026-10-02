@@ -71,11 +71,11 @@ export default function Payables() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><HandCoins className="w-6 h-6" /> 支払い先まとめ</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">届いた請求書をスキャンして読み込み、翌月末に支払う一覧（支払い先ごと・会社別の振込金額）にまとめます。カードの利用明細も月ごとに保持し、どちらも売上粗利管理表の実績に入ります</p>
+          <p className="text-sm text-muted-foreground mt-0.5">届いた請求書をスキャンして読み込み、翌月末に支払う一覧（支払い先ごと・会社別の振込金額）にまとめます。カードの利用明細も月ごとに保持します。CV 分は売上粗利管理表の実績に入ります（cv digital・Cool Agri 分は振込の情報としてだけ持ちます）</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant={tab === "list" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("list")}><ListChecks className="w-4 h-4" /> 支払い一覧</Button>
-          <Button variant={tab === "card" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("card")}><CreditCard className="w-4 h-4" /> カード利用明細</Button>
+          <Button variant={tab === "card" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("card")}><CreditCard className="w-4 h-4" /> カード利用明細まとめ</Button>
           <Button variant={tab === "payees" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("payees")}><Users className="w-4 h-4" /> 支払い先マスタ（{payees.length}）</Button>
         </div>
       </div>
@@ -220,7 +220,7 @@ function CostMonthSetting() {
   });
   return (
     <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground ml-2">
-      売上粗利管理表の仕入に数える月:
+      売上粗利管理表（CV 分）の仕入に数える月:
       <select value={payablesMonthMode} onChange={(e) => save.mutate(e.target.value)} className="h-7 rounded-md border bg-background px-1 text-[11px] text-foreground" aria-label="仕入に数える月">
         <option value="prev">支払月の前月（請求月）</option>
         <option value="same">支払月</option>

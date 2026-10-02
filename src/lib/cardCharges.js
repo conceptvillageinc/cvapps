@@ -110,4 +110,4 @@ export function chargesToCsv(list, month) {
   lines.push(["", "", "合計", t.total, "", "", `税抜 ${t.total_ex_tax}`].map(csvCell).join(","));
   return "﻿" + lines.join("\r\n") + "\r\n";
 }
-export function downloadChargesCsv(list, month) { downloadText(chargesToCsv(list, month), `カード利用明細_${month}.csv`); }
+export function downloadChargesCsv(list, month) { downloadText(chargesToCsv(list, month), `カード利用明細まとめ_${month}.csv`); }

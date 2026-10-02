@@ -15,7 +15,7 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const entityLabel = (code) => BILL_TO.find((b) => b.code === code)?.label || code;
 
 /**
- * カード利用明細（月ごと）
+ * カード利用明細まとめ（月ごと）
  *   マネーフォワード ビジネスカードなどの利用明細 CSV を取り込む。列は見出しから自動で当て、
  *   合わなければ手で選べる。同じ明細（利用日・利用先・金額・利用者が同じ）は二重に入らない。
  */
@@ -44,7 +44,7 @@ export default function CardChargesTab({ month }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground">利用日がこの月の明細。売上粗利管理表の「実績 その他原価」（税抜）に入ります</span>
+        <span className="text-xs text-muted-foreground">利用日がこの月の明細。CV のカード分だけが売上粗利管理表の「実績 その他原価」（税抜）に入ります</span>
         <div className="flex-1" />
         <Button size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}><FileUp className="w-4 h-4" /> 利用明細 CSV を取り込む</Button>
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadChargesCsv(sorted, month)} disabled={sorted.length === 0}><Download className="w-4 h-4" /> CSV出力</Button>
@@ -65,7 +65,7 @@ export default function CardChargesTab({ month }) {
             <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : sorted.length === 0 ? (
             <div className="text-center py-14 text-sm text-muted-foreground">
-              <p>この月のカード利用明細はまだありません。</p>
+              <p>この月のカード利用明細まとめはまだありません。</p>
               <p className="text-xs mt-1">マネーフォワード ビジネスカードの管理画面から利用明細を CSV で書き出し、「利用明細 CSV を取り込む」で読み込んでください。</p>
             </div>
           ) : (

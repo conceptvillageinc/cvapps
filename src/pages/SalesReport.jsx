@@ -137,7 +137,7 @@ function TargetsDialog({ open, onOpenChange, fiscalYear, months, targets, onSave
   const rowsDef = [
     ["sales", "売上目標"], ["purchase", "仕入目標"], ["gross_jump", "目標粗利（ジャンプ）"], ["gross_must", "必達粗利"],
   ];
-  const actualDef = [["actual_purchase", "実績 仕入（空欄=支払い先まとめ。無い月は銀行明細の出金）"], ["actual_other_cost", "実績 その他原価（空欄=カード利用明細）"]];
+  const actualDef = [["actual_purchase", "実績 仕入（空欄=支払い先まとめの CV 分。無い月は銀行明細の出金）"], ["actual_other_cost", "実績 その他原価（空欄=カード利用明細まとめの CV 分）"]];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -573,7 +573,7 @@ export default function SalesReport() {
         </CardContent>
       </Card>
 
-      <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Pencil className="w-3 h-3" /> 実績の調達（仕入）は「支払い先まとめ」の合計（税込→税抜、{payablesMonthMode === "same" ? "支払月" : "支払月の前月＝請求月"}に計上）、その他原価は「カード利用明細」の合計（税抜）を使います。支払い先まとめが無い月は銀行明細の出金。「目標を編集」で月ごとに手入力すればそちらが優先です</p>
+      <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Pencil className="w-3 h-3" /> 実績の調達（仕入）は「支払い先まとめ」の CV 分（税込→税抜、{payablesMonthMode === "same" ? "支払月" : "支払月の前月＝請求月"}に計上）、その他原価は「カード利用明細まとめ」の CV 分（税抜）を使います。cv digital・Cool Agri 分は数えません。支払い先まとめが無い月は銀行明細の出金。「目標を編集」で月ごとに手入力すればそちらが優先です</p>
 
       <TargetsDialog open={targetsOpen} onOpenChange={setTargetsOpen} fiscalYear={fy} months={months} targets={targets} />
     </div>

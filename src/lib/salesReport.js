@@ -7,8 +7,9 @@
 //   実績     売上（請求） / 調達（仕入） / その他原価 / 粗利 / 粗利率 / 必要売上 / 必要粗利×3
 //   計       売上 / 仕入 / 粗利 / 粗利率 / 必要売上 / 必要粗利×3
 //
-// 見込は案件の見込から、実績は請求書（税抜）と、支払い先まとめ（税込→税抜）・カード利用明細
-// （税込→税抜）から作る。支払い先まとめが無い月は銀行明細の出金、手入力があればそれが優先。
+// 見込は案件の見込から、実績は請求書（税抜）と、支払い先まとめの CV 分（税込→税抜）・カード利用明細
+// まとめの CV 分（税込→税抜）から作る。cv digital・Cool Agri 分は数えない（運営事務局として振込の
+// 情報を持つだけ）。支払い先まとめが無い月は銀行明細の出金、手入力があればそれが優先。
 // 請求済みの案件は、見込から請求済み分を差し引く（二重計上を避ける）。
 // ============================================================================
 
@@ -66,8 +67,8 @@ export function emptyTargets(fiscalYear) {
  * @param {object[]} p.projects   全案件（見込に使う）
  * @param {object[]} p.invoices   全請求書（実績と、案件の請求済み額に使う）
  * @param {object[]} p.bankTxs    銀行明細（支払い先まとめが無い月の仕入の実績に使う）
- * @param {object[]} [p.payables]  支払い先まとめの行（税込。仕入の実績）
- * @param {object[]} [p.cardCharges] カード利用明細（税込。その他原価の実績）
+ * @param {object[]} [p.payables]  支払い先まとめの行（CV 分の税込金額だけを仕入の実績に使う）
+ * @param {object[]} [p.cardCharges] カード利用明細まとめ（entity が cv のものだけ。税込。その他原価の実績）
  * @param {string}  [p.payablesMonthMode] 支払月をどの月に数えるか: "prev"（支払月の前月＝請求月）/ "same"（支払月）
  * @param {object} p.targets      fiscal_targets の行（無ければ emptyTargets）
  * @param {number} p.marginTarget 粗利率の目標（0.8）
@@ -105,20 +106,22 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     if (idx.has(k)) bankOut[idx.get(k)] += n(tx.amount_out);
   }
 
-  // 支払い先まとめ（税込 → 税抜）。支払月の前月（請求月）か支払月に数える
+  // 支払い先まとめの CV 分（税込 → 税抜）。支払月の前月（請求月）か支払月に数える
   const payablesOut = Array(12).fill(0);
   const payablesCount = Array(12).fill(0);
   for (const r of payables || []) {
     const k = payablesCostMonth(r.pay_month, payablesMonthMode);
     if (!idx.has(k)) continue;
-    const total = n(r.amount_cv) + n(r.amount_cvdigital) + n(r.amount_coolagri);
-    payablesOut[idx.get(k)] += total / 1.1;
+    const cv = n(r.amount_cv);
+    if (!cv) continue;
+    payablesOut[idx.get(k)] += cv / 1.1;
     payablesCount[idx.get(k)]++;
   }
-  // カード利用明細（税込 → 税抜）。利用月に数える
+  // カード利用明細まとめの CV 分（税込 → 税抜）。利用月に数える
   const cardOut = Array(12).fill(0);
   const cardCount = Array(12).fill(0);
   for (const c of cardCharges || []) {
+    if ((c.entity || "cv") !== "cv") continue;
     const k = c.charge_month || monthKey(c.charged_at);
     if (!idx.has(k)) continue;
     cardOut[idx.get(k)] += n(c.amount) / 1.1;
