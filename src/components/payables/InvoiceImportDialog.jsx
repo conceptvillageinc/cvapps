@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { FileUp, Loader2, Upload, CheckCircle2, AlertTriangle, FileText, X } from "lucide-react";
+import { FileUp, Loader2, Upload, CheckCircle2, AlertTriangle, FileText, X, Download } from "lucide-react";
 import {
-  PAY_ENTITIES, BILL_TO, extractInvoices, invoicesToRows, mergePayableRow, monthLabel, nextMonth, thisMonth, toAmount,
+  PAY_ENTITIES, BILL_TO, extractInvoices, invoicesToRows, mergePayableRow, monthLabel, nextMonth, thisMonth, toAmount, downloadInvoicesCsv,
 } from "@/lib/payables";
 
 const MAX_FILES = 30;
@@ -173,6 +173,7 @@ export default function InvoiceImportDialog({ open, onOpenChange, month, existin
                 <span>取り込む {included.length} 通 ／ 合計 {yen(total)}</span>
                 {problems.length > 0 && <span className="text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> 会社名・金額・宛先を確認してください（{problems.length} 件）</span>}
                 <div className="flex-1" />
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => downloadInvoicesCsv(included, payMonth)} disabled={included.length === 0}><Download className="w-3.5 h-3.5" /> 読み取り結果を CSV に出す</Button>
                 <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={reset} disabled={reading || saving}>すべて消す</Button>
               </div>
               <div className="max-h-[40vh] overflow-auto">

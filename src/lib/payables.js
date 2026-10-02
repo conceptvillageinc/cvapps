@@ -134,7 +134,7 @@ export function textToGrid(text) {
 export const BILL_TO = [
   { code: "coolagri", key: "amount_coolagri", label: "Cool Agri", names: "Cool Agri／クールアグリ／株式会社Cool Agri／株式会社クールアグリ" },
   { code: "cvdigital", key: "amount_cvdigital", label: "CV digital", names: "CV digital／CVデジタル／株式会社CV digital" },
-  { code: "cv", key: "amount_cv", label: "CV", names: "株式会社コンセプト・ヴィレッジ／コンセプトヴィレッジ／Concept Village／CV" },
+  { code: "cv", key: "amount_cv", label: "CV", names: "株式会社コンセプト・ヴィレッジ／コンセプトヴィレッジ／concept-village／Concept Village／CONCEPT VILLAGE／CV" },
 ];
 export const billToKey = (code) => BILL_TO.find((b) => b.code === code)?.key || "";
 
@@ -173,6 +173,7 @@ export const INVOICE_PROMPT = `添付したファイル（スキャンした請�
   ・coolagri: ${BILL_TO[0].names}
   ・cvdigital: ${BILL_TO[1].names}
   ・cv: ${BILL_TO[2].names}
+  宛先は英語表記（concept-village のようにハイフン付きや小文字）や「御中」「様」付きでも同じ会社です。
   宛先が上のどれでもない・読めないときは unknown にしてください。
 - 支払い先（payee_name）は請求書を発行した側です。当社グループ 3 社の名前を payee_name にしないでください。
 
@@ -245,12 +246,39 @@ export function invoicesToRows(invoices) {
     if (!row.bank_info && inv.bank_info) row.bank_info = inv.bank_info;
     if (inv.due_date && (!row.due_date || inv.due_date < row.due_date)) row.due_date = inv.due_date;
     if (inv.file_path && !row.file_paths.includes(inv.file_path)) row.file_paths.push(inv.file_path);
-    row.invoices.push({ file_path: inv.file_path, bill_to: inv.bill_to || "cv", amount: inv.amount || 0, invoice_date: inv.invoice_date, due_date: inv.due_date, invoice_no: inv.invoice_no, subject: inv.subject });
+    row.invoices.push({ file_path: inv.file_path, file_name: inv.file_name || "", bill_to: inv.bill_to || "cv", amount: inv.amount || 0, invoice_date: inv.invoice_date, due_date: inv.due_date, invoice_no: inv.invoice_no, subject: inv.subject });
   }
   for (const row of byName.values()) {
     row.memo = row.invoices.length === 1 ? [row.invoices[0].invoice_no ? `No.${row.invoices[0].invoice_no}` : "", row.invoices[0].subject].filter(Boolean).join(" ") : row.invoices.map((v) => invoiceLabel(v)).join(" ／ ");
   }
   return [...byName.values()];
+}
+
+/** 請求書 1 通ごとの CSV（読み取り結果の確認用。支払い先まとめの CSV とは別） */
+export function invoicesToCsv(list, payMonth = "") {
+  const head = ["支払月", "支払い先（発行元）", "宛先（支払元）", "金額（税込）", "請求日", "支払期限", "請求書No.", "件名", "振込先情報", "ファイル名"];
+  const lines = [head.join(",")];
+  for (const v of list) {
+    const b = BILL_TO.find((x) => x.code === v.bill_to);
+    lines.push([v.pay_month || payMonth, v.payee_name || "", b ? b.label : "（不明）", Number(v.amount) || 0, v.invoice_date || "", v.due_date || "", v.invoice_no || "", v.subject || "", v.bank_info || "", v.file_name || ""].map(csvCell).join(","));
+  }
+  const total = list.reduce((s, v) => s + (Number(v.amount) || 0), 0);
+  lines.push(["", "合計", `${list.length} 通`, total, "", "", "", "", "", ""].map(csvCell).join(","));
+  return "﻿" + lines.join("\r\n") + "\r\n";
+}
+export function downloadInvoicesCsv(list, payMonth) {
+  downloadText(invoicesToCsv(list, payMonth), `請求書読み取り_${payMonth || thisMonth()}.csv`);
+}
+
+/** 一覧の行（invoices 列）から請求書 1 通ごとの一覧に戻す */
+export function rowsToInvoices(rows) {
+  const out = [];
+  for (const r of rows) {
+    for (const v of (Array.isArray(r.invoices) ? r.invoices : [])) {
+      out.push({ ...v, pay_month: r.pay_month, payee_name: r.payee_name, bank_info: r.bank_info || "", file_name: v.file_name || (v.file_path ? String(v.file_path).split("/").pop() : "") });
+    }
+  }
+  return out;
 }
 
 /** 既存の行（同じ月・同じ支払い先）に、読み取った行を足し込む */

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { HandCoins, Upload, Download, Plus, Trash2, Loader2, Link2, ClipboardPaste, FileUp, Users, ListChecks, ArrowUp, ArrowDown, FileText, Paperclip } from "lucide-react";
 import InvoiceImportDialog from "@/components/payables/InvoiceImportDialog";
 import {
-  PAY_ENTITIES, parsePayableSheet, rowTotal, sumPayables, downloadPayablesCsv, thisMonth, monthLabel, textToGrid, toAmount,
+  PAY_ENTITIES, parsePayableSheet, rowTotal, sumPayables, downloadPayablesCsv, thisMonth, monthLabel, textToGrid, toAmount, rowsToInvoices, downloadInvoicesCsv,
 } from "@/lib/payables";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
@@ -62,6 +62,7 @@ export default function Payables() {
 
   const sorted = useMemo(() => [...rows].sort((a, b) => (a.sort_order - b.sort_order) || String(a.payee_name).localeCompare(String(b.payee_name), "ja")), [rows]);
   const totals = useMemo(() => sumPayables(sorted), [sorted]);
+  const invoiceList = useMemo(() => rowsToInvoices(sorted), [sorted]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
@@ -89,6 +90,7 @@ export default function Payables() {
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setImportOpen(true)}><Upload className="w-4 h-4" /> シートから取込</Button>
             <Button size="sm" className="gap-1.5" onClick={() => setInvoiceOpen(true)}><FileText className="w-4 h-4" /> 請求書を読み込む</Button>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadPayablesCsv(sorted, month)} disabled={sorted.length === 0}><Download className="w-4 h-4" /> CSV出力</Button>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadInvoicesCsv(invoiceList, month)} disabled={invoiceList.length === 0} title="読み取った請求書 1 通ごとの一覧"><Download className="w-4 h-4" /> 請求書ごとのCSV（{invoiceList.length}）</Button>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
