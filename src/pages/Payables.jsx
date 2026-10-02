@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { HandCoins, Upload, Download, Plus, Trash2, Loader2, Link2, ClipboardPaste, FileUp, Users, ListChecks, ArrowUp, ArrowDown } from "lucide-react";
+import { HandCoins, Upload, Download, Plus, Trash2, Loader2, Link2, ClipboardPaste, FileUp, Users, ListChecks, ArrowUp, ArrowDown, FileText, Paperclip } from "lucide-react";
+import InvoiceImportDialog from "@/components/payables/InvoiceImportDialog";
 import {
   PAY_ENTITIES, parsePayableSheet, rowTotal, sumPayables, downloadPayablesCsv, thisMonth, monthLabel, textToGrid, toAmount,
 } from "@/lib/payables";
@@ -17,14 +18,16 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
 /**
  * 支払い先まとめ
- *   月末に受領した請求書を「翌月末に支払う一覧」にまとめる。
- *   スプレッドシート（Google シートの URL／貼り付け／CSV ファイル）から取り込み、CSV に出力できる。
+ *   月末に受領した請求書をスキャンして読み込み、「翌月末に支払う一覧」（支払い先ごとに 1 行、
+ *   Cool Agri／CV digital／CV の 3 社それぞれの振込金額）にまとめる。CSV に出力できる。
+ *   既存のスプレッドシートから入れ直すための取り込みも残してある。
  */
 export default function Payables() {
   const queryClient = useQueryClient();
   const [month, setMonth] = useState(thisMonth());
   const [tab, setTab] = useState("list"); // list | payees
   const [importOpen, setImportOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
@@ -34,7 +37,10 @@ export default function Payables() {
   });
   const { data: payees = [] } = useQuery({ queryKey: ["payees"], queryFn: () => db.entities.Payee.list("sort_order"), retry: false });
 
-  const invalidate = () => { queryClient.invalidateQueries({ queryKey: ["payables"] }); queryClient.invalidateQueries({ queryKey: ["payees"] }); };
+  const invalidate = (toMonth) => {
+    queryClient.invalidateQueries({ queryKey: ["payables"] }); queryClient.invalidateQueries({ queryKey: ["payees"] });
+    if (typeof toMonth === "string" && /^\d{4}-\d{2}$/.test(toMonth)) setMonth(toMonth);
+  };
 
   const update = useMutation({
     mutationFn: ({ id, data }) => db.entities.Payable.update(id, data),
@@ -62,7 +68,7 @@ export default function Payables() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><HandCoins className="w-6 h-6" /> 支払い先まとめ</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">月末に受領した請求書を、翌月末に支払う一覧にまとめます。シートから取り込み、CSV に出せます</p>
+          <p className="text-sm text-muted-foreground mt-0.5">届いた請求書をスキャンして読み込み、翌月末に支払う一覧（支払い先ごと・会社別の振込金額）にまとめます。CSV に出せます</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant={tab === "list" ? "default" : "outline"} size="sm" className="gap-1.5" onClick={() => setTab("list")}><ListChecks className="w-4 h-4" /> 支払い一覧</Button>
@@ -81,7 +87,8 @@ export default function Payables() {
             <div className="flex-1" />
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAddOpen(true)}><Plus className="w-4 h-4" /> 行を追加</Button>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setImportOpen(true)}><Upload className="w-4 h-4" /> シートから取込</Button>
-            <Button size="sm" className="gap-1.5" onClick={() => downloadPayablesCsv(sorted, month)} disabled={sorted.length === 0}><Download className="w-4 h-4" /> CSV出力</Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setInvoiceOpen(true)}><FileText className="w-4 h-4" /> 請求書を読み込む</Button>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadPayablesCsv(sorted, month)} disabled={sorted.length === 0}><Download className="w-4 h-4" /> CSV出力</Button>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -99,7 +106,7 @@ export default function Payables() {
               ) : sorted.length === 0 ? (
                 <div className="text-center py-14 text-sm text-muted-foreground">
                   <p>{monthLabel(month)}の支払いはまだありません。</p>
-                  <p className="text-xs mt-1">「シートから取込」でスプレッドシートを読み込むか、「行を追加」で手で入れてください。</p>
+                  <p className="text-xs mt-1">「請求書を読み込む」でスキャンした請求書の PDF を読み込むか、「行を追加」で手で入れてください。</p>
                 </div>
               ) : (
                 <table className="w-full text-sm">
@@ -111,6 +118,7 @@ export default function Payables() {
                       {PAY_ENTITIES.map((e) => <th key={e.key} className="text-right px-3 py-2 w-32">{e.label}</th>)}
                       <th className="text-right px-3 py-2 w-32">合計（税込）</th>
                       <th className="text-left px-3 py-2 w-56">メモ</th>
+                      <th className="text-left px-3 py-2 w-16">請求書</th>
                       <th className="w-10"></th>
                     </tr>
                   </thead>
@@ -122,18 +130,19 @@ export default function Payables() {
                       <td className="px-3 py-2" colSpan={3}>合計（{totals.count} 件）</td>
                       {PAY_ENTITIES.map((e) => <td key={e.key} className="px-3 py-2 text-right tabular-nums">{yen(totals[e.key])}</td>)}
                       <td className="px-3 py-2 text-right tabular-nums">{yen(totals.total)}<span className="block text-[10px] text-muted-foreground font-normal">税抜 {yen(totals.total_ex_tax)}</span></td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tbody>
                 </table>
               )}
             </CardContent>
           </Card>
-          <p className="text-[11px] text-muted-foreground">金額は税込で入れます。欄を書き換えて枠の外をクリックすると保存されます。「済」にチェックすると支払済みです。</p>
+          <p className="text-[11px] text-muted-foreground">金額は税込です。欄を書き換えて枠の外をクリックすると保存されます。「済」にチェックすると支払済み。クリップのアイコンで読み込んだ請求書を開けます。</p>
         </>
       )}
 
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} month={month} existing={rows} payees={payees} onDone={invalidate} />
+      <InvoiceImportDialog open={invoiceOpen} onOpenChange={setInvoiceOpen} month={month} existing={rows} payees={payees} onDone={invalidate} />
       <AddRowDialog open={addOpen} onOpenChange={setAddOpen} month={month} payees={payees} nextOrder={sorted.length} onDone={invalidate} />
     </div>
   );
@@ -168,13 +177,35 @@ function PayableRow({ row, onChange, onRemove }) {
   return (
     <tr className={`border-b hover:bg-muted/30 ${row.paid ? "bg-emerald-50/50" : ""}`}>
       <td className="px-3 py-1.5"><input type="checkbox" checked={!!row.paid} onChange={(e) => onChange({ paid: e.target.checked })} className="w-4 h-4" aria-label={`${row.payee_name} 支払済`} /></td>
-      <td className={`px-3 py-1.5 font-medium ${row.paid ? "line-through text-muted-foreground" : ""}`}>{row.payee_name}</td>
+      <td className={`px-3 py-1.5 font-medium ${row.paid ? "line-through text-muted-foreground" : ""}`}>
+        {row.payee_name}
+        {row.due_date && <span className="block text-[10px] font-normal text-muted-foreground">期限 {row.due_date.replace(/-/g, "/")}</span>}
+      </td>
       <td className="px-3 py-1.5">{cell("bank_info", false)}</td>
       {PAY_ENTITIES.map((e) => <td key={e.key} className="px-3 py-1.5">{cell(e.key, true)}</td>)}
       <td className="px-3 py-1.5 text-right tabular-nums font-medium">{total ? yen(total) : <span className="text-muted-foreground">—</span>}</td>
       <td className="px-3 py-1.5">{cell("memo", false)}</td>
+      <td className="px-3 py-1.5"><AttachmentLinks paths={row.file_paths} name={row.payee_name} /></td>
       <td className="px-1 py-1.5"><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></Button></td>
     </tr>
+  );
+}
+
+/** 読み込んだ請求書（Storage の非公開ファイル）を署名付き URL で開く */
+function AttachmentLinks({ paths, name }) {
+  const list = Array.isArray(paths) ? paths.filter(Boolean) : [];
+  if (list.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
+  const openFile = async (p) => {
+    try { const url = await db.storage.signedUrl(p); if (url) window.open(url, "_blank", "noopener"); }
+    catch (e) { toast.error("請求書を開けませんでした: " + e.message); }
+  };
+  return (
+    <div className="flex items-center gap-0.5">
+      {list.map((p, i) => (
+        <Button key={p} variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={() => openFile(p)} aria-label={`${name} の請求書 ${i + 1}`} title={`請求書 ${i + 1} を開く`}><Paperclip className="w-3.5 h-3.5" /></Button>
+      ))}
+      {list.length > 1 && <span className="text-[10px] text-muted-foreground">{list.length}</span>}
+    </div>
   );
 }
 

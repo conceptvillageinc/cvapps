@@ -89,13 +89,13 @@ const csvCell = (v) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? 
 
 /** 支払月 1 か月分の CSV（UTF-8 BOM 付き） */
 export function payablesToCsv(rows, payMonth) {
-  const head = ["支払月", "会社名", "振込先情報", ...PAY_ENTITIES.map((e) => `${e.label} 振込金額（税込）`), "合計（税込）", "支払済", "メモ"];
+  const head = ["支払月", "会社名", "振込先情報", ...PAY_ENTITIES.map((e) => `${e.label} 振込金額（税込）`), "合計（税込）", "支払期限", "支払済", "メモ"];
   const lines = [head.join(",")];
   for (const r of rows) {
-    lines.push([payMonth, r.payee_name, r.bank_info || "", ...PAY_ENTITIES.map((e) => Number(r[e.key]) || 0), rowTotal(r), r.paid ? "済" : "", r.memo || ""].map(csvCell).join(","));
+    lines.push([payMonth, r.payee_name, r.bank_info || "", ...PAY_ENTITIES.map((e) => Number(r[e.key]) || 0), rowTotal(r), r.due_date || "", r.paid ? "済" : "", r.memo || ""].map(csvCell).join(","));
   }
   const t = sumPayables(rows);
-  lines.push(["", "合計", "", ...PAY_ENTITIES.map((e) => t[e.key]), t.total, "", `税抜 ${t.total_ex_tax}`].map(csvCell).join(","));
+  lines.push(["", "合計", "", ...PAY_ENTITIES.map((e) => t[e.key]), t.total, "", "", `税抜 ${t.total_ex_tax}`].map(csvCell).join(","));
   return "﻿" + lines.join("\r\n") + "\r\n";
 }
 
@@ -123,3 +123,147 @@ export function textToGrid(text) {
     return out;
   });
 }
+
+// ----------------------------------------------------------------------------
+// 請求書 PDF／画像の読み取り
+//   月末に届いた請求書をまとめてスキャンし、1 ファイル（複数ページ可）ずつ AI に読ませる。
+//   1 ファイルに複数の請求書が入っていてもよい（配列で返る）。
+// ----------------------------------------------------------------------------
+
+/** 宛先（請求書の「〜御中」）→ 支払元。読み取り結果の bill_to に入る値 */
+export const BILL_TO = [
+  { code: "coolagri", key: "amount_coolagri", label: "Cool Agri", names: "Cool Agri／クールアグリ／株式会社Cool Agri／株式会社クールアグリ" },
+  { code: "cvdigital", key: "amount_cvdigital", label: "CV digital", names: "CV digital／CVデジタル／株式会社CV digital" },
+  { code: "cv", key: "amount_cv", label: "CV", names: "株式会社コンセプト・ヴィレッジ／コンセプトヴィレッジ／Concept Village／CV" },
+];
+export const billToKey = (code) => BILL_TO.find((b) => b.code === code)?.key || "";
+
+export const INVOICE_SCHEMA = {
+  type: "object",
+  properties: {
+    invoices: {
+      type: "array",
+      description: "添付に含まれる請求書すべて。1 通の請求書が複数ページでも 1 件にまとめる。見積書・納品書・領収書は含めない",
+      items: {
+        type: "object",
+        properties: {
+          payee_name: { type: "string", description: "請求書を発行した会社名（支払い先）。ロゴ・社印・振込先欄の近くにある社名。「〜御中」の宛先は含めない。法人格は書いてあるとおり" },
+          bill_to: { type: "string", enum: ["coolagri", "cvdigital", "cv", "unknown"], description: "請求書の宛先（〜御中）がどの会社か。Cool Agri／クールアグリ→coolagri、CV digital／CVデジタル→cvdigital、株式会社コンセプト・ヴィレッジ／Concept Village→cv、判別できなければ unknown" },
+          bill_to_text: { type: "string", description: "宛先に書かれていた社名そのまま。無ければ空" },
+          amount: { type: "number", description: "請求金額の合計（税込）。「ご請求金額」「合計」など税込の総額。読み取れなければ 0" },
+          amount_ex_tax: { type: "number", description: "税抜金額。無ければ 0" },
+          tax: { type: "number", description: "消費税額。無ければ 0" },
+          invoice_date: { type: "string", description: "請求日（YYYY-MM-DD）。無ければ空" },
+          due_date: { type: "string", description: "支払期限（YYYY-MM-DD）。無ければ空" },
+          invoice_no: { type: "string", description: "請求書番号。無ければ空" },
+          subject: { type: "string", description: "件名・内容の要約（20 文字程度。例「9月分 チラシ印刷代」）" },
+          bank_info: { type: "string", description: "振込先（銀行名　支店名　種別　口座番号　口座名義）を 1 行で。無ければ空" },
+          pages: { type: "string", description: "この請求書が載っているページ（例「1-2」）。画像なら空" },
+        },
+      },
+    },
+    notes: { type: "string", description: "請求書以外の書類が混ざっている、金額が読みにくいなど、確認してほしいことがあれば 1〜2 行。無ければ空" },
+  },
+};
+
+export const INVOICE_PROMPT = `添付したファイル（スキャンした請求書の PDF または画像）に含まれる請求書を、1 通ずつ読み取って JSON で返してください。
+
+【前提】
+- 当社グループは 3 社あり、請求書の宛先（「〜御中」「〜様」）がどの会社宛かで支払元が決まります。
+  ・coolagri: ${BILL_TO[0].names}
+  ・cvdigital: ${BILL_TO[1].names}
+  ・cv: ${BILL_TO[2].names}
+  宛先が上のどれでもない・読めないときは unknown にしてください。
+- 支払い先（payee_name）は請求書を発行した側です。当社グループ 3 社の名前を payee_name にしないでください。
+
+【読み取り】
+- 1 つのファイルに複数の請求書が入っていることがあります（1 通ごとに 1 件）。1 通が複数ページにわたるときは 1 件にまとめます。
+- 金額はカンマや「¥」「円」を除いた数値で返します。amount は税込の請求合計です。
+- 日付は YYYY-MM-DD。和暦（令和 8 年）は西暦に直します。
+- 振込先は「銀行名　支店名　種別　口座番号　口座名義」の順で 1 行にします。
+- 見積書・納品書・領収書・明細書だけのページは請求書ではないので含めず、notes に一言書いてください。
+- 読み取れない項目は空文字や 0 にし、推測で埋めないでください。`;
+
+/** 1 ファイルを保管して読み取る。返り値 { invoices: [...], notes, file_path } */
+export async function extractInvoices(file, { db }) {
+  const { file_url } = await db.integrations.Core.UploadFile({ file });
+  const res = await db.integrations.Core.InvokeLLM({ prompt: INVOICE_PROMPT, file_urls: [file_url], response_json_schema: INVOICE_SCHEMA });
+  const invoices = (Array.isArray(res?.invoices) ? res.invoices : []).map((v, i) => normalizeInvoice(v, file_url, file.name, i));
+  return { invoices, notes: res?.notes || "", file_path: file_url };
+}
+
+const isoDate = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? v : "");
+
+export function normalizeInvoice(v, file_path, file_name, index = 0) {
+  const billTo = BILL_TO.some((b) => b.code === v?.bill_to) ? v.bill_to : "";
+  return {
+    id: `${file_path}#${index}`,
+    file_path,
+    file_name: file_name || "",
+    payee_name: clean(v?.payee_name),
+    bill_to: billTo,
+    bill_to_text: clean(v?.bill_to_text),
+    amount: Math.round(num(v?.amount)) || 0,
+    amount_ex_tax: Math.round(num(v?.amount_ex_tax)) || 0,
+    tax: Math.round(num(v?.tax)) || 0,
+    invoice_date: isoDate(v?.invoice_date),
+    due_date: isoDate(v?.due_date),
+    invoice_no: clean(v?.invoice_no),
+    subject: clean(v?.subject),
+    bank_info: PLACEHOLDER_BANK.test(clean(v?.bank_info)) ? "" : clean(v?.bank_info),
+    pages: clean(v?.pages),
+    include: true,
+  };
+}
+
+const fmtMd = (d) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
+
+/** 請求書 1 件の内訳メモ（例「No.123 9/30 ¥55,000 チラシ印刷代」） */
+export function invoiceLabel(inv) {
+  const b = BILL_TO.find((x) => x.code === inv.bill_to);
+  return [inv.invoice_no ? `No.${inv.invoice_no}` : "", fmtMd(inv.invoice_date), `¥${(inv.amount || 0).toLocaleString()}`, b ? `→${b.label}` : "", inv.subject].filter(Boolean).join(" ");
+}
+
+/**
+ * 読み取った請求書（include=true のもの）を、支払い先ごとの 1 行にまとめる。
+ * 同じ支払い先の請求書が複数あれば、宛先ごとの金額を足し、内訳をメモに残す。
+ */
+export function invoicesToRows(invoices) {
+  const byName = new Map();
+  for (const inv of invoices) {
+    if (!inv.include) continue;
+    const name = clean(inv.payee_name);
+    if (!name) continue;
+    let row = byName.get(name);
+    if (!row) {
+      row = { payee_name: name, bank_info: "", paid: false, memo: "", due_date: "", file_paths: [], invoices: [] };
+      for (const e of PAY_ENTITIES) row[e.key] = 0;
+      byName.set(name, row);
+    }
+    const key = billToKey(inv.bill_to) || "amount_cv";
+    row[key] += inv.amount || 0;
+    if (!row.bank_info && inv.bank_info) row.bank_info = inv.bank_info;
+    if (inv.due_date && (!row.due_date || inv.due_date < row.due_date)) row.due_date = inv.due_date;
+    if (inv.file_path && !row.file_paths.includes(inv.file_path)) row.file_paths.push(inv.file_path);
+    row.invoices.push({ file_path: inv.file_path, bill_to: inv.bill_to || "cv", amount: inv.amount || 0, invoice_date: inv.invoice_date, due_date: inv.due_date, invoice_no: inv.invoice_no, subject: inv.subject });
+  }
+  for (const row of byName.values()) {
+    row.memo = row.invoices.length === 1 ? [row.invoices[0].invoice_no ? `No.${row.invoices[0].invoice_no}` : "", row.invoices[0].subject].filter(Boolean).join(" ") : row.invoices.map((v) => invoiceLabel(v)).join(" ／ ");
+  }
+  return [...byName.values()];
+}
+
+/** 既存の行（同じ月・同じ支払い先）に、読み取った行を足し込む */
+export function mergePayableRow(existing, add) {
+  const out = { ...existing };
+  for (const e of PAY_ENTITIES) out[e.key] = (Number(existing[e.key]) || 0) + (Number(add[e.key]) || 0);
+  out.bank_info = existing.bank_info || add.bank_info || null;
+  out.due_date = [existing.due_date, add.due_date].filter(Boolean).sort()[0] || null;
+  out.file_paths = [...new Set([...(existing.file_paths || []), ...(add.file_paths || [])])];
+  out.invoices = [...(existing.invoices || []), ...(add.invoices || [])];
+  out.memo = [existing.memo, add.memo].filter(Boolean).join(" ／ ") || null;
+  return out;
+}
+
+/** 翌月（YYYY-MM）。請求書は届いた月の翌月末に支払う */
+export const nextMonth = (ym) => { const [y, m] = (ym || thisMonth()).split("-").map(Number); const d = new Date(y, m, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };

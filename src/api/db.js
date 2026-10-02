@@ -114,7 +114,7 @@ const WRITABLE_COLUMNS = {
   ],
   meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
   payees: ['name', 'bank_info', 'notes', 'sort_order', 'is_active'],
-  payables: ['pay_month', 'payee_id', 'payee_name', 'bank_info', 'amount_coolagri', 'amount_cvdigital', 'amount_cv', 'paid', 'memo', 'sort_order'],
+  payables: ['pay_month', 'payee_id', 'payee_name', 'bank_info', 'amount_coolagri', 'amount_cvdigital', 'amount_cv', 'paid', 'memo', 'sort_order', 'due_date', 'file_paths', 'invoices'],
   meeting_checklists: ['meeting_type', 'key', 'label', 'sort_order', 'is_active'],
   design_fee_masters: [
     'category', 'category_order', 'name', 'detail', 'hours', 'unit_price', 'amount',

@@ -54,3 +54,10 @@ create policy payables_members_all on public.payables
 
 comment on table public.payees is '支払い先のマスタ（支払い先まとめ）';
 comment on table public.payables is '支払月ごとの支払い一覧（支払い先まとめ）';
+
+-- 請求書 PDF の読み取りで付く列（支払期限・読み取った請求書ファイル）
+alter table public.payables add column if not exists due_date date;
+alter table public.payables add column if not exists file_paths jsonb not null default '[]'::jsonb;
+alter table public.payables add column if not exists invoices jsonb not null default '[]'::jsonb;
+comment on column public.payables.file_paths is '読み取った請求書 PDF／画像の Storage パス（uploads バケット）';
+comment on column public.payables.invoices is '読み取った請求書ごとの内訳 [{file_path, bill_to, amount, invoice_date, due_date, invoice_no, subject}]';
