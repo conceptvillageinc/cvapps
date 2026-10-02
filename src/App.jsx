@@ -40,6 +40,7 @@ import Payments from '@/pages/Payments';
 import AccountingExport from '@/pages/AccountingExport';
 import SalesReport from '@/pages/SalesReport';
 import Cashflow from '@/pages/Cashflow';
+import CashPlan from '@/pages/CashPlan';
 import ClientKarte from '@/pages/ClientKarte';
 
 const AuthenticatedApp = () => {
@@ -70,6 +71,7 @@ const AuthenticatedApp = () => {
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/sales-report" element={<SalesReport />} />
           <Route path="/cashflow" element={<Cashflow />} />
+          <Route path="/cash-plan" element={<CashPlan />} />
           <Route path="/clients/:id" element={<ClientKarte />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/payables" element={<Payables />} />

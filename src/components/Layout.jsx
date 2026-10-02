@@ -2,10 +2,11 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import RecordingBar from "@/components/meetings/RecordingBar";
 import {
@@ -28,6 +29,8 @@ const navItems = [
   { path: "/payments", label: "入金確認", icon: Landmark },
   { path: "/payables", label: "支払い先まとめ", icon: HandCoins },
   { path: "/cashflow", label: "入出金予定表", icon: CalendarClock },
+  // 資金繰り表は許可したアドレスだけ（システム設定 cashflow_allowed_emails）
+  { path: "/cash-plan", label: "資金繰り表", icon: Wallet, restricted: "cashflow" },
   { path: "/accounting-export", label: "会計データ出力", icon: FileSpreadsheet },
 ];
 
@@ -52,6 +55,9 @@ export default function Layout() {
   const toggleCollapsed = () => setCollapsed((v) => { try { window.localStorage.setItem("cv.sidebar.collapsed", v ? "0" : "1"); } catch { /* noop */ } return !v; });
 
   const isAdmin = user?.role === "admin";
+  const { cashflowAllowedEmails } = useSystemSettings();
+  const canSeeCashflow = cashflowAllowedEmails.includes(String(user?.email || "").toLowerCase());
+  const visibleNav = navItems.filter((item) => !item.restricted || (item.restricted === "cashflow" && canSeeCashflow));
 
   const handleLogout = () => {
     db.auth.logout("/login");
@@ -124,7 +130,7 @@ export default function Layout() {
           <p className={`px-3 text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-2 ${collapsed ? "lg:hidden" : ""}`}>
             メイン
           </p>
-          {navItems.map(item => (
+          {visibleNav.map(item => (
             <NavLink key={item.path} item={item} onClick={() => setSidebarOpen(false)} />
           ))}
 
