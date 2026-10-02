@@ -24,10 +24,10 @@ const navItems = [
   { path: "/history", label: "提出見積履歴", icon: History },
   { path: "/delivery-notes", label: "納品書", icon: Truck },
   { path: "/invoices", label: "請求書", icon: ReceiptJapaneseYen },
+  { path: "/sales-report", label: "売上粗利管理表", icon: BarChart3 },
   { path: "/payments", label: "入金確認", icon: Landmark },
   { path: "/payables", label: "支払い先まとめ", icon: HandCoins },
   { path: "/cashflow", label: "入出金予定表", icon: CalendarClock },
-  { path: "/sales-report", label: "売上粗利管理表", icon: BarChart3 },
   { path: "/accounting-export", label: "会計データ出力", icon: FileSpreadsheet },
 ];
 
