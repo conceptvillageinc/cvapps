@@ -170,9 +170,9 @@ export default function AccountingExport() {
                     {editing ? <Input value={v[k] || ""} onChange={(e) => set(k, e.target.value)} className="h-8 text-xs" /> : <p className="text-xs h-8 flex items-center">{v[k] || "—"}</p>}
                   </div>
                 ))}
-                {["toho", "ryukyu"].map((b) => (
+                {["toho", "ryukyu", "daito"].map((b) => (
                   <div key={b} className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground">預金の補助科目（{b === "toho" ? "東邦" : "琉球"}）</Label>
+                    <Label className="text-[10px] text-muted-foreground">預金の補助科目（{b === "toho" ? "東邦" : b === "ryukyu" ? "琉球" : "大東"}）</Label>
                     {editing
                       ? <Input value={v.bank_sub_accounts?.[b] || ""} onChange={(e) => setDraft((d) => ({ ...d, bank_sub_accounts: { ...d.bank_sub_accounts, [b]: e.target.value } }))} className="h-8 text-xs" />
                       : <p className="text-xs h-8 flex items-center">{v.bank_sub_accounts?.[b] || "—"}</p>}

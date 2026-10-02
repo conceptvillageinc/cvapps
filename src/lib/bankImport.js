@@ -1,5 +1,6 @@
 // ============================================================================
-// 銀行の入出金明細CSV（東邦銀行・琉球銀行）の読み取りと、請求書との照合
+// 銀行の入出金明細CSV（東邦銀行・琉球銀行・大東銀行）の読み取りと、請求書との照合
+// 東邦・琉球は決まった形。それ以外（大東など）は見出しの文字から列を当てる。
 // ============================================================================
 
 /** CSVの文字コードを判定して文字列にする（銀行のCSVは Shift_JIS が多い） */
@@ -49,6 +50,8 @@ function normalizeDate(v) {
   if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
   m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(?:令和|R)\s*(\d{1,2})[.年/]\s*(\d{1,2})[.月/]\s*(\d{1,2})/);
+  if (m) return `${2018 + Number(m[1])}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
   return null;
 }
 
@@ -107,9 +110,9 @@ export async function parseBankCsv(text) {
       const inn = num(r[4]);
       parsed.push({ transaction_date: date, payee_raw: payee, amount_in: inn, amount_out: out, balance: num(r[5]) });
     }
-  } else if (/銀行/.test(first[0]) && first.length >= 4) {
+  } else if (/銀行/.test(first[0]) && first.length >= 4 && !looksLikeHeader(first)) {
     // 琉球銀行: 銀行,支店,種別,口座,開始日,終了日,出力日時 / ID,日付,出金,入金,摘要,残高
-    bank = /琉球/.test(first[0]) ? "ryukyu" : "other";
+    bank = /琉球/.test(first[0]) ? "ryukyu" : /大東/.test(first[0]) ? "daito" : "other";
     accountLabel = `${first[0]} ${first[1] || ""} ${first[3] || ""}`.replace(/\s+/g, " ").trim();
     for (const r of rows.slice(1)) {
       const date = normalizeDate(r[1]);
@@ -117,7 +120,10 @@ export async function parseBankCsv(text) {
       parsed.push({ transaction_date: date, payee_raw: String(r[4] ?? "").trim(), amount_out: num(r[2]), amount_in: num(r[3]), balance: num(r[5]) });
     }
   } else {
-    throw new Error("対応していないCSV形式です（東邦銀行・琉球銀行の入出金明細に対応しています）");
+    // 見出しから列を当てる（大東銀行など）。日付・入金・出金・残高・摘要の見出しがある表に対応
+    const g = parseGenericBankCsv(rows, text);
+    if (!g) throw new Error("対応していないCSV形式です（日付・入金・出金・残高の見出しがある入出金明細に対応しています）");
+    bank = g.bank; accountLabel = g.accountLabel; parsed = g.parsed;
   }
 
   const out = [];
@@ -134,7 +140,47 @@ export async function parseBankCsv(text) {
   return { bank, accountLabel, rows: out, skipped: rows.length - 1 - parsed.length };
 }
 
-export const BANK_LABELS = { toho: "東邦銀行", ryukyu: "琉球銀行", other: "その他" };
+export const BANK_LABELS = { toho: "東邦銀行", ryukyu: "琉球銀行", daito: "大東銀行", other: "その他" };
+export const BANK_CODES = ["toho", "ryukyu", "daito"];
+
+const H = {
+  date: /取引日|日付|年月日|^日$|お取引日|取扱日/,
+  out: /出金|お支払|支払金額|引出|お引出/,
+  inn: /入金|お預り|お預入|預入|入金額/,
+  balance: /残高/,
+  payee: /摘要|内容|取引内容|お取引内容|振込人|名義|備考|取引先/,
+};
+function looksLikeHeader(cells) { return cells.some((c) => H.date.test(c)) && cells.some((c) => H.balance.test(c) || H.inn.test(c) || H.out.test(c)); }
+
+/** 見出し行を探して、列の役割を当てる。見つからなければ null */
+function parseGenericBankCsv(rows, text) {
+  let hIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++) { if (looksLikeHeader(rows[i].map((c) => String(c ?? "").trim()))) { hIdx = i; break; } }
+  if (hIdx < 0) return null;
+  const header = rows[hIdx].map((c) => String(c ?? "").trim());
+  const find = (re, skip = []) => header.findIndex((h, i) => !skip.includes(i) && re.test(h));
+  const col = {};
+  col.date = find(H.date);
+  col.out = find(H.out); col.inn = find(H.inn, [col.out]); col.balance = find(H.balance); col.payee = find(H.payee, [col.date, col.out, col.inn, col.balance]);
+  if (col.date < 0 || (col.inn < 0 && col.out < 0)) return null;
+  const head = rows.slice(0, hIdx).flat().map((c) => String(c ?? "")).join(" ") + " " + String(text || "").slice(0, 400);
+  const bank = /大東/.test(head) ? "daito" : /東邦/.test(head) ? "toho" : /琉球/.test(head) ? "ryukyu" : "other";
+  const parsed = [];
+  for (const r of rows.slice(hIdx + 1)) {
+    const date = normalizeDate(r[col.date]);
+    if (!date) continue;
+    parsed.push({
+      transaction_date: date,
+      payee_raw: col.payee >= 0 ? String(r[col.payee] ?? "").trim() : "",
+      amount_out: col.out >= 0 ? Math.abs(num(r[col.out])) : 0,
+      amount_in: col.inn >= 0 ? Math.abs(num(r[col.inn])) : 0,
+      balance: col.balance >= 0 ? num(r[col.balance]) : null,
+    });
+  }
+  const meta = rows.slice(0, hIdx).flat().map((c) => String(c ?? "").trim()).filter(Boolean).slice(0, 4).join(" ");
+  const label = BANK_LABELS[bank];
+  return { bank, accountLabel: (meta.includes(label) ? meta : `${label} ${meta}`).trim(), parsed };
+}
 
 /**
  * 入金1件に対する請求書の候補を出す。

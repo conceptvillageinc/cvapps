@@ -130,7 +130,7 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
     ok: `${horizon} 日先まで、確定の予定だけで安全ライン（${yen(safetyLine)}）を下回りません`,
     warn: `${jpFull(plan.firstBelow)} に残高が安全ライン（${yen(safetyLine)}）を下回ります。入金の前倒しか支払の調整を考えてください`,
     danger: `${jpFull(plan.firstNegative)} に残高がマイナスになります。それまでに資金の手当てが必要です`,
-    unknown: "残高の起点がありません。入金確認で銀行明細（東邦・琉球）の CSV を取り込んでください",
+    unknown: "残高の起点がありません。入金確認で銀行明細（東邦・琉球・大東）の CSV を取り込んでください",
   }[plan.status];
   const toggle = (date) => setOpen((s) => { const t = new Set(s); if (t.has(date)) t.delete(date); else t.add(date); return t; });
   const tick = (v, i) => (i % Math.max(1, Math.round(horizon / 12)) === 0 ? v : "");

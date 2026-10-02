@@ -23,7 +23,7 @@ export const DEFAULT_ACCOUNTING_SETTINGS = {
   tax_category_sales: "課税売上 10%",
   tax_category_sales_reduced: "課税売上 8%（軽減）",
   tax_category_none: "対象外",
-  bank_sub_accounts: { toho: "東邦銀行", ryukyu: "琉球銀行" },
+  bank_sub_accounts: { toho: "東邦銀行", ryukyu: "琉球銀行", daito: "大東銀行" },
   department: "",
 };
 
