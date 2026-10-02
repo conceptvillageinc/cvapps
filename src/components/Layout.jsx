@@ -88,7 +88,9 @@ export default function Layout() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 ${collapsed ? "lg:w-16" : "lg:w-64"} bg-sidebar flex flex-col transform transition-[transform,width] duration-300 lg:translate-x-0 ${
+      <aside
+        onClick={() => { if (collapsed && window.matchMedia("(min-width: 1024px)").matches) toggleCollapsed(); }}
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 ${collapsed ? "lg:w-16 lg:cursor-pointer" : "lg:w-64"} bg-sidebar flex flex-col transform transition-[transform,width] duration-300 lg:translate-x-0 ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       }`}>
         {/* Logo */}
@@ -111,7 +113,13 @@ export default function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${collapsed ? "lg:px-2 px-3" : "px-3"}`}>
+        <nav className={`flex-1 py-3 space-y-1 overflow-y-auto ${collapsed ? "lg:px-2 px-3" : "px-3"}`}>
+          {/* 折りたたみ（PC の幅だけ）。折りたたんだ状態ではサイドバーのどこを押しても広がる */}
+          <button type="button" onClick={(e) => { e.stopPropagation(); toggleCollapsed(); }} title={collapsed ? "メニューを広げる" : "メニューを折りたたむ"} aria-label={collapsed ? "メニューを広げる" : "メニューを折りたたむ"}
+            className={`hidden lg:flex items-center gap-2 w-full py-2 mb-2 rounded-lg text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors ${collapsed ? "justify-center px-0" : "px-3"}`}>
+            {collapsed ? <PanelLeftOpen className="w-4 h-4 shrink-0" /> : <PanelLeftClose className="w-4 h-4 shrink-0" />}
+            {!collapsed && <span>メニューを折りたたむ</span>}
+          </button>
           <p className={`px-3 text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-2 ${collapsed ? "lg:hidden" : ""}`}>
             メイン
           </p>
@@ -134,15 +142,6 @@ export default function Layout() {
           <div className="my-4 border-t border-sidebar-border" />
           <NavLink item={faqItem} onClick={() => setSidebarOpen(false)} />
         </nav>
-
-        {/* 折りたたみ（PC の幅だけ） */}
-        <div className="hidden lg:block px-3 pb-1">
-          <button type="button" onClick={toggleCollapsed} title={collapsed ? "メニューを広げる" : "メニューを折りたたむ"} aria-label={collapsed ? "メニューを広げる" : "メニューを折りたたむ"}
-            className={`flex items-center gap-2 w-full py-2 rounded-lg text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors ${collapsed ? "justify-center px-0" : "px-3"}`}>
-            {collapsed ? <PanelLeftOpen className="w-4 h-4 shrink-0" /> : <PanelLeftClose className="w-4 h-4 shrink-0" />}
-            {!collapsed && <span>メニューを折りたたむ</span>}
-          </button>
-        </div>
 
         {/* User section */}
         <div className={`border-t border-sidebar-border ${collapsed ? "lg:p-2 p-3" : "p-3"}`}>
