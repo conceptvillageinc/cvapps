@@ -225,6 +225,41 @@ export function drawBankBand(pdf, y, { dueDate, accounts }) {
  * @param {Array<[string, number, 'left'|'center'|'right']>} columns  [見出し, 幅, 揃え]（幅 0 の列は残り幅）
  * @param {Array<object>} rows  { kind:'item', cells:[...] } | { kind:'text', text } | { kind:'subtotal', name, amount }
  */
+const MAX_ROW_LINES = 3; // 名称が長いときは最大 3 行まで折り返す（それ以上は省略記号）
+
+/** 行の高さを「標準の行の何倍か（units）」で測る。名称が 1 行に収まらないときは折り返す */
+export function measureRow(pdf, row, columns) {
+  const fixed = columns.reduce((s, c) => s + (c[1] || 0), 0);
+  const widths = columns.map((c) => c[1] || CONTENT_W - fixed);
+  let text = '';
+  let w = CONTENT_W - 12;
+  if (row.kind === 'text') { text = String(row.text || ''); }
+  else if (row.kind === 'item') {
+    const nameIdx = columns.findIndex((c) => !c[1]); // 幅 0（残り幅）の列が名称
+    text = String(row.cells[nameIdx] ?? '');
+    w = widths[nameIdx] - 12;
+  } else return 1;
+  pdf.font('jp').fontSize(8.5);
+  if (pdf.widthOfString(text) <= w) return 1;
+  const lines = Math.ceil(pdf.heightOfString(text, { width: w }) / pdf.currentLineHeight());
+  return Math.max(1, Math.min(MAX_ROW_LINES, lines));
+}
+
+/** 行をページごとに分ける（1 ページ rowsPerPage 行分の高さ。折り返す行は複数行分を使う） */
+export function packRows(pdf, rows, columns, rowsPerPage) {
+  const pages = [];
+  let cur = [];
+  let used = 0;
+  for (const row of rows) {
+    const units = measureRow(pdf, row, columns);
+    if (used + units > rowsPerPage && cur.length > 0) { pages.push(cur); cur = []; used = 0; }
+    cur.push({ ...row, units });
+    used += units;
+  }
+  if (cur.length > 0 || pages.length === 0) pages.push(cur);
+  return pages;
+}
+
 export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
   const fixed = columns.reduce((s, c) => s + (c[1] || 0), 0);
   const widths = columns.map((c) => c[1] || CONTENT_W - fixed);
@@ -235,28 +270,41 @@ export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
   pdf.fillColor(BLACK);
 
   const amountW = widths[widths.length - 1];
-  for (let i = 0; i < rowsPerPage; i++) {
-    const ry = y + L.headH + i * L.rowH;
-    pdf.lineWidth(0.6).rect(MARGIN, ry, CONTENT_W, L.rowH).fillAndStroke(i % 2 === 0 ? GRAY : '#ffffff', LINE);
+  const nameIdx = columns.findIndex((c) => !c[1]);
+  // 行の高さは可変（長い名称は折り返す）。使った高さの合計は rowsPerPage 行分を超えない
+  let ry = y + L.headH;
+  let usedUnits = 0;
+  let stripe = 0;
+  const drawRowBox = (h) => {
+    pdf.lineWidth(0.6).rect(MARGIN, ry, CONTENT_W, h).fillAndStroke(stripe % 2 === 0 ? GRAY : '#ffffff', LINE);
     pdf.fillColor(BLACK);
-    const row = rows[i];
-    if (!row) continue;
+    stripe += 1;
+  };
+  for (const row of rows) {
+    const units = row.units || measureRow(pdf, row, columns);
+    if (usedUnits + units > rowsPerPage) break; // 念のため（packRows で分けているので通常は起きない）
+    const h = L.rowH * units;
+    drawRowBox(h);
     if (row.kind === 'text') {
-      textV(pdf, row.text, MARGIN + 6, ry, CONTENT_W - 12, L.rowH, { size: 8.5, bold: true });
-      continue;
+      if (units > 1) paragraphV(pdf, row.text, MARGIN + 6, ry + 2, CONTENT_W - 12, h - 4, { size: 8.5, bold: true });
+      else textV(pdf, row.text, MARGIN + 6, ry, CONTENT_W - 12, h, { size: 8.5, bold: true });
+    } else if (row.kind === 'subtotal') {
+      textV(pdf, row.name || '小計', MARGIN + 6, ry, CONTENT_W - amountW - 12, h, { align: 'right', size: 8.5, bold: true });
+      textV(pdf, signedYen(row.amount), PAGE.width - MARGIN - amountW, ry, amountW - 6, h, { align: 'right', size: 8.5, bold: true });
+    } else {
+      cx = MARGIN;
+      columns.forEach(([, , align], ci) => {
+        const pad = align === 'center' ? 2 : 6;
+        if (ci === nameIdx && units > 1) paragraphV(pdf, row.cells[ci], cx + pad, ry + 2, widths[ci] - pad * 2, h - 4, { align, size: 8.5 });
+        else textV(pdf, row.cells[ci], cx + pad, ry, widths[ci] - pad * 2, h, { align, size: 8.5 });
+        cx += widths[ci];
+      });
     }
-    if (row.kind === 'subtotal') {
-      textV(pdf, row.name || '小計', MARGIN + 6, ry, CONTENT_W - amountW - 12, L.rowH, { align: 'right', size: 8.5, bold: true });
-      textV(pdf, signedYen(row.amount), PAGE.width - MARGIN - amountW, ry, amountW - 6, L.rowH, { align: 'right', size: 8.5, bold: true });
-      continue;
-    }
-    cx = MARGIN;
-    columns.forEach(([, , align], ci) => {
-      const pad = align === 'center' ? 2 : 6;
-      textV(pdf, row.cells[ci], cx + pad, ry, widths[ci] - pad * 2, L.rowH, { align, size: 8.5 });
-      cx += widths[ci];
-    });
+    ry += h;
+    usedUnits += units;
   }
+  // 残りは空行で埋める（表の下端をページごとに同じ位置にそろえる）
+  for (let i = usedUnits; i < rowsPerPage; i++) { drawRowBox(L.rowH); ry += L.rowH; }
   return y + L.headH + rowsPerPage * L.rowH;
 }
 

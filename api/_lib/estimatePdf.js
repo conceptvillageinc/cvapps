@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 import {
-  PAGE_MARGINS, registerFonts, signedYen, fmtQty, fmtUnitPrice,
+  PAGE_MARGINS, registerFonts, signedYen, fmtQty, fmtUnitPrice, packRows,
   drawHeader, drawTitle, drawSubjectAndMeta, drawSummary,
   drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, rowsFor,
 } from './docLayout.js';
@@ -97,7 +97,6 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
   const summaryBottom = 287 + 16 + 26;
   const tableY = tableTop(summaryBottom);
   const rowsPerPage = rowsFor(tableY);
-  const pages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
 
   const columns = [
     ['摘要', 0, 'left'],
@@ -105,6 +104,9 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
     [taxInclusive ? '単価(税込)' : '単価', 63, 'right'],
     [taxInclusive ? '明細金額(税込)' : '明細金額', 88, 'right'],
   ];
+  // 長い名称は折り返して行を高くするので、ページ分けは高さで行う
+  const pagedRows = packRows(pdf, rows, columns, rowsPerPage);
+  const pages = pagedRows.length;
 
   for (let p = 0; p < pages; p++) {
     if (p > 0) pdf.addPage();
@@ -124,7 +126,7 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
     ]);
     let y = drawSummary(pdf, { subtotal: totals.subtotal, tax: totals.tax, total: totals.total, totalLabel: '見積金額' });
     y = tableTop(y);
-    const tableBottom = drawTable(pdf, y, { columns, rows: rows.slice(p * rowsPerPage, (p + 1) * rowsPerPage), rowsPerPage });
+    const tableBottom = drawTable(pdf, y, { columns, rows: pagedRows[p], rowsPerPage });
 
     if (p === pages - 1) {
       const bb = drawBreakdown(pdf, tableBottom, totals.breakdown);

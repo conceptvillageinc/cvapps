@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import {
   PAGE_MARGINS, registerFonts, yen, fmtQty, fmtUnitPrice, fmtDate,
   drawHeader, drawTitle, drawSubjectAndMeta, drawSummary, drawBankBand,
-  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, rowsFor,
+  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, rowsFor, packRows,
 } from './docLayout.js';
 
 // ============================================================================
@@ -47,12 +47,17 @@ export function renderDocumentPdf({ type, doc, company, stamp, logo = null }) {
     const summaryBottom = 287 + 16 + 26;
     const tableY = isInvoice ? tableTop(summaryBottom + 8 + 16 + 55, { afterBank: true }) : tableTop(summaryBottom);
     const rowsPerPage = rowsFor(tableY);
-    const pages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+    const columns = isInvoice
+      ? [['取引日', 82, 'center'], ['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']]
+      : [['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']];
+    // 長い名称は折り返して行を高くするので、ページ分けは高さで行う
+    const pagedRows = packRows(pdf, rows, columns, rowsPerPage);
+    const pages = pagedRows.length;
 
     try {
       for (let p = 0; p < pages; p++) {
         if (p > 0) pdf.addPage();
-        drawPage(pdf, { type, doc, company, stamp, logo, rows: rows.slice(p * rowsPerPage, (p + 1) * rowsPerPage), rowsPerPage, page: p + 1, pages });
+        drawPage(pdf, { type, doc, company, stamp, logo, rows: pagedRows[p], rowsPerPage, page: p + 1, pages, columns });
       }
     } catch (err) {
       reject(err);
@@ -66,7 +71,7 @@ function titleOf(type, doc) {
   return type === 'invoice' ? `御請求書 ${doc.invoice_number}` : `納品書 ${doc.delivery_number}`;
 }
 
-function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, page, pages }) {
+function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, page, pages, columns }) {
   const isInvoice = type === 'invoice';
 
   drawHeader(pdf, {
@@ -92,9 +97,6 @@ function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, pag
     y = tableTop(y);
   }
 
-  const columns = isInvoice
-    ? [['取引日', 82, 'center'], ['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']]
-    : [['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']];
   const tableBottom = drawTable(pdf, y, { columns, rows, rowsPerPage });
 
   if (page === pages) {
