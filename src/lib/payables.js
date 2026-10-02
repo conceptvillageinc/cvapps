@@ -3,9 +3,9 @@ import { downloadText } from "@/lib/mfExport";
 
 /** 支払元（振込金額の列） */
 export const PAY_ENTITIES = [
-  { key: "amount_coolagri", label: "Cool Agri", match: /cool\s*agri|クールアグリ/i },
-  { key: "amount_cvdigital", label: "CV digital", match: /cv\s*digital|デジタル/i },
   { key: "amount_cv", label: "CV", match: /^cv\b|^cv\s*$|^CV\s*\n|cv\s*振込/i },
+  { key: "amount_cvdigital", label: "cv digital", match: /cv\s*digital|デジタル/i },
+  { key: "amount_coolagri", label: "Cool Agri", match: /cool\s*agri|クールアグリ/i },
 ];
 
 const num = (v) => {
@@ -30,7 +30,7 @@ const clean = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
 
 /**
  * 2 次元配列（シートの値）から支払い行を取り出す。
- * 見出し行は「会社名」を含む行。列は見出しの文字で見分ける（Cool Agri／CV digital／CV／支払／会社名／振込先）。
+ * 見出し行は「会社名」を含む行。列は見出しの文字で見分ける（CV／cv digital／Cool Agri／支払／会社名／振込先）。
  * 返り値: { rows: [{ payee_name, bank_info, amount_coolagri, amount_cvdigital, amount_cv, paid }], header, warnings }
  */
 export function parsePayableSheet(values) {
@@ -54,7 +54,7 @@ export function parsePayableSheet(values) {
   const warnings = [];
   if (col.name === undefined) warnings.push("「会社名」の列が見つかりません");
   const found = PAY_ENTITIES.filter((e) => col[e.key] !== undefined).map((e) => e.label);
-  if (found.length === 0) warnings.push("振込金額の列（Cool Agri／CV digital／CV）が見つかりません");
+  if (found.length === 0) warnings.push("振込金額の列（CV／cv digital／Cool Agri）が見つかりません");
   const rows = [];
   for (let r = hIdx + 1; r < grid.length; r++) {
     const line = grid[r];
@@ -132,9 +132,9 @@ export function textToGrid(text) {
 
 /** 宛先（請求書の「〜御中」）→ 支払元。読み取り結果の bill_to に入る値 */
 export const BILL_TO = [
-  { code: "coolagri", key: "amount_coolagri", label: "Cool Agri", names: "Cool Agri／クールアグリ／株式会社Cool Agri／株式会社クールアグリ" },
-  { code: "cvdigital", key: "amount_cvdigital", label: "CV digital", names: "CV digital／CVデジタル／株式会社CV digital" },
   { code: "cv", key: "amount_cv", label: "CV", names: "株式会社コンセプト・ヴィレッジ／コンセプトヴィレッジ／concept-village／Concept Village／CONCEPT VILLAGE／CV" },
+  { code: "cvdigital", key: "amount_cvdigital", label: "cv digital", names: "cv digital／CV digital／CVデジタル／株式会社cv digital" },
+  { code: "coolagri", key: "amount_coolagri", label: "Cool Agri", names: "Cool Agri／クールアグリ／株式会社Cool Agri／株式会社クールアグリ" },
 ];
 export const billToKey = (code) => BILL_TO.find((b) => b.code === code)?.key || "";
 
@@ -148,7 +148,7 @@ export const INVOICE_SCHEMA = {
         type: "object",
         properties: {
           payee_name: { type: "string", description: "請求書を発行した会社名（支払い先）。ロゴ・社印・振込先欄の近くにある社名。「〜御中」の宛先は含めない。法人格は書いてあるとおり" },
-          bill_to: { type: "string", enum: ["coolagri", "cvdigital", "cv", "unknown"], description: "請求書の宛先（〜御中）がどの会社か。Cool Agri／クールアグリ→coolagri、CV digital／CVデジタル→cvdigital、株式会社コンセプト・ヴィレッジ／Concept Village→cv、判別できなければ unknown" },
+          bill_to: { type: "string", enum: ["coolagri", "cvdigital", "cv", "unknown"], description: "請求書の宛先（〜御中）がどの会社か。株式会社コンセプト・ヴィレッジ／concept-village→cv、cv digital／CVデジタル→cvdigital、Cool Agri／クールアグリ→coolagri、判別できなければ unknown" },
           bill_to_text: { type: "string", description: "宛先に書かれていた社名そのまま。無ければ空" },
           amount: { type: "number", description: "請求金額の合計（税込）。「ご請求金額」「合計」など税込の総額。読み取れなければ 0" },
           amount_ex_tax: { type: "number", description: "税抜金額。無ければ 0" },
@@ -170,9 +170,9 @@ export const INVOICE_PROMPT = `添付したファイル（スキャンした請�
 
 【前提】
 - 当社グループは 3 社あり、請求書の宛先（「〜御中」「〜様」）がどの会社宛かで支払元が決まります。
-  ・coolagri: ${BILL_TO[0].names}
+  ・cv: ${BILL_TO[0].names}
   ・cvdigital: ${BILL_TO[1].names}
-  ・cv: ${BILL_TO[2].names}
+  ・coolagri: ${BILL_TO[2].names}
   宛先は英語表記（concept-village のようにハイフン付きや小文字）や「御中」「様」付きでも同じ会社です。
   宛先が上のどれでもない・読めないときは unknown にしてください。
 - 支払い先（payee_name）は請求書を発行した側です。当社グループ 3 社の名前を payee_name にしないでください。

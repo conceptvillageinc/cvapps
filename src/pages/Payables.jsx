@@ -19,7 +19,7 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 /**
  * 支払い先まとめ
  *   月末に受領した請求書をスキャンして読み込み、「翌月末に支払う一覧」（支払い先ごとに 1 行、
- *   Cool Agri／CV digital／CV の 3 社それぞれの振込金額）にまとめる。CSV に出力できる。
+ *   CV／cv digital／Cool Agri の 3 社それぞれの振込金額）にまとめる。CSV に出力できる。
  *   既存のスプレッドシートから入れ直すための取り込みも残してある。
  */
 export default function Payables() {
@@ -300,7 +300,7 @@ function ImportDialog({ open, onOpenChange, month, existing, payees, onDone }) {
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>シートから取込（{monthLabel(month)}）</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm">
-          <p className="text-xs text-muted-foreground">見出しに「会社名」「振込先情報」「Cool Agri／CV digital／CV 振込金額」がある表を読み取ります。金額の欄が「=55000+446490」のような式でも計算して取り込みます。</p>
+          <p className="text-xs text-muted-foreground">見出しに「会社名」「振込先情報」「CV／cv digital／Cool Agri 振込金額」がある表を読み取ります。金額の欄が「=55000+446490」のような式でも計算して取り込みます。</p>
           <div className="flex flex-wrap gap-2">
             {tabBtn("url", Link2, "Google シートの URL")}
             {tabBtn("paste", ClipboardPaste, "貼り付け")}

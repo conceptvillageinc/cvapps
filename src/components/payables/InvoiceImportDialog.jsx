@@ -133,7 +133,7 @@ export default function InvoiceImportDialog({ open, onOpenChange, month, existin
         <DialogHeader><DialogTitle className="flex items-center gap-2"><FileText className="w-5 h-5" /> 請求書を読み込む</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm min-w-0">
           <p className="text-xs text-muted-foreground">
-            スキャンした請求書の PDF（1 ファイルに何通入っていても可）や写真を入れると、AI が支払い先・宛先（Cool Agri／CV digital／CV のどの会社宛か）・金額（税込）・振込先・支払期限を読み取ります。内容を確認・修正してから取り込んでください。
+            スキャンした請求書の PDF（1 ファイルに何通入っていても可）や写真を入れると、AI が支払い先・宛先（CV／cv digital／Cool Agri のどの会社宛か）・金額（税込）・振込先・支払期限を読み取ります。内容を確認・修正してから取り込んでください。
           </p>
 
           <div
