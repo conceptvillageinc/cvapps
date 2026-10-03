@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Download,
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -37,6 +37,23 @@ const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: 
 
 function uid() {
   return `li_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// 明細の表の中で、Enter で次の入力欄へ移る（名称 → 数量 → 単位 → 単価 → 次の行の名称）。
+// 入力欄には data-cell を付けておき、表の中の並び順で次を探す。
+function nextCellOf(el, dir = 1) {
+  const table = el?.closest?.("table");
+  if (!table) return null;
+  const cells = Array.from(table.querySelectorAll("[data-cell]"));
+  const i = cells.indexOf(el);
+  return i >= 0 ? cells[i + dir] || null : null;
+}
+function focusNextCell(el, dir = 1) {
+  const next = nextCellOf(el, dir);
+  if (!next) return false;
+  next.focus();
+  if (typeof next.select === "function") next.select();
+  return true;
 }
 
 // number入力の増減ボタン（スピンボタン）を非表示にし、数字との重なりを回避
@@ -170,6 +187,29 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     if (fromIdx === -1 || toIdx === -1) return;
     const [moved] = items.splice(fromIdx, 1);
     items.splice(toIdx, 0, moved);
+    commitItems(items);
+  };
+
+  // 上下のボタンで 1 つ動かす
+  const moveItem = (id, dir) => {
+    const idx = lineItems.findIndex(i => i.id === id);
+    const to = idx + dir;
+    if (idx < 0 || to < 0 || to >= lineItems.length) return;
+    const items = [...lineItems];
+    const [moved] = items.splice(idx, 1);
+    items.splice(to, 0, moved);
+    commitItems(items);
+  };
+
+  // 行を複製して、すぐ下に入れる（名称・数量・単価・原価・メモなどそのまま。自動計算行は普通の行として複製）
+  const duplicateItem = (id) => {
+    const idx = lineItems.findIndex(i => i.id === id);
+    if (idx < 0) return;
+    const src = lineItems[idx];
+    const copy = { ...src, id: uid() };
+    if (src.source_type === "rule") Object.assign(copy, unlockRuleRow(src), { id: copy.id });
+    const items = [...lineItems];
+    items.splice(idx + 1, 0, copy);
     commitItems(items);
   };
 
@@ -606,13 +646,13 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
             <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm table-fixed">
               <colgroup>
-                <col className="w-5" />
+                <col className="w-7" />
                 <col />
                 <col className="w-16" />
                 <col className="w-12" />
                 <col className="w-24" />
                 <col className="w-24" />
-                <col className="w-7" />
+                <col className="w-12" />
               </colgroup>
               <thead>
                 <tr className="bg-slate-800 text-white text-xs">
@@ -633,23 +673,42 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                     </td>
                   </tr>
                 )}
-                {lineItems.map((li) => (
+                {lineItems.map((li, idx) => (
                   <LineItemRow
                     key={li.id}
                     item={li}
                     showInternal={showInternal}
                     isDragging={dragId === li.id}
-                    onDragStart={() => setDragId(li.id)}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={() => { reorderItems(dragId, li.id); setDragId(null); }}
+                    isFirst={idx === 0}
+                    isLast={idx === lineItems.length - 1}
+                    onDragStart={(e) => {
+                      setDragId(li.id);
+                      // つかんだ行そのものを影として出す（アイコンだけだと何を動かしているか分かりにくい）
+                      const row = e.currentTarget.closest("tr");
+                      if (row && e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", li.id); e.dataTransfer.setDragImage(row, 16, 16); }
+                    }}
+                    onDragOver={e => {
+                      e.preventDefault();
+                      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+                      // 上に重ねた時点で入れ替える（落とすまで待たない）
+                      if (dragId && dragId !== li.id) reorderItems(dragId, li.id);
+                    }}
+                    onDrop={(e) => { e.preventDefault(); setDragId(null); }}
                     onDragEnd={() => setDragId(null)}
                     onChange={patch => updateItem(li.id, patch)}
                     onRemove={() => removeItem(li.id)}
+                    onDuplicate={() => duplicateItem(li.id)}
+                    onMove={(dir) => moveItem(li.id, dir)}
                   />
                 ))}
               </tbody>
             </table>
             </div>
+            {lineItems.length > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                名称は Enter で次の欄（数量 → 単位 → 単価 → 次の行）へ、Shift+Enter で改行、Esc で元に戻します。行は左のつまみをドラッグするか、カーソルを乗せて出る ▲▼ で動かせます。右のコピーのアイコンで同じ行を下に追加します
+              </p>
+            )}
 
             {estimate.additional_notes !== undefined && (
               <div>
@@ -939,15 +998,37 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 }
 
 
-function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove }) {
+/** 行の左端: つかんで動かすハンドルと、上下に 1 つ動かすボタン（行にカーソルを乗せると出る） */
+function RowHandle({ onDragStart, onDragEnd, onMove, isFirst, isLast }) {
+  return (
+    <div className="flex flex-col items-center">
+      <span draggable onDragStart={onDragStart} onDragEnd={onDragEnd} title="つかんで上下に動かす" className="text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing inline-block mt-1">
+        <GripVertical className="w-3.5 h-3.5" />
+      </span>
+      <span className="flex flex-col opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <button type="button" onClick={() => onMove(-1)} disabled={isFirst} className="text-muted-foreground/60 hover:text-foreground disabled:opacity-20 leading-none" title="1 つ上へ" aria-label="1 つ上へ"><ChevronUp className="w-3 h-3" /></button>
+        <button type="button" onClick={() => onMove(1)} disabled={isLast} className="text-muted-foreground/60 hover:text-foreground disabled:opacity-20 leading-none" title="1 つ下へ" aria-label="1 つ下へ"><ChevronDown className="w-3 h-3" /></button>
+      </span>
+    </div>
+  );
+}
+
+/** 行の右端: 複製と削除 */
+function RowActions({ onDuplicate, onRemove }) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <button type="button" onClick={onDuplicate} className="text-muted-foreground hover:text-primary" title="この行を複製して下に追加" aria-label="複製"><Copy className="w-3.5 h-3.5" /></button>
+      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive" title="削除" aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></button>
+    </div>
+  );
+}
+
+function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove, onDuplicate, onMove }) {
+  const handle = <RowHandle onDragStart={onDragStart} onDragEnd={onDragEnd} onMove={onMove} isFirst={isFirst} isLast={isLast} />;
   if (item.row_type === "subtotal") {
     return (
-      <tr className={`bg-slate-50 border-t border-slate-400 ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
-        <td className="px-1 py-2 align-top">
-          <span draggable onDragStart={onDragStart} onDragEnd={onDragEnd} className="text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing inline-block mt-1">
-            <GripVertical className="w-3.5 h-3.5" />
-          </span>
-        </td>
+      <tr className={`group bg-slate-50 border-t border-slate-400 ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
+        <td className="px-1 py-2 align-top">{handle}</td>
         <td colSpan={4} className="px-3 py-2">
           <div className="flex items-center gap-2">
             <Sigma className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -956,36 +1037,25 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
           </div>
         </td>
         <td className="px-3 py-2 text-right align-top font-semibold">{yen(item.amount)}</td>
-        <td className="px-2 py-2 align-top">
-          <button onClick={onRemove} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
-        </td>
+        <td className="px-1 py-2 align-top"><RowActions onDuplicate={onDuplicate} onRemove={onRemove} /></td>
       </tr>
     );
   }
   if (item.row_type === "text") {
     return (
-      <tr className={`bg-muted/30 ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
-        <td colSpan={7} className="px-3 py-1.5">
-          <div className="flex items-center gap-2">
-            <span
-              draggable
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              className="text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0"
-            >
-              <GripVertical className="w-3.5 h-3.5" />
-            </span>
-            <Input
-              value={item.text || ""}
-              onChange={e => onChange({ text: e.target.value })}
-              placeholder="見出し・注記（例: ▼ 印刷費）"
-              className="h-7 text-xs font-medium bg-transparent border-none px-0 focus-visible:ring-0"
-            />
-            <button onClick={onRemove} className="text-muted-foreground hover:text-destructive shrink-0">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+      <tr className={`group bg-muted/30 ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
+        <td className="px-1 py-1.5 align-top">{handle}</td>
+        <td colSpan={5} className="px-3 py-1.5">
+          <Input
+            value={item.text || ""}
+            onChange={e => onChange({ text: e.target.value })}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); focusNextCell(e.currentTarget); } }}
+            data-cell="text"
+            placeholder="見出し・注記（例: ▼ 印刷費）"
+            className="h-7 text-xs font-medium bg-transparent border-none px-0 focus-visible:ring-0"
+          />
         </td>
+        <td className="px-1 py-1.5 align-top"><RowActions onDuplicate={onDuplicate} onRemove={onRemove} /></td>
       </tr>
     );
   }
@@ -999,17 +1069,8 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
 
   return (
     <>
-    <tr className={`${showInternal ? "" : "border-b"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
-      <td className="px-1 py-2 align-top">
-        <span
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          className="text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing inline-block mt-1"
-        >
-          <GripVertical className="w-3.5 h-3.5" />
-        </span>
-      </td>
+    <tr className={`group ${showInternal ? "" : "border-b"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
+      <td className="px-1 py-2 align-top">{handle}</td>
       <td className="px-3 py-2 align-top">
         <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />
         {item.category && (
@@ -1044,16 +1105,20 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
             <NumericField
               value={item.quantity}
               onCommit={(q) => onChange({ quantity: q, amount: q * (item.unit_price || 0) })}
+              onEnter={(e) => focusNextCell(e.currentTarget)}
+              data-cell="quantity"
               className={`${cellInputClass} text-right w-full`}
             />
           </td>
           <td className="px-2 py-2 text-right align-top">
-            <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} className={`${cellInputClass} text-right w-full`} />
+            <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); focusNextCell(e.currentTarget); } }} data-cell="unit" className={`${cellInputClass} text-right w-full`} />
           </td>
           <td className="px-2 py-2 text-right align-top">
             <NumericField
               value={item.unit_price}
               onCommit={(p) => onChange({ unit_price: p, amount: p * (item.quantity || 1) })}
+              onEnter={(e) => focusNextCell(e.currentTarget)}
+              data-cell="unit_price"
               className={`${cellInputClass} text-right w-full`}
             />
           </td>
@@ -1062,11 +1127,7 @@ function LineItemRow({ item, showInternal, isDragging, onDragStart, onDragOver, 
       <td className="px-2 py-2 text-right align-top font-medium whitespace-nowrap tabular-nums">
         {yen(item.amount)}
       </td>
-      <td className="px-1 py-2 align-top text-center">
-        <button onClick={onRemove} className="text-muted-foreground hover:text-destructive">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </td>
+      <td className="px-1 py-2 align-top"><RowActions onDuplicate={onDuplicate} onRemove={onRemove} /></td>
     </tr>
     {showInternal && (
       <tr className="border-b">
@@ -1253,10 +1314,12 @@ function LineScreenshot({ path, sourceUrl, onChange }) {
   );
 }
 
-// 名称セル：普段は文字折り返しで全文表示し、クリックすると入力欄になる（長い名称でも切れない）
+// 名称セル：普段は文字折り返しで全文表示し、クリック（または Tab／Enter で移ってきたとき）に入力欄になる。
+//   Enter … 確定して次の欄（数量）へ　　Shift+Enter … 改行　　Esc … 入力をやめて元に戻す
 function InlineTextCell({ value, onCommit }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value || "");
+  const skipRef = useRef(false); // Esc で閉じたときは blur で保存しない
 
   if (editing) {
     return (
@@ -1264,13 +1327,26 @@ function InlineTextCell({ value, onCommit }) {
         autoFocus
         value={text}
         onChange={e => setText(e.target.value)}
-        onBlur={() => { setEditing(false); if (text !== value) onCommit(text); }}
+        onFocus={e => e.currentTarget.select()}
+        onBlur={() => { setEditing(false); if (!skipRef.current && text !== value) onCommit(text); skipRef.current = false; }}
         onKeyDown={e => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            e.currentTarget.blur();
+            const next = nextCellOf(e.currentTarget);
+            setEditing(false);
+            if (text !== value) onCommit(text);
+            // この欄が消えてから次の欄へ
+            requestAnimationFrame(() => { if (next) { next.focus(); if (typeof next.select === "function") next.select(); } });
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            skipRef.current = true;
+            setText(value || "");
+            setEditing(false);
+          } else if (e.key === "Tab") {
+            // Tab はそのまま次へ。blur で保存される
           }
         }}
+        data-cell="name"
         rows={2}
         className="w-full text-xs border border-input rounded px-1.5 py-1 resize-none focus-visible:outline-none focus-visible:ring-1"
       />
@@ -1279,8 +1355,11 @@ function InlineTextCell({ value, onCommit }) {
 
   return (
     <div
+      tabIndex={0}
+      data-cell="name"
       onClick={() => { setText(value || ""); setEditing(true); }}
-      className="text-xs px-1.5 py-1 -mx-1.5 rounded cursor-text hover:bg-muted/50 whitespace-normal break-words leading-relaxed"
+      onFocus={() => { setText(value || ""); setEditing(true); }}
+      className="text-xs px-1.5 py-1 -mx-1.5 rounded cursor-text hover:bg-muted/50 whitespace-normal break-words leading-relaxed focus-visible:outline-none focus-visible:ring-1"
     >
       {value || <span className="text-muted-foreground/50">名称を入力</span>}
     </div>
