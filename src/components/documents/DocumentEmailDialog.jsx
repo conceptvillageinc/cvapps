@@ -18,8 +18,8 @@ import { greetingLine, senderSignature } from "@/lib/senderProfile";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
-const LABELS = { invoice: "御請求書", delivery: "納品書", estimate: "御見積書" };
-const numberOf = (type, doc) => (type === "invoice" ? doc.invoice_number : type === "estimate" ? doc.estimate_number : doc.delivery_number);
+const LABELS = { invoice: "御請求書", delivery: "納品書", estimate: "御見積書", receipt: "領収書" };
+const numberOf = (type, doc) => (type === "invoice" ? doc.invoice_number : type === "estimate" ? doc.estimate_number : type === "receipt" ? doc.receipt_number : doc.delivery_number);
 
 /** 見積書のメール本文: PDF の内容（件名・金額・主な項目・有効期限）に沿って組み立てる */
 function estimateTemplate(doc, company, user) {
@@ -69,9 +69,11 @@ function defaultTemplate(type, doc, company, user) {
     `　件名: ${doc.title || ""}`,
     type === "invoice"
       ? `　請求金額: ${yen(doc.total)}（税込）\n　入金期日: ${doc.due_date || ""}`
-      : `　納品日: ${doc.delivery_date || ""}`,
+      : type === "receipt"
+        ? `　領収金額: ${yen(doc.total)}（税込）\n　但し書き: ${doc.proviso || ""}\n　発行日: ${doc.issue_date || ""}`
+        : `　納品日: ${doc.delivery_date || ""}`,
     "",
-    type === "invoice" ? "お手数ですが、期日までにお振込みをお願いいたします。" : "内容にお気づきの点がございましたらお知らせください。",
+    type === "invoice" ? "お手数ですが、期日までにお振込みをお願いいたします。" : type === "receipt" ? "この領収書は電子発行のため、収入印紙は不要です。" : "内容にお気づきの点がございましたらお知らせください。",
     "",
     "今後ともよろしくお願いいたします。",
     "",

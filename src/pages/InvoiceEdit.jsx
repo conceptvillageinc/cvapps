@@ -17,7 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, Truck, Send, CircleCheck, Undo2 } from "lucide-react";
+import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, Truck, Send, CircleCheck, Undo2, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import { Mail } from "lucide-react";
@@ -115,6 +115,11 @@ export default function InvoiceEdit() {
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: () => db.entities.Client.list("-name"),
+  });
+  const { data: receipts = [] } = useQuery({
+    queryKey: ["receipts", "bySource", "invoice", id],
+    queryFn: () => db.entities.Receipt.filter({ invoice_id: id }, "-issue_date"),
+    enabled: !isNew, retry: false,
   });
   // まとめる候補: 同じクライアントの納品書（未請求 + この請求書に含めたもの）
   const { data: clientNotes = [] } = useQuery({
@@ -325,6 +330,9 @@ export default function InvoiceEdit() {
               </Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}>
                 <Mail className="w-3.5 h-3.5" /> メール送付
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(`/receipts/new?invoice=${id}`)} title="この請求書の明細から領収書を作ります">
+                <ReceiptText className="w-3.5 h-3.5" /> 領収書を発行{receipts.length > 0 ? `（${receipts.length}）` : ""}
               </Button>
               {form.status === "draft" && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => quick.mutate({ status: "sent", sent_at: new Date().toISOString() })}>
@@ -556,6 +564,21 @@ export default function InvoiceEdit() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {!isNew && receipts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><ReceiptText className="w-4 h-4" /> この請求書から発行した領収書</CardTitle></CardHeader>
+          <CardContent className="space-y-1.5">
+            {receipts.map((r) => (
+              <Link key={r.id} to={`/receipts/${r.id}`} className="flex items-center gap-3 p-2 rounded-md bg-muted/30 text-xs hover:bg-muted/60">
+                <span className="font-mono">{r.receipt_number}</span>
+                <span className="text-muted-foreground">{r.issue_date}</span>
+                <span className="truncate flex-1">{r.proviso}</span>
+                <span className="tabular-nums font-medium">{yen(r.total)}</span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       {!isNew && emailLogs.length > 0 && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">送付履歴</CardTitle></CardHeader>

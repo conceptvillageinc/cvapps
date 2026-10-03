@@ -117,6 +117,25 @@ export const DELIVERY_STATUS_MAP = {
   issued: { label: "発行済", color: "bg-emerald-100 text-emerald-700" },
 };
 
+export const RECEIPT_STATUS_MAP = {
+  draft: { label: "下書き", color: "bg-muted text-muted-foreground" },
+  issued: { label: "発行済", color: "bg-emerald-100 text-emerald-700" },
+  sent: { label: "送付済", color: "bg-blue-100 text-blue-700" },
+};
+
+export const PAYMENT_METHODS = [
+  { key: "cash", label: "現金" },
+  { key: "transfer", label: "振込" },
+  { key: "card", label: "カード" },
+];
+export const paymentMethodLabel = (key) => PAYMENT_METHODS.find((m) => m.key === key)?.label || "";
+
+/** 但し書きの初期値: 「チラシ印刷代として」 */
+export function defaultProviso(title) {
+  const t = String(title || "").trim();
+  return t ? `${t}代として` : "お品代として";
+}
+
 export const INVOICE_STATUS_MAP = {
   draft: { label: "下書き", color: "bg-muted text-muted-foreground" },
   sent: { label: "送付済", color: "bg-blue-100 text-blue-700" },

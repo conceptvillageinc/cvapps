@@ -3,7 +3,7 @@ import { sendMail, isMailConfigured } from './_lib/gmail.js';
 import { loadDocumentPdf } from './document-pdf.js';
 
 // ============================================================================
-// POST /api/send-document-email  { type: 'invoice'|'delivery'|'estimate', id, subject, body, stamp? }
+// POST /api/send-document-email  { type: 'invoice'|'delivery'|'estimate'|'receipt', id, subject, body, stamp? }
 //
 // 納品書・請求書・見積書のPDFを添付して、クライアントへメールを送る。
 // 宛先はクライアントマスタのメールアドレス（サーバー側で解決）。
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   if (!user) return;
 
   const { type, id, subject, body, stamp } = req.body || {};
-  if (!['delivery', 'invoice', 'estimate'].includes(type) || !id || !subject || !body) {
+  if (!['delivery', 'invoice', 'estimate', 'receipt'].includes(type) || !id || !subject || !body) {
     res.status(400).json({ error: '送信に必要な項目が足りません' });
     return;
   }
@@ -93,6 +93,9 @@ export default async function handler(req, res) {
     }
     if (type === 'delivery' && doc.status === 'draft') {
       await admin.from('delivery_notes').update({ status: 'issued' }).eq('id', id);
+    }
+    if (type === 'receipt' && doc.status !== 'sent') {
+      await admin.from('receipts').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
     }
 
     res.status(200).json({ log, recipient_email: client.email });

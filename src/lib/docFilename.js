@@ -25,6 +25,13 @@ export function invoiceFilename(doc) {
   return `${clientLabel(doc)}請求書_${clean(doc?.invoice_number) || "番号未定"}.pdf`;
 }
 
+export function receiptFilename(doc) {
+  return `${clientLabel(doc)}領収書_${clean(doc?.receipt_number) || "番号未定"}.pdf`;
+}
+
 export function documentFilename(type, doc) {
-  return type === "invoice" ? invoiceFilename(doc) : type === "delivery" ? deliveryNoteFilename(doc) : estimateFilename(doc);
+  if (type === "invoice") return invoiceFilename(doc);
+  if (type === "delivery") return deliveryNoteFilename(doc);
+  if (type === "receipt") return receiptFilename(doc);
+  return estimateFilename(doc);
 }

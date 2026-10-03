@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
@@ -25,6 +25,7 @@ const navItems = [
   { path: "/history", label: "提出見積履歴", icon: History },
   { path: "/delivery-notes", label: "納品書", icon: Truck },
   { path: "/invoices", label: "請求書", icon: ReceiptJapaneseYen },
+  { path: "/receipts", label: "領収書", icon: ReceiptText },
   { path: "/sales-report", label: "売上粗利管理表", icon: BarChart3 },
   { path: "/payments", label: "入金確認", icon: Landmark },
   { path: "/payables", label: "支払い先まとめ", icon: HandCoins },

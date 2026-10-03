@@ -15,7 +15,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, CheckCircle2, FileText, Receipt } from "lucide-react";
+import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, CheckCircle2, FileText, Receipt, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import { Mail } from "lucide-react";
@@ -101,6 +101,11 @@ export default function DeliveryNoteEdit() {
   const { data: clients = [] } = useQuery({
     queryKey: ["clients"],
     queryFn: () => db.entities.Client.list("-name"),
+  });
+  const { data: receipts = [] } = useQuery({
+    queryKey: ["receipts", "bySource", "delivery", id],
+    queryFn: () => db.entities.Receipt.filter({ delivery_note_id: id }, "-issue_date"),
+    enabled: !isNew, retry: false,
   });
 
   // 初期化
@@ -265,6 +270,9 @@ export default function DeliveryNoteEdit() {
                   <Receipt className="w-3.5 h-3.5" /> 請求書を作成
                 </Button>
               )}
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(`/receipts/new?delivery=${id}`)} title="この納品書の明細から領収書を作ります">
+                <ReceiptText className="w-3.5 h-3.5" /> 領収書を発行{receipts.length > 0 ? `（${receipts.length}）` : ""}
+              </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:text-destructive" disabled={locked}><Trash2 className="w-3.5 h-3.5" /> 削除</Button>
@@ -433,6 +441,21 @@ export default function DeliveryNoteEdit() {
       )}
       {isNew && form.line_items.length === 0 && sourceEstimateId && (
         <p className="text-xs text-muted-foreground flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> 見積に明細が無いため空で作成します</p>
+      )}
+      {!isNew && receipts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><ReceiptText className="w-4 h-4" /> この納品書から発行した領収書</CardTitle></CardHeader>
+          <CardContent className="space-y-1.5">
+            {receipts.map((r) => (
+              <Link key={r.id} to={`/receipts/${r.id}`} className="flex items-center gap-3 p-2 rounded-md bg-muted/30 text-xs hover:bg-muted/60">
+                <span className="font-mono">{r.receipt_number}</span>
+                <span className="text-muted-foreground">{r.issue_date}</span>
+                <span className="truncate flex-1">{r.proviso}</span>
+                <span className="tabular-nums font-medium">{yen(r.total)}</span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
       )}
       {!isNew && emailLogs.length > 0 && (
         <Card>
