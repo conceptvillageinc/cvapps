@@ -706,7 +706,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
             </div>
             {lineItems.length > 0 && (
               <p className="text-[10px] text-muted-foreground mt-1">
-                名称は Enter で次の欄（数量 → 単位 → 単価 → 次の行）へ、Shift+Enter で改行、Esc で元に戻します。行は左のつまみをドラッグするか、カーソルを乗せて出る ▲▼ で動かせます。右のコピーのアイコンで同じ行を下に追加します
+                名称は Enter を押しても枠内に残ります（Shift+Enter で改行、Tab で数量へ、Esc で元に戻す）。数量・単位・単価は Enter で次の欄へ進みます。行は左のつまみをドラッグするか、カーソルを乗せて出る ▲▼ で動かせます。右のコピーのアイコンで同じ行を下に追加します
               </p>
             )}
 
@@ -1315,7 +1315,8 @@ function LineScreenshot({ path, sourceUrl, onChange }) {
 }
 
 // 名称セル：普段は文字折り返しで全文表示し、クリック（または Tab／Enter で移ってきたとき）に入力欄になる。
-//   Enter … 確定して次の欄（数量）へ　　Shift+Enter … 改行　　Esc … 入力をやめて元に戻す
+//   Enter … 保存するがカーソルは枠内に残る（メモ欄と同じ感覚）　　Shift+Enter … 改行
+//   Tab … 次の欄（数量）へ　　Esc … 入力をやめて元に戻す
 function InlineTextCell({ value, onCommit }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value || "");
@@ -1331,12 +1332,9 @@ function InlineTextCell({ value, onCommit }) {
         onBlur={() => { setEditing(false); if (!skipRef.current && text !== value) onCommit(text); skipRef.current = false; }}
         onKeyDown={e => {
           if (e.key === "Enter" && !e.shiftKey) {
+            // Enter では枠から出ない。内容だけ保存しておく
             e.preventDefault();
-            const next = nextCellOf(e.currentTarget);
-            setEditing(false);
             if (text !== value) onCommit(text);
-            // この欄が消えてから次の欄へ
-            requestAnimationFrame(() => { if (next) { next.focus(); if (typeof next.select === "function") next.select(); } });
           } else if (e.key === "Escape") {
             e.preventDefault();
             skipRef.current = true;
