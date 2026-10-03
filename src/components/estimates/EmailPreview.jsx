@@ -47,17 +47,14 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
     queryFn: () => db.entities.PrintVendor.list("name"),
   });
 
-  const options = useMemo(
-    () => recipientOptions(printVendors, estimate, selectedSpecs),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [printVendors, estimate.schema_version, estimate.print_type, JSON.stringify(selectedSpecs.map(sp => sp.print_type))],
-  );
+  const options = useMemo(() => recipientOptions(printVendors), [printVendors]);
 
   // 印刷物種別から宛先の既定値を決める（旧形式は見積の種別、新形式は選んだ印刷仕様の種別）。
   // 決め手が無い新形式は未選択から始める。
   useEffect(() => {
     if (selected !== null) return;
-    const preset = defaultRecipients(estimate, selectedSpecs);
+    // 既定のチェックは、マスタにある名前だけ
+    const preset = defaultRecipients(estimate, selectedSpecs).filter((name) => options.includes(name));
     if (preset.length > 0 || options.length > 0) setSelected(preset);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estimate, options, selected]);

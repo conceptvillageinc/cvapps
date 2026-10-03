@@ -23,16 +23,14 @@ export function defaultRecipients(estimate, specs = []) {
 }
 
 /**
- * 宛先の候補。印刷所マスタ（メール依頼先）を基本にしつつ、
- * 旧形式の既定宛先がマスタに無くても選べるように足しておく。
+ * 宛先の候補。印刷所マスタ（種別: メール）だけから出す。
+ * マスタに無い名前は候補に出ないので、「印刷所情報」で消せば候補からも消える。
  */
-export function recipientOptions(printVendors, estimate, specs = []) {
+export function recipientOptions(printVendors) {
   const fromMaster = (printVendors || [])
     .filter(v => v.vendor_type === "email")
     .map(v => v.name);
-
-  const merged = [...new Set([...fromMaster, ...defaultRecipients(estimate, specs)])];
-  return merged.sort((a, b) => a.localeCompare(b, "ja"));
+  return [...new Set(fromMaster)].sort((a, b) => a.localeCompare(b, "ja"));
 }
 
 /** 明細行1件を、依頼メールに載せる1行にする。 */
