@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Mail, Send, Loader2, Sparkles, Eye, Edit3, Printer } from "lucide-react";
+import { Mail, Send, Loader2, Sparkles, Eye, Edit3, Printer, Pencil } from "lucide-react";
 import { specLabel, specMissing } from "@/lib/printSpecs";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
@@ -15,7 +15,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { companyInfoFromSettings } from "@/lib/documents";
 import { toast } from "sonner";
 import {
-  defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA,
+  defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA, requestSubject,
 } from "@/lib/estimateEmail";
 
 export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) {
@@ -25,6 +25,9 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
   const [generating, setGenerating] = useState(false);
   const [emails, setEmails] = useState([]);
   const [editingIdx, setEditingIdx] = useState(null);
+  // プレビューの中で件名や本文をクリックしたときの、その場の編集（{ idx, field }）
+  const [inline, setInline] = useState(null);
+  const patchEmail = (idx, patch) => setEmails((cur) => cur.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
   const [sendingIdx, setSendingIdx] = useState(null);
   const [selected, setSelected] = useState(null); // null = 既定値の適用前
   // 新形式: どの印刷仕様を依頼するか（既定は全部）
@@ -84,15 +87,18 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
     }
     setGenerating(true);
     try {
+      const subject = requestSubject(estimate, selectedSpecs);
       const result = await db.integrations.Core.InvokeLLM({
-        prompt: buildEmailPrompt(vendors, buildSpecText(estimate, selectedSpecs), { greeting: greetingLine(user, company), signature: senderSignature(user, company) }),
+        prompt: buildEmailPrompt(vendors, buildSpecText(estimate, selectedSpecs), { greeting: greetingLine(user, company), signature: senderSignature(user, company) }, subject),
         response_json_schema: EMAIL_SCHEMA,
       });
       const generated = result?.emails || [];
       if (generated.length === 0) {
         toast.error("メールを生成できませんでした。もう一度お試しください");
       } else {
-        setEmails(generated);
+        // 件名は決まった形にそろえる（AI の出力に左右されない）
+        setEmails(generated.map((e) => ({ ...e, subject })));
+        setInline(null);
       }
     } catch (err) {
       // 以前は失敗しても画面に何も出ず、押しても無反応に見えていた
@@ -222,7 +228,6 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                 <span className="text-xs text-muted-foreground">
                   {vendorEmail(email.company_name) || "メールアドレス未登録"}
                 </span>
-                <span className="text-xs text-muted-foreground">{email.subject}</span>
               </div>
               <div className="flex gap-1.5">
                 <Button
@@ -250,15 +255,18 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
             <div className="p-4">
               {editingIdx === idx ? (
                 <div className="space-y-2">
-                  <Input
-                    value={email.subject}
-                    onChange={e => {
-                      const updated = [...emails];
-                      updated[idx] = { ...updated[idx], subject: e.target.value };
-                      setEmails(updated);
-                    }}
-                    className="text-sm"
-                  />
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">件名：</span>
+                    <Input
+                      value={email.subject}
+                      onChange={e => {
+                        const updated = [...emails];
+                        updated[idx] = { ...updated[idx], subject: e.target.value };
+                        setEmails(updated);
+                      }}
+                      className="text-sm"
+                    />
+                  </div>
                   <Textarea
                     value={email.body}
                     onChange={e => {
@@ -271,9 +279,50 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                   />
                 </div>
               ) : (
-                <pre className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {email.body}
-                </pre>
+                <div className="space-y-2">
+                  {/* 件名: クリックでその場で直せる */}
+                  <div className="flex items-start gap-2 text-xs">
+                    <span className="shrink-0 font-medium text-muted-foreground pt-1.5">件名：</span>
+                    {inline?.idx === idx && inline.field === "subject" ? (
+                      <Input
+                        autoFocus
+                        value={email.subject}
+                        onChange={(e) => patchEmail(idx, { subject: e.target.value })}
+                        onBlur={() => setInline(null)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); } }}
+                        className="h-7 text-xs"
+                        aria-label="件名"
+                      />
+                    ) : (
+                      <button type="button" onClick={() => setInline({ idx, field: "subject" })} title="クリックして件名を直す" className="group flex-1 text-left font-medium px-1.5 py-1 -mx-1.5 rounded hover:bg-muted/60 flex items-center gap-1.5">
+                        <span>{email.subject || <span className="text-muted-foreground/60">（件名なし）</span>}</span>
+                        <Pencil className="w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                  {/* 本文: クリックでその場で直せる（枠の外を押すと戻る） */}
+                  {inline?.idx === idx && inline.field === "body" ? (
+                    <Textarea
+                      autoFocus
+                      value={email.body}
+                      onChange={(e) => patchEmail(idx, { body: e.target.value })}
+                      onBlur={() => setInline(null)}
+                      onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); } }}
+                      rows={Math.min(30, Math.max(8, String(email.body || "").split("\n").length + 1))}
+                      className="text-xs leading-relaxed"
+                      aria-label="本文"
+                    />
+                  ) : (
+                    <pre
+                      onClick={() => setInline({ idx, field: "body" })}
+                      title="クリックして本文を直す"
+                      className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed font-sans px-1.5 py-1 -mx-1.5 rounded cursor-text hover:bg-muted/40 border border-transparent hover:border-dashed hover:border-border"
+                    >
+                      {email.body}
+                    </pre>
+                  )}
+                  <p className="text-[10px] text-muted-foreground">件名や本文をクリックするとその場で直せます。まとめて直すときは右上の「編集」</p>
+                </div>
               )}
             </div>
           </div>

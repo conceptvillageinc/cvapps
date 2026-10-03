@@ -104,7 +104,14 @@ export default function VendorRequestTool({ open, onOpenChange, estimate, onUpda
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="fixed left-auto right-0 top-0 h-screen max-h-screen w-full max-w-[920px] translate-x-0 translate-y-0 rounded-none sm:rounded-none p-0 gap-0 flex flex-col data-[state=open]:animate-none data-[state=closed]:animate-none">
+      <DialogContent
+        className="fixed left-auto right-0 top-0 h-screen max-h-screen w-full max-w-[920px] translate-x-0 translate-y-0 rounded-none sm:rounded-none p-0 gap-0 flex flex-col data-[state=open]:animate-none data-[state=closed]:animate-none"
+        // 入力中に Esc を押しても、パネルごと閉じて書きかけを失わないように。入力欄から抜けるだけにする
+        onEscapeKeyDown={(e) => {
+          const el = document.activeElement;
+          if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) { e.preventDefault(); el.blur(); }
+        }}
+      >
         <div className="px-6 pt-5 pb-3 border-b">
           <DialogTitle className="text-base font-bold flex items-center gap-2"><Printer className="w-4 h-4" /> 印刷所に見積を依頼する</DialogTitle>
           <DialogDescription className="text-[11px] mt-0.5">

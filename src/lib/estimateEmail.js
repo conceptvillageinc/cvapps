@@ -105,12 +105,19 @@ export const EMAIL_SCHEMA = {
  * @param {string} specText      印刷仕様の本文
  * @param {{greeting?:string, signature?:string}} sender  名乗り（「コンセプト・ヴィレッジ　馬場です。」）と署名
  */
-export function buildEmailPrompt(recipients, specText, sender = {}) {
+/** 件名: 「【御見積のご相談】パッケージラベル印刷関連」。複数の種別なら「・」でつなぐ */
+export function requestSubject(estimate, specs = []) {
+  const types = [...new Set((specs || []).map((sp) => sp?.print_type).filter(Boolean))];
+  const label = types.length ? types.join("・") : (estimate?.print_type || "印刷物");
+  return `【御見積のご相談】${label}関連`;
+}
+
+export function buildEmailPrompt(recipients, specText, sender = {}, subject = "") {
   const senderLine = sender.greeting || "コンセプト・ヴィレッジです。";
   const signature = sender.signature || COMPANY_INFO.name;
   return `以下の印刷仕様に基づいて、印刷会社への見積依頼メールを生成してください。
 丁寧なビジネスメールの形式で、以下の情報を含めてください：
-- 件名
+- 件名（${subject ? `必ず「${subject}」とする` : "「【御見積のご相談】○○印刷関連」の形"}）
 - 挨拶
 - 見積依頼の趣旨
 - 印刷仕様の詳細
