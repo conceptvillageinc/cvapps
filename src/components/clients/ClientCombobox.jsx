@@ -107,7 +107,7 @@ export default function ClientCombobox({ value, onChange, clients, onRegister, r
               aria-selected={i === active}
               onMouseDown={(e) => { e.preventDefault(); pick(c); }}
               onMouseEnter={() => setActive(i)}
-              className={`px-3 py-1.5 cursor-pointer flex items-center gap-2 ${i === active ? "bg-accent" : ""}`}
+              className={`px-3 py-1.5 cursor-pointer flex items-center gap-2 ${i === active ? "bg-sky-100 text-sky-950" : ""}`}
             >
               <Check className={`w-3.5 h-3.5 shrink-0 ${c.name === text.trim() ? "opacity-100" : "opacity-0"}`} />
               <span className="truncate"><Highlight text={c.name} query={text.trim()} /></span>
