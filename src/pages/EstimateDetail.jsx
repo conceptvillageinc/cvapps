@@ -318,7 +318,7 @@ export default function EstimateDetail() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {formData.schema_version === 2 && (
             <>
               <DropdownMenu>
@@ -330,7 +330,6 @@ export default function EstimateDetail() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(true)}>電子印鑑あり（メール送付用）</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false)}>電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false, "purchase_order")}>発注書の雛形（クライアント記入用・宛先 CV）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button variant="outline" size="sm" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }} className="gap-1.5 text-xs">
@@ -339,9 +338,17 @@ export default function EstimateDetail() {
               <Button variant="outline" size="sm" onClick={() => navigate(`/delivery-notes/new?estimate=${estimateId}`)} className="gap-1.5 text-xs">
                 <Truck className="w-3.5 h-3.5" /> 納品書を作成
               </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate(`/partner-orders/new?estimate=${estimateId}`)} className="gap-1.5 text-xs" title="印刷所やデザイナーなど連携先へ出す発注書を、この見積の明細から作ります">
-                <ClipboardList className="w-3.5 h-3.5" /> 連携先へ発注書を作る{partnerOrders.length > 0 ? `（${partnerOrders.length}）` : ""}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={pdfLoading}>
+                    <ClipboardList className="w-3.5 h-3.5" /> 発注書を作る{partnerOrders.length > 0 ? `（${partnerOrders.length}）` : ""} <ChevronDown className="w-3 h-3 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false, "purchase_order")}>発注書の雛形（宛先：CV／発行元：クライアント）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => navigate(`/partner-orders/new?estimate=${estimateId}`)}>連携先への発注書（宛先：連携先／発行元：CV）</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
           <Button variant="outline" size="sm" onClick={copyLink} className="gap-1.5 text-xs" title="この見積の短いリンクをコピー（Asana やチャットに貼る用）">
@@ -374,7 +381,7 @@ export default function EstimateDetail() {
               <Send className="w-3.5 h-3.5" /> レビュー申請
             </Button>
           ) : null}
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-1">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-1 whitespace-nowrap shrink-0">
             {saveMutation.isPending ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> 保存中...
