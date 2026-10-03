@@ -483,6 +483,7 @@ const FUNCTION_ROUTES = {
   captureUrl: 'capture-url',
   checkEmailReplies: 'check-email-replies',
   meetingProcess: 'meeting-process',
+  backup: 'backup',
 };
 
 const functions = {
