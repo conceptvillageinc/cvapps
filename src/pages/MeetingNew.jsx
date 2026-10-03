@@ -13,6 +13,7 @@ import { ArrowLeft, Mic, FileUp, Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
 import ClientFormDialog from "@/components/clients/ClientFormDialog";
+import ClientCombobox from "@/components/clients/ClientCombobox";
 import LiveRecordingBanner from "@/components/meetings/LiveRecordingBanner";
 import { useLiveRecordings } from "@/lib/liveRecordings";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -163,19 +164,18 @@ export default function MeetingNew() {
                 {form.client_name === INTERNAL_CLIENT ? "✓ 社内の打ち合わせ（CV自社）" : "社内の打ち合わせ（CV自社）"}
               </button>
             </div>
-            <Input list="meeting-client-options" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="クライアント名（社内なら「CV自社」）" className="h-10" />
-            <datalist id="meeting-client-options">
-              <option value={INTERNAL_CLIENT}>社内の打ち合わせ</option>
-              {uniqueClients.filter((c) => c.name !== INTERNAL_CLIENT).map((c) => <option key={c.id} value={c.name} />)}
-            </datalist>
-            {form.client_name && form.client_name !== INTERNAL_CLIENT && !clientMatched && (
-              <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
-                <span>「{form.client_name}」はクライアント一覧にありません。</span>
-                <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1 bg-white" onClick={() => setClientDialogOpen(true)}><UserPlus className="w-3.5 h-3.5" /> クライアント一覧に新規登録する</Button>
-                <span className="text-[11px] text-amber-700">登録すると議事録がそのクライアントに紐づきます（登録しなくても議事録は作れます）</span>
-              </div>
+            {form.client_name === INTERNAL_CLIENT ? (
+              <Input value="社内の打ち合わせ（CV自社）" readOnly className="h-10 bg-muted/40" />
+            ) : (
+              <ClientCombobox
+                value={form.client_name}
+                onChange={(v) => setForm({ ...form, client_name: v })}
+                clients={uniqueClients.filter((c) => c.name !== INTERNAL_CLIENT)}
+                onRegister={() => setClientDialogOpen(true)}
+                registerHint="登録すると議事録がそのクライアントに紐づきます（登録しなくても議事録は作れます）"
+                placeholder="クライアント名で検索（一部でも可）"
+              />
             )}
-            {clientMatched && form.client_name !== INTERNAL_CLIENT && <p className="text-[11px] text-emerald-700">クライアント一覧の「{clientMatched.name}」に紐づきます</p>}
           </div>
           <div className="space-y-1">
             <Label className="text-xs">案件（任意）{form.client_name === INTERNAL_CLIENT && <span className="text-muted-foreground font-normal">　社内の打ち合わせでも、対象のクライアント案件を紐づけられます</span>}</Label>

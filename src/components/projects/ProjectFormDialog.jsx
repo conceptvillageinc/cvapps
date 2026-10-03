@@ -8,14 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { generateProjectNumber } from "@/lib/projectNumber";
 import { nextMonthEnd, todayString } from "@/lib/fiscal";
+import ClientCombobox from "@/components/clients/ClientCombobox";
+import ClientFormDialog from "@/components/clients/ClientFormDialog";
 
 // 数値入力: 空は 0、カンマ入りも受け付ける
 const toNumber = (v) => {
@@ -69,7 +69,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
   const { user } = useAuth();
   const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
   const [form, setForm] = useState(() => emptyForm(defaults));
-  const [clientOpen, setClientOpen] = useState(false);
+  const [clientDialogOpen, setClientDialogOpen] = useState(false);
   // 入金予定日を手で変えた後は、完了予定日を変えても自動で上書きしない
   const [dueTouched, setDueTouched] = useState(false);
   const [paymentDueTouched, setPaymentDueTouched] = useState(false);
@@ -200,38 +200,15 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">クライアント <span className="text-destructive">*</span></Label>
-              <Popover open={clientOpen} onOpenChange={setClientOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-9">
-                    <span className="truncate">{form.client_name || "クライアントを検索・選択"}</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command>
-                    <CommandInput
-                      placeholder="クライアント名を入力して検索"
-                      value={form.client_name}
-                      onValueChange={(v) => set("client_name", v)}
-                    />
-                    <CommandList>
-                      <CommandEmpty>一致するクライアントがありません（このまま新規登録されます）</CommandEmpty>
-                      <CommandGroup>
-                        {uniqueClients.map((c) => (
-                          <CommandItem
-                            key={c.id}
-                            value={c.name}
-                            onSelect={() => { set("client_name", c.name); setClientOpen(false); }}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", form.client_name === c.name ? "opacity-100" : "opacity-0")} />
-                            {c.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <ClientCombobox
+                value={form.client_name}
+                onChange={(v) => set("client_name", v)}
+                clients={uniqueClients}
+                onRegister={() => setClientDialogOpen(true)}
+                registerHint="登録しなくても案件は作れます"
+                placeholder="クライアント名で検索（一部でも可）"
+                inputClassName="h-9"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">案件名 <span className="text-destructive">*</span></Label>
@@ -364,6 +341,12 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ClientFormDialog
+        open={clientDialogOpen}
+        onOpenChange={setClientDialogOpen}
+        initialName={form.client_name}
+        onSaved={(row) => { if (row?.name) set("client_name", row.name); queryClient.invalidateQueries({ queryKey: ["clients"] }); toast.success("クライアントを登録しました"); }}
+      />
     </Dialog>
   );
 }

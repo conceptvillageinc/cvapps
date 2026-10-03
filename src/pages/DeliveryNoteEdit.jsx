@@ -18,6 +18,7 @@ import {
 import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, CheckCircle2, FileText, Receipt, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
+import ClientCombobox from "@/components/clients/ClientCombobox";
 import { Mail } from "lucide-react";
 import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
@@ -309,8 +310,7 @@ export default function DeliveryNoteEdit() {
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs">クライアント <span className="text-destructive">*</span></Label>
               <div className="flex gap-2">
-                <Input list="dn-clients" value={form.client_name} onChange={(e) => set("client_name", e.target.value)} className="h-9" disabled={locked} />
-                <datalist id="dn-clients">{clients.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+                <ClientCombobox value={form.client_name} onChange={(v) => set("client_name", v)} clients={clients} disabled={locked} inputClassName="h-9" className="flex-1" placeholder="クライアント名で検索（一部でも可）" />
                 <Select value={form.client_honorific} onValueChange={(v) => set("client_honorific", v)} disabled={locked}>
                   <SelectTrigger className="h-9 w-24 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
