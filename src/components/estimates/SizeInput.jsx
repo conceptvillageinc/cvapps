@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { ArrowLeftRight } from "lucide-react";
+import { RectangleVertical, RectangleHorizontal } from "lucide-react";
 
 /**
  * 印刷仕様のサイズ入力。数字だけ入れると「210mm×297mm」の形の文字列にする。
  * 保存される値は今まで通りの文字列なので、既存データ・PDF・依頼メールはそのまま使える。
  *
- * - 定型サイズはチップを押すだけ（保存値は「A4（210mm×297mm）」）
+ * - 定型サイズはチップを押すだけ（保存値は「A4タテ（210mm×297mm）」「A4ヨコ（297mm×210mm）」）
+ *   タテ／ヨコは幅と高さの大小で決まり、切り替えると幅と高さが入れ替わる
  * - 「箱・立体」に切り替えると奥行が増えて「幅mm×奥行mm×高さmm」
  * - 定型に無いもの（A4変形、可変など）は「文字で入力」で自由に書ける
  */
@@ -23,6 +24,13 @@ export const SIZE_PRESETS = [
   { label: "角2封筒", w: 240, h: 332 },
 ];
 
+/** 幅と高さから向きを決める（幅 < 高さ ならタテ）。正方形は空 */
+export function orientationOf(w, h) {
+  const a = Number(w), b = Number(h);
+  if (!a || !b || a === b) return "";
+  return a < b ? "タテ" : "ヨコ";
+}
+
 const NUM = "(\\d+(?:\\.\\d+)?)";
 const DIMS_RE = new RegExp(`${NUM}\\s*mm\\s*[×xX＊*]\\s*${NUM}\\s*mm(?:\\s*[×xX＊*]\\s*${NUM}\\s*mm)?`);
 
@@ -32,13 +40,23 @@ export function parseSize(value) {
   if (!v) return { w: "", h: "", d: "", preset: "", text: "", mode: "flat" };
   const m = v.match(DIMS_RE);
   if (!m) {
-    const p = SIZE_PRESETS.find((x) => x.label === v);
-    if (p) return { w: String(p.w), h: String(p.h), d: "", preset: p.label, text: "", mode: "flat" };
+    // 「A4」「A4ヨコ」のように寸法が無い場合
+    const pm = v.match(/^(.+?)(タテ|ヨコ|縦|横)?$/);
+    const p = SIZE_PRESETS.find((x) => x.label === (pm ? pm[1] : v));
+    if (p) {
+      const landscape = pm && /ヨコ|横/.test(pm[2] || "");
+      const natural = orientationOf(p.w, p.h);
+      const flip = landscape ? natural === "タテ" : (pm && /タテ|縦/.test(pm[2] || "") ? natural === "ヨコ" : false);
+      return { w: String(flip ? p.h : p.w), h: String(flip ? p.w : p.h), d: "", preset: p.label, text: "", mode: "flat" };
+    }
     return { w: "", h: "", d: "", preset: "", text: v, mode: "text" };
   }
   const isBox = m[3] != null;
   const w = m[1], h = isBox ? m[3] : m[2], d = isBox ? m[2] : "";
-  const preset = !isBox ? (SIZE_PRESETS.find((x) => String(x.w) === w && String(x.h) === h && v.startsWith(x.label))?.label || "") : "";
+  // 定型は寸法が合えば向きがどちらでも同じ定型（A4ヨコ＝297×210 も A4）
+  const preset = !isBox
+    ? (SIZE_PRESETS.find((x) => ((String(x.w) === w && String(x.h) === h) || (String(x.w) === h && String(x.h) === w)) && v.startsWith(x.label))?.label || "")
+    : "";
   return { w, h, d, preset, text: "", mode: isBox ? "box" : "flat" };
 }
 
@@ -48,7 +66,8 @@ export function formatSize({ w, h, d, preset, mode }) {
   const parts = mode === "box" ? [clean(w), clean(d), clean(h)] : [clean(w), clean(h)];
   if (parts.some((x) => !x)) return "";
   const dims = parts.map((x) => `${x}mm`).join("×");
-  return preset && mode !== "box" ? `${preset}（${dims}）` : dims;
+  if (preset && mode !== "box") return `${preset}${orientationOf(w, h)}（${dims}）`;
+  return dims;
 }
 
 export default function SizeInput({ value, onChange, className = "" }) {
@@ -70,13 +89,21 @@ export default function SizeInput({ value, onChange, className = "" }) {
     onChange(str);
   };
   const setNum = (key) => (e) => emit({ ...fields, [key]: e.target.value.replace(/[^0-9.]/g, ""), preset: "" });
-  const pickPreset = (p) => emit({ ...fields, mode: "flat", w: String(p.w), h: String(p.h), d: "", preset: p.label, text: "" });
+  // 定型を押したときは、いま選んでいる向きを引き継ぐ（A4 を押してからヨコにしたあと A3 を押しても横のまま）
+  const pickPreset = (p) => {
+    const keepLandscape = orientationOf(fields.w, fields.h) === "ヨコ";
+    const natural = orientationOf(p.w, p.h);
+    const flip = keepLandscape ? natural === "タテ" : false;
+    emit({ ...fields, mode: "flat", w: String(flip ? p.h : p.w), h: String(flip ? p.w : p.h), d: "", preset: p.label, text: "" });
+  };
   const setMode = (mode) => emit({ ...fields, mode, preset: mode === "box" ? "" : fields.preset, text: mode === "text" ? (fields.text || formatSize(fields)) : "" });
-  const swap = () => emit({ ...fields, w: fields.h, h: fields.w, preset: "" });
+  // タテ／ヨコの切り替え: 幅と高さを入れ替える（定型はそのまま）
+  const setOrientation = (o) => { if (orientationOf(fields.w, fields.h) !== o) emit({ ...fields, w: fields.h, h: fields.w }); };
 
   const isBox = fields.mode === "box";
   const isText = fields.mode === "text";
   const result = isText ? fields.text : formatSize(fields);
+  const orientation = orientationOf(fields.w, fields.h);
 
   const numBox = (key, label, id) => (
     <label className="flex items-center h-9 rounded-md border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring" title={label}>
@@ -134,9 +161,23 @@ export default function SizeInput({ value, onChange, className = "" }) {
             </>
           )}
           {numBox("h", "高さ", "size-h")}
-          <button type="button" onClick={swap} title="幅と高さを入れ替える" aria-label="幅と高さを入れ替える" className="h-9 w-9 flex items-center justify-center rounded-md border bg-background hover:bg-muted text-muted-foreground">
-            <ArrowLeftRight className="w-3.5 h-3.5" />
-          </button>
+          {!isBox && (
+            <div className="flex gap-0.5 p-0.5 rounded-md bg-muted" role="group" aria-label="向き">
+              {[["タテ", RectangleVertical], ["ヨコ", RectangleHorizontal]].map(([o, Icon]) => (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => setOrientation(o)}
+                  disabled={!fields.w || !fields.h || fields.w === fields.h}
+                  aria-pressed={orientation === o}
+                  title={o === "タテ" ? "タテ（幅 < 高さ）" : "ヨコ（幅 > 高さ）"}
+                  className={`h-8 px-2 rounded flex items-center gap-1 text-[11px] disabled:opacity-40 ${orientation === o ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {o}
+                </button>
+              ))}
+            </div>
+          )}
           <span className={`ml-auto h-9 flex items-center px-3 rounded-md text-sm font-medium tabular-nums whitespace-nowrap ${result ? "bg-indigo-50 text-slate-800" : "bg-muted text-muted-foreground"}`}>
             {result || (isBox ? "000mm×000mm×000mm" : "000mm×000mm")}
           </span>
