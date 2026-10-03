@@ -278,13 +278,12 @@ export default function PartnerOrderEdit() {
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs">連携先 <span className="text-destructive">*</span> <span className="text-muted-foreground font-normal">クライアント一覧と印刷所情報から検索</span></Label>
               <div className="flex gap-2">
-                <ClientCombobox value={form.partner_name} onChange={(v) => set("partner_name", v)} clients={partners} inputClassName="h-9" className="flex-1" placeholder="連携先の名前で検索（一部でも可）" />
+                <ClientCombobox value={form.partner_name} onChange={(v) => set("partner_name", v)} clients={partners} inputClassName="h-9" className="flex-1" placeholder="連携先の名前で検索（一部でも可）" listLabel="クライアント一覧・印刷所情報" matchedText={(p) => `${p.source === "print_vendor" ? "印刷所情報" : "クライアント一覧"}の「${p.name}」に紐づきます${p.email ? `（${p.email}）` : "（メールアドレス未登録）"}`} />
                 <Select value={form.partner_honorific} onValueChange={(v) => set("partner_honorific", v)}>
                   <SelectTrigger className="h-9 w-24 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="御中" className="text-xs">御中</SelectItem><SelectItem value="様" className="text-xs">様</SelectItem></SelectContent>
                 </Select>
               </div>
-              {partner && <p className="text-[10px] text-muted-foreground">{partner.source === "print_vendor" ? "印刷所情報" : "クライアント一覧"}の登録{partner.email ? `（${partner.email}）` : "（メールアドレス未登録）"}</p>}
             </div>
             <div className="space-y-1.5"><Label className="text-xs">郵便番号</Label><Input value={form.partner_postal_code || ""} onChange={(e) => set("partner_postal_code", e.target.value)} className="h-9 font-mono" /></div>
             <div className="space-y-1.5"><Label className="text-xs">住所</Label><Input value={form.partner_address || ""} onChange={(e) => set("partner_address", e.target.value)} className="h-9" /></div>

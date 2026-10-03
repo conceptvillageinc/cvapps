@@ -54,7 +54,7 @@ function Highlight({ text, query }) {
  * @param {string} [p.registerHint]    新規登録の案内文
  * @param {boolean} [p.required]
  */
-export default function ClientCombobox({ value, onChange, clients, onRegister, registerHint, placeholder = "クライアント名で検索", className = "", inputClassName = "h-10", disabled = false, autoFocus = false }) {
+export default function ClientCombobox({ value, onChange, clients, onRegister, registerHint, placeholder = "クライアント名で検索", className = "", inputClassName = "h-10", disabled = false, autoFocus = false, matchedText = null, listLabel = "クライアント一覧" }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const wrapRef = useRef(null);
@@ -117,10 +117,10 @@ export default function ClientCombobox({ value, onChange, clients, onRegister, r
         </ul>
       )}
       {exact ? (
-        <p className="text-[11px] text-emerald-700 mt-1">クライアント一覧の「{exact.name}」に紐づきます</p>
+        <p className="text-[11px] text-emerald-700 mt-1">{matchedText ? matchedText(exact) : `${listLabel}の「${exact.name}」に紐づきます`}</p>
       ) : noMatch ? (
         <div className="mt-1 flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
-          <span>「{text.trim()}」はクライアント一覧にありません。</span>
+          <span>「{text.trim()}」は{listLabel}にありません。</span>
           {onRegister && (
             <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1 bg-white" onClick={onRegister}><UserPlus className="w-3.5 h-3.5" /> クライアント一覧に新規登録する</Button>
           )}
