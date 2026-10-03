@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Printer, Mail, Inbox, Check, Loader2, RefreshCw, FileUp, MessageSquareReply, Undo2 } from "lucide-react";
+import { Printer, Mail, Inbox, Check, Loader2, RefreshCw, FileUp, MessageSquareReply, Undo2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import PrintSpecsPanel from "@/components/estimates/PrintSpecsPanel";
 import EmailPreview from "@/components/estimates/EmailPreview";
@@ -16,11 +16,13 @@ import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 const fmt = (d) => (d ? new Date(d).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "");
 
 /** 上部のステップ表示（1 仕様 / 2 送信 / 3 返答の取り込み） */
+const STEP_LABELS = { 1: "印刷仕様を入力", 2: "送信先を選んでメールを送る", 3: "返答を明細に取り込む" };
+
 function ToolSteps({ status, current, onPick }) {
   const steps = [
-    { n: 1, label: "印刷仕様を入力", note: status.specs > 0 ? `${status.specs}件` : "未入力", done: status.specs > 0 },
-    { n: 2, label: "送信先を選んでメールを送る", note: status.sent > 0 ? `${status.sent}社に送信` : "未送信", done: status.sent > 0 },
-    { n: 3, label: "返答を明細に取り込む", note: status.imported > 0 ? `${status.imported}社 取り込み済み` : status.replied > 0 ? `${status.replied}社 返答あり` : "返答待ち", done: status.imported > 0 },
+    { n: 1, label: STEP_LABELS[1], note: status.specs > 0 ? `${status.specs}件` : "未入力", done: status.specs > 0 },
+    { n: 2, label: STEP_LABELS[2], note: status.sent > 0 ? `${status.sent}社に送信` : "未送信", done: status.sent > 0 },
+    { n: 3, label: STEP_LABELS[3], note: status.imported > 0 ? `${status.imported}社 取り込み済み` : status.replied > 0 ? `${status.replied}社 返答あり` : "返答待ち", done: status.imported > 0 },
   ];
   return (
     <div className="flex items-center rounded-lg border bg-muted/30 px-3 py-2">
@@ -29,7 +31,7 @@ function ToolSteps({ status, current, onPick }) {
         return (
           <div key={s.n} className="flex items-center flex-1 min-w-0">
             {i > 0 && <div className={`h-0.5 w-6 shrink-0 ${steps[i - 1].done ? "bg-primary" : "bg-border"}`} />}
-            <button type="button" onClick={() => onPick(s.n)} className={`flex items-center gap-2 min-w-0 ${i > 0 ? "pl-2" : ""} text-left`}>
+            <button type="button" onClick={() => onPick(s.n)} title={active ? "いまここ" : `${s.n}. ${s.label} に移る`} className={`flex items-center gap-2 min-w-0 ${i > 0 ? "pl-2" : ""} pr-2 py-1 rounded-md text-left transition-colors ${active ? "" : "hover:bg-background hover:shadow-sm"}`}>
               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${s.done && !active ? "bg-emerald-600 text-white" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                 {s.done && !active ? <Check className="w-3.5 h-3.5" /> : s.n}
               </div>
@@ -207,8 +209,19 @@ export default function VendorRequestTool({ open, onOpenChange, estimate, onUpda
           )}
         </div>
 
-        <div className="px-6 py-3 border-t flex items-center justify-between bg-background">
-          <span className="text-[11px] text-muted-foreground">仕様 {status.specs}件 ・ 送信 {status.sent}社 ・ 返答 {status.replied}社 ・ 取り込み {status.imported}社</span>
+        <div className="px-6 py-3 border-t flex flex-wrap items-center gap-2 bg-background">
+          {/* 手順の行き来: 上の手順の帯を押しても移れるが、分かりやすいように「戻る」「次へ」を置く */}
+          {current > 1 ? (
+            <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => setStep(current - 1)}>
+              <ChevronLeft className="w-3.5 h-3.5" /> 戻る：{current - 1}. {STEP_LABELS[current - 1]}
+            </Button>
+          ) : <span />}
+          {current < 3 && (
+            <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => setStep(current + 1)}>
+              次へ：{current + 1}. {STEP_LABELS[current + 1]} <ChevronRight className="w-3.5 h-3.5" />
+            </Button>
+          )}
+          <span className="text-[11px] text-muted-foreground ml-auto hidden sm:inline">仕様 {status.specs}件 ・ 送信 {status.sent}社 ・ 返答 {status.replied}社 ・ 取り込み {status.imported}社</span>
           <Button variant="outline" size="sm" className="text-xs" onClick={() => onOpenChange(false)}>閉じて見積書に戻る</Button>
         </div>
 
