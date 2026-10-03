@@ -18,6 +18,9 @@ import {
   defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA, requestSubject,
 } from "@/lib/estimateEmail";
 
+// 本文の行数に合わせた高さ（最低 14 行、最大 60 行）。毎回マウスで枠を広げなくて済むように
+const bodyRows = (text) => Math.min(60, Math.max(14, String(text || "").split("\n").length + 2));
+
 export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) {
   const { user } = useAuth();
   const { settings } = useSystemSettings();
@@ -274,8 +277,8 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                       updated[idx] = { ...updated[idx], body: e.target.value };
                       setEmails(updated);
                     }}
-                    rows={10}
-                    className="text-sm font-mono"
+                    rows={bodyRows(email.body)}
+                    className="text-sm leading-relaxed"
                   />
                 </div>
               ) : (
@@ -308,7 +311,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                       onChange={(e) => patchEmail(idx, { body: e.target.value })}
                       onBlur={() => setInline(null)}
                       onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); } }}
-                      rows={Math.min(30, Math.max(8, String(email.body || "").split("\n").length + 1))}
+                      rows={bodyRows(email.body)}
                       className="text-xs leading-relaxed"
                       aria-label="本文"
                     />
