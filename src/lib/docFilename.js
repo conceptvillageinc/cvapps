@@ -29,7 +29,13 @@ export function receiptFilename(doc) {
   return `${clientLabel(doc)}領収書_${clean(doc?.receipt_number) || "番号未定"}.pdf`;
 }
 
+export function partnerOrderFilename(doc) {
+  const name = clean(doc?.partner_name) || "連携先";
+  return `【${name}${clean(doc?.partner_honorific) || "御中"}】発注書_${clean(doc?.po_number) || "番号未定"}.pdf`;
+}
+
 export function documentFilename(type, doc) {
+  if (type === "partner_order") return partnerOrderFilename(doc);
   if (type === "invoice") return invoiceFilename(doc);
   if (type === "delivery") return deliveryNoteFilename(doc);
   if (type === "receipt") return receiptFilename(doc);

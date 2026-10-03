@@ -23,7 +23,7 @@ export const PAGE_MARGINS = { top: MARGIN, bottom: 14, left: MARGIN, right: MARG
 export const DEFAULT_STAMP_WIDTH = 52;
 
 // 位置（pt）。参考帳票を実測したもの
-const L = {
+export const L = {
   clientPostalY: 38,
   clientAddressY: 50,
   clientNameY: 68,
@@ -50,7 +50,7 @@ const L = {
 };
 
 const GRAY = '#e6e6e6';
-const LINE = '#999999';
+export const LINE = '#999999';
 const BLACK = '#000000';
 
 export const yen = (n) => `${Math.round(Number(n) || 0).toLocaleString('ja-JP')}`;
@@ -76,7 +76,7 @@ export function registerFonts(pdf) {
 }
 
 /** 1行の文字を枠 (x, y, w, h) の上下中央に置く */
-function textV(pdf, text, x, y, w, h, { align = 'left', size = 8.5, bold = false, color = BLACK, minSize = 6.5 } = {}) {
+export function textV(pdf, text, x, y, w, h, { align = 'left', size = 8.5, bold = false, color = BLACK, minSize = 6.5 } = {}) {
   const str = String(text ?? '');
   pdf.font(bold ? 'jp-bold' : 'jp').fontSize(size).fillColor(color);
   // 収まらないときは少し小さくし、それでも長ければ省略記号
@@ -88,7 +88,7 @@ function textV(pdf, text, x, y, w, h, { align = 'left', size = 8.5, bold = false
 }
 
 /** 複数行の文章を枠の上下中央に置く（折り返しあり） */
-function paragraphV(pdf, text, x, y, w, h, { align = 'left', size = 8.5, bold = false, color = BLACK } = {}) {
+export function paragraphV(pdf, text, x, y, w, h, { align = 'left', size = 8.5, bold = false, color = BLACK } = {}) {
   const str = String(text ?? '');
   pdf.font(bold ? 'jp-bold' : 'jp').fontSize(size).fillColor(color);
   const th = Math.min(h, pdf.heightOfString(str, { width: w }));
@@ -180,7 +180,7 @@ export function drawSubjectAndMeta(pdf, subject, meta) {
 }
 
 /** 黒帯の見出し行 */
-function drawBandHead(pdf, x, y, cols, labels) {
+export function drawBandHead(pdf, x, y, cols, labels) {
   const w = cols.reduce((s, c) => s + c, 0);
   pdf.rect(x, y, w, L.headH).fill(BLACK);
   let cx = x;

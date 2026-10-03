@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   if (!user) return;
 
   const { type, id, subject, body, stamp } = req.body || {};
-  if (!['delivery', 'invoice', 'estimate', 'receipt'].includes(type) || !id || !subject || !body) {
+  if (!['delivery', 'invoice', 'estimate', 'receipt', 'partner_order'].includes(type) || !id || !subject || !body) {
     res.status(400).json({ error: '送信に必要な項目が足りません' });
     return;
   }
@@ -30,9 +30,16 @@ export default async function handler(req, res) {
     const admin = adminClient();
     const { buffer, filename, doc } = await loadDocumentPdf(admin, type, id, { stamp: stamp !== false });
 
-    // 宛先: クライアントマスタ（id があれば id、無ければ名前）から
+    // 宛先: クライアントマスタ（id があれば id、無ければ名前）から。
+    // 発注書は連携先（クライアント一覧か印刷所情報）から
     let client = null;
-    if (doc.client_id) {
+    if (type === 'partner_order') {
+      const table = doc.partner_type === 'print_vendor' ? 'print_vendors' : 'clients';
+      const cols = doc.partner_type === 'print_vendor' ? 'id, name, email' : 'id, name, email, cc_emails';
+      if (doc.partner_id) ({ data: client } = await admin.from(table).select(cols).eq('id', doc.partner_id).maybeSingle());
+      if (!client) ({ data: client } = await admin.from(table).select(cols).eq('name', doc.partner_name).order('created_at').limit(1).maybeSingle());
+      if (!client) { res.status(404).json({ error: `「${doc.partner_name}」が${doc.partner_type === 'print_vendor' ? '印刷所情報' : 'クライアント一覧'}に見つかりません` }); return; }
+    } else if (doc.client_id) {
       ({ data: client } = await admin.from('clients').select('id, name, email, cc_emails').eq('id', doc.client_id).maybeSingle());
     }
     if (!client) {
@@ -96,6 +103,9 @@ export default async function handler(req, res) {
     }
     if (type === 'receipt' && doc.status !== 'sent') {
       await admin.from('receipts').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
+    }
+    if (type === 'partner_order' && (doc.status === 'draft' || doc.status === 'issued')) {
+      await admin.from('partner_orders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
     }
 
     res.status(200).json({ log, recipient_email: client.email });

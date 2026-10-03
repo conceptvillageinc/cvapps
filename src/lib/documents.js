@@ -136,6 +136,25 @@ export function defaultProviso(title) {
   return t ? `${t}代として` : "お品代として";
 }
 
+export const PARTNER_ORDER_STATUS_MAP = {
+  draft: { label: "下書き", color: "bg-muted text-muted-foreground" },
+  issued: { label: "発行済", color: "bg-emerald-100 text-emerald-700" },
+  sent: { label: "送付済", color: "bg-blue-100 text-blue-700" },
+  done: { label: "納品済", color: "bg-slate-100 text-slate-600" },
+};
+export const DELIVERY_TO_KINDS = [
+  { key: "cv", label: "CV（自社）" },
+  { key: "client", label: "クライアント直送" },
+  { key: "other", label: "その他" },
+];
+export const DEFAULT_PAYMENT_TERMS = ["納品月末締め翌月末払い"];
+/** システム設定 po_payment_terms（JSON 配列）。無ければ既定 */
+export function paymentTermsFromSettings(settings) {
+  const row = (settings || []).find((x) => x.setting_key === "po_payment_terms");
+  if (!row) return DEFAULT_PAYMENT_TERMS;
+  try { const v = JSON.parse(row.setting_value); return Array.isArray(v) && v.length ? v.map(String) : DEFAULT_PAYMENT_TERMS; } catch { return DEFAULT_PAYMENT_TERMS; }
+}
+
 export const INVOICE_STATUS_MAP = {
   draft: { label: "下書き", color: "bg-muted text-muted-foreground" },
   sent: { label: "送付済", color: "bg-blue-100 text-blue-700" },

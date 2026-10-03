@@ -18,8 +18,33 @@ import { greetingLine, senderSignature } from "@/lib/senderProfile";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
-const LABELS = { invoice: "御請求書", delivery: "納品書", estimate: "御見積書", receipt: "領収書" };
-const numberOf = (type, doc) => (type === "invoice" ? doc.invoice_number : type === "estimate" ? doc.estimate_number : type === "receipt" ? doc.receipt_number : doc.delivery_number);
+const LABELS = { invoice: "御請求書", delivery: "納品書", estimate: "御見積書", receipt: "領収書", partner_order: "発注書" };
+const numberOf = (type, doc) => (type === "invoice" ? doc.invoice_number : type === "estimate" ? doc.estimate_number : type === "receipt" ? doc.receipt_number : type === "partner_order" ? doc.po_number : doc.delivery_number);
+
+/** 連携先への発注書のメール本文 */
+function partnerOrderTemplate(doc, company, user) {
+  const subject = `【発注書】${doc.title || doc.po_number}（${company.name}）`;
+  const lines = [
+    `${doc.partner_name} ${doc.partner_honorific || "御中"}`,
+    "",
+    "いつもお世話になっております。",
+    greetingLine(user, company),
+    "",
+    "下記のとおり発注いたします。発注書の PDF を添付しておりますのでご確認ください。",
+    "",
+    `　発注書番号: ${doc.po_number}`,
+    `　件名: ${doc.title || ""}`,
+    `　発注金額: ${yen(doc.total)}（税込）`,
+    `　納期: ${doc.due_date || ""}`,
+    `　支払条件: ${doc.payment_terms || ""}`,
+    "",
+    "ご不明な点がございましたらお知らせください。",
+    "よろしくお願いいたします。",
+    "",
+    senderSignature(user, company),
+  ];
+  return { subject, body: lines.join("\n") };
+}
 
 /** 見積書のメール本文: PDF の内容（件名・金額・主な項目・有効期限）に沿って組み立てる */
 function estimateTemplate(doc, company, user) {
@@ -54,6 +79,7 @@ function estimateTemplate(doc, company, user) {
 
 function defaultTemplate(type, doc, company, user) {
   if (type === "estimate") return estimateTemplate(doc, company, user);
+  if (type === "partner_order") return partnerOrderTemplate(doc, company, user);
   const label = LABELS[type];
   const number = numberOf(type, doc);
   const subject = `【${label}】${doc.title || number}（${company.name}）`;
@@ -86,7 +112,7 @@ function defaultTemplate(type, doc, company, user) {
  * 納品書・請求書をPDF添付でクライアントへ送るダイアログ。
  * 宛先はクライアント一覧のメールアドレス（画面からは変更できない）。
  */
-export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onSent }) {
+export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onSent, recipient = null }) {
   const queryClient = useQueryClient();
   const { settings } = useSystemSettings();
   const { user } = useAuth();
@@ -101,7 +127,9 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
     queryFn: () => db.entities.Client.list("-name"),
     enabled: open,
   });
-  const client = clients.find((c) => (doc.client_id && c.id === doc.client_id) || c.name === doc.client_name);
+  // 宛先の表示。発注書は連携先（recipient で渡される）、それ以外はクライアント一覧から
+  const client = recipient || clients.find((c) => (doc.client_id && c.id === doc.client_id) || c.name === doc.client_name);
+  const toName = recipient ? recipient.name : doc.client_name;
 
   useEffect(() => {
     if (!open) return;
@@ -115,7 +143,7 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
     setSending(true);
     try {
       const { data } = await db.functions.invoke("sendDocumentEmail", { type, id: doc.id, subject, body, stamp: withStamp });
-      toast.success(`${doc.client_name}（${data.recipient_email}）へ送信しました`);
+      toast.success(`${toName}（${data.recipient_email}）へ送信しました`);
       queryClient.invalidateQueries({ queryKey: ["emailLogs", type, doc.id] });
       onSent?.();
       onOpenChange(false);
@@ -138,8 +166,8 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
           <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-muted-foreground w-12">宛先</span>
-              <span className="font-medium">{doc.client_name}</span>
-              {client?.email ? <span className="text-muted-foreground">{client.email}</span> : <span className="text-amber-700">メールアドレスが未登録です（クライアント一覧で登録してください）</span>}
+              <span className="font-medium">{toName}</span>
+              {client?.email ? <span className="text-muted-foreground">{client.email}</span> : <span className="text-amber-700">メールアドレスが未登録です（{recipient ? "クライアント一覧か印刷所情報" : "クライアント一覧"}で登録してください）</span>}
               {Array.isArray(client?.cc_emails) && client.cc_emails.filter(Boolean).length > 0 && (
                 <span className="text-muted-foreground">CC: {client.cc_emails.filter(Boolean).join(", ")}</span>
               )}

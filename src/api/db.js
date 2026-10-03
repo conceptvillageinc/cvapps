@@ -37,6 +37,7 @@ const TABLES = {
   DeliveryNote: 'delivery_notes',
   Invoice: 'invoices',
   Receipt: 'receipts',
+  PartnerOrder: 'partner_orders',
   BankTransaction: 'bank_transactions',
   FiscalTarget: 'fiscal_targets',
   ProjectTask: 'project_tasks',
@@ -63,6 +64,11 @@ const WRITABLE_COLUMNS = {
     'client_postal_code', 'client_address', 'title', 'delivery_date', 'line_items',
     'subtotal', 'tax', 'total', 'tax_breakdown', 'notes', 'status', 'invoice_id',
     'person_in_charge', 'created_by',
+  ],
+  partner_orders: [
+    'po_number', 'estimate_id', 'project_id', 'partner_type', 'partner_id', 'partner_name', 'partner_honorific',
+    'partner_postal_code', 'partner_address', 'partner_contact', 'title', 'order_date', 'due_date', 'delivery_to_kind', 'delivery_to',
+    'payment_terms', 'line_items', 'subtotal', 'tax', 'total', 'tax_breakdown', 'notes', 'status', 'sent_at', 'person_in_charge', 'created_by',
   ],
   receipts: [
     'receipt_number', 'delivery_note_id', 'invoice_id', 'project_id', 'client_id', 'client_name', 'client_honorific',
@@ -146,7 +152,7 @@ const DATE_COLUMNS = new Set([
   'estimate_date', 'desired_delivery_date', 'last_updated',
   'approved_date', 'sent_at',
   'registered_at', 'due_date', 'payment_due_date', 'vendor_payment_date',
-  'start_month', 'end_month', 'delivery_date', 'invoice_date', 'due_date', 'paid_at', 'transaction_date', 'issue_date',
+  'start_month', 'end_month', 'delivery_date', 'invoice_date', 'due_date', 'paid_at', 'transaction_date', 'issue_date', 'order_date',
   'start_date', 'end_date',
 ]);
 

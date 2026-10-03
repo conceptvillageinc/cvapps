@@ -36,6 +36,8 @@ import DeliveryNoteList from '@/pages/DeliveryNoteList';
 import DeliveryNoteEdit from '@/pages/DeliveryNoteEdit';
 import ReceiptList from '@/pages/ReceiptList';
 import ReceiptEdit from '@/pages/ReceiptEdit';
+import PartnerOrderList from '@/pages/PartnerOrderList';
+import PartnerOrderEdit from '@/pages/PartnerOrderEdit';
 import InvoiceList from '@/pages/InvoiceList';
 import InvoiceEdit from '@/pages/InvoiceEdit';
 import Payments from '@/pages/Payments';
@@ -87,6 +89,9 @@ const AuthenticatedApp = () => {
           <Route path="/receipts" element={<ReceiptList />} />
           <Route path="/receipts/new" element={<ReceiptEdit />} />
           <Route path="/receipts/:id" element={<ReceiptEdit />} />
+          <Route path="/partner-orders" element={<PartnerOrderList />} />
+          <Route path="/partner-orders/new" element={<PartnerOrderEdit />} />
+          <Route path="/partner-orders/:id" element={<PartnerOrderEdit />} />
           <Route path="/estimates/new" element={<EstimateCreate />} />
           <Route path="/estimates/:id" element={<EstimateDetail />} />
           <Route path="/e/:number" element={<EstimateShortLink />} />

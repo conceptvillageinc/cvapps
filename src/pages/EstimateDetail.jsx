@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -67,6 +67,12 @@ export default function EstimateDetail() {
     queryKey: ["emailLogs", estimateId],
     queryFn: () => db.entities.EmailLog.filter({ estimate_id: estimateId }),
     enabled: !!estimateId,
+  });
+  // この見積から連携先へ出した発注書
+  const { data: partnerOrders = [] } = useQuery({
+    queryKey: ["partnerOrders", "byEstimate", estimateId],
+    queryFn: () => db.entities.PartnerOrder.filter({ estimate_id: estimateId }, "-order_date"),
+    enabled: !!estimateId, retry: false,
   });
 
   const { data: project } = useQuery({
@@ -332,6 +338,9 @@ export default function EstimateDetail() {
               </Button>
               <Button variant="outline" size="sm" onClick={() => navigate(`/delivery-notes/new?estimate=${estimateId}`)} className="gap-1.5 text-xs">
                 <Truck className="w-3.5 h-3.5" /> 納品書を作成
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/partner-orders/new?estimate=${estimateId}`)} className="gap-1.5 text-xs" title="印刷所やデザイナーなど連携先へ出す発注書を、この見積の明細から作ります">
+                <ClipboardList className="w-3.5 h-3.5" /> 連携先へ発注書を作る{partnerOrders.length > 0 ? `（${partnerOrders.length}）` : ""}
               </Button>
             </>
           )}

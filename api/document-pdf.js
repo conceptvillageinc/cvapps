@@ -3,6 +3,7 @@ import { renderDocumentPdf } from './_lib/pdf.js';
 import { renderEstimatePdf, estimateFilename } from './_lib/estimatePdf.js';
 import { renderPurchaseOrderPdf, purchaseOrderFilename } from './_lib/purchaseOrderPdf.js';
 import { renderReceiptPdf } from './_lib/receiptPdf.js';
+import { renderPartnerOrderPdf } from './_lib/partnerOrderPdf.js';
 import { documentFilename } from '../src/lib/docFilename.js';
 
 // ============================================================================
@@ -13,7 +14,7 @@ import { documentFilename } from '../src/lib/docFilename.js';
 // stamp: false を渡すと印影を押さない（郵送・持参で押印する場合）。既定は押す。
 // ============================================================================
 
-const TYPES = ['delivery', 'invoice', 'estimate', 'purchase_order', 'receipt'];
+const TYPES = ['delivery', 'invoice', 'estimate', 'purchase_order', 'receipt', 'partner_order'];
 
 async function loadCompany(admin) {
   const { data: row } = await admin.from('system_settings').select('setting_value').eq('setting_key', 'company_info').maybeSingle();
@@ -50,6 +51,14 @@ export async function loadDocumentPdf(admin, type, id, { stamp: withStamp = true
     }
     const buffer = await renderEstimatePdf({ estimate: est, client, company, stamp, logo });
     return { buffer, filename: estimateFilename(est), doc: est, client };
+  }
+
+  if (type === 'partner_order') {
+    const { data: order, error } = await admin.from('partner_orders').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!order) { const e = new Error('発注書が見つかりません'); e.status = 404; throw e; }
+    const buffer = await renderPartnerOrderPdf({ order, company, stamp, logo });
+    return { buffer, filename: documentFilename('partner_order', order), doc: order };
   }
 
   if (type === 'receipt') {
