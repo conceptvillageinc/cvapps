@@ -42,7 +42,7 @@ function Highlight({ text, query }) {
   if (!q) return text;
   const i = String(text).toLowerCase().indexOf(q.toLowerCase());
   if (i < 0) return text;
-  return <>{text.slice(0, i)}<mark className="bg-yellow-100 text-inherit rounded-sm">{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</>;
+  return <>{text.slice(0, i)}<mark className="bg-sky-100 text-sky-900 rounded-sm">{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</>;
 }
 
 /**
