@@ -165,7 +165,7 @@ export function bankCodeOf(name, fallback = "other") {
 export const BALANCE_SNAPSHOT_PAYEE = "残高照会";
 
 /**
- * 残高照会の画面から読み取った口座残高（{ bank, account_label, as_of, balance }）を、明細の形の行にする。
+ * 残高照会の画面から読み取った口座残高（{ bank, account_label, as_of, balance, memo? }）を、明細の形の行にする。
  * 入出金 0 円・残高だけの行で、照合の対象外（ignored）として入れる。資金繰り表の残高の起点に使う。
  */
 export async function rowsFromBalances(entries) {
@@ -175,7 +175,7 @@ export async function rowsFromBalances(entries) {
     const key = [b.bank, b.as_of, BALANCE_SNAPSHOT_PAYEE, label, b.balance].join("|");
     out.push({
       bank: b.bank, account_label: label, transaction_date: b.as_of, payee_raw: BALANCE_SNAPSHOT_PAYEE, payee_normalized: normalizePayee(BALANCE_SNAPSHOT_PAYEE),
-      amount_in: 0, amount_out: 0, balance: b.balance, match_status: "ignored", memo: "残高照会の画面から（明細ではなく、その時点の残高）",
+      amount_in: 0, amount_out: 0, balance: b.balance, match_status: "ignored", memo: b.memo || "残高照会の画面から（明細ではなく、その時点の残高）",
       source_hash: await sha1Hex(key),
     });
   }
