@@ -11,7 +11,7 @@
 // ============================================================================
 
 import { nextMonthEnd } from "@/lib/fiscal";
-import { BANK_LABELS } from "@/lib/bankImport";
+import { BANK_LABELS, accountKeyOf } from "@/lib/bankImport";
 
 const n = (v) => Number(v) || 0;
 const pad = (x) => String(x).padStart(2, "0");
@@ -35,14 +35,20 @@ export const countsAsForecast = (p) => p.status === "open" && p.phase === "着�
 
 /** 口座ごとの最後の残高（最後の日付の明細のうち、最後に取り込んだもの） */
 export function latestBalances(bankTxs) {
+  // 口座（銀行＋口座番号）ごとに、いちばん新しい行の残高を使う。同じ日なら後に取り込んだ方
   const best = new Map();
   for (const tx of bankTxs || []) {
     if (tx.balance === null || tx.balance === undefined || tx.balance === "") continue;
-    const cur = best.get(tx.bank);
+    const key = accountKeyOf(tx);
+    const cur = best.get(key);
     const newer = !cur || tx.transaction_date > cur.transaction_date || (tx.transaction_date === cur.transaction_date && String(tx.created_at || "") >= String(cur.created_at || ""));
-    if (newer) best.set(tx.bank, tx);
+    if (newer) best.set(key, tx);
   }
-  return [...best.values()].map((tx) => ({ bank: tx.bank, label: BANK_LABELS[tx.bank] || tx.account_label || tx.bank, balance: n(tx.balance), date: tx.transaction_date })).sort((a, b) => a.bank.localeCompare(b.bank));
+  return [...best.entries()].map(([key, tx]) => {
+    const numbered = key.split("|")[1];
+    const label = numbered && tx.account_label ? tx.account_label : (BANK_LABELS[tx.bank] || tx.account_label || tx.bank);
+    return { key, bank: tx.bank, label, balance: n(tx.balance), date: tx.transaction_date };
+  }).sort((a, b) => a.bank.localeCompare(b.bank) || a.label.localeCompare(b.label, "ja"));
 }
 
 /**

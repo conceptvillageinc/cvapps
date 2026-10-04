@@ -141,8 +141,8 @@ export default function Payments() {
           <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()} disabled={importing}>
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} 明細CSVを取り込む
           </Button>
-          <Button variant="outline" className="gap-2" onClick={() => setPassbookOpen(true)} title="大東銀行など、通帳のページの写真から読み取る">
-            <BookOpen className="w-4 h-4" /> 通帳の画像から取り込む
+          <Button variant="outline" className="gap-2" onClick={() => setPassbookOpen(true)} title="通帳のページの写真や、ネットバンキングの残高照会・入出金明細の画面のスクリーンショットから読み取る">
+            <BookOpen className="w-4 h-4" /> 通帳・画面の画像から取り込む
           </Button>
           <PassbookImportDialog open={passbookOpen} onOpenChange={setPassbookOpen} userId={user?.id} scope="payments" onDone={() => queryClient.invalidateQueries({ queryKey: ["bankTransactions"] })} />
           <Button className="gap-2" onClick={applyConfident} disabled={confidentCount === 0 || match.isPending}>

@@ -153,6 +153,41 @@ export async function rowsFromPassbook(bank, lines, accountLabel = "") {
 }
 export const BANK_CODES = ["toho", "ryukyu", "daito"];
 
+/** 銀行名の文字列から銀行コードを当てる。分からなければ fallback */
+export function bankCodeOf(name, fallback = "other") {
+  const s = String(name || "");
+  if (/東邦/.test(s)) return "toho";
+  if (/琉球|りゅうぎん/.test(s)) return "ryukyu";
+  if (/大東/.test(s)) return "daito";
+  return fallback;
+}
+
+export const BALANCE_SNAPSHOT_PAYEE = "残高照会";
+
+/**
+ * 残高照会の画面から読み取った口座残高（{ bank, account_label, as_of, balance }）を、明細の形の行にする。
+ * 入出金 0 円・残高だけの行で、照合の対象外（ignored）として入れる。資金繰り表の残高の起点に使う。
+ */
+export async function rowsFromBalances(entries) {
+  const out = [];
+  for (const b of entries) {
+    const label = `${BANK_LABELS[b.bank] || b.bank} ${b.account_label || ""}`.replace(/\s+/g, " ").trim();
+    const key = [b.bank, b.as_of, BALANCE_SNAPSHOT_PAYEE, label, b.balance].join("|");
+    out.push({
+      bank: b.bank, account_label: label, transaction_date: b.as_of, payee_raw: BALANCE_SNAPSHOT_PAYEE, payee_normalized: normalizePayee(BALANCE_SNAPSHOT_PAYEE),
+      amount_in: 0, amount_out: 0, balance: b.balance, match_status: "ignored", memo: "残高照会の画面から（明細ではなく、その時点の残高）",
+      source_hash: await sha1Hex(key),
+    });
+  }
+  return out;
+}
+
+/** 口座を見分けるキー（銀行＋口座番号）。口座番号が分からなければ銀行だけ */
+export function accountKeyOf(tx) {
+  const m = String(tx.account_label || "").match(/(?<!\d)\d{6,8}(?!\d)/);
+  return `${tx.bank}|${m ? m[0] : ""}`;
+}
+
 const H = {
   date: /取引日|日付|年月日|^日$|お取引日|取扱日/,
   out: /出金|お支払|支払金額|引出|お引出/,

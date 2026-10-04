@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { BookOpen, Loader2, Upload, AlertTriangle, ImagePlus, X } from "lucide-react";
-import { BANK_LABELS, BANK_CODES, rowsFromPassbook } from "@/lib/bankImport";
+import { BANK_LABELS, BANK_CODES, rowsFromPassbook, rowsFromBalances, bankCodeOf } from "@/lib/bankImport";
 import { readPassbook } from "@/lib/passbook";
 import { saveBankRows, importResultText } from "@/lib/bankImportActions";
 
@@ -14,8 +14,10 @@ const MAX_FILES = 5;
 const toInt = (v) => Math.round(Number(String(v).replace(/[,\s]/g, "")) || 0);
 
 /**
- * 通帳の画像から明細を取り込む（大東銀行など、CSV が出せない口座向け）
+ * 通帳の画像や、ネットバンキングの画面（入出金明細・残高照会）のスクリーンショットから取り込む
  *   画像を AI に読ませ、行ごとに確認・修正してから bank_transactions に入れる。
+ *   残高照会の画面は明細が無いので、口座ごとの残高を「残高照会」の行（入出金 0 円・照合対象外）として入れ、
+ *   資金繰り表の残高の起点に使う。
  *   同じ行（銀行・日付・摘要・金額・残高が同じ）は二重に入らない。
  *   scope: payments=入金確認から（全画面で使う） / cashplan=資金繰り表から（資金繰り表だけで使う）
  */
@@ -24,7 +26,8 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [reading, setReading] = useState(false);
-  const [result, setResult] = useState(null); // { bank_name, account_label, lines, notes }
+  const [result, setResult] = useState(null); // { bank_name, account_label, lines, balances, screen_kind, notes }
+  const [accountLabel, setAccountLabel] = useState(""); // 明細の行に付ける口座（支店・科目・番号）
   const [saving, setSaving] = useState(false);
   const inputRef = useRef(null);
 
@@ -41,27 +44,35 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
     setReading(true);
     try {
       const r = await readPassbook(files);
-      if (r.lines.length === 0) toast.error("明細の行を読み取れませんでした。ページ全体が写るように撮り直してください");
-      if (/東邦/.test(r.bank_name)) setBank("toho"); else if (/琉球/.test(r.bank_name)) setBank("ryukyu"); else if (/大東/.test(r.bank_name)) setBank("daito");
+      if (r.lines.length === 0 && r.balances.length === 0) toast.error("明細の行も残高も読み取れませんでした。ページ全体が写るように撮り直してください");
+      if (r.lines.length === 0 && r.balances.length > 0) toast.message(`残高照会の画面として読み取りました（${r.balances.length} 口座）`);
+      const guessed = bankCodeOf(r.bank_name || r.balances[0]?.bank_name, "");
+      if (guessed) setBank(guessed);
+      setAccountLabel(r.account_label || "");
       setResult(r);
     } catch (e) { toast.error("読み取れませんでした: " + (e?.message || e)); }
     finally { setReading(false); }
   };
 
   const patch = (id, data) => setResult((r) => ({ ...r, lines: r.lines.map((l) => (l.id === id ? { ...l, ...data } : l)) }));
+  const patchBal = (id, data) => setResult((r) => ({ ...r, balances: r.balances.map((b) => (b.id === id ? { ...b, ...data } : b)) }));
   const lines = result?.lines || [];
+  const balances = result?.balances || [];
+  const includedBalances = balances.filter((b) => b.include && b.as_of && b.balance);
+  const balanceWarn = balances.filter((b) => b.include && (!b.as_of || !b.balance));
   const isWarn = (l) => l.include && (l.kind === "unclear" || l.balance_ok === false || !l.transaction_date);
   const included = lines.filter((l) => l.include && l.transaction_date && (l.amount_in || l.amount_out));
   const unclear = lines.filter(isWarn);
 
   const doImport = async () => {
-    if (included.length === 0) return;
+    if (included.length === 0 && includedBalances.length === 0) return;
     if (unclear.length > 0 && !window.confirm(`読み取りが怪しい行が ${unclear.length} 行あります（黄色の行）。このまま取り込みますか？`)) return;
     setSaving(true);
     try {
-      const label = result.account_label ? `${BANK_LABELS[bank]} ${result.account_label}` : "";
-      const rows = await rowsFromPassbook(bank, included.map((l) => ({ transaction_date: l.transaction_date, payee_raw: l.payee_raw, amount_in: l.amount_in, amount_out: l.amount_out, balance: l.balance || null })), label);
-      const r = await saveBankRows(rows, { userId, scope });
+      const label = accountLabel.trim() ? `${BANK_LABELS[bank]} ${accountLabel.trim()}` : "";
+      const rows = included.length > 0 ? await rowsFromPassbook(bank, included.map((l) => ({ transaction_date: l.transaction_date, payee_raw: l.payee_raw, amount_in: l.amount_in, amount_out: l.amount_out, balance: l.balance || null })), label) : [];
+      const balRows = await rowsFromBalances(includedBalances.map((b) => ({ bank: bankCodeOf(b.bank_name, bank), account_label: b.account_label, as_of: b.as_of, balance: b.balance })));
+      const r = await saveBankRows([...rows, ...balRows], { userId, scope });
       toast.success(importResultText(BANK_LABELS[bank], r));
       onDone();
       onOpenChange(false);
@@ -77,16 +88,16 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!reading && !saving) onOpenChange(v); }}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><BookOpen className="w-5 h-5" /> 通帳の画像から取り込む</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><BookOpen className="w-5 h-5" /> 通帳・ネットバンキングの画面の画像から取り込む</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm min-w-0">
-          <p className="text-xs text-muted-foreground">CSV が出せない口座（大東銀行など）は、通帳のページを撮影・スキャンした画像を入れてください。AI が日付・摘要・出金・入金・残高を読み取ります。残高のつながりが合わない行は黄色になるので、通帳と見比べて直してから取り込んでください。</p>
+          <p className="text-xs text-muted-foreground">通帳のページを撮影・スキャンした画像（大東銀行など CSV が出せない口座）か、ネットバンキングの「入出金明細」「残高照会」の画面のスクリーンショットを入れてください。AI が日付・摘要・出金・入金・残高を読み取ります。残高照会の画面は明細が無いので、口座ごとの残高をその日の残高として取り込みます（資金繰り表の起点になります）。残高のつながりが合わない行は黄色になるので、見比べて直してから取り込んでください。</p>
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs">銀行</Label>
             <select value={bank} onChange={(e) => setBank(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm" aria-label="銀行">
               {BANK_CODES.map((b) => <option key={b} value={b}>{BANK_LABELS[b]}</option>)}
             </select>
             <input ref={inputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
-            <Button type="button" size="sm" variant="outline" className="h-9 gap-1" onClick={() => inputRef.current?.click()} disabled={reading}><ImagePlus className="w-4 h-4" /> 通帳の写真を選ぶ</Button>
+            <Button type="button" size="sm" variant="outline" className="h-9 gap-1" onClick={() => inputRef.current?.click()} disabled={reading}><ImagePlus className="w-4 h-4" /> 画像を選ぶ</Button>
             <Button type="button" size="sm" className="h-9 gap-1" onClick={read} disabled={files.length === 0 || reading}>{reading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {reading ? "読み取り中…" : "読み取る"}</Button>
             <span className="text-[11px] text-muted-foreground">最大 {MAX_FILES} 枚。文字がはっきり写るように、ページ全体を正面から</span>
           </div>
@@ -101,12 +112,12 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
             </div>
           )}
 
-          {result && (
+          {result && (lines.length > 0 || balances.length === 0) && (
             <div className="rounded-lg border">
               <div className="flex flex-wrap items-center gap-3 px-3 py-2 text-xs border-b bg-muted/40">
                 <span className="font-semibold">読み取った行 {lines.length}</span>
                 <span>取り込む {included.length} 行</span>
-                {result.bank_name && <span className="text-muted-foreground">{result.bank_name} {result.account_label}</span>}
+                <span className="flex items-center gap-1 text-muted-foreground">口座 <Input value={accountLabel} onChange={(e) => setAccountLabel(e.target.value)} placeholder="支店名 科目 口座番号" className="h-6 w-56 text-[11px]" aria-label="口座" title="明細の行に付ける口座。口座番号が入っていると、資金繰り表で同じ口座の CSV と一つにまとまります" /></span>
                 {unclear.length > 0 && <span className="text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> 確認が必要な行 {unclear.length}</span>}
                 {result.notes && <span className="text-amber-700">{result.notes}</span>}
               </div>
@@ -133,10 +144,43 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
               <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">繰越の行は残高の確認用で、明細としては取り込みません。取り込む行の合計: 入金 {yen(included.reduce((s, l) => s + l.amount_in, 0))} ／ 出金 {yen(included.reduce((s, l) => s + l.amount_out, 0))}</p>
             </div>
           )}
+          {result && balances.length > 0 && (
+            <div className="rounded-lg border" data-testid="balances">
+              <div className="flex flex-wrap items-center gap-3 px-3 py-2 text-xs border-b bg-muted/40">
+                <span className="font-semibold">口座残高（残高照会の画面） {balances.length} 口座</span>
+                <span>取り込む {includedBalances.length} 口座</span>
+                {balanceWarn.length > 0 && <span className="text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> 日付か残高が読めていない口座 {balanceWarn.length}</span>}
+              </div>
+              <table className="w-full text-xs table-fixed">
+                <thead className="bg-slate-800 text-white">
+                  <tr><th className="w-8"></th><th className="text-left px-2 py-1.5 w-28">銀行</th><th className="text-left px-2 py-1.5">口座（支店・科目・番号）</th><th className="text-right px-2 py-1.5 w-36">現在の残高</th><th className="text-left px-2 py-1.5 w-36">時点</th></tr>
+                </thead>
+                <tbody>
+                  {balances.map((b) => (
+                    <tr key={b.id} className={`border-t ${!b.include ? "opacity-50" : (!b.as_of || !b.balance) ? "bg-amber-50" : ""}`}>
+                      <td className="px-2 py-1 text-center"><input type="checkbox" checked={b.include} onChange={(e) => patchBal(b.id, { include: e.target.checked })} aria-label="この口座を取り込む" /></td>
+                      <td className="px-2 py-1">
+                        <select value={bankCodeOf(b.bank_name, bank)} onChange={(e) => patchBal(b.id, { bank_name: BANK_LABELS[e.target.value] })} className="h-7 w-full rounded-md border bg-background px-1 text-xs" aria-label="口座の銀行">
+                          {[...BANK_CODES, "other"].map((c) => <option key={c} value={c}>{BANK_LABELS[c]}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-1"><Input value={b.account_label} onChange={(e) => patchBal(b.id, { account_label: e.target.value })} className="h-7 text-xs" aria-label="口座" /></td>
+                      <td className="px-2 py-1"><Input value={b.balance || ""} onChange={(e) => patchBal(b.id, { balance: toInt(e.target.value) })} inputMode="numeric" className="h-7 text-xs text-right tabular-nums" aria-label="現在の残高" /></td>
+                      <td className="px-2 py-1"><Input type="date" value={b.as_of} onChange={(e) => patchBal(b.id, { as_of: e.target.value })} className="h-7 text-xs px-1" aria-label="時点" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="px-3 py-2 text-[11px] text-muted-foreground border-t">口座ごとの残高を「残高照会」の行（入出金 0 円・照合の対象外）として入れます。合計 {yen(includedBalances.reduce((s, b) => s + b.balance, 0))}。同じ口座の明細 CSV を取り込んでいる場合は、口座番号が同じなら新しい日付の方が残高の起点になります</p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={reading || saving}>キャンセル</Button>
-          <Button onClick={doImport} disabled={included.length === 0 || reading || saving} className="gap-1.5">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {included.length} 行を取り込む</Button>
+          <Button onClick={doImport} disabled={(included.length === 0 && includedBalances.length === 0) || reading || saving} className="gap-1.5">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {included.length > 0 && includedBalances.length > 0 ? `${included.length} 行と残高 ${includedBalances.length} 口座を取り込む` : includedBalances.length > 0 ? `残高 ${includedBalances.length} 口座を取り込む` : `${included.length} 行を取り込む`}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -148,7 +148,7 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
     ok: `${horizon} 日先まで、確定の予定だけで安全ライン（${yen(safetyLine)}）を下回りません`,
     warn: `${jpFull(plan.firstBelow)} に残高が安全ライン（${yen(safetyLine)}）を下回ります。入金の前倒しか支払の調整を考えてください`,
     danger: `${jpFull(plan.firstNegative)} に残高がマイナスになります。それまでに資金の手当てが必要です`,
-    unknown: "残高の起点がありません。下の「明細 CSV」か「通帳の画像」から、銀行明細（東邦・琉球・大東）を取り込んでください",
+    unknown: "残高の起点がありません。下の「明細 CSV」か「通帳・画面の画像」から、銀行明細か残高照会の画面を取り込んでください",
   }[plan.status];
   const toggle = (date) => setOpen((s) => { const t = new Set(s); if (t.has(date)) t.delete(date); else t.add(date); return t; });
   const tick = (v, i) => (i % Math.max(1, Math.round(horizon / 12)) === 0 ? v : "");
@@ -174,12 +174,12 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
         <Card><CardContent className="p-3">
           <p className="text-[11px] text-muted-foreground">いまの口座残高（合計）</p>
           <p className="text-lg font-bold tabular-nums">{yen(plan.anchor.total)}</p>
-          {plan.anchor.accounts.map((a) => <p key={a.bank} className="text-[10px] text-muted-foreground tabular-nums">{a.label} {yen(a.balance)}（{jpFull(a.date)} 時点）</p>)}
+          {plan.anchor.accounts.map((a) => <p key={a.key || a.bank} className="text-[10px] text-muted-foreground tabular-nums">{a.label} {yen(a.balance)}（{jpFull(a.date)} 時点）</p>)}
           {plan.stale !== null && plan.stale > 7 && <p className="text-[10px] text-amber-700 flex items-center gap-1 mt-0.5"><AlertTriangle className="w-3 h-3" /> 明細が {plan.stale} 日前のものです</p>}
           <div className="flex flex-wrap gap-1 mt-1.5">
             <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} />
             <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => csvRef.current?.click()} disabled={importing} title="東邦・琉球の入出金明細 CSV">{importing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} 明細 CSV</Button>
-            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setPassbookOpen(true)} title="大東銀行など、通帳のページの写真から読み取る"><BookOpen className="w-3 h-3" /> 通帳の画像</Button>
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setPassbookOpen(true)} title="通帳のページの写真や、ネットバンキングの残高照会・入出金明細の画面のスクリーンショットから読み取る"><BookOpen className="w-3 h-3" /> 通帳・画面の画像</Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">ここで取り込んだ明細は資金繰り表だけで使います。入金確認で取り込んだ明細もここに反映されます</p>
         </CardContent></Card>
