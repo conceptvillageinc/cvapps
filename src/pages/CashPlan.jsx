@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Wallet, Loader2, Plus, Trash2, Pencil, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, CalendarDays, Settings2, ListPlus } from "lucide-react";
+import { Wallet, Loader2, Plus, Trash2, Pencil, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, CalendarDays, Settings2, ListPlus, BookOpen, Upload } from "lucide-react";
+import PassbookImportDialog from "@/components/payments/PassbookImportDialog";
+import { importBankCsvFile } from "@/lib/bankImportActions";
 import { useAuth } from "@/lib/AuthContext";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { todayString } from "@/lib/fiscal";
@@ -120,6 +122,21 @@ function StatusBadge({ status }) {
 
 function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, itemsCount }) {
   const [open, setOpen] = useState(() => new Set());
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [passbookOpen, setPassbookOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const csvRef = useRef(null);
+  const refreshBank = () => queryClient.invalidateQueries({ queryKey: ["bankTransactions"] });
+  // 東邦・琉球の明細 CSV をここから取り込む（入金確認と同じ処理。残高の起点を新しくするため）
+  const importCsv = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try { const r = await importBankCsvFile(file, user?.id); refreshBank(); toast.success(`${r.label}の明細を取り込みました（新規 ${r.fresh}件・取込済み ${r.total - r.fresh}件）`); }
+    catch (err) { toast.error("取込に失敗しました: " + err.message); }
+    finally { setImporting(false); if (csvRef.current) csvRef.current.value = ""; }
+  };
   const chartData = useMemo(() => plan.days.map((d) => ({
     label: jp(d.date), date: d.date,
     "残高（確定）": d.balance_sure, "残高（見込込み）": d.balance_all,
@@ -157,8 +174,14 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
           <p className="text-[11px] text-muted-foreground">いまの口座残高（合計）</p>
           <p className="text-lg font-bold tabular-nums">{yen(plan.anchor.total)}</p>
           {plan.anchor.accounts.map((a) => <p key={a.bank} className="text-[10px] text-muted-foreground tabular-nums">{a.label} {yen(a.balance)}（{jpFull(a.date)} 時点）</p>)}
-          {plan.stale !== null && plan.stale > 7 && <p className="text-[10px] text-amber-700 flex items-center gap-1 mt-0.5"><AlertTriangle className="w-3 h-3" /> 明細が {plan.stale} 日前のものです。<Link to="/payments" className="underline">取り込む</Link></p>}
+          {plan.stale !== null && plan.stale > 7 && <p className="text-[10px] text-amber-700 flex items-center gap-1 mt-0.5"><AlertTriangle className="w-3 h-3" /> 明細が {plan.stale} 日前のものです</p>}
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} />
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => csvRef.current?.click()} disabled={importing} title="東邦・琉球の入出金明細 CSV">{importing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} 明細 CSV</Button>
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setPassbookOpen(true)} title="大東銀行など、通帳のページの写真から読み取る"><BookOpen className="w-3 h-3" /> 通帳の画像</Button>
+          </div>
         </CardContent></Card>
+      <PassbookImportDialog open={passbookOpen} onOpenChange={setPassbookOpen} userId={user?.id} onDone={refreshBank} />
         <Card><CardContent className="p-3">
           <p className="text-[11px] text-muted-foreground">安全ライン{autoLine ? "（自動）" : ""}</p>
           <p className="text-lg font-bold tabular-nums">{yen(safetyLine)}</p>

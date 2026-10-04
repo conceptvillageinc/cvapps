@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Upload, Loader2, Landmark, Check, X, Search, Sparkles, Link2, Undo2, BookOpen } from "lucide-react";
-import PassbookImportDialog from "@/components/payments/PassbookImportDialog";
+import { Upload, Loader2, Landmark, Check, X, Search, Sparkles, Link2, Undo2 } from "lucide-react";
+import { importBankCsvFile } from "@/lib/bankImportActions";
 import { toast } from "sonner";
-import { decodeCsv, parseBankCsv, suggestInvoices, isConfident, BANK_LABELS } from "@/lib/bankImport";
+import { suggestInvoices, isConfident, BANK_LABELS } from "@/lib/bankImport";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -23,7 +23,6 @@ export default function Payments() {
   const { user } = useAuth();
   const fileRef = useRef(null);
   const [importing, setImporting] = useState(false);
-  const [passbookOpen, setPassbookOpen] = useState(false);
   const [tab, setTab] = useState("unmatched"); // unmatched | matched | ignored
   const [search, setSearch] = useState("");
   const [pickFor, setPickFor] = useState(null); // 手動で請求書を選ぶ対象の明細
@@ -56,15 +55,9 @@ export default function Payments() {
     if (!file) return;
     setImporting(true);
     try {
-      const text = await decodeCsv(file);
-      const { bank, rows } = await parseBankCsv(text);
-      const hashes = rows.map((r) => r.source_hash);
-      const existing = await db.entities.BankTransaction.whereIn("source_hash", hashes);
-      const known = new Set(existing.map((r) => r.source_hash));
-      const fresh = rows.filter((r) => !known.has(r.source_hash)).map((r) => ({ ...r, imported_by: user?.id || null }));
-      if (fresh.length > 0) await db.entities.BankTransaction.createMany(fresh);
+      const r = await importBankCsvFile(file, user?.id);
       queryClient.invalidateQueries({ queryKey: ["bankTransactions"] });
-      toast.success(`${BANK_LABELS[bank] || bank}の明細を取り込みました（新規 ${fresh.length}件・取込済み ${rows.length - fresh.length}件）`);
+      toast.success(`${r.label}の明細を取り込みました（新規 ${r.fresh}件・取込済み ${r.total - r.fresh}件）`);
     } catch (err) {
       toast.error("取込に失敗しました: " + err.message);
     } finally {
@@ -135,7 +128,7 @@ export default function Payments() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Landmark className="w-5 h-5" /> 入金確認</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            銀行の入出金明細（東邦・琉球は CSV、大東は通帳の画像）を取り込み、請求書と照合します。未照合 {unmatched.length}件
+            銀行の入出金明細 CSV を取り込み、請求書と照合します。未照合 {unmatched.length}件
             {confidentCount > 0 && <span className="text-emerald-700">（自動で確定できるもの {confidentCount}件）</span>}
           </p>
         </div>
@@ -143,9 +136,6 @@ export default function Payments() {
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} />
           <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()} disabled={importing}>
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} 明細CSVを取り込む
-          </Button>
-          <Button variant="outline" className="gap-2" onClick={() => setPassbookOpen(true)}>
-            <BookOpen className="w-4 h-4" /> 通帳の画像から取り込む
           </Button>
           <Button className="gap-2" onClick={applyConfident} disabled={confidentCount === 0 || match.isPending}>
             <Sparkles className="w-4 h-4" /> 自動照合を適用（{confidentCount}）
@@ -172,7 +162,7 @@ export default function Payments() {
           ) : listFor(tab).length === 0 ? (
             <div className="text-center py-16">
               <Landmark className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">{txs.length === 0 ? "明細がまだありません。「明細CSVを取り込む」か「通帳の画像から取り込む」から始めてください" : "該当する明細がありません"}</p>
+              <p className="text-sm text-muted-foreground">{txs.length === 0 ? "明細がまだありません。「明細CSVを取り込む」から始めてください" : "該当する明細がありません"}</p>
             </div>
           ) : (
             <div className="divide-y">
@@ -269,7 +259,6 @@ export default function Payments() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <PassbookImportDialog open={passbookOpen} onOpenChange={setPassbookOpen} userId={user?.id} onDone={() => queryClient.invalidateQueries({ queryKey: ["bankTransactions"] })} />
     </div>
   );
 }
