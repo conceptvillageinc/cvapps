@@ -5,13 +5,19 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { BookOpen, Loader2, Upload, AlertTriangle, ImagePlus, X } from "lucide-react";
-import { BANK_LABELS, BANK_CODES, rowsFromPassbook, rowsFromBalances, bankCodeOf } from "@/lib/bankImport";
+import { BANK_LABELS, BANK_CODES, rowsFromPassbook, rowsFromBalances, bankCodeOf, decodeCsv, parseBankCsv } from "@/lib/bankImport";
 import { readPassbook } from "@/lib/passbook";
 import { saveBankRows, importResultText } from "@/lib/bankImportActions";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const MAX_FILES = 5;
 const toInt = (v) => Math.round(Number(String(v).replace(/[,\s]/g, "")) || 0);
+const isCsv = (f) => /\.csv$/i.test(f.name) || f.type === "text/csv" || f.type === "application/vnd.ms-excel";
+/** 行の並びで残高のつながりを確かめる（前の行の残高 + 入金 − 出金 = この行の残高） */
+function checkContinuity(lines) {
+  for (let i = 1; i < lines.length; i++) { const prev = lines[i - 1]; const cur = lines[i]; if (prev.balance && cur.balance) cur.balance_ok = prev.balance + cur.amount_in - cur.amount_out === cur.balance; }
+  return lines;
+}
 
 /**
  * 通帳の画像や、ネットバンキングの画面（入出金明細・残高照会）のスクリーンショットから取り込む
@@ -20,8 +26,9 @@ const toInt = (v) => Math.round(Number(String(v).replace(/[,\s]/g, "")) || 0);
  *   資金繰り表の残高の起点に使う。
  *   同じ行（銀行・日付・摘要・金額・残高が同じ）は二重に入らない。
  *   scope: payments=入金確認から（全画面で使う） / cashplan=資金繰り表から（資金繰り表だけで使う）
+ *   acceptCsv: 明細 CSV も同じ画面で受け付ける（画像と同じく行を見せ、資金繰り表では最新の残高だけを記録する）
  */
-export default function PassbookImportDialog({ open, onOpenChange, userId, onDone, scope = "payments" }) {
+export default function PassbookImportDialog({ open, onOpenChange, userId, onDone, scope = "payments", acceptCsv = false }) {
   const [bank, setBank] = useState("daito");
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -33,8 +40,8 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
 
   const setList = (next) => { setFiles(next); setPreviews(next.map((f) => (f.type.startsWith("image/") ? URL.createObjectURL(f) : null))); };
   const pick = (list) => {
-    const picked = Array.from(list || []).filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
-    if (picked.length === 0) { toast.error("通帳の写真（JPG・PNG）か PDF を選んでください"); return; }
+    const picked = Array.from(list || []).filter((f) => f.type.startsWith("image/") || f.type === "application/pdf" || (acceptCsv && isCsv(f)));
+    if (picked.length === 0) { toast.error(acceptCsv ? "通帳の写真（JPG・PNG）・PDF・明細 CSV を選んでください" : "通帳の写真（JPG・PNG）か PDF を選んでください"); return; }
     setList([...files, ...picked].slice(0, MAX_FILES));
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -43,12 +50,23 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
     if (files.length === 0) return;
     setReading(true);
     try {
-      const r = await readPassbook(files);
-      if (r.lines.length === 0 && r.balances.length === 0) toast.error("明細の行も残高も読み取れませんでした。ページ全体が写るように撮り直してください");
+      const csvFiles = files.filter(isCsv);
+      const imageFiles = files.filter((f) => !isCsv(f));
+      const r = imageFiles.length > 0 ? await readPassbook(imageFiles) : { bank_name: "", account_label: "", lines: [], balances: [], screen_kind: "other", notes: "" };
+      // 明細 CSV は AI を使わずそのまま行にする（画像の行の後ろに続ける）
+      let csvBank = ""; let csvLabel = "";
+      for (const f of csvFiles) {
+        const { bank: b, accountLabel: al, rows } = await parseBankCsv(await decodeCsv(f));
+        csvBank = b; csvLabel = al;
+        const lines = rows.map((row) => ({ transaction_date: row.transaction_date, payee_raw: row.payee_raw, amount_out: row.amount_out, amount_in: row.amount_in, balance: row.balance, kind: "transaction", include: true, source: "csv" }));
+        r.lines = [...r.lines, ...checkContinuity(lines)];
+      }
+      r.lines = r.lines.map((l, i) => ({ ...l, id: i }));
+      if (r.lines.length === 0 && r.balances.length === 0) toast.error(csvFiles.length > 0 && imageFiles.length === 0 ? "CSV に明細の行がありませんでした" : "明細の行も残高も読み取れませんでした。ページ全体が写るように撮り直してください");
       if (r.lines.length === 0 && r.balances.length > 0) toast.message(`残高照会の画面として読み取りました（${r.balances.length} 口座）`);
-      const guessed = bankCodeOf(r.bank_name || r.balances[0]?.bank_name, "");
+      const guessed = (csvBank && csvBank !== "other" ? csvBank : "") || bankCodeOf(r.bank_name || r.balances[0]?.bank_name, "");
       if (guessed) setBank(guessed);
-      setAccountLabel(r.account_label || "");
+      setAccountLabel((csvLabel || r.account_label || "").replace(/^(東邦銀行|琉球銀行|大東銀行|その他)\s*/, ""));
       setResult(r);
     } catch (e) { toast.error("読み取れませんでした: " + (e?.message || e)); }
     finally { setReading(false); }
@@ -101,18 +119,18 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!reading && !saving) onOpenChange(v); }}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><BookOpen className="w-5 h-5" /> 通帳・ネットバンキングの画面の画像から取り込む</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><BookOpen className="w-5 h-5" /> {acceptCsv ? "通帳・画面の画像・明細 CSV から取り込む" : "通帳・ネットバンキングの画面の画像から取り込む"}</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm min-w-0">
-          <p className="text-xs text-muted-foreground">通帳のページを撮影・スキャンした画像（大東銀行など CSV が出せない口座）か、ネットバンキングの「入出金明細」「残高照会」の画面のスクリーンショットを入れてください。AI が日付・摘要・出金・入金・残高を読み取ります。残高照会の画面は明細が無いので、口座ごとの残高をその日の残高として取り込みます（資金繰り表の起点になります）。残高のつながりが合わない行は黄色になるので、見比べて直してから取り込んでください。</p>
+          <p className="text-xs text-muted-foreground">通帳のページを撮影・スキャンした画像（大東銀行など CSV が出せない口座）か、ネットバンキングの「入出金明細」「残高照会」の画面のスクリーンショット{acceptCsv ? "、または東邦・琉球の入出金明細 CSV" : ""}を入れてください。AI が日付・摘要・出金・入金・残高を読み取ります。残高照会の画面は明細が無いので、口座ごとの残高をその日の残高として取り込みます（資金繰り表の起点になります）。残高のつながりが合わない行は黄色になるので、見比べて直してから取り込んでください。</p>
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs">銀行</Label>
             <select value={bank} onChange={(e) => setBank(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm" aria-label="銀行">
               {BANK_CODES.map((b) => <option key={b} value={b}>{BANK_LABELS[b]}</option>)}
             </select>
-            <input ref={inputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
-            <Button type="button" size="sm" variant="outline" className="h-9 gap-1" onClick={() => inputRef.current?.click()} disabled={reading}><ImagePlus className="w-4 h-4" /> 画像を選ぶ</Button>
+            <input ref={inputRef} type="file" accept={acceptCsv ? "image/*,application/pdf,.csv,text/csv" : "image/*,application/pdf"} multiple className="hidden" onChange={(e) => pick(e.target.files)} />
+            <Button type="button" size="sm" variant="outline" className="h-9 gap-1" onClick={() => inputRef.current?.click()} disabled={reading}><ImagePlus className="w-4 h-4" /> {acceptCsv ? "画像・CSVを選ぶ" : "画像を選ぶ"}</Button>
             <Button type="button" size="sm" className="h-9 gap-1" onClick={read} disabled={files.length === 0 || reading}>{reading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {reading ? "インポート中…" : "インポート"}</Button>
-            <span className="text-[11px] text-muted-foreground">最大 {MAX_FILES} 枚。文字がはっきり写るように、ページ全体を正面から</span>
+            <span className="text-[11px] text-muted-foreground">最大 {MAX_FILES} 件。画像は文字がはっきり写るように、ページ全体を正面から</span>
           </div>
           {files.length > 0 && (
             <div className="flex flex-wrap gap-2">
