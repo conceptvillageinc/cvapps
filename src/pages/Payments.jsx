@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Upload, Loader2, Landmark, Check, X, Search, Sparkles, Link2, Undo2 } from "lucide-react";
-import { importBankCsvFile } from "@/lib/bankImportActions";
+import { Upload, Loader2, Landmark, Check, X, Search, Sparkles, Link2, Undo2, BookOpen } from "lucide-react";
+import { importBankCsvFile, importResultText, forPayments } from "@/lib/bankImportActions";
+import PassbookImportDialog from "@/components/payments/PassbookImportDialog";
 import { toast } from "sonner";
 import { suggestInvoices, isConfident, BANK_LABELS } from "@/lib/bankImport";
 
@@ -27,10 +28,13 @@ export default function Payments() {
   const [search, setSearch] = useState("");
   const [pickFor, setPickFor] = useState(null); // 手動で請求書を選ぶ対象の明細
   const [pickSearch, setPickSearch] = useState("");
+  const [passbookOpen, setPassbookOpen] = useState(false);
 
+  // 資金繰り表で取り込んだ明細（scope=cashplan）は資金繰り表だけで使うので、ここには出さない
   const { data: txs = [], isLoading } = useQuery({
     queryKey: ["bankTransactions"],
     queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000),
+    select: forPayments,
   });
   const { data: invoices = [] } = useQuery({
     queryKey: ["invoices", "all"],
@@ -55,9 +59,9 @@ export default function Payments() {
     if (!file) return;
     setImporting(true);
     try {
-      const r = await importBankCsvFile(file, user?.id);
+      const r = await importBankCsvFile(file, { userId: user?.id, scope: "payments" });
       queryClient.invalidateQueries({ queryKey: ["bankTransactions"] });
-      toast.success(`${r.label}の明細を取り込みました（新規 ${r.fresh}件・取込済み ${r.total - r.fresh}件）`);
+      toast.success(importResultText(r.label, r));
     } catch (err) {
       toast.error("取込に失敗しました: " + err.message);
     } finally {
@@ -128,7 +132,7 @@ export default function Payments() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Landmark className="w-5 h-5" /> 入金確認</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            銀行の入出金明細 CSV を取り込み、請求書と照合します。未照合 {unmatched.length}件
+            銀行の入出金明細（CSV か通帳の画像）を取り込み、請求書と照合します。未照合 {unmatched.length}件
             {confidentCount > 0 && <span className="text-emerald-700">（自動で確定できるもの {confidentCount}件）</span>}
           </p>
         </div>
@@ -137,6 +141,10 @@ export default function Payments() {
           <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()} disabled={importing}>
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} 明細CSVを取り込む
           </Button>
+          <Button variant="outline" className="gap-2" onClick={() => setPassbookOpen(true)} title="大東銀行など、通帳のページの写真から読み取る">
+            <BookOpen className="w-4 h-4" /> 通帳の画像から取り込む
+          </Button>
+          <PassbookImportDialog open={passbookOpen} onOpenChange={setPassbookOpen} userId={user?.id} scope="payments" onDone={() => queryClient.invalidateQueries({ queryKey: ["bankTransactions"] })} />
           <Button className="gap-2" onClick={applyConfident} disabled={confidentCount === 0 || match.isPending}>
             <Sparkles className="w-4 h-4" /> 自動照合を適用（{confidentCount}）
           </Button>

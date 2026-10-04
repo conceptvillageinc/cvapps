@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
+import { forPayments } from "@/lib/bankImportActions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ export default function AccountingExport() {
   const { data: txs = [] } = useQuery({
     queryKey: ["bankTransactions", "matched"],
     queryFn: () => db.entities.BankTransaction.filter({ match_status: "matched" }),
+    select: forPayments,
   });
 
   const { from, to } = monthRange(month);

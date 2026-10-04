@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Wallet, Loader2, Plus, Trash2, Pencil, ShieldCheck, ShieldAlert, ShieldX, AlertTriangle, CalendarDays, Settings2, ListPlus, BookOpen, Upload } from "lucide-react";
 import PassbookImportDialog from "@/components/payments/PassbookImportDialog";
-import { importBankCsvFile } from "@/lib/bankImportActions";
+import { importBankCsvFile, importResultText } from "@/lib/bankImportActions";
 import { useAuth } from "@/lib/AuthContext";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { todayString } from "@/lib/fiscal";
@@ -128,12 +128,13 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
   const [importing, setImporting] = useState(false);
   const csvRef = useRef(null);
   const refreshBank = () => queryClient.invalidateQueries({ queryKey: ["bankTransactions"] });
-  // 東邦・琉球の明細 CSV をここから取り込む（入金確認と同じ処理。残高の起点を新しくするため）
+  // 明細 CSV をここから取り込む。ここで入れた明細（scope=cashplan）は資金繰り表の残高の起点にだけ使い、
+  // 入金確認などほかの画面には出さない。入金確認で取り込んだ明細はそのままここでも使う
   const importCsv = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImporting(true);
-    try { const r = await importBankCsvFile(file, user?.id); refreshBank(); toast.success(`${r.label}の明細を取り込みました（新規 ${r.fresh}件・取込済み ${r.total - r.fresh}件）`); }
+    try { const r = await importBankCsvFile(file, { userId: user?.id, scope: "cashplan" }); refreshBank(); toast.success(importResultText(r.label, r)); }
     catch (err) { toast.error("取込に失敗しました: " + err.message); }
     finally { setImporting(false); if (csvRef.current) csvRef.current.value = ""; }
   };
@@ -147,7 +148,7 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
     ok: `${horizon} 日先まで、確定の予定だけで安全ライン（${yen(safetyLine)}）を下回りません`,
     warn: `${jpFull(plan.firstBelow)} に残高が安全ライン（${yen(safetyLine)}）を下回ります。入金の前倒しか支払の調整を考えてください`,
     danger: `${jpFull(plan.firstNegative)} に残高がマイナスになります。それまでに資金の手当てが必要です`,
-    unknown: "残高の起点がありません。入金確認で銀行明細（東邦・琉球・大東）の CSV を取り込んでください",
+    unknown: "残高の起点がありません。下の「明細 CSV」か「通帳の画像」から、銀行明細（東邦・琉球・大東）を取り込んでください",
   }[plan.status];
   const toggle = (date) => setOpen((s) => { const t = new Set(s); if (t.has(date)) t.delete(date); else t.add(date); return t; });
   const tick = (v, i) => (i % Math.max(1, Math.round(horizon / 12)) === 0 ? v : "");
@@ -180,8 +181,9 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
             <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => csvRef.current?.click()} disabled={importing} title="東邦・琉球の入出金明細 CSV">{importing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />} 明細 CSV</Button>
             <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setPassbookOpen(true)} title="大東銀行など、通帳のページの写真から読み取る"><BookOpen className="w-3 h-3" /> 通帳の画像</Button>
           </div>
+          <p className="text-[10px] text-muted-foreground mt-1">ここで取り込んだ明細は資金繰り表だけで使います。入金確認で取り込んだ明細もここに反映されます</p>
         </CardContent></Card>
-      <PassbookImportDialog open={passbookOpen} onOpenChange={setPassbookOpen} userId={user?.id} onDone={refreshBank} />
+      <PassbookImportDialog open={passbookOpen} onOpenChange={setPassbookOpen} userId={user?.id} scope="cashplan" onDone={refreshBank} />
         <Card><CardContent className="p-3">
           <p className="text-[11px] text-muted-foreground">安全ライン{autoLine ? "（自動）" : ""}</p>
           <p className="text-lg font-bold tabular-nums">{yen(safetyLine)}</p>

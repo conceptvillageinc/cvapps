@@ -57,7 +57,7 @@ const WRITABLE_COLUMNS = {
   bank_transactions: [
     'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',
     'payee_normalized', 'balance', 'source_hash', 'match_status', 'invoice_id', 'matched_by',
-    'memo', 'imported_by',
+    'memo', 'imported_by', 'scope',
   ],
   delivery_notes: [
     'delivery_number', 'project_id', 'estimate_id', 'client_id', 'client_name', 'client_honorific',

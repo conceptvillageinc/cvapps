@@ -5,6 +5,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { db } from "@/api/db";
+import { forPayments } from "@/lib/bankImportActions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -214,7 +215,7 @@ export default function SalesReport() {
 
   const { data: projects = [] } = useQuery({ queryKey: ["projects", "all"], queryFn: () => db.entities.Project.list("-registered_at") });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "all"], queryFn: () => db.entities.Invoice.list("-invoice_date") });
-  const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000) });
+  const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), select: forPayments });
   const { data: payables = [] } = useQuery({ queryKey: ["payables", "all"], queryFn: () => db.entities.Payable.listAll("pay_month"), retry: false });
   const { data: cardCharges = [] } = useQuery({ queryKey: ["cardCharges", "all"], queryFn: () => db.entities.CardCharge.listAll("charged_at"), retry: false });
   const { data: targetRows = [], isLoading } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list() });

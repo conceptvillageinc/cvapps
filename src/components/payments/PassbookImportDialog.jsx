@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +7,7 @@ import { toast } from "sonner";
 import { BookOpen, Loader2, Upload, AlertTriangle, ImagePlus, X } from "lucide-react";
 import { BANK_LABELS, BANK_CODES, rowsFromPassbook } from "@/lib/bankImport";
 import { readPassbook } from "@/lib/passbook";
+import { saveBankRows, importResultText } from "@/lib/bankImportActions";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const MAX_FILES = 5;
@@ -17,8 +17,9 @@ const toInt = (v) => Math.round(Number(String(v).replace(/[,\s]/g, "")) || 0);
  * 通帳の画像から明細を取り込む（大東銀行など、CSV が出せない口座向け）
  *   画像を AI に読ませ、行ごとに確認・修正してから bank_transactions に入れる。
  *   同じ行（銀行・日付・摘要・金額・残高が同じ）は二重に入らない。
+ *   scope: payments=入金確認から（全画面で使う） / cashplan=資金繰り表から（資金繰り表だけで使う）
  */
-export default function PassbookImportDialog({ open, onOpenChange, userId, onDone }) {
+export default function PassbookImportDialog({ open, onOpenChange, userId, onDone, scope = "payments" }) {
   const [bank, setBank] = useState("daito");
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -60,11 +61,8 @@ export default function PassbookImportDialog({ open, onOpenChange, userId, onDon
     try {
       const label = result.account_label ? `${BANK_LABELS[bank]} ${result.account_label}` : "";
       const rows = await rowsFromPassbook(bank, included.map((l) => ({ transaction_date: l.transaction_date, payee_raw: l.payee_raw, amount_in: l.amount_in, amount_out: l.amount_out, balance: l.balance || null })), label);
-      const existing = await db.entities.BankTransaction.whereIn("source_hash", rows.map((r) => r.source_hash));
-      const known = new Set(existing.map((r) => r.source_hash));
-      const fresh = rows.filter((r) => !known.has(r.source_hash)).map((r) => ({ ...r, imported_by: userId || null }));
-      if (fresh.length > 0) await db.entities.BankTransaction.createMany(fresh);
-      toast.success(`${BANK_LABELS[bank]}の明細を取り込みました（新規 ${fresh.length}件・取込済み ${rows.length - fresh.length}件）`);
+      const r = await saveBankRows(rows, { userId, scope });
+      toast.success(importResultText(BANK_LABELS[bank], r));
       onDone();
       onOpenChange(false);
       setList([]); setResult(null);
