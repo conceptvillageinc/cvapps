@@ -5,7 +5,8 @@ import { parseCostSheet, templateImageHashes, parseFileTitle, isEmptySheet } fro
 
 // ============================================================================
 // POST /api/cost-sheet-import
-//   { action: "list", folderUrl }            … フォルダの中の原価計算表（スプレッドシート）を列挙する
+//   { action: "list", folderUrl? }           … 原価計算表（スプレッドシート）を列挙する。URL が空なら 14期・13期のフォルダ両方。
+//                                             フォルダやスプレッドシートの URL を貼れば、それだけ（複数可）。期はファイル名から読む
 //   { action: "import", spreadsheetId, clientId?, clientName? } … 1 ファイルを xlsx に書き出して読み、タブごとに cost_sheets へ入れる
 //
 // 読み取りは操作した本人のアカウント権限（サービスアカウントの権限委任）。本人が開けるファイルだけ読める。
@@ -19,6 +20,8 @@ const SCOPE = 'https://www.googleapis.com/auth/drive';
 const DRIVE = 'https://www.googleapis.com/drive/v3';
 const SHEET_MIME = 'application/vnd.google-apps.spreadsheet';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+// 原価計算表のフォルダ（14期・13期）。期はファイル名（「【原価計算表】14期_…」）から読む
+export const DEFAULT_FOLDER_IDS = ['1fwuM8jx7fORT7WNZduVYX2OvhIcwNuhv', '1JMFvvEkJxRdaUO70szntzFjpxHuLlBUg'];
 
 export function parseFolderUrl(raw) {
   const s = String(raw || '').trim();
@@ -31,6 +34,10 @@ async function gapi(token, url, options = {}) {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     const msg = data.error?.message || `Google API エラー (${res.status})`;
+    if (/has not been used in project|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(msg) || data.error?.status === 'PERMISSION_DENIED' && /Drive API/i.test(msg)) {
+      const project = /project[= ](\d+)/.exec(msg)?.[1];
+      throw new Error(`Google Cloud で「Google Drive API」が有効になっていません。管理者が Google Cloud コンソールで有効にしてください${project ? `（https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=${project}）` : ''}。有効にしてから数分後に、もう一度お試しください`);
+    }
     throw new Error(res.status === 403 || res.status === 404 ? `ドライブのファイルを開けませんでした。ログイン中のアカウントで見られるか確認してください（${msg}）` : msg);
   }
   return res;
@@ -62,17 +69,35 @@ export default async function handler(req, res) {
     const { data: clients = [] } = await admin.from('clients').select('id, name');
 
     if (action === 'list') {
-      const folderId = parseFolderUrl(req.body?.folderUrl);
-      if (!folderId) { res.status(400).json({ error: 'Google ドライブのフォルダの URL を貼ってください（https://drive.google.com/drive/folders/…）' }); return; }
+      // 対象: 貼られた URL（フォルダ・スプレッドシート、改行かカンマ区切りで複数可）。空なら登録済みのフォルダ全部
+      const raw = [req.body?.folderUrl, ...(Array.isArray(req.body?.urls) ? req.body.urls : [])].filter(Boolean).join('\n');
+      const parts = raw.split(/[\s,、]+/).map((x) => x.trim()).filter(Boolean);
+      const folderIds = []; const sheetIds = [];
+      for (const u of parts) {
+        const sm = /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(u);
+        if (sm) { sheetIds.push(sm[1]); continue; }
+        const fid = parseFolderUrl(u);
+        if (fid) folderIds.push(fid);
+      }
+      if (folderIds.length === 0 && sheetIds.length === 0) folderIds.push(...DEFAULT_FOLDER_IDS);
       const files = [];
-      let pageToken = '';
-      do {
-        const q = encodeURIComponent(`'${folderId}' in parents and mimeType='${SHEET_MIME}' and trashed=false`);
-        const r = await gapi(token, `${DRIVE}/files?q=${q}&fields=nextPageToken,files(id,name,modifiedTime,size)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? `&pageToken=${pageToken}` : ''}`);
-        const data = await r.json();
-        files.push(...(data.files || []));
-        pageToken = data.nextPageToken || '';
-      } while (pageToken);
+      for (const folderId of folderIds) {
+        let pageToken = '';
+        do {
+          const q = encodeURIComponent(`'${folderId}' in parents and mimeType='${SHEET_MIME}' and trashed=false`);
+          const r = await gapi(token, `${DRIVE}/files?q=${q}&fields=nextPageToken,files(id,name,modifiedTime,size)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? `&pageToken=${pageToken}` : ''}`);
+          const data = await r.json();
+          files.push(...(data.files || []));
+          pageToken = data.nextPageToken || '';
+        } while (pageToken);
+      }
+      for (const id of sheetIds) {
+        const r = await gapi(token, `${DRIVE}/files/${id}?fields=id,name,modifiedTime,size&supportsAllDrives=true`);
+        files.push(await r.json());
+      }
+      // 同じファイルが重なったら 1 つに
+      const seen = new Set();
+      for (let i = files.length - 1; i >= 0; i--) { if (seen.has(files[i].id)) files.splice(i, 1); else seen.add(files[i].id); }
       const { data: existing = [] } = await admin.from('cost_sheets').select('spreadsheet_id, imported_at').in('spreadsheet_id', files.map((f) => f.id));
       const importedAt = new Map();
       for (const e of existing) if (!importedAt.has(e.spreadsheet_id) || e.imported_at > importedAt.get(e.spreadsheet_id)) importedAt.set(e.spreadsheet_id, e.imported_at);
@@ -83,8 +108,8 @@ export default async function handler(req, res) {
           const c = matchClient(meta.client_name, clients);
           return { id: f.id, name: f.name, modifiedTime: f.modifiedTime, period: meta.period, client_name: meta.client_name, client_id: c?.id || null, matched_name: c?.name || null, imported_at: importedAt.get(f.id) || null };
         })
-        .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-      res.status(200).json({ folderId, files: out });
+        .sort((a, b) => (parseInt(b.period, 10) || 0) - (parseInt(a.period, 10) || 0) || a.name.localeCompare(b.name, 'ja'));
+      res.status(200).json({ folderIds, files: out });
       return;
     }
 

@@ -4,7 +4,6 @@ import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { FileSpreadsheet, Loader2, Search, Download, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,15 +14,11 @@ import { toast } from "sonner";
 //   同じファイルを取り直すと上書きされる（シートを直したあとの取り直し用）。
 // ============================================================================
 
-const DEFAULT_FOLDERS = [
-  { label: "14期", url: "https://drive.google.com/drive/folders/1fwuM8jx7fORT7WNZduVYX2OvhIcwNuhv" },
-  { label: "13期", url: "https://drive.google.com/drive/folders/1JMFvvEkJxRdaUO70szntzFjpxHuLlBUg" },
-];
 const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("ja-JP") : "");
 
 export default function CostSheetImportCard() {
   const queryClient = useQueryClient();
-  const [folderUrl, setFolderUrl] = useState(DEFAULT_FOLDERS[0].url);
+  const [folderUrl, setFolderUrl] = useState("");
   const [files, setFiles] = useState(null);
   const [listing, setListing] = useState(false);
   const [running, setRunning] = useState(false);
@@ -79,12 +74,11 @@ export default function CostSheetImportCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-1">
-          <Label className="text-xs">フォルダの URL</Label>
           <div className="flex flex-wrap gap-2">
-            <Input value={folderUrl} onChange={(e) => setFolderUrl(e.target.value)} className="h-9 flex-1 min-w-[280px]" placeholder="https://drive.google.com/drive/folders/…" />
-            {DEFAULT_FOLDERS.map((f) => <Button key={f.url} type="button" size="sm" variant={folderUrl === f.url ? "default" : "outline"} className="h-9 text-xs" onClick={() => setFolderUrl(f.url)}>{f.label}</Button>)}
-            <Button type="button" size="sm" className="h-9 text-xs gap-1" onClick={list} disabled={listing || running}>{listing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />} ファイルを読む</Button>
+            <Button type="button" size="sm" className="h-9 text-xs gap-1" onClick={list} disabled={listing || running}>{listing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />} 原価計算表を探す</Button>
+            <Input value={folderUrl} onChange={(e) => setFolderUrl(e.target.value)} className="h-9 flex-1 min-w-[280px]" placeholder="（任意）特定のファイルだけ読むときは、スプレッドシートかフォルダの URL を貼る" aria-label="スプレッドシートかフォルダの URL" />
           </div>
+          <p className="text-[11px] text-muted-foreground">URL が空なら、14期・13期の原価計算表のフォルダを両方読みます。期とクライアントはファイル名（「【原価計算表】14期_クライアント名_社内見積」）から読み取ります</p>
         </div>
 
         {files && files.length > 0 && (
