@@ -1,6 +1,6 @@
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { getAccessToken } from './_lib/gmail.js';
-import { readXlsx } from './_lib/xlsx.js';
+import { readXlsx, colLetter } from './_lib/xlsx.js';
 import { parseCostSheet, templateImageHashes, parseFileTitle, isEmptySheet } from './_lib/costSheet.js';
 
 // ============================================================================
@@ -41,6 +41,61 @@ async function gapi(token, url, options = {}) {
     throw new Error(res.status === 403 || res.status === 404 ? `ドライブのファイルを開けませんでした。ログイン中のアカウントで見られるか確認してください（${msg}）` : msg);
   }
   return res;
+}
+
+/**
+ * スプレッドシートを読む。
+ *   1) ドライブの書き出し（xlsx）… 10MB まで。画像も取れる
+ *   2) スプレッドシートの書き出し口（docs.google.com の export）… 大きいファイルも書き出せることが多い。画像も取れる
+ *   3) Sheets API の値だけ … 画像は取れないが、どんな大きさでも読める
+ * @returns {{ wb: { sheets }, mode: 'xlsx' | 'xlsx-docs' | 'values' }}
+ */
+export async function loadWorkbook(token, spreadsheetId) {
+  const tooLarge = (e) => /too large|exportSizeLimitExceeded|413/i.test(String(e?.message || e));
+  try {
+    const r = await gapi(token, `${DRIVE}/files/${spreadsheetId}/export?mimeType=${encodeURIComponent(XLSX_MIME)}`);
+    return { wb: await readXlsx(Buffer.from(await r.arrayBuffer())), mode: 'xlsx' };
+  } catch (e) {
+    if (!tooLarge(e)) throw e;
+  }
+  try {
+    const r = await fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`, { headers: { Authorization: `Bearer ${token}` }, redirect: 'follow' });
+    const type = r.headers.get('content-type') || '';
+    if (r.ok && /spreadsheetml|octet-stream|zip/.test(type)) {
+      return { wb: await readXlsx(Buffer.from(await r.arrayBuffer())), mode: 'xlsx-docs' };
+    }
+    console.warn('[cost-sheet-import] docs export failed', r.status, type);
+  } catch (e) {
+    console.warn('[cost-sheet-import] docs export error', e?.message);
+  }
+  return { wb: await readValuesOnly(token, spreadsheetId), mode: 'values' };
+}
+
+/** Sheets API でタブごとの値（A〜T 列、計算済みの値）を読み、readXlsx と同じ形にする。画像は無し */
+async function readValuesOnly(token, spreadsheetId) {
+  const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
+  const meta = await (await gapi(token, `${SHEETS}/${spreadsheetId}?fields=sheets.properties(sheetId,title,index)`)).json();
+  const props = (meta.sheets || []).map((x) => x.properties).sort((a, b) => a.index - b.index);
+  const sheets = [];
+  for (let i = 0; i < props.length; i += 20) {
+    const chunk = props.slice(i, i + 20);
+    const ranges = chunk.map((p) => `ranges=${encodeURIComponent(`'${p.title.replace(/'/g, "''")}'!A1:T400`)}`).join('&');
+    const data = await (await gapi(token, `${SHEETS}/${spreadsheetId}/values:batchGet?${ranges}&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`)).json();
+    (data.valueRanges || []).forEach((vr, k) => {
+      const p = chunk[k];
+      const cells = new Map();
+      let maxRow = 0;
+      (vr.values || []).forEach((row, r) => {
+        (row || []).forEach((v, c) => {
+          if (v === '' || v === null || v === undefined) return;
+          cells.set(`${colLetter(c + 1)}${r + 1}`, v);
+          if (r + 1 > maxRow) maxRow = r + 1;
+        });
+      });
+      sheets.push({ name: p.title, sheetId: p.sheetId, cells, maxRow, images: [] });
+    });
+  }
+  return { sheets };
 }
 
 /** クライアント名の表記揺れをそろえる（クライアント一覧との突き合わせ用） */
@@ -123,9 +178,7 @@ export default async function handler(req, res) {
       const clientRow = clientId ? clients.find((c) => c.id === clientId) : null;
       const clientName = clientRow?.name || req.body?.clientName || title.client_name;
 
-      const xres = await gapi(token, `${DRIVE}/files/${spreadsheetId}/export?mimeType=${encodeURIComponent(XLSX_MIME)}`);
-      const buf = Buffer.from(await xres.arrayBuffer());
-      const wb = await readXlsx(buf);
+      const { wb, mode } = await loadWorkbook(token, spreadsheetId);
       const tpl = templateImageHashes(wb.sheets);
       const results = [];
       for (const sheet of wb.sheets) {
@@ -153,7 +206,7 @@ export default async function handler(req, res) {
         if (error) throw new Error(`保存できませんでした（${sheet.name}）: ${error.message}`);
         results.push({ sheet: sheet.name, title: parsed.title, status: parsed.status, lines: parsed.lines.length, images: images.length, sell_total: parsed.sell_total, cost_total: parsed.cost_total });
       }
-      res.status(200).json({ file: fileMeta.name, client_id: clientId, client_name: clientName, period: title.period, sheets: results, imported: results.filter((r) => !r.skipped).length, skipped: results.filter((r) => r.skipped).length });
+      res.status(200).json({ file: fileMeta.name, mode, note: mode === 'values' ? 'ファイルが大きく画像付きで書き出せなかったため、数字と文字だけを取り込みました（スクショは入っていません）' : '', client_id: clientId, client_name: clientName, period: title.period, sheets: results, imported: results.filter((r) => !r.skipped).length, skipped: results.filter((r) => r.skipped).length });
       return;
     }
 

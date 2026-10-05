@@ -98,7 +98,7 @@ export default function CostSheetImportCard() {
                   const r = results.find((x) => x.id === f.id);
                   return (
                     <tr key={f.id} className="border-t">
-                      <td className="px-2 py-1"><div className="truncate max-w-[360px]" title={f.name}>{f.name}</div>{r && (r.ok ? <div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}</div> : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
+                      <td className="px-2 py-1"><div className="truncate max-w-[360px]" title={f.name}>{f.name}</div>{r && (r.ok ? <div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}</div>{r.note && <div className="text-[10px] text-amber-700">{r.note}</div>} : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
                       <td className="px-2 py-1">{f.period}</td>
                       <td className="px-2 py-1">
                         <select value={clientOf(f)} onChange={(e) => setOverrides((o) => ({ ...o, [f.id]: e.target.value }))} className={`h-7 w-full rounded-md border px-1 text-xs ${clientOf(f) ? "bg-background" : "bg-amber-50 border-amber-300"}`} aria-label={`${f.name} のクライアント`}>

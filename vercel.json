@@ -53,6 +53,10 @@
     "api/backup.js": {
       "maxDuration": 300,
       "memory": 2048
+    },
+    "api/cost-sheet-import.js": {
+      "maxDuration": 300,
+      "memory": 2048
     }
   },
   "crons": [
