@@ -16,6 +16,7 @@ import { Wallet, Loader2, Plus, Trash2, Pencil, ShieldCheck, ShieldAlert, Shield
 import PassbookImportDialog from "@/components/payments/PassbookImportDialog";
 import { useAuth } from "@/lib/AuthContext";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { useCashAccess } from "@/lib/useCashAccess";
 import { todayString } from "@/lib/fiscal";
 import { buildCashPlan, autoSafetyLine, CATEGORIES, directionOf } from "@/lib/cashPlan";
 
@@ -25,13 +26,6 @@ const jp = (d) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "�
 const jpFull = (d) => (d ? `${d.slice(0, 4)}/${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "—");
 const C = { sure: "#2a78d6", all: "#eb6834", line: "#d64545", zero: "#1f2937", inBar: "#1baf7a", outBar: "#d64545", grid: "#e5e7eb", text: "#52514e" };
 
-/** 資金繰り表を見られるか（システム設定のアドレス一覧） */
-export function useCashAccess() {
-  const { user } = useAuth();
-  const { cashflowAllowedEmails, isLoading } = useSystemSettings();
-  const email = String(user?.email || "").toLowerCase();
-  return { allowed: !!email && cashflowAllowedEmails.includes(email), isLoading };
-}
 
 function TooltipBox({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -442,9 +436,9 @@ function SettingsTab({ auto }) {
           <p className="text-[11px] text-muted-foreground">カード利用明細まとめの CV 分を、この日にまとめて支払う予定として置きます。途中でチャージした分は銀行明細に出るので、残高の起点に反映されます</p>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">資金繰り表を見られるアドレス（カンマ区切り）</Label>
+          <Label className="text-xs">資金繰り表と「案件の積み上げ」を見られるアドレス（カンマ区切り）</Label>
           <Input value={emails} onChange={(e) => setEmails(e.target.value)} className="h-9" />
-          <p className="text-[11px] text-muted-foreground">ここに無いアカウントにはメニューも画面も出ません</p>
+          <p className="text-[11px] text-muted-foreground">ここに無いアカウントには資金繰り表のメニューも画面も出ません。売上粗利管理表のシミュレーションにある「案件の積み上げ」も同じアドレスだけに出ます</p>
         </div>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "保存中..." : "保存"}</Button>
       </CardContent>
