@@ -409,19 +409,6 @@ export default function SalesReport() {
           </p>
         </div>
       )}
-      {isSim && active && pipelineAllowed && (
-        <DealPipeline
-          deals={activeDeals}
-          onChangeDeals={(deals) => updateActive({ deals })}
-          tags={sim.deal_tags || []}
-          meta={pipelineMeta}
-          onChangeMeta={({ tags, ...meta }) => persist({ ...sim, deal_tags: tags, ...meta })}
-          grossMust={annual.target.gross_must}
-          appAnnual={report.annual}
-          projects={projects}
-          fiscalLabel={fiscalYearLabel(fy, fiscalYearStartMonth)}
-        />
-      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           [`売上（${totalLabel}）`, annualTotal.sales, `目標 ${man(annual.target.sales)}`],
@@ -600,6 +587,21 @@ export default function SalesReport() {
           ))}
         </CardContent>
       </Card>
+
+      {/* 案件の積み上げ（確定／見込）: シミュレーションのパターンごと。資金繰り表と同じアドレスだけ */}
+      {isSim && active && pipelineAllowed && (
+        <DealPipeline
+          deals={activeDeals}
+          onChangeDeals={(deals) => updateActive({ deals })}
+          tags={sim.deal_tags || []}
+          meta={pipelineMeta}
+          onChangeMeta={({ tags, ...meta }) => persist({ ...sim, deal_tags: tags, ...meta })}
+          grossMust={annual.target.gross_must}
+          appAnnual={report.annual}
+          projects={projects}
+          fiscalLabel={fiscalYearLabel(fy, fiscalYearStartMonth)}
+        />
+      )}
 
       <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Pencil className="w-3 h-3" /> 実績の調達（仕入）は「支払い先まとめ」の CV 分（税込→税抜、{payablesMonthMode === "same" ? "支払月" : "支払月の前月＝請求月"}に計上）、その他原価は「カード利用明細まとめ」の CV 分（税抜）を使います。cv digital・Cool Agri 分は数えません。支払い先まとめが無い月は銀行明細の出金。「目標を編集」で月ごとに手入力すればそちらが優先です</p>
 
