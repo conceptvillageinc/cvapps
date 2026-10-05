@@ -40,6 +40,7 @@ const TABLES = {
   PartnerOrder: 'partner_orders',
   BankTransaction: 'bank_transactions',
   FiscalTarget: 'fiscal_targets',
+  CostSheet: 'cost_sheets',
   ProjectTask: 'project_tasks',
 };
 
@@ -58,6 +59,10 @@ const WRITABLE_COLUMNS = {
     'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',
     'payee_normalized', 'balance', 'source_hash', 'match_status', 'invoice_id', 'matched_by',
     'memo', 'imported_by', 'scope',
+  ],
+  cost_sheets: [
+    'client_id', 'client_name', 'period', 'title', 'status', 'sheet_date', 'spreadsheet_id', 'sheet_gid', 'sheet_title', 'file_title',
+    'sheet_url', 'sell_total', 'cost_total', 'gross', 'margin', 'authors', 'last_entry_date', 'lines', 'images', 'imported_at', 'imported_by',
   ],
   delivery_notes: [
     'delivery_number', 'project_id', 'estimate_id', 'client_id', 'client_name', 'client_honorific',
@@ -153,7 +158,7 @@ const DATE_COLUMNS = new Set([
   'approved_date', 'sent_at',
   'registered_at', 'due_date', 'payment_due_date', 'vendor_payment_date',
   'start_month', 'end_month', 'delivery_date', 'invoice_date', 'due_date', 'paid_at', 'transaction_date', 'issue_date', 'order_date',
-  'start_date', 'end_date',
+  'start_date', 'end_date', 'sheet_date', 'last_entry_date',
 ]);
 
 // Base44 の並び替え指定（"-created_date" / "name"）を Supabase の形に変換
@@ -490,6 +495,7 @@ const FUNCTION_ROUTES = {
   checkEmailReplies: 'check-email-replies',
   meetingProcess: 'meeting-process',
   backup: 'backup',
+  costSheetImport: 'cost-sheet-import',
 };
 
 const functions = {

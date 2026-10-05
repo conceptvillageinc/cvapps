@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { db } from "@/api/db";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
+import { linesToEstimateItems } from "@/lib/costSheets";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ export default function EstimateCreate() {
   // クライアントカルテから来た場合: クライアント名の初期値と、複製元の見積
   const presetClient = searchParams.get("client") || "";
   const copyFromId = searchParams.get("copy_from");
+  const costSheetId = searchParams.get("cost_sheet"); // クライアントカルテの「社内見積（原価計算表）」から
   // 選んだ明細だけ複製するとき（カルテの「選択した明細を複製」）
   const copyLineIds = searchParams.get("lines");
   const { data: copyFrom } = useQuery({
@@ -131,6 +133,21 @@ export default function EstimateCreate() {
       total_amount: computeEstimateTotals(from.line_items).total,
     }));
   }, [meeting]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { data: costSheet } = useQuery({ queryKey: ["costSheet", costSheetId], queryFn: () => db.entities.CostSheet.get(costSheetId), enabled: !!costSheetId });
+  // 原価計算表（社内見積）の行を明細にする。最終納品の行があればそれだけ、無ければ金額のある行すべて
+  useEffect(() => {
+    if (!costSheet) return;
+    const items = linesToEstimateItems(costSheet);
+    setFormData((prev) => ({
+      ...prev,
+      client_name: prev.client_name || costSheet.client_name || "",
+      estimate_title: prev.estimate_title || costSheet.title || "",
+      line_items: items,
+      total_amount: computeEstimateTotals(items).total,
+    }));
+    toast.message(`原価計算表「${costSheet.title}」から ${items.length} 行を明細にしました。数量・単価・原価は見直してください`);
+  }, [costSheet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 複製元の見積から件名・仕様・明細・備考を引き継ぐ（明細の id は振り直し、複製元を残す）
   useEffect(() => {

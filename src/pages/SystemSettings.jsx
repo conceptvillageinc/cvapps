@@ -12,6 +12,7 @@ import PricingRulesCard from "@/components/settings/PricingRulesCard";
 import CompanyInfoCard from "@/components/settings/CompanyInfoCard";
 import MeetingSettingsCard from "@/components/settings/MeetingSettingsCard";
 import BackupCard from "@/components/settings/BackupCard";
+import CostSheetImportCard from "@/components/settings/CostSheetImportCard";
 import { useAuth } from "@/lib/AuthContext";
 
 // 設定1件をupsert（存在すれば更新、無ければ新規作成）
@@ -244,6 +245,8 @@ export default function SystemSettingsPage() {
       <MeetingSettingsCard settings={settings} upsertSetting={upsertSetting} />
 
       <BackupCard settings={settings} isAdmin={isAdmin} />
+
+      <CostSheetImportCard />
 
       <Card>
         <CardHeader>

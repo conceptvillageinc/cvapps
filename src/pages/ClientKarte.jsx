@@ -21,6 +21,8 @@ import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/l
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { specLabel } from "@/lib/printSpecs";
 import { MEETING_STATUS } from "@/lib/meetings";
+import { COST_SHEET_STATUS, searchText as costSheetSearchText } from "@/lib/costSheets";
+import CostSheetPane from "@/components/clients/CostSheetPane";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
@@ -70,6 +72,7 @@ function Field({ label, children }) {
 
 const TABS = [
   { key: "estimates", label: "見積" },
+  { key: "costSheets", label: "社内見積" },
   { key: "projects", label: "案件" },
   { key: "invoices", label: "請求書" },
   { key: "deliveryNotes", label: "納品書" },
@@ -103,6 +106,8 @@ export default function ClientKarte() {
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "byClient", name], queryFn: () => db.entities.Invoice.filter({ client_name: name }, "-invoice_date"), enabled: !!name });
   const { data: masters = [] } = useQuery({ queryKey: ["priceMaster"], queryFn: () => db.entities.PriceMaster.list("-last_updated") });
   const { data: meetings = [] } = useQuery({ queryKey: ["meetings", "byClient", name], queryFn: () => db.entities.Meeting.filter({ client_name: name }, "-held_at"), enabled: !!name });
+  // 原価計算表（スプレッドシート）から取り込んだ社内見積
+  const { data: costSheets = [] } = useQuery({ queryKey: ["costSheets", "byClient", id], queryFn: () => db.entities.CostSheet.filter({ client_id: id }, "-sheet_date"), enabled: !!id, retry: false });
   const masterById = useMemo(() => Object.fromEntries(masters.map((m) => [m.id, m])), [masters]);
   const projectById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
 
@@ -144,6 +149,16 @@ export default function ClientKarte() {
         .filter((i) => has(i.invoice_number, i.title))
         .map((i) => ({ id: i.id, number: i.invoice_number, date: fmtDate(i.invoice_date), title: i.title || "（件名なし）", total: i.total, sub: i.due_date ? `入金期日 ${fmtDate(i.due_date)}` : "", badge: INVOICE_STATUS_MAP[i.status] ? { label: INVOICE_STATUS_MAP[i.status].label, cls: INVOICE_STATUS_MAP[i.status].color } : null, raw: i }));
     }
+    if (tab === "costSheets") {
+      const sorted = [...costSheets].sort((a, b) => String(b.sheet_date || b.last_entry_date || "").localeCompare(String(a.sheet_date || a.last_entry_date || "")) || String(b.period).localeCompare(String(a.period)));
+      return sorted
+        .filter((cs) => has(costSheetSearchText(cs)))
+        .map((cs) => {
+          const st = COST_SHEET_STATUS[cs.status] || COST_SHEET_STATUS.open;
+          const margin = cs.margin != null ? `粗利率 ${(Number(cs.margin) * 100).toFixed(0)}%` : "";
+          return { id: cs.id, number: cs.period, date: fmtDate(cs.sheet_date || cs.last_entry_date), title: cs.title || cs.sheet_title || "（件名なし）", total: cs.sell_total, sub: [`仕入 ${yen(cs.cost_total)}`, margin, (cs.authors || []).join("・")].filter(Boolean).join("　"), badge: { label: st.label, cls: st.color }, raw: cs };
+        });
+    }
     if (tab === "meetings") {
       return meetings
         .filter((m) => has(m.title, m.summary?.overview))
@@ -152,7 +167,7 @@ export default function ClientKarte() {
     return deliveryNotes
       .filter((n) => has(n.delivery_number, n.title))
       .map((n) => ({ id: n.id, number: n.delivery_number, date: fmtDate(n.delivery_date), title: n.title || "（件名なし）", total: n.total, sub: "", badge: DELIVERY_STATUS_MAP[n.status] ? { label: DELIVERY_STATUS_MAP[n.status].label, cls: DELIVERY_STATUS_MAP[n.status].color } : null, raw: n }));
-  }, [tab, search, estimates, projects, invoices, deliveryNotes, meetings]);
+  }, [tab, search, estimates, projects, invoices, deliveryNotes, meetings, costSheets]);
 
   useEffect(() => {
     if (list.length === 0) { setSelectedId(null); return; }
@@ -218,7 +233,7 @@ export default function ClientKarte() {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const counts = { estimates: estimates.length, projects: projects.length, invoices: invoices.length, deliveryNotes: deliveryNotes.length, meetings: meetings.length };
+  const counts = { estimates: estimates.length, costSheets: costSheets.length, projects: projects.length, invoices: invoices.length, deliveryNotes: deliveryNotes.length, meetings: meetings.length };
 
   return (
     <div className="max-w-7xl mx-auto space-y-3">
@@ -302,12 +317,12 @@ export default function ClientKarte() {
           <div className="p-2 border-b">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === "estimates" ? "件名・番号・仕様・明細名で絞り込み" : "件名・番号で絞り込み"} className="h-8 pl-8 text-xs" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === "estimates" ? "件名・番号・仕様・明細名で絞り込み" : tab === "costSheets" ? "件名・明細名・仕入先・記入者で絞り込み" : "件名・番号で絞り込み"} className="h-8 pl-8 text-xs" />
             </div>
           </div>
           <div className="overflow-y-auto flex-1">
             {list.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-10">{search ? "該当がありません" : "まだありません"}</p>
+              <p className="text-xs text-muted-foreground text-center py-10 px-3">{search ? "該当がありません" : tab === "costSheets" ? "まだありません。システム設定の「原価計算表（社内見積）の取り込み」で、このクライアントの原価計算表を取り込むとここに並びます" : "まだありません"}</p>
             ) : list.map((row) => {
               const on = row.id === selectedId;
               return (
@@ -334,6 +349,8 @@ export default function ClientKarte() {
             <p className="text-xs text-muted-foreground text-center py-16">左の一覧から選んでください</p>
           ) : tab === "estimates" && estimateView ? (
             <EstimatePane view={estimateView} onOpenPdf={openPdf} pdfLoading={pdfLoading} clientName={client.name} />
+          ) : tab === "costSheets" ? (
+            <CostSheetPane sheet={current.raw} clientName={client.name} />
           ) : tab === "meetings" ? (
             <MeetingPane meeting={current.raw} />
           ) : (
