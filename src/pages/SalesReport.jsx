@@ -19,9 +19,6 @@ import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { buildSalesReport, emptyTargets, splitAnnual, applySimulation, SIM_KEYS } from "@/lib/salesReport";
-import { normalizeDealTags, normalizeDeals, DEFAULT_PER_PERSON } from "@/lib/dealPipeline";
-import { useCashAccess } from "@/lib/useCashAccess";
-import DealPipeline from "@/components/sales/DealPipeline";
 import { useAuth } from "@/lib/AuthContext";
 
 // 検証済みの配色（dataviz の基準パレット: 青 / オレンジ / アクア / 黄）
@@ -42,23 +39,15 @@ function Cell({ v, kind = "yen", warn, ok, muted }) {
 /** 保存されているシミュレーションを { scenarios, active_id } の形にそろえる（初期版の「値だけ」の形も読む） */
 function normalizeSimulation(raw) {
   const doc = raw && typeof raw === "object" ? raw : {};
-  // パターンをまたいで共通のもの: 案件の積み上げの区分（色と意味）と人数・1 人あたりの目標
-  const shared = {
-    deal_tags: normalizeDealTags(doc.deal_tags),
-    headcount: Number(doc.headcount) || 0,
-    headcount_memo: String(doc.headcount_memo || ""),
-    per_person_sales: Number(doc.per_person_sales) || DEFAULT_PER_PERSON.sales,
-    per_person_gross: Number(doc.per_person_gross) || DEFAULT_PER_PERSON.gross,
-  };
   if (Array.isArray(doc.scenarios)) {
-    const scenarios = doc.scenarios.filter((sc) => sc && sc.id).map((sc) => ({ ...sc, values: sc.values || {}, deals: normalizeDeals(sc.deals) }));
-    return { ...shared, scenarios, active_id: scenarios.some((sc) => sc.id === doc.active_id) ? doc.active_id : (scenarios[0]?.id || null) };
+    const scenarios = doc.scenarios.filter((sc) => sc && sc.id).map((sc) => ({ ...sc, values: sc.values || {} }));
+    return { scenarios, active_id: scenarios.some((sc) => sc.id === doc.active_id) ? doc.active_id : (scenarios[0]?.id || null) };
   }
   const hasValues = SIM_KEYS.some((k) => Array.isArray(doc[k]) && doc[k].some((v) => v !== null && v !== undefined && v !== ""));
-  if (!hasValues) return { ...shared, scenarios: [], active_id: null };
+  if (!hasValues) return { scenarios: [], active_id: null };
   const values = Object.fromEntries(SIM_KEYS.filter((k) => Array.isArray(doc[k])).map((k) => [k, doc[k]]));
-  const sc = { id: "legacy-1", name: "パターン1", values, deals: [], updated_at: doc.updated_at || null, updated_by: doc.updated_by || "" };
-  return { ...shared, scenarios: [sc], active_id: sc.id };
+  const sc = { id: "legacy-1", name: "パターン1", values, updated_at: doc.updated_at || null, updated_by: doc.updated_by || "" };
+  return { scenarios: [sc], active_id: sc.id };
 }
 
 // シミュレーション用の入力セル。実データと違う値は色を付け、元の値をツールチップに出す
@@ -218,7 +207,6 @@ export default function SalesReport() {
   const [totalMode, setTotalMode] = useState("forecast");
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { allowed: pipelineAllowed } = useCashAccess(); // 案件の積み上げは資金繰り表と同じアドレスだけ
   // シミュレーションの上書き値（期ごとに fiscal_targets.simulation へ保存）
   const [sim, setSim] = useState({});
   const [simDirty, setSimDirty] = useState(false);
@@ -248,8 +236,6 @@ export default function SalesReport() {
   const view = useMemo(() => (isSim ? applySimulation(report, activeValues, grossMarginTarget) : report), [isSim, report, activeValues, grossMarginTarget]);
   const { rows, annual, months } = view;
   const simEditedCount = SIM_KEYS.reduce((c, k) => c + (activeValues[k] || []).filter((v) => v !== null && v !== undefined && v !== "").length, 0);
-  const activeDeals = active?.deals || [];
-  const pipelineMeta = { headcount: sim.headcount || 0, headcount_memo: sim.headcount_memo || "", per_person_sales: sim.per_person_sales || DEFAULT_PER_PERSON.sales, per_person_gross: sim.per_person_gross || DEFAULT_PER_PERSON.gross };
   const stamp = () => ({ updated_at: new Date().toISOString(), updated_by: user?.full_name || user?.email || "" });
   const updateActive = (patch) => {
     setSim((prev) => ({ ...prev, scenarios: (prev.scenarios || []).map((sc) => (sc.id === (active?.id) ? { ...sc, ...patch } : sc)) }));
@@ -277,7 +263,7 @@ export default function SalesReport() {
   const newScenario = (copyFrom = null) => {
     const name = window.prompt("パターンの名前", copyFrom ? `${copyFrom.name}のコピー` : `パターン${scenarios.length + 1}`);
     if (!name || !name.trim()) return;
-    const sc = { id: crypto.randomUUID(), name: name.trim(), values: copyFrom ? JSON.parse(JSON.stringify(copyFrom.values || {})) : {}, deals: copyFrom ? JSON.parse(JSON.stringify(copyFrom.deals || [])).map((d) => ({ ...d, id: crypto.randomUUID() })) : [], ...stamp() };
+    const sc = { id: crypto.randomUUID(), name: name.trim(), values: copyFrom ? JSON.parse(JSON.stringify(copyFrom.values || {})) : {}, ...stamp() };
     persist({ ...sim, scenarios: [...scenarios, sc], active_id: sc.id });
   };
   const renameScenario = () => {
@@ -408,19 +394,6 @@ export default function SalesReport() {
               : "「＋ 新しいパターン」で名前を付けて始めてください。パターンごとに書き換えを保存して、切り替えて比べられます。"}
           </p>
         </div>
-      )}
-      {isSim && active && pipelineAllowed && (
-        <DealPipeline
-          deals={activeDeals}
-          onChangeDeals={(deals) => updateActive({ deals })}
-          tags={sim.deal_tags || []}
-          meta={pipelineMeta}
-          onChangeMeta={({ tags, ...meta }) => persist({ ...sim, deal_tags: tags, ...meta })}
-          grossMust={annual.target.gross_must}
-          appAnnual={report.annual}
-          projects={projects}
-          fiscalLabel={fiscalYearLabel(fy, fiscalYearStartMonth)}
-        />
       )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
