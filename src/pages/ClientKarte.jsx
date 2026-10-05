@@ -71,11 +71,11 @@ function Field({ label, children }) {
 }
 
 const TABS = [
-  { key: "estimates", label: "見積" },
-  { key: "costSheets", label: "社内見積" },
   { key: "projects", label: "案件" },
-  { key: "invoices", label: "請求書" },
+  { key: "costSheets", label: "社内見積" },
+  { key: "estimates", label: "見積" },
   { key: "deliveryNotes", label: "納品書" },
+  { key: "invoices", label: "請求書" },
   { key: "meetings", label: "議事録" },
 ];
 
@@ -93,7 +93,7 @@ export default function ClientKarte() {
   const { fiscalYearStartMonth } = useSystemSettings();
   const [notes, setNotes] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
-  const [tab, setTab] = useState("estimates");
+  const [tab, setTab] = useState("projects");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
