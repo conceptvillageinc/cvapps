@@ -31,6 +31,7 @@ import { generateEstimateNumber } from "@/lib/estimateNumber";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
 import VendorRequestBar from "@/components/estimates/VendorRequestBar";
+import CarriedPriceCheck from "@/components/estimates/CarriedPriceCheck";
 import VendorRequestTool from "@/components/estimates/VendorRequestTool";
 import ReviewStep from "@/components/estimates/ReviewStep";
 import { autoChecks } from "@/components/estimates/ReviewStep";
@@ -541,6 +542,7 @@ export default function EstimateDetail() {
             <div className="space-y-4">
               {/* 依頼ツールは右の列ではなく 1 行の帯にして、プレビューと編集欄に横幅を全部使わせる */}
               <VendorRequestBar estimate={formData} emailLogs={emailLogs} onOpen={(n) => { setToolStep(n); setToolOpen(true); }} />
+              <CarriedPriceCheck estimate={formData} onUpdate={handleUpdate} />
               <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
             </div>
           ) : (

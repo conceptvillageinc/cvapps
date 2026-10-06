@@ -90,6 +90,7 @@ export function linesToEstimateItems(cs, rows) {
       screenshot_path: imgByRow.get(l.row) || null,
       notes: [l.memo, `原価計算表 ${cs.period} ${cs.title} より`].filter(Boolean).join("\n"),
       copied_from: `原価計算表 ${cs.period} ${cs.title}`,
+      cost_as_of: l.entered_on || cs.sheet_date || cs.last_entry_date || null, // 前回の原価の時点（価格確認で使う）
     };
   });
 }
