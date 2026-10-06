@@ -44,6 +44,7 @@ export default function EstimateCreate() {
   const presetClient = searchParams.get("client") || "";
   const copyFromId = searchParams.get("copy_from");
   const costSheetId = searchParams.get("cost_sheet"); // クライアントカルテの「社内見積（原価計算表）」から
+  const costSheetRows = (searchParams.get("rows") || "").split(",").map(Number).filter((n) => n > 0); // 選んだ行（シートの行番号）
   // 選んだ明細だけ複製するとき（カルテの「選択した明細を複製」）
   const copyLineIds = searchParams.get("lines");
   const { data: copyFrom } = useQuery({
@@ -135,10 +136,10 @@ export default function EstimateCreate() {
   }, [meeting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: costSheet } = useQuery({ queryKey: ["costSheet", costSheetId], queryFn: () => db.entities.CostSheet.get(costSheetId), enabled: !!costSheetId });
-  // 原価計算表（社内見積）の行を明細にする。最終納品の行があればそれだけ、無ければ金額のある行すべて
+  // 原価計算表（社内見積）の行を明細にする。カルテで選んだ行（無ければ初期選択と同じ行）
   useEffect(() => {
     if (!costSheet) return;
-    const items = linesToEstimateItems(costSheet);
+    const items = linesToEstimateItems(costSheet, costSheetRows);
     setFormData((prev) => ({
       ...prev,
       client_name: prev.client_name || costSheet.client_name || "",

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Image as ImageIcon, CopyPlus, Check, Link2, FileSpreadsheet } from "lucide-react";
-import { COST_SHEET_STATUS, groupLabel, groupLines, finalTotals } from "@/lib/costSheets";
+import { ExternalLink, Image as ImageIcon, CopyPlus, Check, Minus, Link2, FileSpreadsheet } from "lucide-react";
+import { COST_SHEET_STATUS, groupLabel, groupLines, finalTotals, defaultSelectedRows } from "@/lib/costSheets";
 
 // ============================================================================
 // クライアントカルテの「社内見積（原価計算表）」の右側。
@@ -40,13 +41,18 @@ function Thumb({ image, size = "h-12" }) {
   );
 }
 
-function LineRow({ l, images, hasFinal }) {
+function LineRow({ l, images, hasFinal, checked, onToggle }) {
   const muted = hasFinal && !l.final;
   const rowImages = images.filter((im) => im.near_row === l.row);
   const isDiscount = /割引/.test(l.name) || Number(l.adjusted) < 0;
   return (
     <tr className={`border-t align-top ${l.final ? "bg-emerald-50/60" : muted ? "text-muted-foreground/80" : ""}`} data-row={l.row}>
-      <td className="px-2 py-1.5 text-center w-7">{l.final ? <Check className="w-4 h-4 text-emerald-600 inline" aria-label="最終納品" /> : null}</td>
+      <td className="px-2 py-1.5 text-center w-12 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1">
+          <Checkbox checked={checked} onCheckedChange={onToggle} aria-label={`${l.name || "この行"} を新規見積に使う`} />
+          {l.final ? <Check className="w-3.5 h-3.5 text-emerald-600" aria-label="最終納品" /> : <span className="w-3.5" />}
+        </span>
+      </td>
       <td className="px-2 py-1.5 text-[11px] text-muted-foreground whitespace-nowrap">{l.section}</td>
       <td className="px-2 py-1.5">
         <div className={`text-[12.5px] ${l.final ? "font-semibold" : "font-medium"} ${isDiscount ? "text-red-700" : ""}`}>{l.name || <span className="text-muted-foreground">（項目名なし）</span>}</div>
@@ -100,6 +106,20 @@ export default function CostSheetPane({ sheet, clientName }) {
   const rowLinked = new Set(images.filter((im) => im.near_row).map((im) => im.near_row));
   const groupImages = (title) => images.filter((im) => im.group === title && !(im.near_row && rowLinked.has(im.near_row) && sheet.lines.some((l) => l.row === im.near_row)));
   const orphanImages = images.filter((im) => !im.group);
+  // 新規見積に使う行（初期: 調整後売価が 0 でない行。最終納品の印がある区分は印の行だけ）
+  const [selected, setSelected] = useState(() => new Set(defaultSelectedRows(sheet)));
+  useEffect(() => { setSelected(new Set(defaultSelectedRows(sheet))); }, [sheet.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (row) => setSelected((s) => { const t = new Set(s); if (t.has(row)) t.delete(row); else t.add(row); return t; });
+  const setGroup = (lines, on) => setSelected((s) => { const t = new Set(s); for (const l of lines) { if (on) t.add(l.row); else t.delete(l.row); } return t; });
+  const allRows = (sheet.lines || []).map((l) => l.row);
+  const selLines = (sheet.lines || []).filter((l) => selected.has(l.row));
+  const selSell = selLines.reduce((s, l) => s + Number(l.adjusted || 0), 0);
+  const selCost = selLines.reduce((s, l) => s + Number(l.cost_total || 0), 0);
+  const createEstimate = () => {
+    if (selLines.length === 0) return;
+    const rows = selLines.map((l) => l.row).join(",");
+    navigate(`/estimates/new?client=${encodeURIComponent(clientName)}&cost_sheet=${sheet.id}&rows=${rows}`);
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0" data-testid="cost-sheet-pane">
@@ -112,8 +132,8 @@ export default function CostSheetPane({ sheet, clientName }) {
           {sheet.sheet_date && <span className="text-[11px] text-muted-foreground">入稿日 {fmtDate(sheet.sheet_date)}</span>}
           <div className="ml-auto flex items-center gap-1.5">
             <a href={sheet.sheet_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 h-7 px-2 rounded-md border text-[11px] hover:bg-muted/40" title="原価計算表のタブを開く"><FileSpreadsheet className="w-3.5 h-3.5" /> 原価計算表 <ExternalLink className="w-3 h-3" /></a>
-            <Button size="sm" className="h-7 text-[11px] gap-1" onClick={() => navigate(`/estimates/new?client=${encodeURIComponent(clientName)}&cost_sheet=${sheet.id}`)} title={hasFinal ? "最終納品の行を明細にした新しい見積を作る" : "金額のある行を明細にした新しい見積を作る"}>
-              <CopyPlus className="w-3.5 h-3.5" /> この内容で新規見積を作る
+            <Button size="sm" className="h-7 text-[11px] gap-1" onClick={createEstimate} disabled={selLines.length === 0} title="チェックした行を明細にした新しい見積を作る">
+              <CopyPlus className="w-3.5 h-3.5" /> 選んだ {selLines.length} 行で新規見積を作る
             </Button>
           </div>
         </div>
@@ -122,6 +142,16 @@ export default function CostSheetPane({ sheet, clientName }) {
           <div className="rounded-md border bg-muted/20 px-2.5 py-1.5"><p className="text-[10px] text-muted-foreground">外注／仕入合計（税別）</p><p className="font-bold tabular-nums">{yen(sheet.cost_total)}</p>{fin && <p className="text-[10px] text-emerald-700 tabular-nums">最終納品の行だけ {yen(fin.cost)}</p>}</div>
           <div className="rounded-md border bg-muted/20 px-2.5 py-1.5"><p className="text-[10px] text-muted-foreground">粗利（税別）</p><p className="font-bold tabular-nums">{yen(sheet.gross)}</p>{fin && <p className="text-[10px] text-emerald-700 tabular-nums">最終納品の行だけ {yen(fin.gross)}</p>}</div>
           <div className="rounded-md border bg-muted/20 px-2.5 py-1.5"><p className="text-[10px] text-muted-foreground">粗利率</p><p className="font-bold tabular-nums">{pct(sheet.margin)}</p>{fin && <p className="text-[10px] text-emerald-700 tabular-nums">最終納品の行だけ {pct(fin.margin)}</p>}</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-[11px]" data-testid="cost-sheet-selection">
+          <span className="font-medium">新規見積に使う行: {selLines.length} / {allRows.length} 行</span>
+          <span className="text-muted-foreground tabular-nums">調整後売価 {yen(selSell)}・仕入 {yen(selCost)}</span>
+          <div className="ml-auto flex gap-1">
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] bg-background" onClick={() => setSelected(new Set(allRows))}>すべて選ぶ</Button>
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] bg-background" onClick={() => setSelected(new Set(defaultSelectedRows(sheet)))}>初期の選択に戻す</Button>
+            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] bg-background" onClick={() => setSelected(new Set())}>すべて外す</Button>
+          </div>
+          <span className="basis-full text-[10px] text-muted-foreground">最初は、調整後売価が ¥0 の行（使わなかった割引の候補など）と、最終納品の印がある区分の印の無い行（数量違いの候補）を外しています</span>
         </div>
         <p className="text-[10px] text-muted-foreground">
           記入者 {(sheet.authors || []).join("・") || "—"}{sheet.last_entry_date ? `　最終記入 ${fmtDate(sheet.last_entry_date)}` : ""}　取り込み {fmtDate(sheet.imported_at)}
@@ -138,6 +168,15 @@ export default function CostSheetPane({ sheet, clientName }) {
           return (
             <div key={g.title} className="border-b last:border-b-0" data-testid="cost-sheet-group">
               <div className="px-3 py-1.5 bg-slate-800 text-white text-[11px] font-semibold flex items-center gap-2">
+                {(() => {
+                  const n = g.lines.filter((l) => selected.has(l.row)).length;
+                  const all = n === g.lines.length;
+                  return (
+                    <button type="button" role="checkbox" aria-checked={all ? "true" : n > 0 ? "mixed" : "false"} onClick={() => setGroup(g.lines, !all)} className={`h-4 w-4 shrink-0 rounded-sm border border-white flex items-center justify-center ${n > 0 ? "bg-white text-slate-800" : ""}`} aria-label={`${groupLabel(g.title)} の行をまとめて選ぶ`} title={all ? "この区分をすべて外す" : "この区分をすべて選ぶ"}>
+                      {all ? <Check className="w-3.5 h-3.5" /> : n > 0 ? <Minus className="w-3.5 h-3.5" /> : null}
+                    </button>
+                  );
+                })()}
                 {groupLabel(g.title)}
                 <span className="font-normal opacity-70">{g.lines.length} 行</span>
                 {/割引/.test(g.title) && <span className="font-normal opacity-70">（シートが自動で出す割引の候補。実際に引いた分は各区分の行に入っています）</span>}
@@ -146,7 +185,7 @@ export default function CostSheetPane({ sheet, clientName }) {
               <table className="w-full text-xs">
                 <thead className="bg-muted/40 text-[10px] text-muted-foreground">
                   <tr>
-                    <th className="w-7"></th>
+                    <th className="w-12 text-[9px] font-normal">使う</th>
                     <th className="text-left px-2 py-1 font-normal w-20">区分</th>
                     <th className="text-left px-2 py-1 font-normal">項目・仕様・備考</th>
                     <th className="text-right px-2 py-1 font-normal w-28">仕入（単価×数量）</th>
@@ -157,7 +196,7 @@ export default function CostSheetPane({ sheet, clientName }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {g.lines.map((l) => <LineRow key={l.row} l={l} images={images} hasFinal={hasFinal} />)}
+                  {g.lines.map((l) => <LineRow key={l.row} l={l} images={images} hasFinal={hasFinal} checked={selected.has(l.row)} onToggle={() => toggle(l.row)} />)}
                 </tbody>
               </table>
               {imgs.length > 0 && (

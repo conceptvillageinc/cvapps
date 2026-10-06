@@ -38,30 +38,48 @@ export function searchText(cs) {
 }
 
 /**
- * 社内見積の行を、新しい見積の明細にする。
- * 最終納品の印がある行があればそれだけ、無ければ金額のある行すべて。割引・コンセプト設計・校正の自動計算行は除く。
+ * 新規見積に使う行の初期選択（シートの行番号の配列）。
+ *   調整後売価が 0 の行（使っていない割引の候補・空の行）は外す。
+ *   最終納品の印がある区分では、印の付いた行だけ（数量違いの候補のうち採用した行）。
  */
-export function linesToEstimateItems(cs) {
-  const uid = () => `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+export function defaultSelectedRows(cs) {
   const lines = cs.lines || [];
-  const hasFinal = lines.some((l) => l.final);
-  const picked = lines.filter((l) => (hasFinal ? l.final : true) && l.name && !/^【?CV割引|Draw up|^コンセプト設計費$|^校正費$/.test(l.name) && (l.adjusted || l.sell_total));
+  const finalGroups = new Set(lines.filter((l) => l.final).map((l) => l.group));
+  return lines
+    .filter((l) => Math.round(Number(l.adjusted || 0)) !== 0)
+    .filter((l) => !finalGroups.has(l.group) || l.final)
+    .map((l) => l.row);
+}
+
+/**
+ * 社内見積の行を、新しい見積の明細にする。
+ * @param {object} cs        cost_sheets の 1 行
+ * @param {number[]} [rows]  使う行（シートの行番号）。省略時は defaultSelectedRows
+ */
+export function linesToEstimateItems(cs, rows) {
+  const uid = () => `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const wanted = new Set((rows && rows.length ? rows : defaultSelectedRows(cs)).map(Number));
+  const picked = (cs.lines || []).filter((l) => wanted.has(Number(l.row)));
   const imgByRow = new Map((cs.images || []).filter((im) => im.near_row).map((im) => [im.near_row, im.path]));
   return picked.map((l) => {
-    const qty = Number(l.qty) || 1;
-    const amount = Math.round(Number(l.adjusted || l.sell_total) || 0);
+    const qty = Number(l.qty) > 0 ? Number(l.qty) : 1;
+    const amount = Math.round(Number(l.adjusted || 0) || Number(l.sell_total || 0));
     const unitPrice = Math.round(amount / qty);
+    const name = l.name === "〃" || !l.name
+      ? `${l.section || groupLabel(l.group)}${l.qty ? ` ${Number(l.qty).toLocaleString()}${l.unit || ""}` : ""}`.trim()
+      : l.name;
+    const costTotal = Number(l.cost_total) || 0;
     return {
       id: uid(),
       row_type: "item",
       category: guessCategory(`${l.group} ${l.section} ${l.name}`),
-      name: l.name === "〃" ? `${l.section} ${l.qty ? `${Number(l.qty).toLocaleString()}${l.unit || ""}` : ""}`.trim() : l.name,
+      name: /割引/.test(name) && l.memo ? `${name}（${l.memo.split("\n")[0]}）` : name,
       quantity: qty,
-      unit: (l.unit || "式").replace(/／.*$/, ""),
+      unit: (l.unit || "式").replace(/／.*$/, "") || "式",
       unit_price: unitPrice,
-      amount,
+      amount: unitPrice * qty,
       tax_rate: 10,
-      cost_price: Number(l.cost_unit) || (Number(l.cost_total) ? Number(l.cost_total) / qty : null),
+      cost_price: costTotal ? Math.round((costTotal / qty) * 100) / 100 : (Number(l.cost_unit) && Number(l.qty) ? Number(l.cost_unit) : null),
       markup_rate: Number(l.markup) || null,
       source_type: l.vendor ? "vendor_quote" : "manual",
       source_ref: l.vendor || null,
