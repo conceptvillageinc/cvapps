@@ -139,3 +139,34 @@ export const PRICE_CHECK_STATUS = {
   unknown: { label: "要確認", cls: "bg-amber-100 text-amber-800" },
   replaced: { label: "置き換え済み", cls: "bg-violet-100 text-violet-700" },
 };
+
+/**
+ * 確認できなかった理由の種類（次にやることの出し分けに使う）
+ *   url_unreadable … 入稿先 URL はあるが読めなかった（JavaScript で価格を出すページ・ボット対策・時間切れ）
+ *   no_quantity    … 価格表は読めたが、同じ数量の行が無かった
+ *   no_source      … 入稿先 URL も価格マスタの登録も無い
+ */
+export function unknownReason(li, masters) {
+  const pc = li.price_check || {};
+  if (/の行がありませんでした/.test(pc.error || "")) return "no_quantity";
+  if (li.source_url || masterOf(li, masters)?.source_url || pc.source === "url") return "url_unreadable";
+  return "no_source";
+}
+
+/**
+ * 手で入れた今の金額で比べる（入稿先や仕入先の見積を見て入力した値）。
+ * @param {number} total   見た金額（数量分の合計）
+ * @param {"included"|"excluded"} taxMode
+ */
+export function checkManual(li, total, taxMode, userName = "") {
+  const old = oldUnitCost(li);
+  const qty = Number(li.quantity) || 1;
+  const unit = Math.round((toTaxExcluded(total, taxMode) / qty) * 100) / 100;
+  return { ...(li.price_check || {}), status: compareCost(old, unit), checked_at: new Date().toISOString(), old_cost: old, current_cost: unit, source: "manual", label: taxMode === "included" ? "税込で入力" : "税別で入力", ref: "", error: "", checked_by: userName, manual_total: Number(total) };
+}
+
+/** 「前回と同じでよい」として確認済みにする */
+export function markSame(li, userName = "") {
+  const old = oldUnitCost(li);
+  return { ...(li.price_check || {}), status: "same", checked_at: new Date().toISOString(), old_cost: old, current_cost: old, source: "manual_same", label: "", ref: "", error: "", checked_by: userName };
+}

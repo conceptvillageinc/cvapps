@@ -1,14 +1,17 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { useAuth } from "@/lib/AuthContext";
+import { vendorTaxMode } from "@/lib/priceTax";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, ExternalLink, History, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
+import { Loader2, RefreshCw, ExternalLink, History, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, Send, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { recomputeSubtotals, recomputeRuleRows, usePricingRules } from "@/lib/pricing";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
-import { priceCheckTargets, oldUnitCost, checkWithMaster, checkWithGrid, replaceWithCurrent, PRICE_CHECK_STATUS, masterOf, vendorOf, originLabel } from "@/lib/priceCheck";
+import { priceCheckTargets, oldUnitCost, checkWithMaster, checkWithGrid, replaceWithCurrent, PRICE_CHECK_STATUS, masterOf, vendorOf, originLabel, unknownReason, checkManual, markSame } from "@/lib/priceCheck";
 
 // ============================================================================
 // 見積書の画面の「印刷費・仕入の価格確認」（依頼ツールの帯の下に常に出す）
@@ -23,7 +26,65 @@ const yen0 = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("ja-JP") : "");
 const pct = (a, b) => (a && b ? `${((b - a) / a * 100 >= 0 ? "+" : "")}${((b - a) / a * 100).toFixed(1)}%` : "");
 
-export default function CarriedPriceCheck({ estimate, onUpdate }) {
+const REASON_TEXT = {
+  url_unreadable: "入稿先のページを読み取れませんでした。価格を JavaScript で後から出すページや、サーバーからのアクセスを断るサイトでは読めないことがあります",
+  no_quantity: "価格表は読めましたが、この数量の行がありませんでした（数量の区切りが変わった可能性があります）",
+  no_source: "入稿先 URL も価格マスタの登録も無いため、アプリでは今の価格を調べられません",
+};
+
+/** 確認できなかった行の「次にやること」 */
+function NextActions({ li, masters, printVendors, onManual, onSame, onRequest }) {
+  const reason = unknownReason(li, masters);
+  const url = li.source_url || masterOf(li, masters)?.source_url || "";
+  const qty = Number(li.quantity) || 1;
+  const [total, setTotal] = useState("");
+  const [mode, setMode] = useState(() => vendorTaxMode(printVendors, vendorOf(li, masters)));
+  const n = String(total).replace(/[,¥￥\s]/g, "");
+  const valid = n !== "" && Number(n) > 0;
+  return (
+    <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2.5 space-y-2" data-testid="price-next-actions">
+      <p className="text-[11px] text-amber-900 flex items-start gap-1.5"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /><span><span className="font-semibold">確認できなかった理由：</span>{REASON_TEXT[reason]}</span></p>
+      <p className="text-[11px] font-semibold text-slate-700">次にやること</p>
+      <ol className="space-y-2 text-[11px]">
+        <li className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-600 text-white text-[9px] shrink-0">1</span>
+          {url ? (
+            <>
+              <span>入稿先のページを開いて、{qty.toLocaleString()}{li.unit} の今の金額を見る</span>
+              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 h-6 px-2 rounded border border-teal-300 bg-white text-teal-800 text-[10px] hover:bg-teal-50">入稿先を開く <ExternalLink className="w-3 h-3" /></a>
+            </>
+          ) : (
+            <>
+              <span>仕入先（{vendorOf(li, masters) || "未登録"}）に今の価格を確認する。メールで聞くときは依頼ツールが使えます</span>
+              <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1 border-teal-300 text-teal-800 bg-white" onClick={onRequest}><Send className="w-3 h-3" /> 依頼ツールを開く</Button>
+            </>
+          )}
+        </li>
+        <li className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-600 text-white text-[9px] shrink-0">2</span>
+          <span>見た金額（{qty.toLocaleString()}{li.unit} の合計）を入れて比べる</span>
+          <Input value={total} onChange={(e) => setTotal(e.target.value)} inputMode="numeric" placeholder="例: 3,010" className="h-7 w-28 text-xs text-right tabular-nums bg-white" aria-label="見た金額" />
+          <select value={mode} onChange={(e) => setMode(e.target.value)} className="h-7 rounded-md border bg-white px-1 text-[11px]" aria-label="税込・税別">
+            <option value="included">税込</option>
+            <option value="excluded">税別</option>
+          </select>
+          <Button type="button" size="sm" className="h-7 px-2 text-[11px] bg-teal-600 hover:bg-teal-700" disabled={!valid} onClick={() => onManual(Number(n), mode)}>比べる</Button>
+        </li>
+        <li className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-400 text-white text-[9px] shrink-0">他</span>
+          <span className="text-muted-foreground">確認して前回と同じだった場合は</span>
+          <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1 bg-white" onClick={onSame}><CheckCircle2 className="w-3 h-3" /> 変わりなしとして確認済みにする</Button>
+          {url && <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[10px] gap-1 text-teal-800" onClick={onRequest}><Send className="w-3 h-3" /> 仕入先に聞く（依頼ツール）</Button>}
+        </li>
+      </ol>
+      {reason !== "no_source" && <p className="text-[10px] text-muted-foreground">よく使う印刷物は価格マスタに登録しておくと、次から URL が読めなくても価格マスタで自動で比べられます</p>}
+    </div>
+  );
+}
+
+export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestTool }) {
+  const { user } = useAuth();
+  const userName = user?.full_name || user?.email || "";
   const { rules } = usePricingRules();
   const items = estimate.line_items || [];
   const carried = useMemo(() => priceCheckTargets(items), [items]);
@@ -88,6 +149,8 @@ export default function CarriedPriceCheck({ estimate, onUpdate }) {
   };
 
   const replace = (li) => patchItems({ [li.id]: (cur) => replaceWithCurrent(cur) });
+  const manual = (li, total, mode) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: checkManual(cur, total, mode, userName) }) }); toast.success("入れた金額で比べました"); };
+  const same = (li) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: markSame(cur, userName) }) }); toast.success("変わりなしとして確認済みにしました"); };
   const replaceAllUp = () => {
     const targets = carried.filter((li) => ["up", "down"].includes(li.price_check?.status) && li.price_check?.current_cost != null);
     const patches = Object.fromEntries(targets.map((li) => [li.id, (cur) => replaceWithCurrent(cur)]));
@@ -115,6 +178,11 @@ export default function CarriedPriceCheck({ estimate, onUpdate }) {
             <button type="button" onClick={() => setOpen((v) => !v)} className="p-1 text-muted-foreground hover:text-foreground" aria-label={open ? "たたむ" : "開く"}>{open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           </div>
         </div>
+        {open && count("unknown") > 0 && (
+          <div className="px-4 py-1.5 border-b bg-amber-50 text-[11px] text-amber-900 flex items-center gap-1.5" data-testid="price-check-unknown-note">
+            <AlertTriangle className="w-3.5 h-3.5" /> 確認できなかった行が {count("unknown")} 行あります。各行の下の「次にやること」から、入稿先を見て金額を入れるか、仕入先に確認してください
+          </div>
+        )}
         {open && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[860px]">
@@ -136,7 +204,8 @@ export default function CarriedPriceCheck({ estimate, onUpdate }) {
                   const old = oldUnitCost(li);
                   const loading = busy.has(li.id);
                   return (
-                    <tr key={li.id} className="border-t align-top" data-testid="price-check-row">
+                    <Fragment key={li.id}>
+                    <tr className={`border-t align-top ${pc.status === "unknown" ? "bg-amber-50/30" : ""}`} data-testid="price-check-row">
                       <td className="px-3 py-2">
                         <div className="font-medium text-[12px]">{li.name}</div>
                         <div className="text-[10px] text-muted-foreground">{[li.source_type === "price_master" ? "" : vendorOf(li, masters), originLabel(li, masters), li.cost_as_of ? `${fmtDate(li.cost_as_of)} 時点` : ""].filter(Boolean).join("・")}</div>
@@ -161,7 +230,10 @@ export default function CarriedPriceCheck({ estimate, onUpdate }) {
                       <td className="px-2 py-2 text-[10.5px] text-muted-foreground">
                         {pc.source === "url" && <div>入稿先の価格表{pc.label ? `（${pc.label}）` : ""}</div>}
                         {pc.source === "master" && <div>価格マスタ {pc.ref}{pc.label ? `（${pc.label}）` : ""}{pc.master_date ? `・${fmtDate(pc.master_date)} 更新` : ""}</div>}
-                        {pc.error && <div className="text-amber-700">{pc.error}</div>}
+                        {pc.source === "manual" && <div>手で入力（{pc.manual_total != null ? `${yen0(pc.manual_total)}・` : ""}{pc.label}）{pc.checked_by ? `・${pc.checked_by}` : ""}</div>}
+                        {pc.source === "manual_same" && <div>前回と同じことを確認{pc.checked_by ? `・${pc.checked_by}` : ""}</div>}
+                        {pc.error && pc.status === "unknown" && <div className="text-amber-700">確認できませんでした（下の「次にやること」へ）</div>}
+                        {pc.error && pc.status !== "unknown" && <div className="text-amber-700">{pc.error}</div>}
                         {!pc.status && <div>{li.source_url || masterOf(li, masters)?.source_url ? "入稿先 URL を読み直します" : "価格マスタで探します"}</div>}
                       </td>
                       <td className="px-2 py-2">
@@ -174,6 +246,14 @@ export default function CarriedPriceCheck({ estimate, onUpdate }) {
                         </div>
                       </td>
                     </tr>
+                    {pc.status === "unknown" && (
+                      <tr className="bg-amber-50/30">
+                        <td colSpan={7} className="px-3 pb-3 pt-0">
+                          <NextActions li={li} masters={masters} printVendors={printVendors} onManual={(t, m) => manual(li, t, m)} onSame={() => same(li)} onRequest={() => onOpenRequestTool?.()} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>

@@ -542,7 +542,7 @@ export default function EstimateDetail() {
             <div className="space-y-4">
               {/* 依頼ツールは右の列ではなく 1 行の帯にして、プレビューと編集欄に横幅を全部使わせる */}
               <VendorRequestBar estimate={formData} emailLogs={emailLogs} onOpen={(n) => { setToolStep(n); setToolOpen(true); }} />
-              <CarriedPriceCheck estimate={formData} onUpdate={handleUpdate} />
+              <CarriedPriceCheck estimate={formData} onUpdate={handleUpdate} onOpenRequestTool={() => { setToolStep(1); setToolOpen(true); }} />
               <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
             </div>
           ) : (
