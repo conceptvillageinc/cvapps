@@ -23,6 +23,7 @@ import { specLabel } from "@/lib/printSpecs";
 import { MEETING_STATUS } from "@/lib/meetings";
 import { COST_SHEET_STATUS, searchText as costSheetSearchText } from "@/lib/costSheets";
 import CostSheetPane from "@/components/clients/CostSheetPane";
+import MeetingAttachments from "@/components/meetings/MeetingAttachments";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
@@ -521,6 +522,8 @@ function MeetingPane({ meeting: m }) {
             <div><p className="text-[10px] text-muted-foreground font-medium">決定事項</p>{(s.decisions || []).length ? <ul className="list-disc pl-4 space-y-0.5">{s.decisions.map((d, i) => <li key={i}>{d}</li>)}</ul> : <p className="text-muted-foreground">—</p>}</div>
             <div><p className="text-[10px] text-muted-foreground font-medium">ToDo</p>{(s.todos || []).length ? <ul className="space-y-0.5">{s.todos.map((t, i) => <li key={i} className={t.done ? "line-through text-muted-foreground" : ""}>・{t.text}{t.owner ? `（${t.owner}）` : ""}{t.due ? ` 期限 ${t.due}` : ""}</li>)}</ul> : <p className="text-muted-foreground">—</p>}</div>
             {unconfirmed.length > 0 && <div><p className="text-[10px] text-amber-700 font-medium">未確認の項目</p><p className="text-amber-800">{unconfirmed.map((c) => c.label).join("・")}</p></div>}
+            {(s.open_items || []).length > 0 && <div><p className="text-[10px] text-muted-foreground font-medium">保留・次回までの確認事項</p><ul className="space-y-0.5">{s.open_items.map((o, i) => <li key={i}>・{o}</li>)}</ul></div>}
+            {(s.attachments || []).length > 0 && <div className="space-y-1"><p className="text-[10px] text-muted-foreground font-medium">参考資料（{s.attachments.length}）</p><MeetingAttachments meetingId={m.id} value={s.attachments} readOnly /></div>}
             {s.notes && <div><p className="text-[10px] text-muted-foreground font-medium">補足メモ</p><p className="whitespace-pre-line">{s.notes}</p></div>}
           </>
         )}

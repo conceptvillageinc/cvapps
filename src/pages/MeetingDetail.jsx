@@ -21,6 +21,8 @@ import {
 import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save } from "lucide-react";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
+import MeetingAttachments from "@/components/meetings/MeetingAttachments";
+import { useAuth } from "@/lib/AuthContext";
 import { useRecording } from "@/lib/recording";
 
 // useQuery の既定値に毎回新しい配列を渡すと、effect が無限に走るので固定の空配列を使う
@@ -123,6 +125,7 @@ export default function MeetingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { typeLabel } = useMeetingSettings();
   const audioRef = useRef(null);
   const [search, setSearch] = useState("");
@@ -204,7 +207,7 @@ export default function MeetingDetail() {
 
   const remove = useMutation({
     mutationFn: async () => {
-      const paths = [meeting.audio_path, ...segments.map((s) => s.storage_path)].filter(Boolean);
+      const paths = [meeting.audio_path, ...segments.map((s) => s.storage_path), ...((meeting.summary?.attachments || []).map((a) => a.path))].filter(Boolean);
       await db.entities.Meeting.delete(id);
       // 音声は消せる範囲で消す（失敗しても議事録の削除は成立）
       await db.storage.remove(paths).catch(() => {});
@@ -214,6 +217,15 @@ export default function MeetingDetail() {
   });
 
   const upd = (patch) => { setSummary((s) => ({ ...s, ...patch })); setDirty(true); };
+  // 参考資料: ファイルの追加・削除はすぐ保存する（Storage に置いたファイルと一覧がずれないように）。メモの書き換えは「保存」で
+  const updAttachments = (next, { save: saveNow = false, removed = [] } = {}) => {
+    const nextSummary = { ...summary, attachments: next };
+    setSummary(nextSummary);
+    if (!saveNow) { setDirty(true); return; }
+    save.mutate({ summary: nextSummary, checkpoints, estimate_conditions: conditions }, {
+      onSuccess: () => { if (removed.length) db.storage.remove(removed).catch(() => {}); },
+    });
+  };
   const updConditions = (next) => { setConditions(next); setDirty(true); };
   // 条件を保存してから、新しい見積を新しいタブで開く（見積側が議事録を読んで印刷仕様・明細を埋める）
   const createEstimateFromConditions = async () => {
@@ -406,6 +418,10 @@ export default function MeetingDetail() {
                   {(summary.open_items || []).map((o, i) => (
                     <Row key={i} onRemove={() => removeFrom("open_items", i)}><LineField value={o} onChange={(v) => updList("open_items", i, v)} /></Row>
                   ))}
+                </Section>
+
+                <Section title={`参考資料${(summary.attachments || []).length ? `（${summary.attachments.length}）` : ""}`}>
+                  <MeetingAttachments meetingId={id} value={summary.attachments || []} onChange={updAttachments} userName={user?.full_name || user?.email || ""} />
                 </Section>
 
               </CardContent>
