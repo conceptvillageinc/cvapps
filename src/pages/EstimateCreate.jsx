@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { db } from "@/api/db";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
-import { linesToEstimateItems } from "@/lib/costSheets";
+import { linesToEstimateItems, defaultSelectedRows, groupLabel, COST_SHEET_STATUS } from "@/lib/costSheets";
+import CarryOverPanel from "@/components/estimates/CarryOverPanel";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,40 +137,75 @@ export default function EstimateCreate() {
   }, [meeting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: costSheet } = useQuery({ queryKey: ["costSheet", costSheetId], queryFn: () => db.entities.CostSheet.get(costSheetId), enabled: !!costSheetId });
-  // 原価計算表（社内見積）の行を明細にする。カルテで選んだ行（無ければ初期選択と同じ行）
+  // 原価計算表（社内見積）の行を明細にする。カルテで選んだ行（無ければ初期選択と同じ行）。右の「引き継ぐ明細」で選び直せる
+  const [costRows, setCostRows] = useState(null); // Set<行番号>
   useEffect(() => {
-    if (!costSheet) return;
-    const items = linesToEstimateItems(costSheet, costSheetRows);
-    setFormData((prev) => ({
-      ...prev,
-      client_name: prev.client_name || costSheet.client_name || "",
-      estimate_title: prev.estimate_title || costSheet.title || "",
-      line_items: items,
-      total_amount: computeEstimateTotals(items).total,
-    }));
-    toast.message(`原価計算表「${costSheet.title}」から ${items.length} 行を明細にしました。数量・単価・原価は見直してください`);
+    if (!costSheet || costRows) return;
+    setCostRows(new Set(costSheetRows.length ? costSheetRows : defaultSelectedRows(costSheet)));
+    setFormData((prev) => ({ ...prev, client_name: prev.client_name || costSheet.client_name || "", estimate_title: prev.estimate_title || costSheet.title || "" }));
   }, [costSheet]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 複製元の見積から件名・仕様・明細・備考を引き継ぐ（明細の id は振り直し、複製元を残す）
   useEffect(() => {
-    if (!copyFrom) return;
-    const uid = () => `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    if (!costSheet || !costRows) return;
+    const items = costRows.size ? linesToEstimateItems(costSheet, [...costRows]) : [];
+    setFormData((prev) => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items).total }));
+  }, [costSheet, costRows]);
+
+  // 複製元の見積から件名・仕様・明細・備考を引き継ぐ（明細の id は振り直し、複製元を残す）。右の「引き継ぐ明細」で選び直せる
+  const copySource = useMemo(() => (copyFrom?.schema_version === 2 ? (copyFrom.line_items || []) : []), [copyFrom]);
+  const copyDefaultIds = useMemo(() => {
     const wanted = copyLineIds ? new Set(copyLineIds.split(",").filter(Boolean)) : null;
-    const source = (copyFrom.schema_version === 2 ? (copyFrom.line_items || []) : [])
-      // 選択複製のときは選んだ行だけ（見出し行・小計・自動計算行は付けない）
-      .filter((li) => !wanted || wanted.has(li.id));
-    const items = source.map((li) => ({ ...li, id: uid(), ...(li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" ? { copied_from: copyFrom.estimate_number, copied_from_id: copyFrom.id } : {}) }));
+    return copySource.filter((li) => !wanted || wanted.has(li.id)).map((li) => li.id);
+  }, [copySource, copyLineIds]);
+  const [copyIds, setCopyIds] = useState(null); // Set<明細 id>
+  useEffect(() => {
+    if (!copyFrom || copyIds) return;
+    setCopyIds(new Set(copyDefaultIds));
     setFormData(prev => ({
       ...prev,
       client_name: prev.client_name || copyFrom.client_name || "",
       estimate_title: prev.estimate_title || copyFrom.estimate_title || "",
       additional_notes: copyFrom.additional_notes || "",
       print_specs: (copyFrom.print_specs || []).map((sp) => ({ ...sp, id: `ps_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` })),
-      line_items: items,
       tax_inclusive: !!copyFrom.tax_inclusive,
-      total_amount: computeEstimateTotals(items, { taxInclusive: !!copyFrom.tax_inclusive }).total,
     }));
-  }, [copyFrom, copyLineIds]);
+  }, [copyFrom]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!copyFrom || !copyIds) return;
+    const uid = () => `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const items = copySource.filter((li) => copyIds.has(li.id))
+      .map((li) => ({ ...li, id: uid(), ...(li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" ? { copied_from: copyFrom.estimate_number, copied_from_id: copyFrom.id } : {}) }));
+    setFormData(prev => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items, { taxInclusive: !!copyFrom.tax_inclusive }).total }));
+  }, [copyFrom, copyIds, copySource]);
+
+  // 右の「引き継ぐ明細」パネルに出す内容
+  const carry = useMemo(() => {
+    const toggleIn = (setter) => (key) => setter((prev) => { const t = new Set(prev || []); if (t.has(key)) t.delete(key); else t.add(key); return t; });
+    if (costSheet && costRows) {
+      const st = COST_SHEET_STATUS[costSheet.status]?.label || "";
+      const rows = (costSheet.lines || []).map((l) => {
+        const [it] = linesToEstimateItems(costSheet, [l.row]);
+        return { key: l.row, label: it?.name || l.name || "（項目名なし）", sub: [groupLabel(l.group), l.vendor, l.final ? "✓最終納品" : ""].filter(Boolean).join("・"), qty: it?.quantity, unit: it?.unit, unitPrice: it?.unit_price, amount: it?.amount ?? 0, cost: it?.cost_price != null ? Number(it.cost_price) * (Number(it.quantity) || 1) : null };
+      });
+      return {
+        title: `社内見積「${costSheet.title}」`, subtitle: [costSheet.period, st, (costSheet.authors || []).join("・")].filter(Boolean).join("・"),
+        linkTo: costSheet.client_id ? `/clients/${costSheet.client_id}` : null, linkLabel: "クライアントカルテで開く",
+        rows, selected: costRows, onToggle: toggleIn(setCostRows), onSetAll: (keys) => setCostRows(new Set(keys)), defaultKeys: defaultSelectedRows(costSheet), taxInclusive: false,
+      };
+    }
+    if (copyFrom && copyIds) {
+      const rows = copySource.map((li) => ({
+        key: li.id, kind: li.row_type, label: li.row_type === "text" ? (li.text || "（見出し）") : (li.name || "（項目名なし）"),
+        sub: li.row_type === "text" ? "" : [li.category, li.source_ref].filter(Boolean).join("・"),
+        qty: li.quantity, unit: li.unit, unitPrice: li.unit_price, amount: li.amount, cost: li.cost_price != null && li.cost_price !== "" ? Number(li.cost_price) * (Number(li.quantity) || 1) : null,
+      }));
+      return {
+        title: `見積 ${copyFrom.estimate_number}「${copyFrom.estimate_title || copyFrom.print_type || ""}」`, subtitle: copyFrom.client_name || "",
+        linkTo: `/estimates/${copyFrom.id}`, linkLabel: "元の見積を開く",
+        rows, selected: copyIds, onToggle: toggleIn(setCopyIds), onSetAll: (keys) => setCopyIds(new Set(keys)), defaultKeys: copyDefaultIds, taxInclusive: !!copyFrom.tax_inclusive,
+      };
+    }
+    return null;
+  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds]);
 
   const handleSave = async () => {
     if (!project) {
@@ -224,8 +260,8 @@ export default function EstimateCreate() {
     navigate(`/estimates/${created.id}`);
   };
 
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
+  const form = (
+    <div className="space-y-6 min-w-0">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
@@ -408,9 +444,18 @@ export default function EstimateCreate() {
       <div className="flex items-center justify-end gap-2 pb-6">
         <Button variant="outline" onClick={() => navigate(-1)} disabled={saving}>キャンセル</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2" size="lg">
-          <Save className="w-4 h-4" /> 作成して明細入力へ
+          <Save className="w-4 h-4" /> {carry ? `${formData.line_items.length} 行の明細で作成して明細入力へ` : "作成して明細入力へ"}
         </Button>
       </div>
+    </div>
+  );
+
+  if (!carry) return <div className="max-w-2xl mx-auto">{form}</div>;
+  // 社内見積・見積の複製から来たときは、右に「引き継ぐ明細」を並べて確認しながら入力できるようにする
+  return (
+    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
+      {form}
+      <CarryOverPanel {...carry} items={formData.line_items} />
     </div>
   );
 }

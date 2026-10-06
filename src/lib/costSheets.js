@@ -63,7 +63,10 @@ export function linesToEstimateItems(cs, rows) {
   const imgByRow = new Map((cs.images || []).filter((im) => im.near_row).map((im) => [im.near_row, im.path]));
   return picked.map((l) => {
     const qty = Number(l.qty) > 0 ? Number(l.qty) : 1;
-    const amount = Math.round(Number(l.adjusted || 0) || Number(l.sell_total || 0));
+    // 調整後売価を使う。0 のときは売価。割引の行は必ずマイナス（シートの売価欄は割引額を正の数で持つため）
+    const isDiscount = /割引/.test(`${l.group} ${l.section} ${l.name}`);
+    let amount = Math.round(Number(l.adjusted || 0) || Number(l.sell_total || 0));
+    if (isDiscount && amount > 0) amount = -amount;
     const unitPrice = Math.round(amount / qty);
     const name = l.name === "〃" || !l.name
       ? `${l.section || groupLabel(l.group)}${l.qty ? ` ${Number(l.qty).toLocaleString()}${l.unit || ""}` : ""}`.trim()
