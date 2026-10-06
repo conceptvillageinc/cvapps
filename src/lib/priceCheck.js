@@ -131,13 +131,14 @@ export function replaceWithCurrent(li) {
   return { ...li, cost_price: now, unit_price: unitPrice, amount: Math.round(unitPrice * qty), price_check: { ...pc, status: "replaced", replaced_at: new Date().toISOString(), old_unit_price: li.unit_price } };
 }
 
+// 色は 青緑（この帯の操作色）・グレー・赤（値上がりだけ）にしぼる
 export const PRICE_CHECK_STATUS = {
-  none: { label: "未確認", cls: "bg-slate-100 text-slate-600" },
-  same: { label: "変わりなし", cls: "bg-emerald-100 text-emerald-700" },
-  up: { label: "値上がり", cls: "bg-red-100 text-red-700" },
-  down: { label: "値下がり", cls: "bg-sky-100 text-sky-700" },
-  unknown: { label: "要確認", cls: "bg-amber-100 text-amber-800" },
-  replaced: { label: "置き換え済み", cls: "bg-violet-100 text-violet-700" },
+  none: { label: "未確認", cls: "bg-white border border-slate-200 text-slate-500" },
+  same: { label: "変わりなし", cls: "bg-slate-100 text-slate-600" },
+  up: { label: "値上がり", cls: "bg-red-50 border border-red-200 text-red-700" },
+  down: { label: "値下がり", cls: "bg-teal-50 text-teal-800" },
+  unknown: { label: "要確認", cls: "bg-white border border-teal-600 text-teal-800 font-medium" },
+  replaced: { label: "置き換え済み", cls: "bg-slate-100 text-slate-600" },
 };
 
 /**

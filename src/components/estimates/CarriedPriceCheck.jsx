@@ -157,7 +157,7 @@ function ShotReader({ li, masters, printVendors, onCompare }) {
                 </div>
               </>
             ) : (
-              <div className="flex items-center gap-2 text-[11px] text-amber-800">読み取れませんでした。<button type="button" className="text-teal-700 hover:underline" onClick={() => setShot(null)}>別のスクショにする</button></div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-600">読み取れませんでした。<button type="button" className="text-teal-700 hover:underline" onClick={() => setShot(null)}>別のスクショにする</button></div>
             )}
           </div>
         </div>
@@ -177,8 +177,8 @@ function NextActions({ li, masters, printVendors, onManual, onSame, onRequest, o
   const n = String(total).replace(/[,¥￥\s]/g, "");
   const valid = n !== "" && Number(n) > 0;
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2.5 space-y-2" data-testid="price-next-actions">
-      <p className="text-[11px] text-amber-900 flex items-start gap-1.5"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /><span><span className="font-semibold">確認できなかった理由：</span>{REASON_TEXT[reason]}</span></p>
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 space-y-2" data-testid="price-next-actions">
+      <p className="text-[11px] text-slate-700 flex items-start gap-1.5"><AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" /><span><span className="font-semibold">確認できなかった理由：</span>{REASON_TEXT[reason]}</span></p>
       <p className="text-[11px] font-semibold text-slate-700">次にやること</p>
       <ol className="space-y-2 text-[11px]">
         <li className="flex flex-wrap items-center gap-2">
@@ -186,12 +186,12 @@ function NextActions({ li, masters, printVendors, onManual, onSame, onRequest, o
           {url ? (
             <>
               <span>入稿先のページを開いて、{qty.toLocaleString()}{li.unit} の今の金額を見る</span>
-              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 h-6 px-2 rounded border border-teal-300 bg-white text-teal-800 text-[10px] hover:bg-teal-50">入稿先を開く <ExternalLink className="w-3 h-3" /></a>
+              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 h-6 px-2 rounded border bg-white text-[10px] hover:bg-slate-50">入稿先を開く <ExternalLink className="w-3 h-3" /></a>
             </>
           ) : (
             <>
               <span>仕入先（{vendorOf(li, masters) || "未登録"}）に今の価格を確認する。メールで聞くときは依頼ツールが使えます</span>
-              <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1 border-teal-300 text-teal-800 bg-white" onClick={onRequest}><Send className="w-3 h-3" /> 依頼ツールを開く</Button>
+              <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1 bg-white" onClick={onRequest}><Send className="w-3 h-3" /> 依頼ツールを開く</Button>
             </>
           )}
         </li>
@@ -332,20 +332,20 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
             {["same", "up", "down", "unknown", "replaced", "none"].map((st) => count(st) > 0 && <Badge key={st} className={`${PRICE_CHECK_STATUS[st].cls} hover:${PRICE_CHECK_STATUS[st].cls} font-normal`}>{PRICE_CHECK_STATUS[st].label} {count(st)}</Badge>)}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            {changed.length > 0 && <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 bg-background border-teal-300 text-teal-800" onClick={replaceAllUp}>変わった {changed.length} 行を今の原価に置き換える</Button>}
+            {changed.length > 0 && <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 bg-background" onClick={replaceAllUp}>変わった {changed.length} 行を今の原価に置き換える</Button>}
             <Button size="sm" className="h-7 text-[11px] gap-1 bg-teal-600 hover:bg-teal-700" onClick={() => run(carried)} disabled={busy.size > 0}>{busy.size > 0 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} まとめて今の価格を確認</Button>
             <button type="button" onClick={() => setOpen((v) => !v)} className="p-1 text-muted-foreground hover:text-foreground" aria-label={open ? "たたむ" : "開く"}>{open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
           </div>
         </div>
         {open && count("unknown") > 0 && (
-          <div className="px-4 py-1.5 border-b bg-amber-50 text-[11px] text-amber-900 flex items-center gap-1.5" data-testid="price-check-unknown-note">
-            <AlertTriangle className="w-3.5 h-3.5" /> 確認できなかった行が {count("unknown")} 行あります。各行の下の「次にやること」から、入稿先を見て金額を入れるか、仕入先に確認してください
+          <div className="px-4 py-1.5 border-b bg-slate-50 text-[11px] text-slate-700 flex items-center gap-1.5" data-testid="price-check-unknown-note">
+            <AlertTriangle className="w-3.5 h-3.5 text-slate-400" /> 確認できなかった行が {count("unknown")} 行あります。各行の下の「次にやること」から、入稿先を見て金額を入れるか、仕入先に確認してください
           </div>
         )}
         {open && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[860px]">
-              <thead className="bg-teal-50/40 text-[10px] text-muted-foreground">
+              <thead className="bg-slate-50 text-[10px] text-muted-foreground">
                 <tr>
                   <th className="text-left px-3 py-1.5 font-normal">明細</th>
                   <th className="text-right px-2 py-1.5 font-normal w-24">数量</th>
@@ -364,7 +364,7 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                   const loading = busy.has(li.id);
                   return (
                     <Fragment key={li.id}>
-                    <tr className={`border-t align-top ${pc.status === "unknown" ? "bg-amber-50/30" : ""}`} data-testid="price-check-row">
+                    <tr className="border-t align-top" data-testid="price-check-row">
                       <td className="px-3 py-2">
                         <div className="font-medium text-[12px]">{li.name}</div>
                         <div className="text-[10px] text-muted-foreground">{[li.source_type === "price_master" ? "" : vendorOf(li, masters), originLabel(li, masters), li.cost_as_of ? `${fmtDate(li.cost_as_of)} 時点` : ""].filter(Boolean).join("・")}</div>
@@ -377,7 +377,7 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                       <td className="px-2 py-2 text-right tabular-nums">
                         {pc.current_cost != null ? (
                           <>
-                            <div className={pc.status === "up" ? "text-red-700 font-semibold" : pc.status === "down" ? "text-sky-700 font-semibold" : ""}>{yen(pc.current_cost)}</div>
+                            <div className={pc.status === "up" ? "text-red-700 font-semibold" : pc.status === "down" ? "text-teal-700 font-semibold" : ""}>{yen(pc.current_cost)}</div>
                             <div className="text-[10px] text-muted-foreground">計 {yen0(pc.current_cost * (Number(li.quantity) || 1))}</div>
                           </>
                         ) : <span className="text-muted-foreground">—</span>}
@@ -392,8 +392,8 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                         {pc.source === "manual" && <div>手で入力（{pc.manual_total != null ? `${yen0(pc.manual_total)}・` : ""}{pc.label}）{pc.checked_by ? `・${pc.checked_by}` : ""}</div>}
                         {pc.source === "screenshot" && <div>スクショから読み取り（{pc.label}・¥{Number(pc.shot_price || 0).toLocaleString()}{pc.shot_tax_mode === "excluded" ? "税別" : "税込"}）{pc.checked_by ? `・${pc.checked_by}` : ""} <EvidenceLink path={pc.evidence_path} /></div>}
                         {pc.source === "manual_same" && <div>前回と同じことを確認{pc.checked_by ? `・${pc.checked_by}` : ""}</div>}
-                        {pc.error && pc.status === "unknown" && <div className="text-amber-700">確認できませんでした（下の「次にやること」へ）</div>}
-                        {pc.error && pc.status !== "unknown" && <div className="text-amber-700">{pc.error}</div>}
+                        {pc.error && pc.status === "unknown" && <div className="text-slate-600">確認できませんでした（下の「次にやること」へ）</div>}
+                        {pc.error && pc.status !== "unknown" && <div className="text-slate-600">{pc.error}</div>}
                         {!pc.status && <div>{li.source_url || masterOf(li, masters)?.source_url ? "入稿先 URL を読み直します" : "価格マスタで探します"}</div>}
                       </td>
                       <td className="px-2 py-2">
@@ -407,7 +407,7 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                       </td>
                     </tr>
                     {pc.status === "unknown" && (
-                      <tr className="bg-amber-50/30">
+                      <tr>
                         <td colSpan={7} className="px-3 pb-3 pt-0">
                           <NextActions li={li} masters={masters} printVendors={printVendors} onManual={(t, m) => manual(li, t, m)} onSame={() => same(li)} onRequest={() => onOpenRequestTool?.()} onShot={(shot, mode, saveMaster) => shotCompare(li, shot, mode, saveMaster)} />
                         </td>
