@@ -1,6 +1,7 @@
 // ============================================================================
-// 引き継いだ明細の「今の価格」確認
-//   社内見積（原価計算表）や過去の見積から引き継いだ行について、前回の原価と今の原価を比べる。
+// 印刷費・仕入の行の「今の価格」確認
+//   社内見積（原価計算表）や過去の見積から引き継いだ行、価格マスタ・入稿先 URL・仕入先見積から入れた行について、
+//   見積に入れたときの原価と今の原価を比べる。
 //   今の原価の出どころ:
 //     url    … 行の入稿先 URL の価格表を読み直す（価格マスタの URL 取り込みと同じ仕組み）
 //     master … 価格マスタの同じ仕入先・同じ数量の価格
@@ -14,11 +15,38 @@ import { toTaxExcluded, vendorTaxMode } from "@/lib/priceTax";
 const norm = (s) => String(s || "").normalize("NFKC").toLowerCase().replace(/\s+/g, "").replace(/株式会社|（株）|\(株\)|㈱/g, "");
 const urlKey = (u) => { try { const x = new URL(u); return `${x.hostname.replace(/^www\./, "")}${x.pathname.replace(/\/+$/, "")}`; } catch { return ""; } };
 
-/** 引き継いだ行（価格確認の対象） */
-export function carriedItems(items) {
-  // 仕入先・入稿先がある行と、印刷費の行だけ（社内のデザイン費などは値段が外で変わらないので対象外）
-  return (items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" && li.copied_from
-    && !/割引/.test(li.name || "") && Number(li.amount) > 0 && (li.source_url || li.source_ref || /印刷/.test(li.category || "")));
+/**
+ * 価格確認の対象の行。
+ *   価格マスタ・仕入先見積・入稿先 URL から入れた行と、社内見積・過去の見積から引き継いだ印刷費・仕入先の行。
+ *   社内のデザイン費・自動計算の行・割引は、外で値段が変わらないので対象外。
+ */
+export function priceCheckTargets(items) {
+  return (items || []).filter((li) => {
+    if (li.row_type === "text" || li.row_type === "subtotal" || li.source_type === "rule" || li.source_type === "design_master") return false;
+    if (/割引/.test(li.name || "") || !(Number(li.amount) > 0)) return false;
+    if (li.source_type === "price_master" || li.source_type === "vendor_quote" || li.source_url) return true;
+    return !!li.copied_from && (!!li.source_ref || /印刷/.test(li.category || ""));
+  });
+}
+/** 旧名（互換） */
+export const carriedItems = priceCheckTargets;
+
+/** 価格マスタから入れた行なら、その価格マスタ */
+export const masterOf = (li, masters) => (li.source_type === "price_master" ? (masters || []).find((m) => m.id === li.source_ref) || null : null);
+
+/** 仕入先名（価格マスタから入れた行は source_ref がマスタの id なので、マスタの仕入先名） */
+export function vendorOf(li, masters) {
+  const m = masterOf(li, masters);
+  if (m) return m.vendor_name || "";
+  return li.source_type === "price_master" ? "" : (li.source_ref || "");
+}
+
+/** 行の出どころの説明（一覧の小さい字） */
+export function originLabel(li, masters) {
+  if (li.copied_from) return /^原価計算表/.test(li.copied_from) ? li.copied_from.replace(/^原価計算表\s*/, "社内見積 ") : `見積 ${li.copied_from}`;
+  if (li.source_type === "price_master") { const m = masterOf(li, masters); return m ? `価格マスタ ${m.vendor_name || ""} ${m.spec_summary || ""}`.trim() : "価格マスタ（削除済み）"; }
+  if (li.source_type === "vendor_quote") return "仕入先の見積";
+  return li.source_url ? "入稿先 URL" : "";
 }
 
 /** 原価計算表から来た行か */
@@ -50,9 +78,11 @@ export function pickFromGrid(grid, quantity, oldCost, taxMode) {
 export function findMaster(li, masters) {
   const qty = Number(li.quantity) || 0;
   const hasQty = (m) => (m.price_grid || []).some((r) => Number(r.quantity) === qty);
+  const own = masterOf(li, masters);
+  if (own && hasQty(own)) return own;
   const byUrl = li.source_url ? (masters || []).filter((m) => m.source_url && urlKey(m.source_url) === urlKey(li.source_url) && hasQty(m)) : [];
   if (byUrl.length) return byUrl[0];
-  const v = norm(li.source_ref);
+  const v = norm(vendorOf(li, masters));
   if (!v) return null;
   return (masters || []).find((m) => norm(m.vendor_name) === v && hasQty(m)) || null;
 }
@@ -78,11 +108,13 @@ export function checkWithMaster(li, masters, printVendors) {
 }
 
 /** URL の価格表で確認する（fetchPriceFromUrl の結果を渡す） */
-export function checkWithGrid(li, grid, printVendors) {
+export function checkWithGrid(li, grid, printVendors, masters = [], url = li.source_url) {
   const old = oldUnitCost(li);
-  const p = pickFromGrid(grid, li.quantity, old, vendorTaxMode(printVendors, li.source_ref));
-  if (!p) return { status: "unknown", checked_at: new Date().toISOString(), old_cost: old, current_cost: null, source: "url", label: "", ref: li.source_url, error: `価格表に ${Number(li.quantity).toLocaleString()} の行がありませんでした` };
-  return { status: compareCost(old, p.unitCost), checked_at: new Date().toISOString(), old_cost: old, current_cost: p.unitCost, source: "url", label: p.label || "", ref: li.source_url, error: "" };
+  const m = masterOf(li, masters);
+  const mode = m?.price_tax_mode === "excluded" ? "excluded" : m?.price_tax_mode === "included" ? "included" : vendorTaxMode(printVendors, vendorOf(li, masters));
+  const p = pickFromGrid(grid, li.quantity, old, mode);
+  if (!p) return { status: "unknown", checked_at: new Date().toISOString(), old_cost: old, current_cost: null, source: "url", label: "", ref: url, error: `価格表に ${Number(li.quantity).toLocaleString()} の行がありませんでした` };
+  return { status: compareCost(old, p.unitCost), checked_at: new Date().toISOString(), old_cost: old, current_cost: p.unitCost, source: "url", label: p.label || "", ref: url, error: "" };
 }
 
 /** 今の原価に置き換える。売価は前回の「売価 ÷ 原価」の比率をそのまま使う（無ければ掛け率） */
