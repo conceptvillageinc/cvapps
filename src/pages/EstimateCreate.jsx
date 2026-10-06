@@ -451,11 +451,12 @@ export default function EstimateCreate() {
   );
 
   if (!carry) return <div className="max-w-2xl mx-auto">{form}</div>;
-  // 社内見積・見積の複製から来たときは、右に「引き継ぐ明細」を並べて確認しながら入力できるようにする
+  // 社内見積・見積の複製から来たときは、左に「引き継ぐ明細」、右に入力欄を並べて確認しながら入力できるようにする
+  // （狭い画面では入力欄が上）
   return (
-    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
-      {form}
-      <CarryOverPanel {...carry} items={formData.line_items} />
+    <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)] gap-6 items-start">
+      <div className="order-2 lg:order-1 min-w-0"><CarryOverPanel {...carry} items={formData.line_items} /></div>
+      <div className="order-1 lg:order-2 min-w-0">{form}</div>
     </div>
   );
 }
