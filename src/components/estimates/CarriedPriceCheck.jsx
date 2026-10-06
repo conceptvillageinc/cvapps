@@ -27,7 +27,7 @@ const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("ja-JP") : "");
 const pct = (a, b) => (a && b ? `${((b - a) / a * 100 >= 0 ? "+" : "")}${((b - a) / a * 100).toFixed(1)}%` : "");
 
 const REASON_TEXT = {
-  url_unreadable: "入稿先のページを読み取れませんでした。価格を JavaScript で後から出すページや、サーバーからのアクセスを断るサイトでは読めないことがあります",
+  url_unreadable: "入稿先のページを読み取れませんでした。価格を JavaScript で後から出すページ等の場合、読み込めないことがあります",
   no_quantity: "価格表は読めましたが、この数量の行がありませんでした（数量の区切りが変わった可能性があります）",
   no_source: "入稿先 URL も価格マスタの登録も無いため、アプリでは今の価格を調べられません",
 };
@@ -418,7 +418,7 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                 })}
               </tbody>
             </table>
-            <p className="px-4 py-2 text-[10px] text-muted-foreground border-t">入稿先 URL がある行（価格マスタに URL があるものを含む）はその価格表を読み直し、同じ数量で見積に入れた原価にいちばん近い納期のマスと比べます。読めないサイト（JavaScript で価格を出すページなど）は価格マスタで探し、どちらも無い行は「要確認」です。置き換えると、原価を今の値にし、売価は前回と同じ「売価 ÷ 原価」の比率で計算し直します</p>
+            <p className="px-4 py-2 text-[10px] text-muted-foreground border-t">入稿先 URL がある行（価格マスタに URL があるものを含む）はその価格表を読み直し、同じ数量で見積に入れた原価にいちばん近い納期のマスと比べます。読めないページ（価格を JavaScript で後から出すページ等）は価格マスタで探し、どちらも無い行は「要確認」です。置き換えると、原価を今の値にし、売価は前回と同じ「売価 ÷ 原価」の比率で計算し直します</p>
           </div>
         )}
       </CardContent>

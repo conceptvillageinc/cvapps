@@ -143,7 +143,7 @@ export const PRICE_CHECK_STATUS = {
 
 /**
  * 確認できなかった理由の種類（次にやることの出し分けに使う）
- *   url_unreadable … 入稿先 URL はあるが読めなかった（JavaScript で価格を出すページ・ボット対策・時間切れ）
+ *   url_unreadable … 入稿先 URL はあるが読めなかった（価格を JavaScript で後から出すページ等）
  *   no_quantity    … 価格表は読めたが、同じ数量の行が無かった
  *   no_source      … 入稿先 URL も価格マスタの登録も無い
  */
