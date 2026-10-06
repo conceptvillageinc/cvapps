@@ -1,17 +1,17 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/AuthContext";
-import { vendorTaxMode } from "@/lib/priceTax";
+import { vendorTaxMode, toTaxExcluded, PRICE_READ_NOTES } from "@/lib/priceTax";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, ExternalLink, History, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, Send, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, ExternalLink, History, ChevronDown, ChevronUp, ArrowRight, AlertTriangle, Send, CheckCircle2, ImagePlus, Image as ImageIcon, Keyboard } from "lucide-react";
 import { toast } from "sonner";
 import { recomputeSubtotals, recomputeRuleRows, usePricingRules } from "@/lib/pricing";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
-import { priceCheckTargets, oldUnitCost, checkWithMaster, checkWithGrid, replaceWithCurrent, PRICE_CHECK_STATUS, masterOf, vendorOf, originLabel, unknownReason, checkManual, markSame } from "@/lib/priceCheck";
+import { priceCheckTargets, oldUnitCost, checkWithMaster, checkWithGrid, replaceWithCurrent, PRICE_CHECK_STATUS, masterOf, vendorOf, originLabel, unknownReason, checkManual, markSame, PRICE_GRID_SCHEMA, defaultCell, checkWithShot } from "@/lib/priceCheck";
 
 // ============================================================================
 // 見積書の画面の「印刷費・仕入の価格確認」（依頼ツールの帯の下に常に出す）
@@ -32,8 +32,143 @@ const REASON_TEXT = {
   no_source: "入稿先 URL も価格マスタの登録も無いため、アプリでは今の価格を調べられません",
 };
 
+/** 署名付き URL（Storage の非公開バケット） */
+function useSignedUrl(path) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (!path) { setUrl(null); return; }
+    db.storage.signedUrl(path).then((u) => alive && setUrl(u)).catch(() => alive && setUrl(null));
+    return () => { alive = false; };
+  }, [path]);
+  return url;
+}
+
+function EvidenceLink({ path, label = "スクショ" }) {
+  const url = useSignedUrl(path);
+  if (!path) return null;
+  return <a href={url || "#"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-teal-700 hover:underline"><ImageIcon className="w-3 h-3" /> {label}</a>;
+}
+
+/**
+ * スクショ（貼り付け／ファイル）から価格表を読み、数量の行と前回にいちばん近いマスを選ぶ。選び直してから「比べる」。
+ */
+function ShotReader({ li, masters, printVendors, onCompare }) {
+  const qty = Number(li.quantity) || 1;
+  const old = oldUnitCost(li);
+  const inputRef = useRef(null);
+  const [mode, setMode] = useState(() => vendorTaxMode(printVendors, vendorOf(li, masters)));
+  const [shot, setShot] = useState(null); // { preview, path, grid, spec, pick }
+  const [reading, setReading] = useState(false);
+  const [saveMaster, setSaveMaster] = useState(false);
+  const [over, setOver] = useState(false);
+
+  const read = async (file) => {
+    if (!file) return;
+    if (!/^image\/|pdf$/.test(file.type || "") && !/\.(png|jpe?g|webp|pdf)$/i.test(file.name || "")) { toast.error("画像か PDF を選んでください"); return; }
+    setReading(true);
+    const preview = /^image\//.test(file.type) ? URL.createObjectURL(file) : null;
+    try {
+      const ext = (file.name.match(/\.[a-zA-Z0-9]+$/) || [file.type === "application/pdf" ? ".pdf" : ".png"])[0].toLowerCase();
+      const path = `price-checks/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${ext}`;
+      const { file_url } = await db.integrations.Core.UploadFile({ file, path });
+      const res = await db.integrations.Core.InvokeLLM({
+        prompt: `添付した画像（またはPDF）は印刷会社の価格ページのスクリーンショットか、仕入先の見積書です。縦(枚数)×横(納期)の価格表を読み取ってください。見積書で数量ごとの金額しか無い場合は、数量ごとに 1 マス（label は「見積」）にしてください。価格は表示どおりの数値で返してください。${PRICE_READ_NOTES}`,
+        file_urls: [file_url],
+        response_json_schema: PRICE_GRID_SCHEMA,
+      });
+      const grid = (res?.price_grid || []).filter((r) => Number(r.quantity) > 0 && (r.cells || []).length);
+      if (grid.length === 0) { toast.error("価格表を読み取れませんでした。価格表全体が写るように撮り直すか、金額を手で入れてください"); setShot({ preview, path: file_url, grid: [], spec: "", pick: null }); return; }
+      setShot({ preview, path: file_url, grid, spec: res?.spec_summary || "", pick: defaultCell(grid, qty, old, mode) });
+    } catch (e) {
+      toast.error("読み取りに失敗しました: " + e.message);
+    } finally { setReading(false); if (inputRef.current) inputRef.current.value = ""; }
+  };
+  const onPaste = (e) => {
+    const f = Array.from(e.clipboardData?.items || []).find((it) => it.kind === "file")?.getAsFile();
+    if (f) { e.preventDefault(); read(f); }
+  };
+
+  const row = shot?.pick ? shot.grid[shot.pick.r] : null;
+  const cell = row ? row.cells[shot.pick.c] : null;
+  const unit = cell ? Math.round((toTaxExcluded(cell.price, mode) / (Number(row.quantity) || 1)) * 100) / 100 : null;
+  const qtyRowIdx = shot ? shot.grid.findIndex((r) => Number(r.quantity) === qty) : -1;
+  // 数量の行の前後 1 行ずつだけ見せる（全部だと長くなるため）
+  const visibleRows = shot ? shot.grid.map((r, i) => ({ r, i })).filter(({ i }) => qtyRowIdx < 0 || Math.abs(i - qtyRowIdx) <= 1) : [];
+
+  return (
+    <div
+      tabIndex={0}
+      onPaste={onPaste}
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); read(e.dataTransfer?.files?.[0]); }}
+      className={`flex-1 min-w-[320px] rounded-md border border-dashed p-2 bg-white outline-none focus:ring-2 focus:ring-teal-300 ${over ? "border-teal-500 bg-teal-50" : "border-teal-300"}`}
+      data-testid="price-shot-reader"
+      aria-label="スクリーンショットを貼り付け（クリックしてから Ctrl+V）"
+    >
+      {!shot && !reading && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => read(e.target.files?.[0])} />
+          <Button type="button" size="sm" className="h-7 px-2 text-[11px] gap-1 bg-teal-600 hover:bg-teal-700" onClick={() => inputRef.current?.click()}><ImagePlus className="w-3.5 h-3.5" /> スクショ・PDF を選ぶ</Button>
+          <span className="text-[10.5px] text-muted-foreground">または この枠をクリックして Ctrl+V（⌘+V）で貼り付け／ドラッグ＆ドロップ</span>
+        </div>
+      )}
+      {reading && <p className="text-[11px] text-teal-800 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> 価格表を読み取っています…（数秒かかります）</p>}
+      {shot && !reading && (
+        <div className="flex flex-wrap gap-3">
+          {shot.preview && <a href={shot.preview} target="_blank" rel="noreferrer" className="shrink-0"><img src={shot.preview} alt="スクショ" className="h-24 w-auto max-w-[180px] rounded border object-contain bg-white" /></a>}
+          <div className="flex-1 min-w-[240px] space-y-1.5">
+            {shot.grid.length > 0 ? (
+              <>
+                <p className="text-[10.5px] text-muted-foreground">読み取った価格表{shot.spec ? `（${shot.spec}）` : ""}。{qtyRowIdx >= 0 ? `${qty.toLocaleString()}${li.unit} の行で、前回にいちばん近いマスを選んでいます。違う場合はマスをクリック` : `この画像に ${qty.toLocaleString()}${li.unit} の行がありません。数量の行が写るように撮り直すか、金額を手で入れてください`}</p>
+                <div className="overflow-x-auto">
+                  <table className="text-[10.5px] border-collapse" data-testid="price-shot-grid">
+                    <tbody>
+                      {visibleRows.map(({ r, i }) => (
+                        <tr key={i} className={i === qtyRowIdx ? "" : "opacity-50"}>
+                          <td className="pr-2 py-0.5 text-right tabular-nums whitespace-nowrap font-medium">{Number(r.quantity).toLocaleString()}</td>
+                          {(r.cells || []).map((c, j) => {
+                            const on = shot.pick && shot.pick.r === i && shot.pick.c === j;
+                            return (
+                              <td key={j} className="p-0.5">
+                                <button type="button" disabled={i !== qtyRowIdx} onClick={() => setShot((sh) => ({ ...sh, pick: { r: i, c: j } }))} className={`px-1.5 py-0.5 rounded border whitespace-nowrap tabular-nums ${on ? "bg-teal-600 text-white border-teal-600" : "bg-white hover:bg-teal-50"}`}>
+                                  <span className="opacity-70 mr-1">{c.label}</span>¥{Number(c.price).toLocaleString()}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {cell && (
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span>使う金額: <b>{Number(row.quantity).toLocaleString()}{li.unit}・{cell.label} ¥{Number(cell.price).toLocaleString()}</b></span>
+                    <select value={mode} onChange={(e) => setMode(e.target.value)} className="h-6 rounded border bg-white px-1 text-[10.5px]" aria-label="表示の税"><option value="included">税込表示</option><option value="excluded">税別表示</option></select>
+                    <span className="text-muted-foreground">→ 1{li.unit || "個"}あたり ¥{unit?.toLocaleString()}（税別）</span>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" size="sm" className="h-7 px-2 text-[11px] bg-teal-600 hover:bg-teal-700" disabled={!cell} onClick={() => onCompare(shot, mode, saveMaster)}>比べる</Button>
+                  <label className="inline-flex items-center gap-1 text-[10.5px] text-muted-foreground"><input type="checkbox" checked={saveMaster} onChange={(e) => setSaveMaster(e.target.checked)} /> 価格マスタにも登録する（次から自動で比べられます）</label>
+                  <button type="button" className="text-[10.5px] text-teal-700 hover:underline ml-auto" onClick={() => setShot(null)}>別のスクショにする</button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-[11px] text-amber-800">読み取れませんでした。<button type="button" className="text-teal-700 hover:underline" onClick={() => setShot(null)}>別のスクショにする</button></div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 確認できなかった行の「次にやること」 */
-function NextActions({ li, masters, printVendors, onManual, onSame, onRequest }) {
+function NextActions({ li, masters, printVendors, onManual, onSame, onRequest, onShot }) {
+  const [manualOpen, setManualOpen] = useState(false);
   const reason = unknownReason(li, masters);
   const url = li.source_url || masterOf(li, masters)?.source_url || "";
   const qty = Number(li.quantity) || 1;
@@ -60,15 +195,24 @@ function NextActions({ li, masters, printVendors, onManual, onSame, onRequest })
             </>
           )}
         </li>
-        <li className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-600 text-white text-[9px] shrink-0">2</span>
-          <span>見た金額（{qty.toLocaleString()}{li.unit} の合計）を入れて比べる</span>
-          <Input value={total} onChange={(e) => setTotal(e.target.value)} inputMode="numeric" placeholder="例: 3,010" className="h-7 w-28 text-xs text-right tabular-nums bg-white" aria-label="見た金額" />
-          <select value={mode} onChange={(e) => setMode(e.target.value)} className="h-7 rounded-md border bg-white px-1 text-[11px]" aria-label="税込・税別">
-            <option value="included">税込</option>
-            <option value="excluded">税別</option>
-          </select>
-          <Button type="button" size="sm" className="h-7 px-2 text-[11px] bg-teal-600 hover:bg-teal-700" disabled={!valid} onClick={() => onManual(Number(n), mode)}>比べる</Button>
+        <li className="flex flex-wrap items-start gap-2">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-600 text-white text-[9px] shrink-0 mt-1.5">2</span>
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <p>{url ? "その画面のスクショを貼ると、価格表を読み取って比べます" : "届いた見積書（PDF・画像）を入れると、金額を読み取って比べます"}</p>
+            <ShotReader li={li} masters={masters} printVendors={printVendors} onCompare={onShot} />
+            <button type="button" className="inline-flex items-center gap-1 text-[10.5px] text-teal-700 hover:underline" onClick={() => setManualOpen((v) => !v)}><Keyboard className="w-3 h-3" /> {manualOpen ? "金額の手入力を閉じる" : "金額を手で入れる"}</button>
+            {manualOpen && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span>見た金額（{qty.toLocaleString()}{li.unit} の合計）</span>
+                <Input value={total} onChange={(e) => setTotal(e.target.value)} inputMode="numeric" placeholder="例: 3,010" className="h-7 w-28 text-xs text-right tabular-nums bg-white" aria-label="見た金額" />
+                <select value={mode} onChange={(e) => setMode(e.target.value)} className="h-7 rounded-md border bg-white px-1 text-[11px]" aria-label="税込・税別">
+                  <option value="included">税込</option>
+                  <option value="excluded">税別</option>
+                </select>
+                <Button type="button" size="sm" className="h-7 px-2 text-[11px] bg-teal-600 hover:bg-teal-700" disabled={!valid} onClick={() => onManual(Number(n), mode)}>比べる</Button>
+              </div>
+            )}
+          </div>
         </li>
         <li className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-400 text-white text-[9px] shrink-0">他</span>
@@ -150,6 +294,21 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
 
   const replace = (li) => patchItems({ [li.id]: (cur) => replaceWithCurrent(cur) });
   const manual = (li, total, mode) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: checkManual(cur, total, mode, userName) }) }); toast.success("入れた金額で比べました"); };
+  const shotCompare = async (li, shot, mode, saveMaster) => {
+    const pc = checkWithShot(li, shot.grid, shot.pick, mode, shot.path, userName);
+    patchItems({ [li.id]: (cur) => ({ ...cur, price_check: checkWithShot(cur, shot.grid, shot.pick, mode, shot.path, userName), screenshot_path: cur.screenshot_path || shot.path }) });
+    toast.success(`スクショの価格で比べました（${PRICE_CHECK_STATUS[pc.status]?.label || ""}）`);
+    if (saveMaster) {
+      try {
+        await db.entities.PriceMaster.create({
+          category: li.name, vendor_name: vendorOf(li, masters) || "（仕入先未登録）", spec_summary: shot.spec || "",
+          paper_type_group: /紙以外/.test(li.category || "") ? "紙以外" : "紙", price_grid: shot.grid, last_updated: new Date().toISOString().slice(0, 10),
+          screenshot_url: shot.path, source_url: li.source_url || null, price_tax_mode: mode,
+        });
+        toast.success("価格マスタにも登録しました");
+      } catch (e) { toast.error("価格マスタに登録できませんでした: " + e.message); }
+    }
+  };
   const same = (li) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: markSame(cur, userName) }) }); toast.success("変わりなしとして確認済みにしました"); };
   const replaceAllUp = () => {
     const targets = carried.filter((li) => ["up", "down"].includes(li.price_check?.status) && li.price_check?.current_cost != null);
@@ -231,6 +390,7 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                         {pc.source === "url" && <div>入稿先の価格表{pc.label ? `（${pc.label}）` : ""}</div>}
                         {pc.source === "master" && <div>価格マスタ {pc.ref}{pc.label ? `（${pc.label}）` : ""}{pc.master_date ? `・${fmtDate(pc.master_date)} 更新` : ""}</div>}
                         {pc.source === "manual" && <div>手で入力（{pc.manual_total != null ? `${yen0(pc.manual_total)}・` : ""}{pc.label}）{pc.checked_by ? `・${pc.checked_by}` : ""}</div>}
+                        {pc.source === "screenshot" && <div>スクショから読み取り（{pc.label}・¥{Number(pc.shot_price || 0).toLocaleString()}{pc.shot_tax_mode === "excluded" ? "税別" : "税込"}）{pc.checked_by ? `・${pc.checked_by}` : ""} <EvidenceLink path={pc.evidence_path} /></div>}
                         {pc.source === "manual_same" && <div>前回と同じことを確認{pc.checked_by ? `・${pc.checked_by}` : ""}</div>}
                         {pc.error && pc.status === "unknown" && <div className="text-amber-700">確認できませんでした（下の「次にやること」へ）</div>}
                         {pc.error && pc.status !== "unknown" && <div className="text-amber-700">{pc.error}</div>}
@@ -249,7 +409,7 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                     {pc.status === "unknown" && (
                       <tr className="bg-amber-50/30">
                         <td colSpan={7} className="px-3 pb-3 pt-0">
-                          <NextActions li={li} masters={masters} printVendors={printVendors} onManual={(t, m) => manual(li, t, m)} onSame={() => same(li)} onRequest={() => onOpenRequestTool?.()} />
+                          <NextActions li={li} masters={masters} printVendors={printVendors} onManual={(t, m) => manual(li, t, m)} onSame={() => same(li)} onRequest={() => onOpenRequestTool?.()} onShot={(shot, mode, saveMaster) => shotCompare(li, shot, mode, saveMaster)} />
                         </td>
                       </tr>
                     )}

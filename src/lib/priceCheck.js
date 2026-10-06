@@ -170,3 +170,41 @@ export function markSame(li, userName = "") {
   const old = oldUnitCost(li);
   return { ...(li.price_check || {}), status: "same", checked_at: new Date().toISOString(), old_cost: old, current_cost: old, source: "manual_same", label: "", ref: "", error: "", checked_by: userName };
 }
+
+/** スクショ・PDF から価格表（枚数×納期）を読むときのスキーマ（価格マスタの読み取りと同じ形） */
+export const PRICE_GRID_SCHEMA = {
+  type: "object",
+  properties: {
+    spec_summary: { type: "string", description: "仕様の要約（紙質・厚さ・面など）。わかる場合のみ" },
+    price_grid: {
+      type: "array",
+      description: "縦=枚数・横=納期の価格表。写っている枚数パターンをすべて行にし、それぞれの納期パターンと価格を cells に入れる。単価しか無い見積書なら、その数量の合計金額を price に入れる",
+      items: { type: "object", properties: { quantity: { type: "number" }, cells: { type: "array", items: { type: "object", properties: { label: { type: "string" }, price: { type: "number" } } } } } },
+    },
+    notes: { type: "string" },
+  },
+};
+
+/** 価格表の中で、この行の数量の行番号と、前回の原価にいちばん近いマス */
+export function defaultCell(grid, quantity, oldCost, taxMode) {
+  const q = Number(quantity) || 0;
+  const r = (grid || []).findIndex((row) => Number(row.quantity) === q);
+  if (r < 0) return null;
+  const cells = grid[r].cells || [];
+  let best = -1; let bestDiff = Infinity;
+  cells.forEach((c, i) => {
+    if (!(Number(c.price) > 0)) return;
+    const d = oldCost != null ? Math.abs(toTaxExcluded(c.price, taxMode) / q - oldCost) : i;
+    if (d < bestDiff) { bestDiff = d; best = i; }
+  });
+  return best < 0 ? null : { r, c: best };
+}
+
+/** スクショから読んだ価格表の、選んだマスで比べる */
+export function checkWithShot(li, grid, pick, taxMode, shotPath, userName = "") {
+  const old = oldUnitCost(li);
+  const row = grid[pick.r]; const cell = row.cells[pick.c];
+  const q = Number(row.quantity) || 1;
+  const unit = Math.round((toTaxExcluded(cell.price, taxMode) / q) * 100) / 100;
+  return { ...(li.price_check || {}), status: compareCost(old, unit), checked_at: new Date().toISOString(), old_cost: old, current_cost: unit, source: "screenshot", label: `${q.toLocaleString()}${li.unit || ""}・${cell.label || ""}`.replace(/・$/, ""), ref: "", error: "", checked_by: userName, evidence_path: shotPath, shot_price: Number(cell.price), shot_tax_mode: taxMode };
+}
