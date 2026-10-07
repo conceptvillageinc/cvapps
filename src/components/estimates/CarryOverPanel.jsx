@@ -14,6 +14,7 @@ import { computeEstimateTotals } from "@/lib/estimateTotals";
 
 const yen = (n) => { const v = Math.round(Number(n) || 0); return `${v < 0 ? "−" : ""}¥${Math.abs(v).toLocaleString()}`; };
 const num = (n) => Number(n || 0).toLocaleString();
+const unitYen = (n) => `${Number(n) < 0 ? "−" : ""}¥${Math.abs(Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 /**
  * @param {object} p
@@ -72,7 +73,7 @@ export default function CarryOverPanel({ title, subtitle, linkTo, linkLabel = "�
                   </div>
                   {!heading && (
                     <div className="flex items-baseline gap-2 text-[10.5px] text-muted-foreground tabular-nums">
-                      <span>{num(r.qty)}{r.unit} × {yen(r.unitPrice)}</span>
+                      <span>{num(r.qty)}{r.unit} × {unitYen(r.unitPrice)}</span>
                       {r.cost != null && r.cost !== 0 && <span className="ml-auto whitespace-nowrap">原価 {yen(r.cost)}</span>}
                     </div>
                   )}

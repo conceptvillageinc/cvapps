@@ -22,6 +22,7 @@ import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
 import MeetingAttachments from "@/components/meetings/MeetingAttachments";
+import MeetingChat from "@/components/meetings/MeetingChat";
 import { useAuth } from "@/lib/AuthContext";
 import { useRecording } from "@/lib/recording";
 
@@ -426,6 +427,9 @@ export default function MeetingDetail() {
 
               </CardContent>
             </Card>
+
+            {/* AI に依頼（議事録・資料をもとに見積のたたき台・提案書の骨子・メール文面など） */}
+            <MeetingChat meeting={meeting} references={summary.attachments || []} />
 
             {/* 文字起こし */}
             <Card>

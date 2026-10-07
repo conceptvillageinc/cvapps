@@ -41,6 +41,7 @@ const TABLES = {
   BankTransaction: 'bank_transactions',
   FiscalTarget: 'fiscal_targets',
   CostSheet: 'cost_sheets',
+  MeetingChatMessage: 'meeting_chat_messages',
   ProjectTask: 'project_tasks',
 };
 
@@ -496,6 +497,7 @@ const FUNCTION_ROUTES = {
   meetingProcess: 'meeting-process',
   backup: 'backup',
   costSheetImport: 'cost-sheet-import',
+  meetingChat: 'meeting-chat',
 };
 
 const functions = {

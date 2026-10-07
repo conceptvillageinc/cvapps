@@ -57,6 +57,10 @@
     "api/cost-sheet-import.js": {
       "maxDuration": 300,
       "memory": 2048
+    },
+    "api/meeting-chat.js": {
+      "maxDuration": 300,
+      "memory": 1024
     }
   },
   "crons": [

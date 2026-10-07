@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { conditionsToEstimate } from "@/lib/meetingConditions";
+import { draftToLineItems, draftAmount, draftCost } from "@/lib/meetingChat";
 
 export default function EstimateCreate() {
   const navigate = useNavigate();
@@ -48,6 +49,7 @@ export default function EstimateCreate() {
   const costSheetRows = (searchParams.get("rows") || "").split(",").map(Number).filter((n) => n > 0); // 選んだ行（シートの行番号）
   // 選んだ明細だけ複製するとき（カルテの「選択した明細を複製」）
   const copyLineIds = searchParams.get("lines");
+  const chatId = searchParams.get("chat"); // 議事録の「AI に依頼」の見積のたたき台から
   const { data: copyFrom } = useQuery({
     queryKey: ["estimate", copyFromId],
     queryFn: () => db.entities.Estimate.get(copyFromId),
@@ -128,11 +130,10 @@ export default function EstimateCreate() {
       client_name: prev.client_name || (meeting.client_name && meeting.client_name !== "CV自社" ? meeting.client_name : ""),
       estimate_title: prev.estimate_title || from.estimate_title,
       desired_delivery_date: prev.desired_delivery_date || from.desired_delivery_date,
-      print_specs: from.print_specs,
-      line_items: from.line_items,
       meeting_id: meeting.id,
       meeting_budget: from.meeting_budget,
-      total_amount: computeEstimateTotals(from.line_items).total,
+      // AI のたたき台から作るときは、明細はたたき台の方を使う（見積条件の印刷仕様・明細は入れない）
+      ...(chatId ? {} : { print_specs: from.print_specs, line_items: from.line_items, total_amount: computeEstimateTotals(from.line_items).total }),
     }));
   }, [meeting]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -149,6 +150,21 @@ export default function EstimateCreate() {
     const items = costRows.size ? linesToEstimateItems(costSheet, [...costRows]) : [];
     setFormData((prev) => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items).total }));
   }, [costSheet, costRows]);
+
+  // 議事録の「AI に依頼」の見積のたたき台。左の「引き継ぐ明細」で選び直せる
+  const { data: chatMsg } = useQuery({ queryKey: ["meetingChatMessage", chatId], queryFn: () => db.entities.MeetingChatMessage.get(chatId), enabled: !!chatId });
+  const chatDraft = chatMsg?.draft?.items?.length ? chatMsg.draft : null;
+  const [chatKeys, setChatKeys] = useState(null); // Set<たたき台の行 key>
+  useEffect(() => {
+    if (!chatDraft || chatKeys) return;
+    setChatKeys(new Set(chatDraft.items.map((it) => it.key)));
+    setFormData((prev) => ({ ...prev, estimate_title: chatDraft.title || prev.estimate_title }));
+  }, [chatDraft]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!chatDraft || !chatKeys) return;
+    const items = draftToLineItems(chatDraft, [...chatKeys], `議事録の AI 依頼（${chatMsg.author_name || ""}）`);
+    setFormData((prev) => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items).total }));
+  }, [chatDraft, chatKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 複製元の見積から件名・仕様・明細・備考を引き継ぐ（明細の id は振り直し、複製元を残す）。右の「引き継ぐ明細」で選び直せる
   const copySource = useMemo(() => (copyFrom?.schema_version === 2 ? (copyFrom.line_items || []) : []), [copyFrom]);
@@ -192,6 +208,18 @@ export default function EstimateCreate() {
         rows, selected: costRows, onToggle: toggleIn(setCostRows), onSetAll: (keys) => setCostRows(new Set(keys)), defaultKeys: defaultSelectedRows(costSheet), taxInclusive: false,
       };
     }
+    if (chatDraft && chatKeys) {
+      const rows = chatDraft.items.map((it) => ({
+        key: it.key, label: it.spec ? `${it.name}（${it.spec}）` : it.name,
+        sub: [it.group, it.needs_check ? "要確認" : "", it.basis].filter(Boolean).join("・"),
+        qty: it.quantity, unit: it.unit, unitPrice: it.unit_price, amount: draftAmount(it), cost: draftCost(it) || null,
+      }));
+      return {
+        title: `AI の見積のたたき台${chatDraft.title ? `「${chatDraft.title}」` : ""}`, subtitle: [meeting?.title ? `議事録「${meeting.title}」` : "", chatMsg.author_name ? `${chatMsg.author_name} の依頼` : ""].filter(Boolean).join("・"),
+        linkTo: meeting ? `/meetings/${meeting.id}` : null, linkLabel: "議事録を開く",
+        rows, selected: chatKeys, onToggle: toggleIn(setChatKeys), onSetAll: (keys) => setChatKeys(new Set(keys)), defaultKeys: chatDraft.items.map((it) => it.key), taxInclusive: false,
+      };
+    }
     if (copyFrom && copyIds) {
       const rows = copySource.map((li) => ({
         key: li.id, kind: li.row_type, label: li.row_type === "text" ? (li.text || "（見出し）") : (li.name || "（項目名なし）"),
@@ -205,7 +233,7 @@ export default function EstimateCreate() {
       };
     }
     return null;
-  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds]);
+  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds, chatDraft, chatKeys, chatMsg, meeting]);
 
   const handleSave = async () => {
     if (!project) {
@@ -272,7 +300,9 @@ export default function EstimateCreate() {
             <p className="text-xs text-muted-foreground mt-0.5">案件を選んで基本情報を入力後、見積書画面で明細を追加します</p>
             {meeting && (
               <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-1.5 mt-1 inline-block">
-                議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の見積条件から作ります。印刷物は印刷仕様に、制作・開発は明細に入ります
+                {chatId
+                  ? <>議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の「AI に依頼」で作った見積のたたき台から作ります。要確認の行は作成後に確かめてください</>
+                  : <>議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の見積条件から作ります。印刷物は印刷仕様に、制作・開発は明細に入ります</>}
               </p>
             )}
             {copyFrom && (
