@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
 import { todayString, fiscalYearOf, fiscalYearLabel } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { isOffDay } from "@/lib/jpHolidays";
 import { toast } from "sonner";
 import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check } from "lucide-react";
 
@@ -37,6 +38,25 @@ function weekStart(today) {
   d.setDate(d.getDate() - dow);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** from〜to（YYYY-MM-DD、両端を含む）の営業日数（土日・祝日・年末年始を除く） */
+function businessDays(from, to) {
+  const d = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  let n = 0;
+  for (; d <= end; d.setDate(d.getDate() + 1)) if (!isOffDay(d)) n += 1;
+  return n;
+}
+const addDaysYmd = (ymd, days) => {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const monthEndYmd = (ymd) => {
+  const d = new Date(`${ymd.slice(0, 7)}-01T00:00:00`);
+  const e = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+};
 
 function Empty({ text }) {
   return (
@@ -322,10 +342,13 @@ export function DailyView({ projects, isLoading }) {
   useScrollToRowOnce(!isLoading && groups.length > 0, `[data-day="${today}"]`);
 
   const monthLabel = `${Number(today.slice(5, 7))}月`;
+  // 週・月の目標 = 1 日あたりの粗利目標 × その週・月の営業日数（土日・祝日・年末年始を除く）。1 日あたりの目標を変えると自動で変わる
+  const weekDays = businessDays(summary.week.from, addDaysYmd(summary.week.from, 6));
+  const monthDays = businessDays(today.slice(0, 8) + "01", monthEndYmd(today));
   const cards = [
-    { label: `今日（${shortDate(today).replace("-", "/")}）の新規案件`, v: summary.today, isToday: true },
-    { label: `今週（${shortDate(summary.week.from).replace("-", "/")}〜）の新規案件`, v: summary.week },
-    { label: `今月（${monthLabel}）の新規案件`, v: summary.month },
+    { label: `今日（${shortDate(today).replace("-", "/")}）の新規案件`, v: summary.today, target, isToday: true },
+    { label: `今週（${shortDate(summary.week.from).replace("-", "/")}〜）の新規案件`, v: summary.week, target: target * weekDays, days: weekDays },
+    { label: `今月（${monthLabel}）の新規案件`, v: summary.month, target: target * monthDays, days: monthDays },
   ];
 
   return (
@@ -336,11 +359,18 @@ export function DailyView({ projects, isLoading }) {
           <Card key={c.label}>
             <CardContent className="p-4">
               <p className="text-[11px] text-muted-foreground">{c.label}</p>
+              {target > 0 && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1" data-testid="period-target">
+                  <TargetBadge gross={c.v.counted} target={c.target} />
+                  <span className="text-[10.5px] text-muted-foreground tabular-nums" title="1日あたりの粗利目標 × 営業日数（土日・祝日・年末年始を除く）">
+                    目標 {yen(c.target)}{c.isToday ? "" : `（${c.days}営業日 × ${yen(target)}）`}
+                  </span>
+                </div>
+              )}
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-1">
                 <span className="text-2xl font-bold tabular-nums">{c.v.count}<span className="text-sm font-medium ml-0.5">件</span></span>
                 <span className="text-xs text-muted-foreground tabular-nums">受注見込 {yen(c.v.revenue)}　粗利見込 {yen(c.v.gross)}</span>
                 <span className="text-xs tabular-nums font-medium" title={TARGET_RULE}>計上 {yen(c.v.counted)}（{c.countedCount ?? c.v.countedCount}件）</span>
-                {c.isToday && <TargetBadge gross={c.v.counted} target={target} />}
               </div>
             </CardContent>
           </Card>
