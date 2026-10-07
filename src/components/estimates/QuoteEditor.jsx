@@ -1095,12 +1095,12 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
         <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />
         {(item.category || item.name) && (
           <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex flex-wrap items-center gap-1">
-            <SalesCategoryChip item={item} />
             {orders.map((o) => (
               <button key={o.id} type="button" onClick={() => onOpenOrder?.(o)} className="inline-flex items-center gap-1 rounded-full border border-teal-300 bg-teal-50 px-1.5 leading-4 text-[9.5px] font-semibold text-teal-800 hover:bg-teal-100" title="入稿記録を開く" data-testid="ordered-chip">
                 <PackageCheck className="w-2.5 h-2.5" /> 入稿済 {fmtOrderDate(o.ordered_on).slice(5)}
               </button>
             ))}
+            <SalesCategoryChip item={item} />
             {item.category}
             {isRule && <span className="inline-flex items-center gap-0.5 text-emerald-700"><Lock className="w-2.5 h-2.5" /> {ruleRowHint(item)}</span>}
             {item.copied_from && <span className="inline-flex items-center gap-0.5 text-sky-700" title="過去の見積から複製した明細"><History className="w-2.5 h-2.5" /> 前回: {item.copied_from} から複製</span>}
