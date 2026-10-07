@@ -428,9 +428,6 @@ export default function MeetingDetail() {
               </CardContent>
             </Card>
 
-            {/* AI に依頼（議事録・資料をもとに見積のたたき台・提案書の骨子・メール文面など） */}
-            <MeetingChat meeting={meeting} references={summary.attachments || []} />
-
             {/* 文字起こし */}
             <Card>
               <CardContent className="pt-4 space-y-3">
@@ -461,6 +458,9 @@ export default function MeetingDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* AI に依頼（議事録・資料をもとに見積のたたき台・提案書の骨子・メール文面など） */}
+            <MeetingChat meeting={meeting} references={summary.attachments || []} />
           </div>
 
           {/* 確認事項・指標 */}
