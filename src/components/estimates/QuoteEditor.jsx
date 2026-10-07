@@ -1162,7 +1162,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
           {/* 税率・入稿先URL・スクショ・メモ（社内用。見積書には出ない） */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
             {isPrintLine(item) && (
-              <button type="button" onClick={onRecordOrder} className="inline-flex items-center gap-1 h-6 rounded border border-teal-300 bg-white px-1.5 text-[10px] font-semibold text-teal-800 hover:bg-teal-50" title="この明細（品名・枚数・金額）で入稿したことを記録します。追加印刷のときに入稿履歴から同じ内容で見積を作れます" data-testid="record-order">
+              <button type="button" onClick={onRecordOrder} className="inline-flex items-center gap-1 h-6 rounded border bg-white px-1.5 text-[10px] font-medium text-foreground hover:bg-muted" title="この明細（品名・枚数・金額）で入稿したことを記録します。追加印刷のときに入稿履歴から同じ内容で見積を作れます" data-testid="record-order">
                 <PackageCheck className="w-3 h-3" /> {orders.length ? "もう一度入稿した" : "入稿した"}
               </button>
             )}
@@ -1218,13 +1218,13 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
             </label>
           </div>
           {hasCost && (
-          <div className="p-2.5 rounded bg-amber-50 border border-amber-100 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-            <div className="text-[10px] text-amber-700">
+          <div className="p-2.5 rounded bg-muted/40 border flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <div className="text-[10px] text-muted-foreground">
               原価 ¥{Number(item.cost_price).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}（仕入合計 ¥{Math.round(lineCostTotal).toLocaleString()}）
               <span className="mx-1.5">−</span>
               出し値 ¥{Number(item.unit_price || 0).toLocaleString()} × {(item.quantity || 1).toLocaleString()}{item.unit || "枚"}
               <span className="mx-1.5">＝</span>
-              粗利 <strong className={lineProfit < 0 ? "text-red-700" : ""}>¥{lineProfit.toLocaleString()}</strong>（粗利率 <strong>{lineProfitRate}%</strong>）
+              粗利 <strong className={lineProfit < 0 ? "text-red-700" : "text-foreground"}>¥{lineProfit.toLocaleString()}</strong>（粗利率 <strong className={lineProfit < 0 ? "text-red-700" : "text-foreground"}>{lineProfitRate}%</strong>）
             </div>
             {lineProfit < 0 && (Number(item.quantity) || 1) > 1 && (
               <button
@@ -1237,9 +1237,9 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
               </button>
             )}
             {item.outsourcing_kind ? (
-              <div className="text-[10px] text-amber-700">外注（仕入 ÷ 率で売価を算出）</div>
+              <div className="text-[10px] text-muted-foreground">外注（仕入 ÷ 率で売価を算出）</div>
             ) : (
-            <div className="flex items-center gap-1.5 text-[10px] text-amber-700">
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span className="shrink-0">掛け率</span>
               <NumericField
                 value={item.markup_rate}
@@ -1249,7 +1249,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
                 }}
                 className={`h-6 w-16 text-[10px] px-1.5 bg-white shrink-0 ${noSpinner}`}
               />
-              <span className="text-amber-600">変更すると自動反映</span>
+              <span>変更すると自動反映</span>
             </div>
             )}
           </div>

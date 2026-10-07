@@ -11,15 +11,12 @@ export default function SalesCategorySelect({ item, onChange, disabled = false, 
   const { list } = useSalesCategories();
   const auto = classifySalesCategory(item, list);
   const fixed = salesCategoryDef(item.sales_category, list) ? item.sales_category : "";
-  const current = salesCategoryOf(item, list);
-  const color = salesCategoryDef(current, list)?.color || "#888";
   return (
     <select
       value={fixed}
       onChange={(e) => onChange({ sales_category: e.target.value || null })}
       disabled={disabled}
-      className={`h-6 max-w-[200px] rounded border pl-1 pr-0.5 text-[10px] bg-white ${className}`}
-      style={{ borderColor: color, color }}
+      className={`h-6 max-w-[200px] rounded border pl-1 pr-0.5 text-[10px] bg-white text-foreground ${className}`}
       title="売上カテゴリー（freee の会計計上部門）。売上粗利管理表でカテゴリーごとに集計します"
       aria-label="売上カテゴリー"
       data-testid="sales-category"
@@ -36,7 +33,7 @@ export function SalesCategoryChip({ item }) {
   const def = salesCategoryDef(salesCategoryOf(item, list), list);
   if (!def) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 leading-4 text-[9.5px]" style={{ borderColor: `${def.color}66`, color: def.color }} title={`売上カテゴリー: ${def.label}${item.sales_category ? "（手で選択）" : "（自動）"}`} data-testid="sales-category-chip">
+    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 leading-4 text-[9.5px] text-muted-foreground bg-white" title={`売上カテゴリー: ${def.label}${item.sales_category ? "（手で選択）" : "（自動）"}`} data-testid="sales-category-chip">
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: def.color }} />{def.short}
     </span>
   );
