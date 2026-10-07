@@ -4,8 +4,10 @@ import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FileSpreadsheet, Loader2, Search, Download, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FileSpreadsheet, Loader2, Search, Download, CheckCircle2, AlertTriangle, ChevronDown, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { matchClients } from "@/components/clients/ClientCombobox";
 
 // ============================================================================
 // 原価計算表（社内見積）の取り込み
@@ -15,6 +17,76 @@ import { toast } from "sonner";
 // ============================================================================
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("ja-JP") : "");
+/** 表に出すファイル名（どのファイルにも付く「【原価計算表】◯期_」「_社内見積」を省く。期は隣の列に出る） */
+const shortFileName = (name) => String(name || "").replace(/^【原価計算表】\s*(\d+期)?[_＿\s]*/, "").replace(/[_＿\s]*社内見積$/, "") || name;
+
+/**
+ * 表の中で使うクライアントの選択（名前を検索して選ぶ）。
+ *   未選択のときは、ファイル名から読んだクライアント名で検索した状態で開く。
+ */
+function ClientPicker({ value, onChange, clients, fileClientName, label }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [active, setActive] = useState(0);
+  const selected = clients.find((c) => c.id === value) || null;
+  const candidates = useMemo(() => matchClients(clients, q, 50), [clients, q]);
+  const onOpenChange = (v) => {
+    setOpen(v);
+    if (v) { setQ(selected ? "" : fileClientName || ""); setActive(0); }
+  };
+  const pick = (id) => { onChange(id); setOpen(false); };
+  const onKeyDown = (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(candidates.length - 1, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(0, i - 1)); }
+    else if (e.key === "Enter" && candidates[active]) { e.preventDefault(); pick(candidates[active].id); }
+  };
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`h-7 w-full rounded-md border px-2 text-xs flex items-center gap-1 text-left ${selected ? "bg-background" : "bg-amber-50 border-amber-300 text-amber-900"}`}
+          title={selected ? selected.name : fileClientName ? `ファイル名: ${fileClientName}` : "クライアントを選ぶ"}
+          aria-label={label}
+          data-testid="cost-sheet-client"
+        >
+          <span className="truncate flex-1">{selected ? selected.name : <>（未選択）{fileClientName ? <span className="text-[10.5px]">ファイル名: {fileClientName}</span> : null}</>}</span>
+          <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <div className="p-2 border-b">
+          <div className="relative">
+            <Search className="absolute left-2 top-2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} onKeyDown={onKeyDown} placeholder="クライアント名で検索（一部でも可）" className="h-8 pl-7 text-xs" aria-label="クライアントを検索" />
+          </div>
+        </div>
+        <ul className="max-h-64 overflow-auto py-1 text-xs" role="listbox">
+          {candidates.length === 0 ? (
+            <li className="px-3 py-3 text-center text-muted-foreground">「{q}」に合うクライアントがありません</li>
+          ) : candidates.map((c, i) => (
+            <li
+              key={c.id}
+              role="option"
+              aria-selected={i === active}
+              onMouseDown={(e) => { e.preventDefault(); pick(c.id); }}
+              onMouseEnter={() => setActive(i)}
+              className={`px-3 py-1.5 cursor-pointer flex items-center gap-2 ${i === active ? "bg-sky-100 text-sky-950" : ""}`}
+            >
+              <Check className={`w-3.5 h-3.5 shrink-0 ${c.id === value ? "opacity-100" : "opacity-0"}`} />
+              <span className="truncate">{c.name}</span>
+            </li>
+          ))}
+        </ul>
+        {selected && (
+          <div className="border-t p-1">
+            <button type="button" onClick={() => pick("")} className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted rounded"><X className="w-3.5 h-3.5" /> 選択を外す</button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function CostSheetImportCard() {
   const queryClient = useQueryClient();
@@ -91,22 +163,20 @@ export default function CostSheetImportCard() {
               </div>
             </div>
             {running && <div className="px-3 py-1.5 text-[11px] text-muted-foreground border-b">取り込み中 {progress.done}/{progress.total}　{progress.current}（1 ファイルに数十秒かかることがあります）</div>}
-            <table className="w-full text-xs">
-              <thead className="bg-slate-800 text-white"><tr><th className="text-left px-2 py-1.5">ファイル</th><th className="text-left px-2 py-1.5 w-14">期</th><th className="text-left px-2 py-1.5 w-56">クライアント</th><th className="text-left px-2 py-1.5 w-24">前回の取り込み</th><th className="w-20"></th></tr></thead>
+            <table className="w-full text-xs table-fixed">
+              <colgroup><col /><col className="w-12" /><col className="w-[36%]" /><col className="w-24" /><col className="w-20" /></colgroup>
+              <thead className="bg-slate-800 text-white"><tr><th className="text-left px-2 py-1.5">ファイル</th><th className="text-left px-2 py-1.5 whitespace-nowrap">期</th><th className="text-left px-2 py-1.5 whitespace-nowrap">クライアント</th><th className="text-left px-2 py-1.5 whitespace-nowrap">前回の取り込み</th><th></th></tr></thead>
               <tbody>
                 {files.map((f) => {
                   const r = results.find((x) => x.id === f.id);
                   return (
                     <tr key={f.id} className="border-t">
-                      <td className="px-2 py-1"><div className="truncate max-w-[360px]" title={f.name}>{f.name}</div>{r && (r.ok ? <><div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}</div>{r.note && <div className="text-[10px] text-amber-700">{r.note}</div>}</> : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
-                      <td className="px-2 py-1">{f.period}</td>
+                      <td className="px-2 py-1"><div className="line-clamp-2 break-all leading-snug" title={f.name}>{shortFileName(f.name)}</div>{r && (r.ok ? <><div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}</div>{r.note && <div className="text-[10px] text-amber-700">{r.note}</div>}</> : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
+                      <td className="px-2 py-1 whitespace-nowrap">{f.period}</td>
                       <td className="px-2 py-1">
-                        <select value={clientOf(f)} onChange={(e) => setOverrides((o) => ({ ...o, [f.id]: e.target.value }))} className={`h-7 w-full rounded-md border px-1 text-xs ${clientOf(f) ? "bg-background" : "bg-amber-50 border-amber-300"}`} aria-label={`${f.name} のクライアント`}>
-                          <option value="">（未選択）{f.client_name ? `　ファイル名: ${f.client_name}` : ""}</option>
-                          {sortedClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        <ClientPicker value={clientOf(f)} onChange={(id) => setOverrides((o) => ({ ...o, [f.id]: id }))} clients={sortedClients} fileClientName={f.client_name} label={`${f.name} のクライアント`} />
                       </td>
-                      <td className="px-2 py-1 text-muted-foreground">{f.imported_at ? fmt(f.imported_at) : "—"}</td>
+                      <td className="px-2 py-1 text-muted-foreground whitespace-nowrap">{f.imported_at ? fmt(f.imported_at) : "—"}</td>
                       <td className="px-2 py-1 text-right"><Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => run([f])} disabled={running || !clientOf(f)}>取り込む</Button></td>
                     </tr>
                   );
