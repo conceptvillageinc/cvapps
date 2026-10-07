@@ -25,6 +25,7 @@ import {
 import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
+import { lineShots, shotsPatch, MAX_LINE_SHOTS } from "@/lib/lineShots";
 import { isPrintLine, orderFromLine, fmtOrderDate } from "@/lib/printOrders";
 import { useAuth } from "@/lib/AuthContext";
 import SalesCategorySelect, { SalesCategoryChip } from "@/components/estimates/SalesCategorySelect";
@@ -1205,7 +1206,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
               />
               {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0">開く</a>}
             </label>
-            <LineScreenshot path={item.screenshot_path} sourceUrl={item.source_url} onChange={(p) => onChange({ screenshot_path: p })} />
+            <LineScreenshot paths={lineShots(item)} sourceUrl={item.source_url} onChange={(paths) => onChange(shotsPatch(paths))} />
             <label className="flex items-center gap-1 min-w-[200px] flex-1">
               <span className="shrink-0">メモ</span>
               <Input
@@ -1261,17 +1262,39 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
 }
 
 // 明細行のスクショ（入稿画面の控えなど）。非公開バケットに置き、署名付きURLで表示する
-function LineScreenshot({ path, sourceUrl, onChange }) {
+/** 明細のスクショ 1 枚（サムネイルと外すボタン） */
+function ShotThumb({ path, index, onRemove }) {
   const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (!path) { setUrl(null); return; }
+    db.storage.signedUrl(path).then((u) => alive && setUrl(u)).catch(() => alive && setUrl(null));
+    return () => { alive = false; };
+  }, [path]);
+  return (
+    <span className="inline-flex items-center gap-0.5" data-testid="line-shot">
+      <a href={url || "#"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline" title={`スクショ ${index + 1} を開く`}>
+        {url && /\.(png|jpe?g|gif|webp)$/i.test(path) ? <img src={url} alt={`スクショ ${index + 1}`} className="h-6 w-auto rounded border" /> : <ImageIcon className="w-3 h-3" />}
+        <span className="tabular-nums">{index + 1}</span>
+      </a>
+      <button type="button" className="text-muted-foreground hover:text-destructive" title={`スクショ ${index + 1} を外す`} aria-label={`スクショ ${index + 1} を外す`} onClick={onRemove}><X className="w-3 h-3" /></button>
+    </span>
+  );
+}
+
+/** 明細のスクショ（原価の根拠・入稿先の画面など）。1 行に 3 枚まで */
+function LineScreenshot({ paths, sourceUrl, onChange }) {
   const [uploading, setUploading] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const full = paths.length >= MAX_LINE_SHOTS;
+  const add = (p) => { if (p && !paths.includes(p)) onChange([...paths, p].slice(0, MAX_LINE_SHOTS)); };
   // 入稿先URL のページをサーバーで開いて撮る（手でスクショを撮る代わり）
   const captureFromUrl = async () => {
-    if (!sourceUrl) return;
+    if (!sourceUrl || full) return;
     setCapturing(true);
     try {
       const { data } = await db.functions.invoke("captureUrl", { url: sourceUrl });
-      onChange(data.path);
+      add(data.path);
       toast.success(`スクショを撮りました（${Math.round((data.ms || 0) / 1000)}秒）`);
     } catch (err) {
       toast.error("スクショを撮れませんでした: " + err.message);
@@ -1280,18 +1303,17 @@ function LineScreenshot({ path, sourceUrl, onChange }) {
     }
   };
   const inputRef = useRef(null);
-  useEffect(() => {
-    let alive = true;
-    if (!path) { setUrl(null); return; }
-    db.storage.signedUrl(path).then((u) => alive && setUrl(u)).catch(() => alive && setUrl(null));
-    return () => { alive = false; };
-  }, [path]);
-  const uploadFile = async (file) => {
-    if (!file) return;
+  const uploadFiles = async (files) => {
+    const list = Array.from(files || []).filter(Boolean).slice(0, MAX_LINE_SHOTS - paths.length);
+    if (list.length === 0) { if (files?.length) toast.error(`スクショは 1 行に ${MAX_LINE_SHOTS} 枚までです`); return; }
     setUploading(true);
     try {
-      const { file_url } = await db.integrations.Core.UploadFile({ file });
-      onChange(file_url);
+      const added = [];
+      for (const file of list) {
+        const { file_url } = await db.integrations.Core.UploadFile({ file });
+        added.push(file_url);
+      }
+      onChange([...paths, ...added].slice(0, MAX_LINE_SHOTS));
     } catch (err) {
       toast.error("アップロードできませんでした: " + err.message);
     } finally {
@@ -1299,7 +1321,6 @@ function LineScreenshot({ path, sourceUrl, onChange }) {
       if (inputRef.current) inputRef.current.value = "";
     }
   };
-  const upload = (e) => uploadFile(e.target.files?.[0]);
   // クリップボードの画像（スクショを撮った直後や、シートの画像をコピーした状態）をそのまま付ける
   const pasteFromClipboard = async () => {
     try {
@@ -1310,7 +1331,7 @@ function LineScreenshot({ path, sourceUrl, onChange }) {
         if (!type) continue;
         const blob = await it.getType(type);
         const ext = type.split("/")[1].replace("jpeg", "jpg");
-        await uploadFile(new File([blob], `screenshot-${Date.now()}.${ext}`, { type }));
+        await uploadFiles([new File([blob], `screenshot-${Date.now()}.${ext}`, { type })]);
         return;
       }
       toast.error("クリップボードに画像がありません。先にスクショを撮る（またはコピーする）してから押してください");
@@ -1320,19 +1341,15 @@ function LineScreenshot({ path, sourceUrl, onChange }) {
     }
   };
   return (
-    <span className="flex items-center gap-1">
-      <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={upload} />
-      {path ? (
-        <>
-          <a href={url || "#"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline" title="スクショを開く">
-            {url && /\.(png|jpe?g|gif|webp)$/i.test(path) ? <img src={url} alt="スクショ" className="h-6 w-auto rounded border" /> : <ImageIcon className="w-3 h-3" />} スクショ
-          </a>
-          <button type="button" className="text-muted-foreground hover:text-destructive" title="スクショを外す" onClick={() => onChange(null)}><X className="w-3 h-3" /></button>
-        </>
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <input ref={inputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => uploadFiles(e.target.files)} />
+      {paths.map((p, i) => <ShotThumb key={p} path={p} index={i} onRemove={() => onChange(paths.filter((x) => x !== p))} />)}
+      {full ? (
+        <span className="text-[10px] text-muted-foreground">（{MAX_LINE_SHOTS} 枚まで）</span>
       ) : (
         <>
           <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => inputRef.current?.click()} disabled={uploading}>
-            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />} スクショを付ける
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />} {paths.length ? "スクショを足す" : "スクショを付ける"}
           </button>
           <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={pasteFromClipboard} disabled={uploading} title="コピーした画像（撮ったばかりのスクショなど）をそのまま付けます">
             <Clipboard className="w-3 h-3" /> 貼り付け
@@ -1342,6 +1359,7 @@ function LineScreenshot({ path, sourceUrl, onChange }) {
               {capturing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />} {capturing ? "撮影中…" : "URLからスクショを撮る"}
             </button>
           )}
+          {paths.length > 0 && <span className="text-[10px] text-muted-foreground">{paths.length}/{MAX_LINE_SHOTS} 枚</span>}
         </>
       )}
     </span>

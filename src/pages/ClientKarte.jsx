@@ -27,6 +27,7 @@ import MeetingAttachments from "@/components/meetings/MeetingAttachments";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import { SUBMISSION_STATUS, submissionOf } from "@/lib/submission";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
+import { lineShots } from "@/lib/lineShots";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
@@ -220,7 +221,7 @@ export default function ClientKarte() {
       } else if (li.outsourcing_kind) {
         vendor = "外注";
       }
-      return { kind: "item", id: li.id, name: li.name, category: li.category, quantity: li.quantity, unit: li.unit, cost_price: hasCost ? li.cost_price : null, markup_rate: li.markup_rate, unit_price: li.unit_price, amount: li.amount, vendor, url, spec, screenshot_path: li.screenshot_path || null, notes: li.notes || "", copied_from: li.copied_from || null };
+      return { kind: "item", id: li.id, name: li.name, category: li.category, quantity: li.quantity, unit: li.unit, cost_price: hasCost ? li.cost_price : null, markup_rate: li.markup_rate, unit_price: li.unit_price, amount: li.amount, vendor, url, spec, screenshot_paths: lineShots(li), notes: li.notes || "", copied_from: li.copied_from || null };
     });
     // 旧形式（明細方式になる前）は印刷費1行として見せる
     if (e.schema_version !== 2 && e.selling_price > 0) {
@@ -480,7 +481,7 @@ function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
                 )}
                 {r.notes && <p className="text-[10px] text-foreground/80 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 whitespace-pre-wrap leading-snug">{r.notes}</p>}
               </div>
-              <div><SourceScreenshot path={r.screenshot_path} /></div>
+              <div className="flex flex-wrap gap-1">{(r.screenshot_paths || (r.screenshot_path ? [r.screenshot_path] : [])).map((p) => <SourceScreenshot key={p} path={p} />)}</div>
             </div>
           );
         })}

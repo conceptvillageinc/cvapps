@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { recomputeSubtotals, recomputeRuleRows, usePricingRules } from "@/lib/pricing";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { priceCheckTargets, oldUnitCost, checkWithMaster, checkWithGrid, replaceWithCurrent, PRICE_CHECK_STATUS, masterOf, vendorOf, originLabel, unknownReason, checkManual, markSame, PRICE_GRID_SCHEMA, defaultCell, checkWithShot } from "@/lib/priceCheck";
+import { addShotPatch } from "@/lib/lineShots";
 
 // ============================================================================
 // 見積書の画面の「印刷費・仕入の価格確認」（依頼ツールの帯の下に常に出す）
@@ -296,7 +297,7 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
   const manual = (li, total, mode) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: checkManual(cur, total, mode, userName) }) }); toast.success("入れた金額で比べました"); };
   const shotCompare = async (li, shot, mode, saveMaster) => {
     const pc = checkWithShot(li, shot.grid, shot.pick, mode, shot.path, userName);
-    patchItems({ [li.id]: (cur) => ({ ...cur, price_check: checkWithShot(cur, shot.grid, shot.pick, mode, shot.path, userName), screenshot_path: cur.screenshot_path || shot.path }) });
+    patchItems({ [li.id]: (cur) => ({ ...cur, price_check: checkWithShot(cur, shot.grid, shot.pick, mode, shot.path, userName), ...addShotPatch(cur, shot.path) }) });
     toast.success(`スクショの価格で比べました（${PRICE_CHECK_STATUS[pc.status]?.label || ""}）`);
     if (saveMaster) {
       try {
