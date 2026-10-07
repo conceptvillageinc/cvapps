@@ -1,4 +1,4 @@
-import { SALES_CATEGORIES, classifySalesCategory, salesCategoryOf, salesCategoryDef } from "@/lib/salesCategory";
+import { useSalesCategories, classifySalesCategory, salesCategoryOf, salesCategoryDef } from "@/lib/salesCategory";
 
 /**
  * 明細の売上カテゴリー（freee の会計計上部門にあたる）。
@@ -8,10 +8,11 @@ import { SALES_CATEGORIES, classifySalesCategory, salesCategoryOf, salesCategory
  * @param {(patch: object) => void} p.onChange
  */
 export default function SalesCategorySelect({ item, onChange, disabled = false, className = "" }) {
-  const auto = classifySalesCategory(item);
-  const fixed = salesCategoryDef(item.sales_category) ? item.sales_category : "";
-  const current = salesCategoryOf(item);
-  const color = salesCategoryDef(current)?.color || "#888";
+  const { list } = useSalesCategories();
+  const auto = classifySalesCategory(item, list);
+  const fixed = salesCategoryDef(item.sales_category, list) ? item.sales_category : "";
+  const current = salesCategoryOf(item, list);
+  const color = salesCategoryDef(current, list)?.color || "#888";
   return (
     <select
       value={fixed}
@@ -23,15 +24,16 @@ export default function SalesCategorySelect({ item, onChange, disabled = false, 
       aria-label="売上カテゴリー"
       data-testid="sales-category"
     >
-      <option value="">自動（{salesCategoryDef(auto)?.short || "—"}）</option>
-      {SALES_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+      <option value="">自動（{salesCategoryDef(auto, list)?.short || "—"}）</option>
+      {list.filter((c) => c.active || c.key === fixed).map((c) => <option key={c.key} value={c.key}>{c.label}{c.active ? "" : "（使っていない）"}</option>)}
     </select>
   );
 }
 
 /** 品名の下に出す小さな印（見積書の画面で、社内用の欄を閉じていても見えるように） */
 export function SalesCategoryChip({ item }) {
-  const def = salesCategoryDef(salesCategoryOf(item));
+  const { list } = useSalesCategories();
+  const def = salesCategoryDef(salesCategoryOf(item, list), list);
   if (!def) return null;
   return (
     <span className="inline-flex items-center gap-1 rounded-full border px-1.5 leading-4 text-[9.5px]" style={{ borderColor: `${def.color}66`, color: def.color }} title={`売上カテゴリー: ${def.label}${item.sales_category ? "（手で選択）" : "（自動）"}`} data-testid="sales-category-chip">

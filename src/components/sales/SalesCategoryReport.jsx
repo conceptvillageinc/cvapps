@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { salesByCategory, SALES_CATEGORY_FROM } from "@/lib/salesCategory";
+import { salesByCategory, SALES_CATEGORY_FROM, useSalesCategories } from "@/lib/salesCategory";
 
 // ============================================================================
 // 売上粗利管理表の「売上カテゴリー別の実績」
@@ -13,7 +13,8 @@ const pct = (v) => (v === null || v === undefined || !Number.isFinite(v) ? "—"
 
 export default function SalesCategoryReport({ invoices, months, estimates }) {
   const [mode, setMode] = useState("sales"); // sales | gross
-  const { rows, totalSales } = useMemo(() => salesByCategory(invoices, months, estimates), [invoices, months, estimates]);
+  const { list } = useSalesCategories();
+  const { rows, totalSales } = useMemo(() => salesByCategory(invoices, months, estimates, list), [invoices, months, estimates, list]);
   const inScope = months.some((m) => `${m.key}-31` >= SALES_CATEGORY_FROM);
   const sum = (a) => a.reduce((s, v) => s + v, 0);
   const val = (r) => (mode === "sales" ? r.sales : r.gross);

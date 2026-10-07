@@ -1,12 +1,13 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
-  LayoutDashboard, FileText, Plus, History, Settings, Users,
+  LayoutDashboard, FileText, Plus, History, Settings, Users, Layers,
   LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList
 } from "lucide-react";
 import { useState } from "react";
 import { db } from "@/api/db";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { useSalesCategories } from "@/lib/salesCategory";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import RecordingBar from "@/components/meetings/RecordingBar";
 import {
@@ -42,6 +43,7 @@ const adminItems = [
   { path: "/print-types", label: "印刷種別マスタ", icon: Printer },
   { path: "/price-master", label: "価格マスタ", icon: Tag },
   { path: "/design-fee-master", label: "デザイン費マスタ", icon: Palette },
+  { path: "/sales-category-master", label: "売上カテゴリーマスタ", icon: Layers },
   { path: "/settings", label: "システム設定", icon: Settings },
   { path: "/users", label: "ユーザー管理", icon: Users },
 ];
@@ -58,6 +60,7 @@ export default function Layout() {
 
   const isAdmin = user?.role === "admin";
   const { cashflowAllowedEmails } = useSystemSettings();
+  useSalesCategories(); // 売上カテゴリーマスタを読み込んでおく（見積から請求書へ写すときの自動の振り分けに使う）
   const canSeeCashflow = cashflowAllowedEmails.includes(String(user?.email || "").toLowerCase());
   const visibleNav = navItems.filter((item) => !item.restricted || (item.restricted === "cashflow" && canSeeCashflow));
 
