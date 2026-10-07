@@ -145,7 +145,7 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
       const { data } = await db.functions.invoke("sendDocumentEmail", { type, id: doc.id, subject, body, stamp: withStamp });
       toast.success(`${toName}（${data.recipient_email}）へ送信しました`);
       queryClient.invalidateQueries({ queryKey: ["emailLogs", type, doc.id] });
-      onSent?.();
+      onSent?.(data);
       onOpenChange(false);
     } catch (err) {
       toast.error("送信できませんでした: " + err.message);

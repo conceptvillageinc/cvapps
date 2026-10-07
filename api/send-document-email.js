@@ -108,7 +108,27 @@ export default async function handler(req, res) {
       await admin.from('partner_orders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
     }
 
-    res.status(200).json({ log, recipient_email: client.email });
+    // 見積書は、送った版を「提出済み」にし、同じ見積で前に提出済みだった版を「失注」にする
+    let submission = null;
+    if (type === 'estimate') {
+      try {
+        const now = new Date().toISOString();
+        const patch = { submission_status: 'submitted', is_final_submitted: true, submitted_at: now };
+        const { error: upErr } = await admin.from('estimates').update(patch).eq('id', id);
+        if (upErr) throw upErr;
+        const groupId = doc.project_group_id || doc.id;
+        const { data: lost } = await admin.from('estimates')
+          .update({ submission_status: 'lost', is_final_submitted: false })
+          .eq('project_group_id', groupId).neq('id', id).eq('submission_status', 'submitted')
+          .select('id');
+        submission = { patch, lost_count: (lost || []).length };
+      } catch (err) {
+        // 提出ステータスの列が無い（SQL 未実行）などでも、メールの送信は成功として返す
+        console.warn('[api/send-document-email] submission status not updated:', err?.message || err);
+      }
+    }
+
+    res.status(200).json({ log, recipient_email: client.email, submission });
   } catch (err) {
     console.error('[api/send-document-email]', err);
     res.status(err.status || 500).json({ error: err.message || 'メールの送信に失敗しました' });

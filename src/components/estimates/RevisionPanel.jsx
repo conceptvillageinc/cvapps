@@ -11,10 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { GitBranch, Star, Loader2, Plus, ArrowRight, FolderKanban } from "lucide-react";
+import { GitBranch, Loader2, Plus, ArrowRight, FolderKanban } from "lucide-react";
 import { toast } from "sonner";
 import { STATUS_MAP, getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
+import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf, setSubmission } from "@/lib/submission";
+import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -42,7 +44,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
       const {
         id, created_date, updated_date, created_by_id, estimate_number, status,
         reviewer_id, reviewer_name, approved_date, review_comments, approval_checklist,
-        freee_deal_id, freee_estimate_id, freee_status, is_final_submitted, ...rest
+        freee_deal_id, freee_estimate_id, freee_status, is_final_submitted, submission_status, submitted_at, ...rest
       } = estimate;
       return db.entities.Estimate.create({
         ...rest,
@@ -55,6 +57,8 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
         parent_estimate_id: estimate.id,
         revision_label: label || "改訂版",
         is_final_submitted: false,
+        submission_status: "unsubmitted",
+        submitted_at: null,
       });
     },
     onSuccess: (created) => {
@@ -83,12 +87,34 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
   const probabilityChoices = [...new Set([...dealProbabilityOptions, currentProbability].filter(Boolean))];
   const phaseChoices = [...new Set([...phaseOptions, currentPhase].filter(Boolean))];
 
-  const toggleFinal = (value) => {
-    onUpdate({ is_final_submitted: value });
-    toast.info(value ? "最終提出版に設定しました（上部の「保存」で確定します）" : "最終提出版のマークを解除しました（上部の「保存」で確定します）");
+  // 提出ステータス（未提出／提出済み／失注）。すぐ保存する。提出済みにすると、同じ見積で前に提出済みだった版は失注になる
+  const submission = submissionOf(estimate);
+  const [savingSubmission, setSavingSubmission] = useState(null);
+  const changeSubmission = async (status) => {
+    if (status === submission || savingSubmission) return;
+    setSavingSubmission(status);
+    try {
+      const { patch, lostIds } = await setSubmission(estimate, status);
+      onUpdate(patch);
+      queryClient.invalidateQueries({ queryKey: ["estimateRevisions", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
+      const label = SUBMISSION_STATUS[status].label;
+      toast.success(lostIds.length ? `「${label}」にしました。前に提出済みだった版（${lostIds.length}件）は失注にしました` : `「${label}」にしました`);
+    } catch (err) {
+      toast.error("変更できませんでした: " + (err?.message || "不明なエラー"));
+    } finally {
+      setSavingSubmission(null);
+    }
+  };
+  // 案件ごと失注にしたら、提出済みの版は失注にする（案件に紐づく見積はデータベース側でも同じ処理をする）
+  const lostWithDeal = (v) => {
+    if (!/失注/.test(v || "") || submission !== "submitted") return;
+    if (project) onUpdate({ submission_status: "lost", is_final_submitted: false });
+    else changeSubmission("lost");
   };
 
   const updateDealProbability = (v) => {
+    lostWithDeal(v);
     if (project) {
       projectUpdate.mutate({ deal_probability: v, is_recurring: project.is_recurring || /定期/.test(v) });
       return;
@@ -97,6 +123,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
   };
 
   const updatePhase = (v) => {
+    lostWithDeal(v);
     if (project) {
       projectUpdate.mutate({ phase: v });
       return;
@@ -130,25 +157,32 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
           {isLatest && (
             <Badge className="text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-100">最新版</Badge>
           )}
-          {estimate.is_final_submitted && (
-            <Badge className="text-[10px] bg-amber-100 text-amber-700 hover:bg-amber-100 gap-1">
-              <Star className="w-2.5 h-2.5 fill-current" /> 最終提出版
-            </Badge>
-          )}
+          <SubmissionBadge estimate={estimate} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">最終提出版フラグ</Label>
-            <Button
-              size="sm"
-              variant={estimate.is_final_submitted ? "default" : "outline"}
-              className="w-full gap-1.5 text-xs h-9"
-              onClick={() => toggleFinal(!estimate.is_final_submitted)}
-            >
-              <Star className="w-3.5 h-3.5" />
-              {estimate.is_final_submitted ? "設定済み" : "最終提出版にする"}
-            </Button>
+            <Label className="text-xs">提出ステータス</Label>
+            <div className="grid grid-cols-3 rounded-md border p-0.5 h-9" role="radiogroup" aria-label="提出ステータス" data-testid="submission-switch">
+              {SUBMISSION_KEYS.map((k) => {
+                const on = submission === k;
+                const st = SUBMISSION_STATUS[k];
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => changeSubmission(k)}
+                    disabled={!!savingSubmission}
+                    className={`rounded text-xs inline-flex items-center justify-center gap-1 transition-colors ${on ? `${st.cls} border font-semibold` : "text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {savingSubmission === k ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className={`w-1.5 h-1.5 rounded-full ${on ? st.dot : "bg-muted-foreground/30"}`} />}
+                    {st.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">受注確度</Label>
@@ -184,7 +218,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
           </div>
         </div>
 
-        {!project && estimate.deal_probability === "失注" && (
+        {(submission === "lost" || (!project && estimate.deal_probability === "失注")) && (
           <div className="space-y-1.5">
             <Label className="text-xs">失注理由</Label>
             <Input
@@ -195,6 +229,10 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
             />
           </div>
         )}
+
+        <p className="text-[10px] text-muted-foreground -mt-1">
+          提出ステータス: アプリから「見積書を送付」でメールを送ると、自動で「提出済み」になります。メール以外で出したときは手で選んでください。ある版を「提出済み」にすると、前に提出済みだった版は「失注」に、案件を失注にすると提出済みの版も「失注」になります
+        </p>
 
         {project ? (
           <p className="text-[10px] text-muted-foreground -mt-1 flex items-center gap-1 flex-wrap">
@@ -234,7 +272,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
                       <Badge className={`text-[9px] ${getPhaseColor(rev.phase)} shrink-0`}>{rev.phase}</Badge>
                     )}
                     {rev.id === latestId && <Badge className="text-[9px] bg-blue-100 text-blue-700 shrink-0">最新版</Badge>}
-                    {rev.is_final_submitted && <Badge className="text-[9px] bg-amber-100 text-amber-700 shrink-0">最終提出版</Badge>}
+                    <SubmissionBadge estimate={isSelf ? estimate : rev} size="xs" />
                     {isSelf && <span className="text-[9px] text-muted-foreground ml-auto shrink-0">（表示中）</span>}
                     {!isSelf && <ArrowRight className="w-3 h-3 text-muted-foreground/40 ml-auto shrink-0" />}
                   </div>

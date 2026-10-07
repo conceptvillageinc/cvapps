@@ -104,7 +104,7 @@ const WRITABLE_COLUMNS = {
     'estimate_title', 'estimate_date', 'validity_period_months', 'schema_version',
     'line_items', 'print_type', 'size', 'usage', 'paper_type', 'quantities',
     'color_count', 'desired_delivery_date', 'additional_notes', 'status',
-    'deal_probability', 'phase', 'lost_reason', 'is_final_submitted',
+    'deal_probability', 'phase', 'lost_reason', 'is_final_submitted', 'submission_status', 'submitted_at',
     'project_group_id', 'parent_estimate_id', 'revision_label', 'total_amount',
     'reviewer_id', 'reviewer_name', 'approved_date', 'review_comments',
     'approval_checklist', 'review_requested_to_id', 'review_requested_to_name', 'review_requested_at', 'tax_inclusive', 'finalized_at', 'finalized_by',

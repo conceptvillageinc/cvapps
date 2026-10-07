@@ -24,6 +24,8 @@ import { MEETING_STATUS } from "@/lib/meetings";
 import { COST_SHEET_STATUS, searchText as costSheetSearchText } from "@/lib/costSheets";
 import CostSheetPane from "@/components/clients/CostSheetPane";
 import MeetingAttachments from "@/components/meetings/MeetingAttachments";
+import SubmissionBadge from "@/components/estimates/SubmissionBadge";
+import { SUBMISSION_STATUS, submissionOf } from "@/lib/submission";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
@@ -138,7 +140,7 @@ export default function ClientKarte() {
     if (tab === "estimates") {
       return estimates
         .filter((e) => has(e.estimate_number, e.estimate_title, e.print_type, specSummary(e), (e.line_items || []).map((li) => li.name || li.text || "").join(" ")))
-        .map((e) => ({ id: e.id, number: e.estimate_number, date: fmtDate(e.created_date), title: e.estimate_title || e.print_type || "（件名なし）", total: e.total_amount, sub: specSummary(e), badge: e.is_final_submitted ? { label: "最終提出版", cls: "bg-amber-100 text-amber-700" } : STATUS_MAP[e.status] ? { label: STATUS_MAP[e.status].label, cls: STATUS_MAP[e.status].color } : null, raw: e }));
+        .map((e) => ({ id: e.id, number: e.estimate_number, date: fmtDate(e.created_date), title: e.estimate_title || e.print_type || "（件名なし）", total: e.total_amount, sub: specSummary(e), badge: { label: SUBMISSION_STATUS[submissionOf(e)].label, cls: SUBMISSION_STATUS[submissionOf(e)].cls }, raw: e }));
     }
     if (tab === "projects") {
       return projects
@@ -384,7 +386,8 @@ function EstimatePane({ view, onOpenPdf, pdfLoading, clientName }) {
             <span className="font-mono">{e.estimate_number}</span>
             <span>作成 {fmtDate(e.created_date)}</span>
             {e.person_in_charge && <span>担当 {e.person_in_charge}</span>}
-            {e.is_final_submitted ? <span className="text-amber-700 font-medium">最終提出版</span> : st ? <span>{st.label}</span> : null}
+            <SubmissionBadge estimate={e} size="xs" />
+            {st && <span>{st.label}</span>}
             {e.deal_probability && <span>受注確度 {e.deal_probability}</span>}
             {e.tax_inclusive && <span className="text-primary">税込見積</span>}
             {project && <Link to={`/projects/${project.id}`} className="text-primary hover:underline">案件 {project.project_number} {project.name}</Link>}

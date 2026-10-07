@@ -19,6 +19,8 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PRINT_TYPES } from "@/lib/constants";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import SubmissionBadge from "@/components/estimates/SubmissionBadge";
+import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submission";
 
 /** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
 function estimateGross(e) {
@@ -38,6 +40,7 @@ export default function EstimateList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [submissionFilter, setSubmissionFilter] = useState("all"); // 提出ステータスで絞り込む
   const [columnFilters, setColumnFilters] = useState({});
   const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
   const [picked, setPicked] = useState(() => new Set()); // まとめて削除する見積の id
@@ -127,6 +130,7 @@ export default function EstimateList() {
       est.print_type?.toLowerCase().includes(search.toLowerCase()) ||
       est.usage?.toLowerCase().includes(search.toLowerCase());
     if (!matchSearch) return false;
+    if (submissionFilter !== "all" && submissionOf(est) !== submissionFilter) return false;
 
     for (const key of FILTERABLE_KEYS) {
       const def = columnDefs[key];
@@ -225,6 +229,18 @@ export default function EstimateList() {
           onChange={e => setSearch(e.target.value)}
           className="pl-9"
         />
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 -mt-2" data-testid="submission-filter">
+        <span className="text-xs text-muted-foreground mr-1">提出ステータス</span>
+        {[["all", "すべて"], ...SUBMISSION_KEYS.map((k) => [k, SUBMISSION_STATUS[k].label])].map(([k, label]) => {
+          const n = k === "all" ? estimates.length : estimates.filter((e) => submissionOf(e) === k).length;
+          const on = submissionFilter === k;
+          return (
+            <button key={k} type="button" onClick={() => setSubmissionFilter(k)} aria-pressed={on} className={`h-7 px-2.5 rounded-full border text-xs inline-flex items-center gap-1.5 ${on ? (k === "all" ? "bg-slate-800 text-white border-slate-800" : `${SUBMISSION_STATUS[k].cls} font-semibold`) : "bg-background hover:bg-muted"}`}>
+              {k !== "all" && <span className={`w-1.5 h-1.5 rounded-full ${SUBMISSION_STATUS[k].dot}`} />}{label}<span className="tabular-nums opacity-70">{n}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Table */}
@@ -334,9 +350,7 @@ export default function EstimateList() {
                             {isLatest && (
                               <Badge className="text-[9px] bg-blue-100 text-blue-700 hover:bg-blue-100">最新版</Badge>
                             )}
-                            {est.is_final_submitted && (
-                              <Badge className="text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">最終提出版</Badge>
-                            )}
+                            <SubmissionBadge estimate={est} size="xs" />
                             {est.status === "review_pending" && est.review_requested_to_name && (
                               <Badge variant="outline" className="text-[9px] font-normal text-amber-700 border-amber-200">レビュー: {est.review_requested_to_name}</Badge>
                             )}

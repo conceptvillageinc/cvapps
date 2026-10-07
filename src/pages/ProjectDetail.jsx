@@ -21,6 +21,7 @@ import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP, STATUS_MAP,
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import ProjectTasks from "@/components/projects/ProjectTasks";
 import { NextActionCell } from "@/components/projects/ProjectViews";
+import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 
@@ -365,7 +366,7 @@ export default function ProjectDetail() {
                     <span className="text-xs font-mono text-muted-foreground w-28 shrink-0">{e.estimate_number}</span>
                     <span className="text-sm flex-1 truncate">{e.estimate_title || e.print_type || "（件名なし）"}</span>
                     {e.revision_label && <Badge variant="outline" className="text-[9px] font-normal">{e.revision_label}</Badge>}
-                    {e.is_final_submitted && <Badge className="text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">最終提出版</Badge>}
+                    <SubmissionBadge estimate={e} size="xs" />
                     <Badge className={`text-[9px] ${es.color}`}>{es.label}</Badge>
                     <span className="text-sm tabular-nums w-28 text-right">{e.total_amount ? yen(e.total_amount) : "—"}</span>
                     <span className="text-[10px] text-muted-foreground w-12 text-right">{format(new Date(e.created_date), "M/d")}</span>

@@ -13,6 +13,7 @@ import { STATUS_MAP } from "@/lib/constants";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { specLabel } from "@/lib/printSpecs";
 import { openBlob } from "@/lib/documents";
+import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 // 原価は1枚あたりで小数になることがある（例: 8.5円）
@@ -237,7 +238,7 @@ export default function PastEstimateImport({ estimate, onAdd, onClose }) {
                     <div className="flex items-center gap-1.5 text-[11px]">
                       <span className="font-mono text-muted-foreground">{e.estimate_number}</span>
                       <span className="text-muted-foreground/70">{fmtDate(e.created_date)}</span>
-                      {e.is_final_submitted && <Badge className="ml-auto text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100 px-1.5 py-0">最終提出版</Badge>}
+                      <SubmissionBadge estimate={e} size="xs" hideUnsubmitted className="ml-auto" />
                       {pickedHere > 0 && <Badge className="text-[9px] bg-primary/10 text-primary hover:bg-primary/10 px-1.5 py-0">{pickedHere}件選択</Badge>}
                     </div>
                     <div className="flex items-baseline gap-2 mt-0.5">
@@ -268,7 +269,8 @@ export default function PastEstimateImport({ estimate, onAdd, onClose }) {
                       <span>作成 {fmtDate(e.created_date)}</span>
                       {e.person_in_charge && <span>担当 {e.person_in_charge}</span>}
                       {allClients && <span>{e.client_name}</span>}
-                      {e.is_final_submitted ? <span className="text-amber-700 font-medium">最終提出版</span> : st ? <span>{st.label}</span> : null}
+                      <SubmissionBadge estimate={e} size="xs" />
+                      {st && <span>{st.label}</span>}
                       {e.deal_probability && <span>受注確度 {e.deal_probability}</span>}
                       {e.tax_inclusive && <span className="text-primary">税込見積</span>}
                     </div>

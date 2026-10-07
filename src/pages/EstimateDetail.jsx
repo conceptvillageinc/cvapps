@@ -38,6 +38,7 @@ import ReviewStep from "@/components/estimates/ReviewStep";
 import { autoChecks } from "@/components/estimates/ReviewStep";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { recomputeSubtotals, recomputeRuleRows, usePricingRules } from "@/lib/pricing";
+import { SUBMISSION_FIELDS } from "@/lib/submission";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -147,7 +148,12 @@ export default function EstimateDetail() {
   }, [estimate]);
 
   const saveMutation = useMutation({
-    mutationFn: (data) => db.entities.Estimate.update(estimateId, data),
+    // 提出ステータスは画面の保存では送らない（ボタン・メール送信・案件の失注で別に保存する。古い値で上書きしないため）
+    mutationFn: (data) => {
+      const rest = { ...data };
+      for (const k of SUBMISSION_FIELDS) delete rest[k];
+      return db.entities.Estimate.update(estimateId, rest);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estimate", estimateId] });
     },
@@ -243,6 +249,8 @@ export default function EstimateDetail() {
       parent_estimate_id: null,
       revision_label: "初回",
       is_final_submitted: false,
+      submission_status: "unsubmitted",
+      submitted_at: null,
       status: "draft",
       freee_status: "not_linked",
       review_comments: [],
@@ -445,7 +453,15 @@ export default function EstimateDetail() {
           onOpenChange={setMailOpen}
           type="estimate"
           doc={formData}
-          onSent={() => queryClient.invalidateQueries({ queryKey: ["emailLogs", estimateId] })}
+          onSent={(res) => {
+            queryClient.invalidateQueries({ queryKey: ["emailLogs", estimateId] });
+            // 見積書をメールで送ったら、この版は提出済み（同じ見積で前に提出済みだった版は失注。サーバーが保存済み）
+            if (res?.submission) {
+              handleUpdate(res.submission.patch);
+              queryClient.invalidateQueries({ queryKey: ["estimateRevisions"] });
+              if (res.submission.lost_count) toast.info(`前に提出済みだった版（${res.submission.lost_count}件）を失注にしました`);
+            }
+          }}
         />
       )}
 
