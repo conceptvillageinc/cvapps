@@ -288,6 +288,7 @@ const DAILY_COLS = [
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度" },
   { key: "phase", label: "フェーズ" },
+  { key: "expected_revenue", label: "受注見込(税抜)", num: true },
   { key: "expected_gross_profit", label: "粗利(見込)", num: true },
   { key: "actual_gross_profit", label: "粗利(実績)", num: true },
 ];
@@ -419,7 +420,7 @@ function GroupRows({ group: g, target, isToday }) {
       <TableRow className={`${isToday ? "bg-blue-100/70 hover:bg-blue-100/70" : "bg-slate-100 hover:bg-slate-100"}`} data-day={g.date}>
         <TableCell colSpan={DAILY_COLS.length} className="py-1.5 text-[11px] font-semibold text-slate-700">
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
+            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　受注見込 {yen(g.revenue)}　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
             <TargetBadge gross={g.counted} target={target} />
           </span>
         </TableCell>
@@ -438,6 +439,7 @@ function GroupRows({ group: g, target, isToday }) {
           </TableCell>
           <TableCell>{p.deal_probability && <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>}</TableCell>
           <TableCell>{p.phase && <Badge className={`text-[10px] whitespace-nowrap ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}</TableCell>
+          <TableCell className="text-right text-sm tabular-nums whitespace-nowrap">{yen(p.expected_revenue)}</TableCell>
           <TableCell className={`text-right text-sm tabular-nums whitespace-nowrap ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>
             {countsTowardTarget(p) && <span className="mr-1 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-semibold text-emerald-800 align-middle" title={TARGET_RULE}>計上</span>}
             {yen(p.expected_gross_profit)}
@@ -446,7 +448,8 @@ function GroupRows({ group: g, target, isToday }) {
         </TableRow>
       ))}
       <TableRow className="bg-blue-50/40 hover:bg-blue-50/40">
-        <TableCell colSpan={6} className="py-1.5 text-right text-[11px] text-slate-600">日計　受注見込 {yen(g.revenue)}</TableCell>
+        <TableCell colSpan={6} className="py-1.5 text-right text-[11px] text-slate-600">日計</TableCell>
+        <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.revenue)}</TableCell>
         <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.gross)}</TableCell>
         <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.actual)}</TableCell>
       </TableRow>
