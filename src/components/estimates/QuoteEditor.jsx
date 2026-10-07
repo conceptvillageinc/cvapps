@@ -1162,7 +1162,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
           {/* 税率・入稿先URL・スクショ・メモ（社内用。見積書には出ない） */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
             {isPrintLine(item) && (
-              <button type="button" onClick={onRecordOrder} className="inline-flex items-center gap-1 h-6 rounded border bg-white px-1.5 text-[10px] font-medium text-foreground hover:bg-muted" title="この明細（品名・枚数・金額）で入稿したことを記録します。追加印刷のときに入稿履歴から同じ内容で見積を作れます" data-testid="record-order">
+              <button type="button" onClick={onRecordOrder} className="inline-flex items-center gap-1 h-6 rounded border border-teal-300 bg-white px-1.5 text-[10px] font-semibold text-teal-800 hover:bg-teal-50" title="この明細（品名・枚数・金額）で入稿したことを記録します。追加印刷のときに入稿履歴から同じ内容で見積を作れます" data-testid="record-order">
                 <PackageCheck className="w-3 h-3" /> {orders.length ? "もう一度入稿した" : "入稿した"}
               </button>
             )}

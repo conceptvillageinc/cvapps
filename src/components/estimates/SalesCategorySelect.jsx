@@ -33,8 +33,8 @@ export function SalesCategoryChip({ item }) {
   const def = salesCategoryDef(salesCategoryOf(item, list), list);
   if (!def) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 leading-4 text-[9.5px] text-muted-foreground bg-white" title={`売上カテゴリー: ${def.label}${item.sales_category ? "（手で選択）" : "（自動）"}`} data-testid="sales-category-chip">
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: def.color }} />{def.short}
+    <span className="inline-flex items-center rounded-full border px-1.5 leading-4 text-[9.5px] text-muted-foreground bg-white" title={`売上カテゴリー: ${def.label}${item.sales_category ? "（手で選択）" : "（自動）"}`} data-testid="sales-category-chip">
+      {def.short}
     </span>
   );
 }
