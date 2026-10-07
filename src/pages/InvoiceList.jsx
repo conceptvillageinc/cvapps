@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { INVOICE_STATUS_MAP } from "@/lib/documents";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
+import { useListColumns, columnLabel } from "@/lib/listColumns";
+import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
@@ -86,6 +88,7 @@ function CsvDownload({ defaultFrom, defaultTo }) {
 }
 
 export default function InvoiceList() {
+  const cols = useListColumns("invoices"); // 列の並び・表示（全員共通）
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { fiscalYearStartMonth } = useSystemSettings();
@@ -152,6 +155,7 @@ export default function InvoiceList() {
             </SelectContent>
           </Select>
           <CsvDownload defaultFrom={range?.from} defaultTo={range?.to} />
+          <ListColumnsButton list="invoices" />
           <Button className="gap-2" onClick={() => navigate("/invoices/new")}><Plus className="w-4 h-4" /> 請求書を作成</Button>
         </div>
       </div>
@@ -182,9 +186,10 @@ export default function InvoiceList() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
-                    {["番号", "請求日", "入金期日", "請求先", "件名", "請求金額", "状態", ""].map((h, i) => (
-                      <TableHead key={i} className={`text-xs text-white whitespace-nowrap ${h === "請求金額" ? "text-right" : ""}`}>{h}</TableHead>
+                    {cols.map((k) => (
+                      <TableHead key={k} className={`text-xs text-white whitespace-nowrap ${k === "total" ? "text-right" : ""}`}>{columnLabel("invoices", k)}</TableHead>
                     ))}
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -193,30 +198,38 @@ export default function InvoiceList() {
                     const late = inv.status === "sent" && inv.due_date && inv.due_date < today;
                     return (
                       <TableRow key={inv.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/invoices/${inv.id}`)}>
-                        <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{inv.invoice_number}</TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">{inv.invoice_date}</TableCell>
-                        <TableCell className={`text-xs whitespace-nowrap ${late ? "text-red-700 font-medium" : ""}`}>{inv.due_date || "—"}</TableCell>
-                        <TableCell className="text-sm font-medium max-w-[220px] truncate">{inv.client_name}</TableCell>
-                        <TableCell className="text-sm max-w-[300px] truncate">{inv.title || "—"}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{yen(inv.total)}</TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+                        {cols.map((k) => {
+                          switch (k) {
+                            case "invoice_number": return <TableCell key={k} className="text-xs font-mono text-muted-foreground whitespace-nowrap">{inv.invoice_number}</TableCell>;
+                            case "invoice_date": return <TableCell key={k} className="text-xs whitespace-nowrap">{inv.invoice_date}</TableCell>;
+                            case "due_date": return <TableCell key={k} className={`text-xs whitespace-nowrap ${late ? "text-red-700 font-medium" : ""}`}>{inv.due_date || "—"}</TableCell>;
+                            case "client_name": return <TableCell key={k} className="text-sm font-medium max-w-[220px] truncate">{inv.client_name}</TableCell>;
+                            case "title": return <TableCell key={k} className="text-sm max-w-[300px] truncate">{inv.title || "—"}</TableCell>;
+                            case "total": return <TableCell key={k} className="text-right text-sm tabular-nums">{yen(inv.total)}</TableCell>;
+                            case "status": return (
+                        <TableCell key={k} onClick={(e) => e.stopPropagation()}>
                           <select
                             value={inv.status}
                             onChange={(e) => statusMutation.mutate({ id: inv.id, status: e.target.value })}
                             title="一覧から状態を変えられます（入金額まで記録するときは請求書を開いて「入金を記録」）"
                             className={`h-7 rounded-md border px-1.5 text-[11px] font-medium cursor-pointer ${late ? "bg-red-100 text-red-700 border-red-200" : `${st.color} border-transparent`}`}
                           >
-                            {Object.entries(INVOICE_STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{k === inv.status && late ? "期日超過" : v.label}</option>)}
+                            {Object.entries(INVOICE_STATUS_MAP).map(([sk, v]) => <option key={sk} value={sk}>{sk === inv.status && late ? "期日超過" : v.label}</option>)}
                           </select>
                         </TableCell>
+                            );
+                            default: return <TableCell key={k} />;
+                          }
+                        })}
                         <TableCell><ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary" /></TableCell>
                       </TableRow>
                     );
                   })}
                   <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium">
-                    <TableCell colSpan={5} className="text-xs text-muted-foreground">表示中の合計（{filtered.length}件）</TableCell>
-                    <TableCell className="text-right text-sm tabular-nums">{yen(sum(filtered))}</TableCell>
-                    <TableCell colSpan={2}></TableCell>
+                    {cols.map((k, i) => (k === "total"
+                      ? <TableCell key={k} className="text-right text-sm tabular-nums">{yen(sum(filtered))}</TableCell>
+                      : <TableCell key={k} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `表示中の合計（${filtered.length}件）` : ""}</TableCell>))}
+                    <TableCell />
                   </TableRow>
                 </TableBody>
               </Table>

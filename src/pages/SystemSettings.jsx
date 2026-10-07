@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Settings, Plus, X, ArrowUp, ArrowDown, FileText, GripVertical, Trash2, CheckCircle2 } from "lucide-react";
+import { Settings, Plus, X, ArrowUp, ArrowDown, FileText, GripVertical, Trash2, CheckCircle2, Columns3 } from "lucide-react";
 import { toast } from "sonner";
 import PricingRulesCard from "@/components/settings/PricingRulesCard";
 import CompanyInfoCard from "@/components/settings/CompanyInfoCard";
 import MeetingSettingsCard from "@/components/settings/MeetingSettingsCard";
 import BackupCard from "@/components/settings/BackupCard";
+import { ListColumnsSettings } from "@/components/table/ListColumnsEditor";
 import CostSheetImportCard from "@/components/settings/CostSheetImportCard";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -243,6 +244,14 @@ export default function SystemSettingsPage() {
       <PricingRulesCard settings={settings} upsertSetting={upsertSetting} />
 
       <MeetingSettingsCard settings={settings} upsertSetting={upsertSetting} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Columns3 className="w-4 h-4" /> 一覧の列</CardTitle>
+          <CardDescription className="text-xs">見積書・納品書・請求書・領収書・発注書の一覧の列の並びと表示（全員共通）。各一覧の右上の「列の設定」からも変えられます</CardDescription>
+        </CardHeader>
+        <CardContent><ListColumnsSettings /></CardContent>
+      </Card>
 
       <BackupCard settings={settings} isAdmin={isAdmin} />
 

@@ -21,6 +21,8 @@ import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submission";
+import { useListColumns } from "@/lib/listColumns";
+import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 
 /** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
 function estimateGross(e) {
@@ -41,6 +43,7 @@ export default function EstimateList() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [submissionFilter, setSubmissionFilter] = useState("all"); // 提出ステータスで絞り込む
+  const listCols = useListColumns("estimates");
   const [columnFilters, setColumnFilters] = useState({});
   const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
   const [picked, setPicked] = useState(() => new Set()); // まとめて削除する見積の id
@@ -181,6 +184,59 @@ export default function EstimateList() {
 
   const activeFilterCount = Object.values(columnFilters).filter(v => v !== null && v !== undefined).length;
 
+  // 列の並び・表示（全員共通。システム設定「一覧の列」または右上の「列の設定」で変える）
+  const cols = listCols;
+  /** 見積一覧の 1 マス。latest は一番左の列の上に出す「最新版」 */
+  const estimateCell = (key, est, latest) => {
+    switch (key) {
+      case "estimate_number":
+        return <TableCell key={key} className="text-xs font-mono text-muted-foreground">{latest}{est.estimate_number}</TableCell>;
+      case "submission":
+        return <TableCell key={key} className="w-[76px]">{latest}<SubmissionBadge estimate={est} className="w-[64px] justify-center" /></TableCell>;
+      case "client_name":
+        return (
+          <TableCell key={key} className="text-sm">
+            {latest}
+            <div className="font-medium">{est.client_name}</div>
+            {est.project_id && projectById[est.project_id] && (
+              <div className="text-[10px] text-muted-foreground truncate max-w-[220px]">
+                {projectById[est.project_id].project_number} {projectById[est.project_id].name}
+              </div>
+            )}
+            {est.status === "review_pending" && est.review_requested_to_name && (
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                <Badge variant="outline" className="text-[9px] font-normal text-amber-700 border-amber-200">レビュー: {est.review_requested_to_name}</Badge>
+              </div>
+            )}
+          </TableCell>
+        );
+      case "print_type":
+        return <TableCell key={key} className="text-sm">{latest}{est.print_type || "—"}</TableCell>;
+      case "deal_probability":
+        return <TableCell key={key}>{latest}{probabilityOf(est) && <Badge className={`text-[10px] ${getDealProbabilityColor(probabilityOf(est))}`}>{probabilityOf(est)}</Badge>}</TableCell>;
+      case "phase":
+        return <TableCell key={key}>{latest}{phaseOf(est) && <Badge className={`text-[10px] ${getPhaseColor(phaseOf(est))}`}>{phaseOf(est)}</Badge>}</TableCell>;
+      case "total_amount": {
+        const g = estimateGross(est);
+        return (
+          <TableCell key={key} className="text-right text-sm font-medium tabular-nums">
+            {latest}
+            {est.total_amount ? `¥${est.total_amount.toLocaleString()}` : "—"}
+            {g ? <span className={`block text-[10px] font-normal ${g.rate < 50 ? "text-amber-700" : "text-muted-foreground"}`} title={`粗利 ¥${g.profit.toLocaleString()}（原価入力済みの明細から）`}>粗利率 {g.rate}%</span> : null}
+          </TableCell>
+        );
+      }
+      case "desired_delivery_date":
+        return <TableCell key={key} className="text-sm">{latest}{est.desired_delivery_date || "—"}</TableCell>;
+      case "created_date":
+        return <TableCell key={key} className="text-xs text-muted-foreground">{latest}{format(new Date(est.created_date), "M/d", { locale: ja })}</TableCell>;
+      case "person_in_charge":
+        return <TableCell key={key} className="text-sm">{latest}{est.person_in_charge || "—"}</TableCell>;
+      default:
+        return <TableCell key={key} />;
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
@@ -215,6 +271,7 @@ export default function EstimateList() {
               </AlertDialogContent>
             </AlertDialog>
           )}
+          <ListColumnsButton list="estimates" />
           <Link to="/estimates/new">
             <Button className="gap-2">
               <Plus className="w-4 h-4" /> 新規作成
@@ -271,7 +328,7 @@ export default function EstimateList() {
                         onCheckedChange={(v) => setPicked(v ? new Set(visibleRows.map((e) => e.id)) : new Set())}
                       />
                     </TableHead>
-                    {Object.entries(columnDefs).map(([key, def]) => (
+                    {cols.map((key) => [key, columnDefs[key]]).map(([key, def]) => (
                       <TableHead key={key} className="text-xs text-white whitespace-nowrap">
                         {def.label}
                         {key === "estimate_number" && (
@@ -338,50 +395,7 @@ export default function EstimateList() {
                         <TableCell className="w-8 px-2" onClick={(e) => e.stopPropagation()}>
                           <Checkbox aria-label="選択" checked={picked.has(est.id)} onCheckedChange={() => togglePick(est.id)} />
                         </TableCell>
-                        <TableCell className="text-xs font-mono text-muted-foreground">
-                          {isLatest && <span className="block font-sans text-[10px] font-semibold text-blue-700 leading-3" title={`改訂版 ${versionCount[gid]} 件のうち最新`}>最新版</span>}
-                          {est.estimate_number}
-                        </TableCell>
-                        <TableCell className="w-[76px]">
-                          <SubmissionBadge estimate={est} className="w-[64px] justify-center" />
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="font-medium">{est.client_name}</div>
-                          {est.project_id && projectById[est.project_id] && (
-                            <div className="text-[10px] text-muted-foreground truncate max-w-[220px]">
-                              {projectById[est.project_id].project_number} {projectById[est.project_id].name}
-                            </div>
-                          )}
-                          {est.status === "review_pending" && est.review_requested_to_name && (
-                            <div className="flex flex-wrap gap-1 mt-0.5">
-                              <Badge variant="outline" className="text-[9px] font-normal text-amber-700 border-amber-200">レビュー: {est.review_requested_to_name}</Badge>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm">{est.print_type || "—"}</TableCell>
-                        <TableCell>
-                          {probabilityOf(est) && (
-                            <Badge className={`text-[10px] ${getDealProbabilityColor(probabilityOf(est))}`}>{probabilityOf(est)}</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {phaseOf(est) && (
-                            <Badge className={`text-[10px] ${getPhaseColor(phaseOf(est))}`}>{phaseOf(est)}</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-sm font-medium tabular-nums">
-                          {est.total_amount ? `¥${est.total_amount.toLocaleString()}` : "—"}
-                          {(() => { const g = estimateGross(est); return g ? <span className={`block text-[10px] font-normal ${g.rate < 50 ? "text-amber-700" : "text-muted-foreground"}`} title={`粗利 ¥${g.profit.toLocaleString()}（原価入力済みの明細から）`}>粗利率 {g.rate}%</span> : null; })()}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {est.desired_delivery_date || "—"}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {format(new Date(est.created_date), "M/d", { locale: ja })}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {est.person_in_charge || "—"}
-                        </TableCell>
+                        {cols.map((key, ci) => estimateCell(key, est, ci === 0 && isLatest ? <span className="block font-sans text-[10px] font-semibold text-blue-700 leading-3 mb-0.5" title={`改訂版 ${versionCount[gid]} 件のうち最新`} data-testid="latest-label">最新版</span> : null))}
                         <TableCell>
                           <Link to={`/estimates/${est.id}`}>
                             <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />

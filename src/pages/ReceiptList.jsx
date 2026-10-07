@@ -8,11 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Loader2, ReceiptText } from "lucide-react";
 import { RECEIPT_STATUS_MAP, paymentMethodLabel } from "@/lib/documents";
+import { useListColumns, columnLabel } from "@/lib/listColumns";
+import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
 /** 領収書の一覧。発行は納品書・請求書の画面から */
 export default function ReceiptList() {
+  const cols = useListColumns("receipts"); // 列の並び・表示（全員共通）
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const { data: receipts = [], isLoading } = useQuery({ queryKey: ["receipts"], queryFn: () => db.entities.Receipt.listAll("-issue_date") });
@@ -31,6 +34,7 @@ export default function ReceiptList() {
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><ReceiptText className="w-5 h-5" /> 領収書</h1>
           <p className="text-sm text-muted-foreground mt-0.5">発行した領収書の一覧です。新しく発行するときは、納品書か請求書の画面の「領収書を発行」から</p>
         </div>
+        <ListColumnsButton list="receipts" />
       </div>
       <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
@@ -49,13 +53,7 @@ export default function ReceiptList() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-800 hover:bg-slate-800">
-                  <TableHead className="text-white text-xs">番号</TableHead>
-                  <TableHead className="text-white text-xs">発行日</TableHead>
-                  <TableHead className="text-white text-xs">宛名</TableHead>
-                  <TableHead className="text-white text-xs">但し書き</TableHead>
-                  <TableHead className="text-white text-xs text-right">金額（税込）</TableHead>
-                  <TableHead className="text-white text-xs">受領</TableHead>
-                  <TableHead className="text-white text-xs">状態</TableHead>
+                  {cols.map((k) => <TableHead key={k} className={`text-white text-xs ${k === "total" ? "text-right" : ""}`}>{columnLabel("receipts", k)}</TableHead>)}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -63,20 +61,25 @@ export default function ReceiptList() {
                   const st = RECEIPT_STATUS_MAP[r.status] || RECEIPT_STATUS_MAP.issued;
                   return (
                     <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/receipts/${r.id}`)}>
-                      <TableCell className="font-mono text-xs">{r.receipt_number}</TableCell>
-                      <TableCell className="text-xs tabular-nums">{r.issue_date}</TableCell>
-                      <TableCell className="text-sm">{r.client_name} {r.client_honorific}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground truncate max-w-[280px]">{r.proviso}</TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">{yen(r.total)}</TableCell>
-                      <TableCell className="text-xs">{paymentMethodLabel(r.payment_method)}</TableCell>
-                      <TableCell><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>
+                      {cols.map((k) => {
+                        switch (k) {
+                          case "receipt_number": return <TableCell key={k} className="font-mono text-xs">{r.receipt_number}</TableCell>;
+                          case "issue_date": return <TableCell key={k} className="text-xs tabular-nums">{r.issue_date}</TableCell>;
+                          case "client_name": return <TableCell key={k} className="text-sm">{r.client_name} {r.client_honorific}</TableCell>;
+                          case "proviso": return <TableCell key={k} className="text-xs text-muted-foreground truncate max-w-[280px]">{r.proviso}</TableCell>;
+                          case "total": return <TableCell key={k} className="text-right tabular-nums font-medium">{yen(r.total)}</TableCell>;
+                          case "payment_method": return <TableCell key={k} className="text-xs">{paymentMethodLabel(r.payment_method)}</TableCell>;
+                          case "status": return <TableCell key={k}><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>;
+                          default: return <TableCell key={k} />;
+                        }
+                      })}
                     </TableRow>
                   );
                 })}
                 <TableRow className="bg-muted/30 font-medium">
-                  <TableCell colSpan={4} className="text-xs">合計（{filtered.length} 件）</TableCell>
-                  <TableCell className="text-right tabular-nums">{yen(total)}</TableCell>
-                  <TableCell colSpan={2}></TableCell>
+                  {cols.map((k, i) => (k === "total"
+                    ? <TableCell key={k} className="text-right tabular-nums">{yen(total)}</TableCell>
+                    : <TableCell key={k} className="text-xs whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `合計（${filtered.length} 件）` : ""}</TableCell>))}
                 </TableRow>
               </TableBody>
             </Table>

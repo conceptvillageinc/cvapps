@@ -15,10 +15,13 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { DELIVERY_STATUS_MAP } from "@/lib/documents";
+import { useListColumns, columnLabel } from "@/lib/listColumns";
+import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
 export default function DeliveryNoteList() {
+  const cols = useListColumns("delivery_notes"); // 列の並び・表示（全員共通）
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -87,6 +90,7 @@ export default function DeliveryNoteList() {
               </AlertDialogContent>
             </AlertDialog>
           )}
+          <ListColumnsButton list="delivery_notes" />
           <Button className="gap-2" onClick={() => navigate("/delivery-notes/new")}><Plus className="w-4 h-4" /> 納品書を作成</Button>
         </div>
       </div>
@@ -126,9 +130,10 @@ export default function DeliveryNoteList() {
                         onCheckedChange={(v) => setPicked(v ? new Set(filtered.map((n) => n.id)) : new Set())}
                       />
                     </TableHead>
-                    {["番号", "納品日", "クライアント", "件名", "合計（税込）", "状態", "請求", ""].map((h, i) => (
-                      <TableHead key={i} className={`text-xs text-white whitespace-nowrap ${h.includes("合計") ? "text-right" : ""}`}>{h}</TableHead>
+                    {cols.map((k) => (
+                      <TableHead key={k} className={`text-xs text-white whitespace-nowrap ${k === "total" ? "text-right" : ""}`}>{columnLabel("delivery_notes", k)}</TableHead>
                     ))}
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -139,17 +144,24 @@ export default function DeliveryNoteList() {
                         <TableCell className="w-8 px-2" onClick={(e) => e.stopPropagation()}>
                           <Checkbox aria-label="選択" checked={picked.has(n.id)} onCheckedChange={() => togglePick(n.id)} />
                         </TableCell>
-                        <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{n.delivery_number}</TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">{n.delivery_date}</TableCell>
-                        <TableCell className="text-sm font-medium max-w-[220px] truncate">{n.client_name}</TableCell>
-                        <TableCell className="text-sm max-w-[300px] truncate">{n.title || "—"}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{yen(n.total)}</TableCell>
-                        <TableCell><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>
-                        <TableCell>
-                          {n.invoice_id
-                            ? <Link to={`/invoices/${n.invoice_id}`} onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline">請求済</Link>
-                            : <span className="text-xs text-amber-700">未請求</span>}
-                        </TableCell>
+                        {cols.map((k) => {
+                          switch (k) {
+                            case "delivery_number": return <TableCell key={k} className="text-xs font-mono text-muted-foreground whitespace-nowrap">{n.delivery_number}</TableCell>;
+                            case "delivery_date": return <TableCell key={k} className="text-xs whitespace-nowrap">{n.delivery_date}</TableCell>;
+                            case "client_name": return <TableCell key={k} className="text-sm font-medium max-w-[220px] truncate">{n.client_name}</TableCell>;
+                            case "title": return <TableCell key={k} className="text-sm max-w-[300px] truncate">{n.title || "—"}</TableCell>;
+                            case "total": return <TableCell key={k} className="text-right text-sm tabular-nums">{yen(n.total)}</TableCell>;
+                            case "status": return <TableCell key={k}><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>;
+                            case "invoice": return (
+                              <TableCell key={k}>
+                                {n.invoice_id
+                                  ? <Link to={`/invoices/${n.invoice_id}`} onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline">請求済</Link>
+                                  : <span className="text-xs text-amber-700">未請求</span>}
+                              </TableCell>
+                            );
+                            default: return <TableCell key={k} />;
+                          }
+                        })}
                         <TableCell><ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary" /></TableCell>
                       </TableRow>
                     );
