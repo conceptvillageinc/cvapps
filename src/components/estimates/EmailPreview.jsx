@@ -15,7 +15,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { companyInfoFromSettings } from "@/lib/documents";
 import { toast } from "sonner";
 import {
-  defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA, requestSubject, replyDeadline, formatJpDate,
+  defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA, requestSubject, replyDeadline, formatJpDate, ensureReplySentence,
 } from "@/lib/estimateEmail";
 
 // 本文の行数に合わせた高さ（最低 14 行、最大 60 行）。毎回マウスで枠を広げなくて済むように
@@ -97,7 +97,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
         toast.error("メールを生成できませんでした。もう一度お試しください");
       } else {
         // 件名は決まった形にそろえる（AI の出力に左右されない）
-        setEmails(generated.map((e) => ({ ...e, subject })));
+        setEmails(generated.map((e) => ({ ...e, subject, body: ensureReplySentence(e.body) })));
         setInline(null);
       }
     } catch (err) {
@@ -148,7 +148,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
             AIでメール生成
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground" data-testid="reply-deadline">ご返信期限は <b className="text-foreground">{formatJpDate(replyDeadline())}</b>（今日から 1 週間後。土日に当たるときは次の月曜日）で書きます。希望納期は載せません</p>
+        <p className="text-[11px] text-muted-foreground" data-testid="reply-deadline">ご返信期限は <b className="text-foreground">{formatJpDate(replyDeadline())}</b>（今日から 1 週間後。土日・祝日に当たるときは次の平日）で、「つきましては、恐れ入りますが【◯年◯月◯日】頃までに御見積書をご送付いただけますと幸いです。」と書きます。希望納期は載せません</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 新形式: どの印刷仕様を依頼するか */}

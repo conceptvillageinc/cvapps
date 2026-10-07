@@ -1,5 +1,6 @@
 import { EMAIL_VENDOR_MAP, COMPANY_INFO } from "@/lib/constants";
 import { specText } from "@/lib/printSpecs";
+import { nextBusinessDay } from "@/lib/jpHolidays";
 
 // ============================================================================
 // 見積依頼メールの宛先と、依頼に載せる仕様テキスト。
@@ -112,21 +113,38 @@ export function requestSubject(estimate, specs = []) {
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 /**
- * 見積依頼の「ご返信期限」: 今日から 1 週間後。土日に当たるときは次の月曜日。
+ * 見積依頼の「ご返信期限」: 今日から 1 週間後。土日・祝日に当たるときは次の平日。
  * @param {Date} [today]
  * @returns {Date}
  */
 export function replyDeadline(today = new Date()) {
-  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
-  if (d.getDay() === 6) d.setDate(d.getDate() + 2);
-  else if (d.getDay() === 0) d.setDate(d.getDate() + 1);
-  return d;
+  return nextBusinessDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7));
 }
 
-/** 「2026年10月14日（水）」 */
+/** 「2026年10月14日（水）」（画面の表示用） */
 export const formatJpDate = (d) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
 
-export function buildEmailPrompt(recipients, specText, sender = {}, subject = "", replyBy = formatJpDate(replyDeadline())) {
+/** メール本文に書く返信期限の一文（文面を統一する） */
+export function replySentence(d = replyDeadline()) {
+  return `つきましては、恐れ入りますが【${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日】頃までに御見積書をご送付いただけますと幸いです。`;
+}
+
+/**
+ * AI が書いた本文に、返信期限の一文がそのまま入っているようにする。
+ * 入っていなければ、返信・期限に触れた行を置き換えるか、締めの挨拶の前に入れる。
+ */
+export function ensureReplySentence(body, sentence = replySentence()) {
+  const text = String(body || "");
+  if (text.includes(sentence)) return text;
+  const lines = text.split("\n");
+  const hit = lines.findIndex((l) => /返信|ご返答|ご回答|期限|までに.*(御見積|お見積|見積書)/.test(l));
+  if (hit >= 0) { lines[hit] = sentence; return lines.join("\n"); }
+  const close = lines.findIndex((l) => /^(何卒|どうぞ|よろしく|以上、?よろしく|ご多忙)/.test(l.trim()));
+  if (close >= 0) { lines.splice(close, 0, sentence, ""); return lines.join("\n"); }
+  return `${text}\n\n${sentence}`;
+}
+
+export function buildEmailPrompt(recipients, specText, sender = {}, subject = "", sentence = replySentence()) {
   const senderLine = sender.greeting || "コンセプト・ヴィレッジです。";
   const signature = sender.signature || COMPANY_INFO.name;
   return `以下の印刷仕様に基づいて、印刷会社への見積依頼メールを生成してください。
@@ -135,7 +153,9 @@ export function buildEmailPrompt(recipients, specText, sender = {}, subject = ""
 - 挨拶
 - 見積依頼の趣旨
 - 印刷仕様の詳細
-- ご返信期限（「${replyBy}」とこの日付をそのまま書く。計算し直したり、曜日を変えたりしない）
+- ご返信期限: 次の一文を一字一句そのまま、独立した 1 行で書く（日付・言い回しを変えない。曜日も足さない）
+  ${sentence}
+  返信期限について、これ以外の書き方の文は書かない
 - 締めの挨拶
 
 希望納期・納期・納品日は本文に書かないでください（仕様にも載せていません）。
