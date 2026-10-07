@@ -4,12 +4,13 @@ import {
   LayoutDashboard, FileText, Plus, History, Settings, Users, Layers,
   LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { db } from "@/api/db";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { useSalesCategories } from "@/lib/salesCategory";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import RecordingBar from "@/components/meetings/RecordingBar";
+import { useScrollHoverPause, ScrollHoverShield } from "@/hooks/use-smooth-scroll";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +61,9 @@ export default function Layout() {
 
   const isAdmin = user?.role === "admin";
   const { cashflowAllowedEmails } = useSystemSettings();
+  const mainRef = useRef(null);
+  const shieldRef = useRef(null);
+  useScrollHoverPause(mainRef, shieldRef);
   useSalesCategories(); // 売上カテゴリーマスタを読み込んでおく（見積から請求書へ写すときの自動の振り分けに使う）
   const canSeeCashflow = cashflowAllowedEmails.includes(String(user?.email || "").toLowerCase());
   const visibleNav = navItems.filter((item) => !item.restricted || (item.restricted === "cashflow" && canSeeCashflow));
@@ -207,7 +211,8 @@ export default function Layout() {
         <RecordingBar />
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main ref={mainRef} className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <ScrollHoverShield shieldRef={shieldRef} />
           <Outlet />
         </main>
       </div>

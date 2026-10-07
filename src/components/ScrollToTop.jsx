@@ -27,6 +27,8 @@ export default function ScrollToTop() {
     }
 
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    // 画面の中身は Layout の <main> の中でスクロールするので、そちらも先頭に戻す
+    document.querySelector("main")?.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [pathname, hash, navigationType]);
 
   return null;

@@ -6,6 +6,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { RecordingProvider } from '@/lib/recording';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import ScrollToTop from '@/components/ScrollToTop';
 
 import Login from '@/pages/Login';
 
@@ -124,6 +125,7 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
+          <ScrollToTop />
           <RecordingProvider>
             <AuthenticatedApp />
           </RecordingProvider>
