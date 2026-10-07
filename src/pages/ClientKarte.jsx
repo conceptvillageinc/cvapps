@@ -79,8 +79,8 @@ const TABS = [
   { key: "costSheets", label: "社内見積" },
   { key: "estimates", label: "見積" },
   { key: "printOrders", label: "入稿" },
-  { key: "deliveryNotes", label: "納品書" },
-  { key: "invoices", label: "請求書" },
+  { key: "deliveryNotes", label: "納品" },
+  { key: "invoices", label: "請求" },
   { key: "meetings", label: "議事録" },
 ];
 
@@ -327,11 +327,12 @@ export default function ClientKarte() {
       {/* 左右2分割 */}
       <div className="flex gap-3 h-[calc(100vh-260px)] min-h-[460px]">
         {/* 左：一覧 */}
-        <div className="w-[320px] shrink-0 bg-card border rounded-lg overflow-hidden flex flex-col">
-          <div className="flex gap-1 p-2 border-b">
+        <div className="w-[340px] shrink-0 bg-card border rounded-lg overflow-hidden flex flex-col">
+          {/* 1 行に収める: 幅は文字の長さに合わせ、件数は小さく右肩に */}
+          <div className="flex gap-0.5 p-1.5 border-b overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-testid="karte-tabs">
             {TABS.map((t) => (
-              <button key={t.key} type="button" onClick={() => { setTab(t.key); setSelectedId(null); }} className={`flex-1 h-7 rounded-md text-[11px] ${tab === t.key ? "bg-slate-800 text-white font-semibold" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}>
-                {t.label} {counts[t.key]}
+              <button key={t.key} type="button" onClick={() => { setTab(t.key); setSelectedId(null); }} title={`${t.label} ${counts[t.key]}件`} className={`flex-auto shrink-0 h-7 px-1 rounded-md text-[11px] whitespace-nowrap inline-flex items-center justify-center gap-0.5 ${tab === t.key ? "bg-slate-800 text-white font-semibold" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}>
+                {t.label}<span className={`text-[9px] tabular-nums ${tab === t.key ? "text-white/80" : "text-muted-foreground/70"}`}>{counts[t.key]}</span>
               </button>
             ))}
           </div>
