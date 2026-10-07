@@ -5,6 +5,7 @@
 import { supabase } from "@/lib/supabase";
 import { nextMonthEnd } from "@/lib/fiscal";
 import { toTaxExclusiveUnitPrice, lineTaxRate } from "@/lib/estimateTotals";
+import { salesCategoryOf } from "@/lib/salesCategory";
 
 export const TAX_RATES = [10, 8];
 export const DEFAULT_TAX_RATE = 10;
@@ -49,6 +50,9 @@ export function docItemsFromEstimate(estimate) {
       ...(li.cost_price != null ? { cost_price: Number(li.cost_price) } : {}),
       source_line_id: li.id,
       source_type: li.source_type || null,
+      // 売上カテゴリー（見積で手で選んだもの、無ければ見積の区分と品名からの自動）を写す
+      sales_category: salesCategoryOf(li),
+      ...(li.rule ? { rule: li.rule } : {}),
     }));
 }
 

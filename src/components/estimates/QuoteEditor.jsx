@@ -24,6 +24,7 @@ import {
 } from "@/lib/pricing";
 import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
+import SalesCategorySelect, { SalesCategoryChip } from "@/components/estimates/SalesCategorySelect";
 import { formatPostalCode } from "@/lib/postalCode";
 import { toTaxExcluded } from "@/lib/priceTax";
 import { computeEstimateTotals, lineTaxRate } from "@/lib/estimateTotals";
@@ -1073,8 +1074,9 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
       <td className="px-1 py-2 align-top">{handle}</td>
       <td className="px-3 py-2 align-top">
         <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />
-        {item.category && (
-          <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex items-center gap-1">
+        {(item.category || item.name) && (
+          <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex flex-wrap items-center gap-1">
+            <SalesCategoryChip item={item} />
             {item.category}
             {isRule && <span className="inline-flex items-center gap-0.5 text-emerald-700"><Lock className="w-2.5 h-2.5" /> {ruleRowHint(item)}</span>}
             {item.copied_from && <span className="inline-flex items-center gap-0.5 text-sky-700" title="過去の見積から複製した明細"><History className="w-2.5 h-2.5" /> 前回: {item.copied_from} から複製</span>}
@@ -1135,6 +1137,10 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
         <td colSpan={6} className="px-3 pb-2 pt-0 space-y-1">
           {/* 税率・入稿先URL・スクショ・メモ（社内用。見積書には出ない） */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            <label className="flex items-center gap-1">
+              <span>売上カテゴリー</span>
+              <SalesCategorySelect item={item} onChange={onChange} />
+            </label>
             <label className="flex items-center gap-1">
               <span>税率</span>
               <select

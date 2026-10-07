@@ -5,6 +5,7 @@ import { db } from "@/api/db";
 import { deliveryNoteFilename } from "@/lib/docFilename";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
+import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -408,7 +409,10 @@ export default function DeliveryNoteEdit() {
                 )}
                 {form.line_items.map((li) => (
                   <tr key={li.id} className="border-b">
-                    <td className="px-2 py-1"><Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
+                    <td className="px-2 py-1">
+                      <Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" disabled={locked} />
+                      <div className="mt-0.5"><SalesCategorySelect item={li} onChange={(p) => setItem(li.id, p)} disabled={locked} /></div>
+                    </td>
                     <td className="px-2 py-1"><Input type="number" value={li.quantity} onChange={(e) => setItem(li.id, { quantity: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
                     <td className="px-2 py-1"><Input value={li.unit || ""} onChange={(e) => setItem(li.id, { unit: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
                     <td className="px-2 py-1"><Input type="number" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>

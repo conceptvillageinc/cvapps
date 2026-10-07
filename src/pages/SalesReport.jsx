@@ -22,6 +22,8 @@ import { buildSalesReport, emptyTargets, splitAnnual, applySimulation, SIM_KEYS 
 import { normalizeDealTags, normalizeDeals, DEFAULT_PER_PERSON } from "@/lib/dealPipeline";
 import { useCashAccess } from "@/lib/useCashAccess";
 import DealPipeline from "@/components/sales/DealPipeline";
+import SalesCategoryReport from "@/components/sales/SalesCategoryReport";
+import { SALES_CATEGORY_FROM } from "@/lib/salesCategory";
 import { useAuth } from "@/lib/AuthContext";
 
 // 検証済みの配色（dataviz の基準パレット: 青 / オレンジ / アクア / 黄）
@@ -230,6 +232,8 @@ export default function SalesReport() {
   const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), select: forPayments });
   const { data: payables = [] } = useQuery({ queryKey: ["payables", "all"], queryFn: () => db.entities.Payable.listAll("pay_month"), retry: false });
   const { data: cardCharges = [] } = useQuery({ queryKey: ["cardCharges", "all"], queryFn: () => db.entities.CardCharge.listAll("charged_at"), retry: false });
+  // 売上カテゴリーの振り分けに使う見積（今期以降に作ったもの）
+  const { data: categoryEstimates = [] } = useQuery({ queryKey: ["estimates", "salesCategory"], queryFn: () => db.entities.Estimate.between("created_at", SALES_CATEGORY_FROM, null), retry: false });
   const { data: targetRows = [], isLoading } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list() });
   const targets = targetRows.find((t) => Number(t.fiscal_year) === fy) || null;
 
@@ -558,6 +562,9 @@ export default function SalesReport() {
           )}
         </CardContent>
       </Card>
+
+      {/* 売上カテゴリー別の実績（請求書の明細から） */}
+      <SalesCategoryReport invoices={invoices} months={months} estimates={categoryEstimates} />
 
       {/* 見込の内訳 */}
       <Card>

@@ -21,6 +21,7 @@ import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, Truck, Se
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import ClientCombobox from "@/components/clients/ClientCombobox";
+import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
 import { Mail } from "lucide-react";
 import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
@@ -514,7 +515,10 @@ export default function InvoiceEdit() {
                     <td className="px-2 py-1"><Input type="date" value={li.transaction_date || ""} onChange={(e) => setItem(li.id, { transaction_date: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
                     <td className="px-2 py-1">
                       <Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" disabled={locked} />
-                      {li.delivery_number && <span className="text-[10px] text-muted-foreground">納品書 {li.delivery_number}</span>}
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        <SalesCategorySelect item={li} onChange={(p) => setItem(li.id, p)} disabled={locked} />
+                        {li.delivery_number && <span className="text-[10px] text-muted-foreground">納品書 {li.delivery_number}</span>}
+                      </div>
                     </td>
                     <td className="px-2 py-1"><Input type="number" value={li.quantity} onChange={(e) => setItem(li.id, { quantity: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
                     <td className="px-2 py-1"><Input value={li.unit || ""} onChange={(e) => setItem(li.id, { unit: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
