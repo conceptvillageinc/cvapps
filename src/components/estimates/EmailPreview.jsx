@@ -15,7 +15,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { companyInfoFromSettings } from "@/lib/documents";
 import { toast } from "sonner";
 import {
-  defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA, requestSubject,
+  defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA, requestSubject, replyDeadline, formatJpDate,
 } from "@/lib/estimateEmail";
 
 // 本文の行数に合わせた高さ（最低 14 行、最大 60 行）。毎回マウスで枠を広げなくて済むように
@@ -148,6 +148,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
             AIでメール生成
           </Button>
         </div>
+        <p className="text-[11px] text-muted-foreground" data-testid="reply-deadline">ご返信期限は <b className="text-foreground">{formatJpDate(replyDeadline())}</b>（今日から 1 週間後。土日に当たるときは次の月曜日）で書きます。希望納期は載せません</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 新形式: どの印刷仕様を依頼するか */}
@@ -156,13 +157,13 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
             <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Printer className="w-3.5 h-3.5" /> 依頼する印刷仕様</p>
             {allSpecs.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                印刷仕様が未入力です。「印刷仕様」タブで種別・サイズ・枚数・希望納期を入力すると、その内容で依頼メールを作ります
+                印刷仕様が未入力です。「印刷仕様」タブで種別・サイズ・枚数を入力すると、その内容で依頼メールを作ります
                 （未入力のままでも、見積書の明細から作ることはできます）。
               </p>
             ) : (
               <div className="flex flex-wrap gap-x-4 gap-y-2">
                 {allSpecs.map((sp, i) => {
-                  const missing = specMissing(sp);
+                  const missing = specMissing(sp, { withDelivery: false });
                   return (
                     <label key={sp.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
                       <Checkbox

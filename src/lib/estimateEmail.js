@@ -49,7 +49,8 @@ export function buildSpecText(estimate, specs = []) {
     return [
       `件名: ${estimate.estimate_title || "未指定"}`,
       "",
-      specs.map((sp, i) => specText(sp, i)).join("\n\n"),
+      // 希望納期は依頼メールに載せない（返信期限はアプリで決めた日付を別に渡す）
+      specs.map((sp, i) => specText(sp, i, { withDelivery: false })).join("\n\n"),
       estimate.additional_notes ? `\n備考:\n${estimate.additional_notes}` : "",
     ].filter(Boolean).join("\n");
   }
@@ -62,7 +63,6 @@ export function buildSpecText(estimate, specs = []) {
 
     return [
       `件名: ${estimate.estimate_title || "未指定"}`,
-      `希望納期: ${estimate.desired_delivery_date || "未指定"}`,
       "",
       "内容:",
       lines,
@@ -77,7 +77,6 @@ export function buildSpecText(estimate, specs = []) {
     `紙質: ${estimate?.paper_type || "未指定"}`,
     `印刷枚数: ${(estimate?.quantities || []).map(q => q.toLocaleString() + "枚").join(", ") || "未指定"}`,
     `印刷色数: ${estimate?.color_count || "未指定"}`,
-    `希望納期: ${estimate?.desired_delivery_date || "未指定"}`,
   ].join("\n");
 }
 
@@ -110,7 +109,24 @@ export function requestSubject(estimate, specs = []) {
   return `【御見積のご相談】${label}関連`;
 }
 
-export function buildEmailPrompt(recipients, specText, sender = {}, subject = "") {
+const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+/**
+ * 見積依頼の「ご返信期限」: 今日から 1 週間後。土日に当たるときは次の月曜日。
+ * @param {Date} [today]
+ * @returns {Date}
+ */
+export function replyDeadline(today = new Date()) {
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
+  if (d.getDay() === 6) d.setDate(d.getDate() + 2);
+  else if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+/** 「2026年10月14日（水）」 */
+export const formatJpDate = (d) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
+
+export function buildEmailPrompt(recipients, specText, sender = {}, subject = "", replyBy = formatJpDate(replyDeadline())) {
   const senderLine = sender.greeting || "コンセプト・ヴィレッジです。";
   const signature = sender.signature || COMPANY_INFO.name;
   return `以下の印刷仕様に基づいて、印刷会社への見積依頼メールを生成してください。
@@ -119,9 +135,10 @@ export function buildEmailPrompt(recipients, specText, sender = {}, subject = ""
 - 挨拶
 - 見積依頼の趣旨
 - 印刷仕様の詳細
-- 希望納期（必ず強調して記載）
-- 返信期限の目安（希望納期の1週間前程度）
+- ご返信期限（「${replyBy}」とこの日付をそのまま書く。計算し直したり、曜日を変えたりしない）
 - 締めの挨拶
+
+希望納期・納期・納品日は本文に書かないでください（仕様にも載せていません）。
 
 送信先の会社名リスト: ${recipients.join(", ")}
 

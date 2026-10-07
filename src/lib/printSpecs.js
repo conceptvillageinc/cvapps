@@ -26,7 +26,8 @@ export function specLabel(spec, index = 0) {
 }
 
 /** 依頼メールに載せる仕様の本文 */
-export function specText(spec, index = 0) {
+/** @param {{ withDelivery?: boolean }} [opts]  withDelivery=false で希望納期の行を出さない（印刷所への見積依頼メール用） */
+export function specText(spec, index = 0, { withDelivery = true } = {}) {
   const q = (spec.quantities || []).map((n) => `${Number(n).toLocaleString()}枚`).join(" / ");
   return [
     `【${specLabel(spec, index)}】`,
@@ -37,16 +38,16 @@ export function specText(spec, index = 0) {
     `印刷枚数: ${q || "未指定"}`,
     spec.finishing ? `加工・オプション: ${spec.finishing}` : null,
     spec.usage ? `用途: ${spec.usage}` : null,
-    `希望納期: ${spec.desired_delivery_date || "未指定"}`,
+    withDelivery ? `希望納期: ${spec.desired_delivery_date || "未指定"}` : null,
     spec.notes ? `備考: ${spec.notes}` : null,
   ].filter(Boolean).join("\n");
 }
 
 /** 仕様に足りない項目（依頼前の確認用） */
-export function specMissing(spec) {
+export function specMissing(spec, { withDelivery = true } = {}) {
   const missing = [];
   if (!spec.print_type) missing.push("印刷物種別");
   if (!(spec.quantities || []).length) missing.push("印刷枚数");
-  if (!spec.desired_delivery_date) missing.push("希望納期");
+  if (withDelivery && !spec.desired_delivery_date) missing.push("希望納期");
   return missing;
 }
