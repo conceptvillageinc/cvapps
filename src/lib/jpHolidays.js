@@ -1,6 +1,7 @@
 // ============================================================================
 // 日本の祝日（内閣府の「国民の祝日」の決まりから計算する。外部の API は使わない）
 //   固定の祝日・ハッピーマンデー・春分／秋分の日（1980〜2099 年の近似式）・振替休日・国民の休日
+//   isOffDay / nextBusinessDay は、これに土日と年末年始（12/29〜1/3）を足した「休み」で判定する
 // ============================================================================
 
 const ymd = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -57,14 +58,20 @@ export function jpHolidays(year) {
   return out;
 }
 
-/** 土日・祝日か */
+/** 年末年始の休み（12/29〜1/3） */
+export function isYearEndHoliday(date) {
+  const m = date.getMonth() + 1, d = date.getDate();
+  return (m === 12 && d >= 29) || (m === 1 && d <= 3);
+}
+
+/** 土日・祝日・年末年始（12/29〜1/3）か */
 export function isOffDay(date) {
   const w = date.getDay();
-  if (w === 0 || w === 6) return true;
+  if (w === 0 || w === 6 || isYearEndHoliday(date)) return true;
   return jpHolidays(date.getFullYear()).has(ymd(date.getFullYear(), date.getMonth() + 1, date.getDate()));
 }
 
-/** 土日・祝日なら、次の平日まで進めた日 */
+/** 土日・祝日・年末年始なら、次の平日まで進めた日 */
 export function nextBusinessDay(date) {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   while (isOffDay(d)) d.setDate(d.getDate() + 1);

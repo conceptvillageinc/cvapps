@@ -113,7 +113,7 @@ export function requestSubject(estimate, specs = []) {
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 /**
- * 見積依頼の「ご返信期限」: 今日から 1 週間後。土日・祝日に当たるときは次の平日。
+ * 見積依頼の「ご返信期限」: 今日から 1 週間後。土日・祝日・年末年始（12/29〜1/3）に当たるときは次の平日。
  * @param {Date} [today]
  * @returns {Date}
  */

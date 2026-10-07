@@ -148,7 +148,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
             AIでメール生成
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground" data-testid="reply-deadline">ご返信期限は <b className="text-foreground">{formatJpDate(replyDeadline())}</b>（今日から 1 週間後。土日・祝日に当たるときは次の平日）で、「つきましては、恐れ入りますが【◯年◯月◯日】頃までに御見積書をご送付いただけますと幸いです。」と書きます。希望納期は載せません</p>
+        <p className="text-[11px] text-muted-foreground" data-testid="reply-deadline">ご返信期限は <b className="text-foreground">{formatJpDate(replyDeadline())}</b>（今日から 1 週間後。土日・祝日・年末年始に当たるときは次の平日）で、「つきましては、恐れ入りますが【◯年◯月◯日】頃までに御見積書をご送付いただけますと幸いです。」と書きます。希望納期は載せません</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 新形式: どの印刷仕様を依頼するか */}
