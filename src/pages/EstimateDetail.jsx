@@ -455,11 +455,11 @@ export default function EstimateDetail() {
           doc={formData}
           onSent={(res) => {
             queryClient.invalidateQueries({ queryKey: ["emailLogs", estimateId] });
-            // 見積書をメールで送ったら、この版は提出済み（同じ見積で前に提出済みだった版は失注。サーバーが保存済み）
+            // 見積書をメールで送ったら、この版は提出済（同じ見積で前に提出済だった版は失注。サーバーが保存済み）
             if (res?.submission) {
               handleUpdate(res.submission.patch);
               queryClient.invalidateQueries({ queryKey: ["estimateRevisions"] });
-              if (res.submission.lost_count) toast.info(`前に提出済みだった版（${res.submission.lost_count}件）を失注にしました`);
+              if (res.submission.lost_count) toast.info(`前に提出済だった版（${res.submission.lost_count}件）を失注にしました`);
             }
           }}
         />

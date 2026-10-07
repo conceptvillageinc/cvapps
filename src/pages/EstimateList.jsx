@@ -94,6 +94,7 @@ export default function EstimateList() {
   // 列ごとの値取得・表示整形
   const columnDefs = useMemo(() => ({
     estimate_number: { label: "見積番号", getValue: e => e.estimate_number || "" },
+    submission: { label: "提出", getValue: e => SUBMISSION_STATUS[submissionOf(e)].label },
     client_name: { label: "クライアント", getValue: e => e.client_name || "" },
     print_type: { label: "印刷物種別", getValue: e => e.print_type || "", master: PRINT_TYPES },
     deal_probability: { label: "受注確度", getValue: probabilityOf, master: dealProbabilityMaster },
@@ -166,8 +167,10 @@ export default function EstimateList() {
   // 同一案件（project_group_id）内で作成日時が最新のものを「最新版」として判定
   // （取得済みの100件の範囲内での簡易判定）
   const latestIdByGroup = {};
+  const versionCount = {}; // 同じ見積（project_group_id）の版の数
   estimates.forEach(e => {
     const gid = e.project_group_id || e.id;
+    versionCount[gid] = (versionCount[gid] || 0) + 1;
     const current = latestIdByGroup[gid];
     if (!current || new Date(e.created_date) > new Date(current.date)) {
       latestIdByGroup[gid] = { id: e.id, date: e.created_date };
@@ -327,14 +330,20 @@ export default function EstimateList() {
                 <TableBody>
                   {visibleRows.map(est => {
                     const gid = est.project_group_id || est.id;
-                    const isLatest = latestIdByGroup[gid]?.id === est.id;
+                    // 最新版の印は、改訂版が 2 つ以上ある見積だけに出す（1 版だけの見積に毎回付くと見づらいため）
+                    const isLatest = latestIdByGroup[gid]?.id === est.id && (versionCount[gid] || 0) > 1;
+                    const sub = submissionOf(est);
                     return (
-                      <TableRow key={est.id} className={`group cursor-pointer hover:bg-muted/40 ${picked.has(est.id) ? "bg-red-50/60" : ""}`} onClick={() => navigate(`/estimates/${est.id}`)}>
+                      <TableRow key={est.id} className={`group cursor-pointer hover:bg-muted/40 ${picked.has(est.id) ? "bg-red-50/60" : ""} ${sub === "lost" ? "text-muted-foreground [&_td]:opacity-70" : ""}`} onClick={() => navigate(`/estimates/${est.id}`)}>
                         <TableCell className="w-8 px-2" onClick={(e) => e.stopPropagation()}>
                           <Checkbox aria-label="選択" checked={picked.has(est.id)} onCheckedChange={() => togglePick(est.id)} />
                         </TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground">
                           {est.estimate_number}
+                          {isLatest && <span className="block font-sans text-[10px] font-semibold text-blue-700" title={`改訂版 ${versionCount[gid]} 件のうち最新`}>最新版</span>}
+                        </TableCell>
+                        <TableCell className="w-[76px]">
+                          <SubmissionBadge estimate={est} className="w-[64px] justify-center" />
                         </TableCell>
                         <TableCell className="text-sm">
                           <div className="font-medium">{est.client_name}</div>
@@ -343,18 +352,11 @@ export default function EstimateList() {
                               {projectById[est.project_id].project_number} {projectById[est.project_id].name}
                             </div>
                           )}
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {est.revision_label && (
-                              <Badge variant="outline" className="text-[9px] font-normal">{est.revision_label}</Badge>
-                            )}
-                            {isLatest && (
-                              <Badge className="text-[9px] bg-blue-100 text-blue-700 hover:bg-blue-100">最新版</Badge>
-                            )}
-                            <SubmissionBadge estimate={est} size="xs" />
-                            {est.status === "review_pending" && est.review_requested_to_name && (
+                          {est.status === "review_pending" && est.review_requested_to_name && (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
                               <Badge variant="outline" className="text-[9px] font-normal text-amber-700 border-amber-200">レビュー: {est.review_requested_to_name}</Badge>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm">{est.print_type || "—"}</TableCell>
                         <TableCell>

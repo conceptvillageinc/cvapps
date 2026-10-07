@@ -108,7 +108,7 @@ export default async function handler(req, res) {
       await admin.from('partner_orders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', id);
     }
 
-    // 見積書は、送った版を「提出済み」にし、同じ見積で前に提出済みだった版を「失注」にする
+    // 見積書は、送った版を「提出済」にし、同じ見積で前に提出済だった版を「失注」にする
     let submission = null;
     if (type === 'estimate') {
       try {

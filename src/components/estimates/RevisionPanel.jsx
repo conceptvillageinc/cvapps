@@ -87,7 +87,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
   const probabilityChoices = [...new Set([...dealProbabilityOptions, currentProbability].filter(Boolean))];
   const phaseChoices = [...new Set([...phaseOptions, currentPhase].filter(Boolean))];
 
-  // 提出ステータス（未提出／提出済み／失注）。すぐ保存する。提出済みにすると、同じ見積で前に提出済みだった版は失注になる
+  // 提出ステータス（未提出／提出済／失注）。すぐ保存する。提出済にすると、同じ見積で前に提出済だった版は失注になる
   const submission = submissionOf(estimate);
   const [savingSubmission, setSavingSubmission] = useState(null);
   const changeSubmission = async (status) => {
@@ -99,14 +99,14 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
       queryClient.invalidateQueries({ queryKey: ["estimateRevisions", groupId] });
       queryClient.invalidateQueries({ queryKey: ["estimates"] });
       const label = SUBMISSION_STATUS[status].label;
-      toast.success(lostIds.length ? `「${label}」にしました。前に提出済みだった版（${lostIds.length}件）は失注にしました` : `「${label}」にしました`);
+      toast.success(lostIds.length ? `「${label}」にしました。前に提出済だった版（${lostIds.length}件）は失注にしました` : `「${label}」にしました`);
     } catch (err) {
       toast.error("変更できませんでした: " + (err?.message || "不明なエラー"));
     } finally {
       setSavingSubmission(null);
     }
   };
-  // 案件ごと失注にしたら、提出済みの版は失注にする（案件に紐づく見積はデータベース側でも同じ処理をする）
+  // 案件ごと失注にしたら、提出済の版は失注にする（案件に紐づく見積はデータベース側でも同じ処理をする）
   const lostWithDeal = (v) => {
     if (!/失注/.test(v || "") || submission !== "submitted") return;
     if (project) onUpdate({ submission_status: "lost", is_final_submitted: false });
@@ -231,7 +231,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
         )}
 
         <p className="text-[10px] text-muted-foreground -mt-1">
-          提出ステータス: アプリから「見積書を送付」でメールを送ると、自動で「提出済み」になります。メール以外で出したときは手で選んでください。ある版を「提出済み」にすると、前に提出済みだった版は「失注」に、案件を失注にすると提出済みの版も「失注」になります
+          提出ステータス: アプリから「見積書を送付」でメールを送ると、自動で「提出済」になります。メール以外で出したときは手で選んでください。ある版を「提出済」にすると、前に提出済だった版は「失注」に、案件を失注にすると提出済の版も「失注」になります
         </p>
 
         {project ? (

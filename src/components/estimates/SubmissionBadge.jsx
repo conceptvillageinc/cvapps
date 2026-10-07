@@ -1,6 +1,6 @@
 import { SUBMISSION_STATUS, submissionOf } from "@/lib/submission";
 
-/** 見積の提出ステータスの印（未提出／提出済み／失注） */
+/** 見積の提出ステータスの印（未提出／提出済／失注） */
 export default function SubmissionBadge({ estimate, size = "sm", hideUnsubmitted = false, className = "" }) {
   const key = submissionOf(estimate);
   if (hideUnsubmitted && key === "unsubmitted") return null;

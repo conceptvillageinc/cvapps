@@ -1,14 +1,14 @@
 // ============================================================================
-// 見積の提出ステータス（未提出／提出済み／失注）
-//   最後にクライアントへ出した版を「提出済み」、通らなかった版を「失注」にする。
-//   ある版を提出済みにすると、同じ見積（project_group_id）で前に提出済みだった版は失注になる。
-//   これまでの「最終提出版」（is_final_submitted）は提出済みとして扱う（0030 の SQL を流す前も同じ表示）。
+// 見積の提出ステータス（未提出／提出済／失注）
+//   最後にクライアントへ出した版を「提出済」、通らなかった版を「失注」にする。
+//   ある版を提出済にすると、同じ見積（project_group_id）で前に提出済だった版は失注になる。
+//   これまでの「最終提出版」（is_final_submitted）は提出済として扱う（0030 の SQL を流す前も同じ表示）。
 // ============================================================================
 import { db } from "@/api/db";
 
 export const SUBMISSION_STATUS = {
   unsubmitted: { label: "未提出", cls: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
-  submitted: { label: "提出済み", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+  submitted: { label: "提出済", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
   lost: { label: "失注", cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500" },
 };
 export const SUBMISSION_KEYS = ["unsubmitted", "submitted", "lost"];
@@ -23,7 +23,7 @@ export function submissionOf(e) {
 export const SUBMISSION_FIELDS = ["submission_status", "submitted_at", "is_final_submitted"];
 
 /**
- * 提出ステータスを変える（この版と、提出済みにするときは同じ見積の他の版も）。
+ * 提出ステータスを変える（この版と、提出済にするときは同じ見積の他の版も）。
  * @returns {Promise<{ patch: object, lostIds: string[] }>}  この版に当てた値と、失注にした他の版
  */
 export async function setSubmission(estimate, status) {
