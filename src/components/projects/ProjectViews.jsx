@@ -288,7 +288,7 @@ const DAILY_COLS = [
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度" },
   { key: "phase", label: "フェーズ" },
-  { key: "expected_revenue", label: "受注見込(税抜)", num: true },
+  { key: "expected_revenue", label: "売上見込（税別）", num: true },
   { key: "expected_gross_profit", label: "粗利(見込)", num: true },
   { key: "actual_gross_profit", label: "粗利(実績)", num: true },
 ];
@@ -420,7 +420,7 @@ function GroupRows({ group: g, target, isToday }) {
       <TableRow className={`${isToday ? "bg-blue-100/70 hover:bg-blue-100/70" : "bg-slate-100 hover:bg-slate-100"}`} data-day={g.date}>
         <TableCell colSpan={DAILY_COLS.length} className="py-1.5 text-[11px] font-semibold text-slate-700">
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　受注見込 {yen(g.revenue)}　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
+            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　売上見込 {yen(g.revenue)}　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
             <TargetBadge gross={g.counted} target={target} />
           </span>
         </TableCell>
