@@ -129,7 +129,7 @@ export default function EstimateDetail() {
   // CV メンバーに共有する用:「▼見積書_クライアント名_案件名」と短いリンク（/e/見積番号）をクリップボードへ
   const copyLink = () => {
     const url = `${window.location.origin}/e/${encodeURIComponent(formData.estimate_number)}`;
-    copyShareText(shareText("見積書", [formData.client_name, project?.name || formData.estimate_title], url));
+    copyShareText(shareText("見積書", formData.client_name, project?.name || formData.estimate_title, url));
   };
   const [activeTab, setActiveTab] = useState(null);
   // 新形式: ステップ（quote = 見積書を作る / review = レビュー・承認）と依頼ツール

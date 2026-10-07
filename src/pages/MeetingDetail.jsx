@@ -273,7 +273,7 @@ export default function MeetingDetail() {
   };
 
   // CV メンバーに共有する用:「▼議事録_クライアント名_案件名」と URL（案件が無ければ議事録の件名）
-  const copyShare = () => copyShareText(shareText("議事録", [meeting.client_name, linkedProject?.name || meeting.title], `${window.location.origin}/meetings/${meeting.id}`));
+  const copyShare = () => copyShareText(shareText("議事録", meeting.client_name, linkedProject?.name || meeting.title, `${window.location.origin}/meetings/${meeting.id}`));
 
   const copyText = async () => {
     try { await navigator.clipboard.writeText(meetingToText({ ...meeting, summary }, typeLabel)); toast.success("議事録をコピーしました"); } catch { toast.error("コピーできませんでした"); }
