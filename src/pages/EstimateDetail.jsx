@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import { openBlob, openPreviewTab, showBlobInTab } from "@/lib/documents";
+import { shareText, copyShareText } from "@/lib/shareText";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
 import { useAuth } from "@/lib/AuthContext";
@@ -125,15 +126,10 @@ export default function EstimateDetail() {
     }
   };
 
-  // 短いリンク（/e/見積番号）をクリップボードへ
-  const copyLink = async () => {
+  // CV メンバーに共有する用:「▼見積書_クライアント名_案件名」と短いリンク（/e/見積番号）をクリップボードへ
+  const copyLink = () => {
     const url = `${window.location.origin}/e/${encodeURIComponent(formData.estimate_number)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("リンクをコピーしました", { description: url });
-    } catch {
-      window.prompt("このリンクをコピーしてください", url);
-    }
+    copyShareText(shareText("見積書", [formData.client_name, project?.name || formData.estimate_title], url));
   };
   const [activeTab, setActiveTab] = useState(null);
   // 新形式: ステップ（quote = 見積書を作る / review = レビュー・承認）と依頼ツール
@@ -352,8 +348,8 @@ export default function EstimateDetail() {
               </DropdownMenu>
             </>
           )}
-          <Button variant="outline" size="sm" onClick={copyLink} className="gap-1.5 text-xs" title="この見積の短いリンクをコピー（Asana やチャットに貼る用）">
-            <Link2 className="w-3.5 h-3.5" /> リンクをコピー
+          <Button variant="outline" size="sm" onClick={copyLink} className="gap-1.5 text-xs" title="「▼見積書_クライアント名_案件名」とこの見積の URL をコピー（CV メンバーへの共有・Asana やチャットに貼る用）">
+            <Link2 className="w-3.5 h-3.5" /> タイトルと URL をコピー
           </Button>
           <Button variant="outline" size="sm" onClick={handleDuplicate} className="gap-1.5 text-xs">
             <Copy className="w-3.5 h-3.5" /> 複製

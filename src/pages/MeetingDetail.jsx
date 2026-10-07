@@ -18,7 +18,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save, Link2 } from "lucide-react";
+import { shareText, copyShareText } from "@/lib/shareText";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
 import MeetingAttachments from "@/components/meetings/MeetingAttachments";
@@ -148,6 +149,12 @@ export default function MeetingDetail() {
     enabled: !!id,
     refetchInterval: (q) => (q.state.data && PROCESSING.has(q.state.data.status) ? 5000 : false),
   });
+  // 紐づけた案件（共有用のタイトルに案件名を使う）
+  const { data: linkedProject } = useQuery({
+    queryKey: ["project", meeting?.project_id],
+    queryFn: () => db.entities.Project.get(meeting.project_id),
+    enabled: !!meeting?.project_id,
+  });
   const { data: segments = EMPTY } = useQuery({
     queryKey: ["meetingSegments", id],
     queryFn: () => db.entities.MeetingSegment.filter({ meeting_id: id }, "seq"),
@@ -265,6 +272,9 @@ export default function MeetingDetail() {
     }
   };
 
+  // CV メンバーに共有する用:「▼議事録_クライアント名_案件名」と URL（案件が無ければ議事録の件名）
+  const copyShare = () => copyShareText(shareText("議事録", [meeting.client_name, linkedProject?.name || meeting.title], `${window.location.origin}/meetings/${meeting.id}`));
+
   const copyText = async () => {
     try { await navigator.clipboard.writeText(meetingToText({ ...meeting, summary }, typeLabel)); toast.success("議事録をコピーしました"); } catch { toast.error("コピーできませんでした"); }
   };
@@ -298,7 +308,8 @@ export default function MeetingDetail() {
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-          <Button variant="outline" size="sm" className="text-xs gap-1" onClick={copyText}><Copy className="w-3.5 h-3.5" /> コピー</Button>
+          <Button variant="outline" size="sm" className="text-xs gap-1" onClick={copyShare} title="「▼議事録_クライアント名_案件名」とこの議事録の URL をコピー（CV メンバーへの共有用）"><Link2 className="w-3.5 h-3.5" /> タイトルと URL をコピー</Button>
+          <Button variant="outline" size="sm" className="text-xs gap-1" onClick={copyText} title="議事録の本文をコピー"><Copy className="w-3.5 h-3.5" /> 本文をコピー</Button>
           <AlertDialog>
             <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="text-xs gap-1 text-destructive hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /> 削除</Button></AlertDialogTrigger>
             <AlertDialogContent>
