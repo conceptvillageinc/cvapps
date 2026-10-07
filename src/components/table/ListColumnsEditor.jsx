@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowUp, ArrowDown, Columns3, Loader2, RotateCcw, Save } from "lucide-react";
+import { ArrowUp, ArrowDown, Columns3, Loader2, RotateCcw, Save, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { LIST_DEFS, LIST_KEYS, columnLabel, normalizeListColumns, useAllListColumns, useSaveListColumns } from "@/lib/listColumns";
 
@@ -26,6 +26,19 @@ export function ListColumnsEditor({ list, onSaved }) {
     [next[i], next[j]] = [next[j], next[i]];
     return next;
   });
+  // ドラッグ＆ドロップで並べ替え（左端のつまみを持って上下へ）
+  const [dragFrom, setDragFrom] = useState(null);
+  const [dropAt, setDropAt] = useState(null); // この位置の前に入れる（0〜件数）
+  const drop = () => {
+    if (dragFrom === null || dropAt === null) { setDragFrom(null); setDropAt(null); return; }
+    setCols((c) => {
+      const next = [...c];
+      const [moved] = next.splice(dragFrom, 1);
+      next.splice(dropAt > dragFrom ? dropAt - 1 : dropAt, 0, moved);
+      return next;
+    });
+    setDragFrom(null); setDropAt(null);
+  };
   const toggle = (i) => setCols((c) => c.map((x, k) => (k === i ? { ...x, visible: !x.visible } : x)));
   const commit = async () => {
     if (!cols.some((c) => c.visible)) { toast.error("1 つ以上の列を表示してください"); return; }
@@ -39,7 +52,23 @@ export function ListColumnsEditor({ list, onSaved }) {
     <div className="space-y-2" data-testid={`list-columns-${list}`}>
       <div className="rounded-md border divide-y">
         {cols.map((c, i) => (
-          <div key={c.key} className={`flex items-center gap-2 px-2 py-1.5 ${c.visible ? "" : "bg-muted/40"}`}>
+          <div
+            key={c.key}
+            onDragOver={(e) => { if (dragFrom === null) return; e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setDropAt(e.clientY < r.top + r.height / 2 ? i : i + 1); }}
+            onDrop={(e) => { e.preventDefault(); drop(); }}
+            className={`relative flex items-center gap-2 px-2 py-1.5 ${c.visible ? "" : "bg-muted/40"} ${dragFrom === i ? "opacity-40" : ""}`}
+            data-testid="list-column-row"
+          >
+            {dragFrom !== null && dropAt === i && <span className="absolute left-0 right-0 -top-px h-0.5 bg-primary" aria-hidden />}
+            {dragFrom !== null && dropAt === i + 1 && i === cols.length - 1 && <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-primary" aria-hidden />}
+            <span
+              draggable
+              onDragStart={(e) => { setDragFrom(i); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", c.key); } catch { /* noop */ } }}
+              onDragEnd={() => { setDragFrom(null); setDropAt(null); }}
+              className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+              title="ドラッグして並べ替え"
+              aria-label={`${columnLabel(list, c.key)} をドラッグして並べ替え`}
+            ><GripVertical className="w-4 h-4" /></span>
             <span className="w-5 text-right text-[11px] text-muted-foreground tabular-nums">{i + 1}</span>
             <label className="flex items-center gap-2 flex-1 text-sm cursor-pointer">
               <input type="checkbox" checked={c.visible} onChange={() => toggle(i)} aria-label={`${columnLabel(list, c.key)} を表示`} />
@@ -50,7 +79,7 @@ export function ListColumnsEditor({ list, onSaved }) {
           </div>
         ))}
       </div>
-      <p className="text-[10.5px] text-muted-foreground">上から順に、一覧の左から並びます。チェックを外した列は一覧に出しません。{list === "estimates" ? "「最新版」の文字は、一番左の列の上に出ます。" : ""}選択用のチェックと右端の矢印は固定です</p>
+      <p className="text-[10.5px] text-muted-foreground">左端の ⋮⋮ をドラッグするか ↑↓ で並べ替えます。上から順に、一覧の左から並びます。チェックを外した列は一覧に出しません。{list === "estimates" ? "「最新版」の文字は、一番左の列の上に出ます。" : ""}選択用のチェックと右端の矢印は固定です</p>
       <div className="flex items-center gap-2">
         <Button type="button" variant="outline" size="sm" className="text-xs gap-1" onClick={() => setCols(normalizeListColumns(list, []))} disabled={busy}><RotateCcw className="w-3.5 h-3.5" /> 初期の並びに戻す</Button>
         <Button type="button" size="sm" className="text-xs gap-1 ml-auto" onClick={commit} disabled={busy || !dirty}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} 保存</Button>
