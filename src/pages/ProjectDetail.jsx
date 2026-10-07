@@ -11,7 +11,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic, PackageCheck } from "lucide-react";
 import { MEETING_STATUS } from "@/lib/meetings";
 import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import ProjectTasks from "@/components/projects/ProjectTasks";
 import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
+import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 
@@ -376,6 +377,14 @@ export default function ProjectDetail() {
             </div>
           )}
         </CardContent>
+      </Card>
+
+      {/* 入稿履歴（この案件の見積で「入稿した」明細） */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2"><PackageCheck className="w-4 h-4 text-teal-700" /> 入稿履歴</CardTitle>
+        </CardHeader>
+        <CardContent><PrintOrderHistory where={{ project_id: project.id }} /></CardContent>
       </Card>
 
       {/* 納品書 */}

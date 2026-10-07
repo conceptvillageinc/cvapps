@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Download,
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp, PackageCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -24,6 +24,9 @@ import {
 } from "@/lib/pricing";
 import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
+import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
+import { isPrintLine, orderFromLine, fmtOrderDate } from "@/lib/printOrders";
+import { useAuth } from "@/lib/AuthContext";
 import SalesCategorySelect, { SalesCategoryChip } from "@/components/estimates/SalesCategorySelect";
 import { formatPostalCode } from "@/lib/postalCode";
 import { toTaxExcluded } from "@/lib/priceTax";
@@ -99,6 +102,17 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     const profit = subtotal - cost;
     return { totalCost: cost, grossProfit: profit, profitRate: subtotal > 0 ? ((profit / subtotal) * 100).toFixed(1) : 0 };
   }, [lineItems, subtotal]);
+
+  // 入稿記録（この見積のどの明細で入稿したか）
+  const { user } = useAuth();
+  const { data: printOrders = [], refetch: refetchOrders } = useQuery({
+    queryKey: ["printOrders", "estimate", estimate.id],
+    queryFn: () => db.entities.PrintOrder.filter({ estimate_id: estimate.id }, "-ordered_on"),
+    enabled: !!estimate.id,
+    retry: false,
+  });
+  const [orderDraft, setOrderDraft] = useState(null);
+  const recordOrder = (li) => setOrderDraft(orderFromLine(estimate, li, { user }));
 
   const { data: priceMasterEntries = [] } = useQuery({
     queryKey: ["priceMaster"],
@@ -700,6 +714,9 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                     onRemove={() => removeItem(li.id)}
                     onDuplicate={() => duplicateItem(li.id)}
                     onMove={(dir) => moveItem(li.id, dir)}
+                    orders={printOrders.filter((o) => o.estimate_line_id === li.id)}
+                    onRecordOrder={() => recordOrder(li)}
+                    onOpenOrder={(o) => setOrderDraft(o)}
                   />
                 ))}
               </tbody>
@@ -994,6 +1011,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
           )}
         </DialogContent>
       </Dialog>
+      <PrintOrderDialog open={!!orderDraft} onOpenChange={(v) => { if (!v) setOrderDraft(null); }} order={orderDraft} onSaved={() => refetchOrders()} />
     </div>
   );
 }
@@ -1024,7 +1042,7 @@ function RowActions({ onDuplicate, onRemove }) {
   );
 }
 
-function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove, onDuplicate, onMove }) {
+function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove, onDuplicate, onMove, orders = [], onRecordOrder, onOpenOrder }) {
   const handle = <RowHandle onDragStart={onDragStart} onDragEnd={onDragEnd} onMove={onMove} isFirst={isFirst} isLast={isLast} />;
   if (item.row_type === "subtotal") {
     return (
@@ -1077,6 +1095,11 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
         {(item.category || item.name) && (
           <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex flex-wrap items-center gap-1">
             <SalesCategoryChip item={item} />
+            {orders.map((o) => (
+              <button key={o.id} type="button" onClick={() => onOpenOrder?.(o)} className="inline-flex items-center gap-1 rounded-full border border-teal-300 bg-teal-50 px-1.5 leading-4 text-[9.5px] font-semibold text-teal-800 hover:bg-teal-100" title="入稿記録を開く" data-testid="ordered-chip">
+                <PackageCheck className="w-2.5 h-2.5" /> 入稿済 {fmtOrderDate(o.ordered_on).slice(5)}
+              </button>
+            ))}
             {item.category}
             {isRule && <span className="inline-flex items-center gap-0.5 text-emerald-700"><Lock className="w-2.5 h-2.5" /> {ruleRowHint(item)}</span>}
             {item.copied_from && <span className="inline-flex items-center gap-0.5 text-sky-700" title="過去の見積から複製した明細"><History className="w-2.5 h-2.5" /> 前回: {item.copied_from} から複製</span>}
@@ -1137,6 +1160,11 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
         <td colSpan={6} className="px-3 pb-2 pt-0 space-y-1">
           {/* 税率・入稿先URL・スクショ・メモ（社内用。見積書には出ない） */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            {isPrintLine(item) && (
+              <button type="button" onClick={onRecordOrder} className="inline-flex items-center gap-1 h-6 rounded border border-teal-300 bg-white px-1.5 text-[10px] font-semibold text-teal-800 hover:bg-teal-50" title="この明細（品名・枚数・金額）で入稿したことを記録します。追加印刷のときに入稿履歴から同じ内容で見積を作れます" data-testid="record-order">
+                <PackageCheck className="w-3 h-3" /> {orders.length ? "もう一度入稿した" : "入稿した"}
+              </button>
+            )}
             <label className="flex items-center gap-1">
               <span>売上カテゴリー</span>
               <SalesCategorySelect item={item} onChange={onChange} />

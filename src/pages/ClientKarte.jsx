@@ -26,6 +26,7 @@ import CostSheetPane from "@/components/clients/CostSheetPane";
 import MeetingAttachments from "@/components/meetings/MeetingAttachments";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import { SUBMISSION_STATUS, submissionOf } from "@/lib/submission";
+import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
@@ -77,6 +78,7 @@ const TABS = [
   { key: "projects", label: "案件" },
   { key: "costSheets", label: "社内見積" },
   { key: "estimates", label: "見積" },
+  { key: "printOrders", label: "入稿" },
   { key: "deliveryNotes", label: "納品書" },
   { key: "invoices", label: "請求書" },
   { key: "meetings", label: "議事録" },
@@ -111,6 +113,17 @@ export default function ClientKarte() {
   const { data: meetings = [] } = useQuery({ queryKey: ["meetings", "byClient", name], queryFn: () => db.entities.Meeting.filter({ client_name: name }, "-held_at"), enabled: !!name });
   // 原価計算表（スプレッドシート）から取り込んだ社内見積
   const { data: costSheets = [] } = useQuery({ queryKey: ["costSheets", "byClient", id], queryFn: () => db.entities.CostSheet.filter({ client_id: id }, "-sheet_date"), enabled: !!id, retry: false });
+  // 入稿記録（クライアントの id と名前のどちらで紐づいていても拾う）
+  const { data: printOrders = [] } = useQuery({
+    queryKey: ["printOrders", "byClient", id, name],
+    queryFn: async () => {
+      const [a, b] = await Promise.all([db.entities.PrintOrder.filter({ client_id: id }, "-ordered_on"), db.entities.PrintOrder.filter({ client_name: name }, "-ordered_on")]);
+      const seen = new Set();
+      return [...a, ...b].filter((r) => (seen.has(r.id) ? false : seen.add(r.id))).sort((x, y) => String(y.ordered_on).localeCompare(String(x.ordered_on)));
+    },
+    enabled: !!id && !!name,
+    retry: false,
+  });
   const masterById = useMemo(() => Object.fromEntries(masters.map((m) => [m.id, m])), [masters]);
   const projectById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
 
@@ -162,6 +175,11 @@ export default function ClientKarte() {
           return { id: cs.id, number: cs.period, date: fmtDate(cs.sheet_date || cs.last_entry_date), title: cs.title || cs.sheet_title || "（件名なし）", total: cs.sell_total, sub: [`仕入 ${yen(cs.cost_total)}`, margin, (cs.authors || []).join("・")].filter(Boolean).join("　"), badge: { label: st.label, cls: st.color }, raw: cs };
         });
     }
+    if (tab === "printOrders") {
+      return printOrders
+        .filter((o) => has(o.name, o.vendor, o.memo, o.estimate_number, o.source_url))
+        .map((o) => ({ id: o.id, number: o.estimate_number || "", date: fmtDate(o.ordered_on), title: o.name || "（品名なし）", total: o.amount, sub: [o.quantity != null ? `${Number(o.quantity).toLocaleString()}${o.unit || ""}` : "", o.vendor].filter(Boolean).join("　"), badge: { label: "入稿", cls: "bg-teal-50 text-teal-800" }, raw: o }));
+    }
     if (tab === "meetings") {
       return meetings
         .filter((m) => has(m.title, m.summary?.overview))
@@ -170,7 +188,7 @@ export default function ClientKarte() {
     return deliveryNotes
       .filter((n) => has(n.delivery_number, n.title))
       .map((n) => ({ id: n.id, number: n.delivery_number, date: fmtDate(n.delivery_date), title: n.title || "（件名なし）", total: n.total, sub: "", badge: DELIVERY_STATUS_MAP[n.status] ? { label: DELIVERY_STATUS_MAP[n.status].label, cls: DELIVERY_STATUS_MAP[n.status].color } : null, raw: n }));
-  }, [tab, search, estimates, projects, invoices, deliveryNotes, meetings, costSheets]);
+  }, [tab, search, estimates, projects, invoices, deliveryNotes, meetings, costSheets, printOrders]);
 
   useEffect(() => {
     if (list.length === 0) { setSelectedId(null); return; }
@@ -236,7 +254,7 @@ export default function ClientKarte() {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  const counts = { estimates: estimates.length, costSheets: costSheets.length, projects: projects.length, invoices: invoices.length, deliveryNotes: deliveryNotes.length, meetings: meetings.length };
+  const counts = { printOrders: printOrders.length, estimates: estimates.length, costSheets: costSheets.length, projects: projects.length, invoices: invoices.length, deliveryNotes: deliveryNotes.length, meetings: meetings.length };
 
   return (
     <div className="max-w-7xl mx-auto space-y-3">
@@ -325,7 +343,7 @@ export default function ClientKarte() {
           </div>
           <div className="overflow-y-auto flex-1">
             {list.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-10 px-3">{search ? "該当がありません" : tab === "costSheets" ? "まだありません。システム設定の「原価計算表（社内見積）の取り込み」で、このクライアントの原価計算表を取り込むとここに並びます" : "まだありません"}</p>
+              <p className="text-xs text-muted-foreground text-center py-10 px-3">{search ? "該当がありません" : tab === "printOrders" ? "まだ入稿記録がありません。見積書の明細の「入稿した」から記録できます" : tab === "costSheets" ? "まだありません。システム設定の「原価計算表（社内見積）の取り込み」で、このクライアントの原価計算表を取り込むとここに並びます" : "まだありません"}</p>
             ) : list.map((row) => {
               const on = row.id === selectedId;
               return (
@@ -356,6 +374,11 @@ export default function ClientKarte() {
             <CostSheetPane sheet={current.raw} clientName={client.name} />
           ) : tab === "meetings" ? (
             <MeetingPane meeting={current.raw} />
+          ) : tab === "printOrders" ? (
+            <div className="p-4 overflow-y-auto">
+              <p className="text-sm font-bold mb-2">入稿記録</p>
+              <PrintOrderHistory where={{ id: current.raw.id }} />
+            </div>
           ) : (
             <SimplePane tab={tab} row={current} />
           )}

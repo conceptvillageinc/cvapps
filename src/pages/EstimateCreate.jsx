@@ -22,6 +22,7 @@ import { format } from "date-fns";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { conditionsToEstimate } from "@/lib/meetingConditions";
 import { draftToLineItems, draftAmount, draftCost } from "@/lib/meetingChat";
+import { lineFromOrder } from "@/lib/printOrders";
 
 export default function EstimateCreate() {
   const navigate = useNavigate();
@@ -50,6 +51,7 @@ export default function EstimateCreate() {
   // 選んだ明細だけ複製するとき（カルテの「選択した明細を複製」）
   const copyLineIds = searchParams.get("lines");
   const chatId = searchParams.get("chat"); // 議事録の「AI に依頼」の見積のたたき台から
+  const reorderId = searchParams.get("reorder"); // 入稿履歴の「この内容で追加印刷の見積を作る」から
   const { data: copyFrom } = useQuery({
     queryKey: ["estimate", copyFromId],
     queryFn: () => db.entities.Estimate.get(copyFromId),
@@ -194,6 +196,30 @@ export default function EstimateCreate() {
   }, [copyFrom, copyIds, copySource]);
 
   // 右の「引き継ぐ明細」パネルに出す内容
+  // 追加印刷: 入稿記録の明細を引き継ぐ（左の「引き継ぐ明細」で外せる）
+  const { data: reorder } = useQuery({ queryKey: ["printOrder", reorderId], queryFn: () => db.entities.PrintOrder.get(reorderId), enabled: !!reorderId, retry: false });
+  const reorderLine = useMemo(() => (reorder ? lineFromOrder(reorder) : null), [reorder]);
+  const [reorderOn, setReorderOn] = useState(null); // Set<"r">
+  useEffect(() => {
+    if (!reorder || reorderOn) return;
+    setReorderOn(new Set(["r"]));
+    setFormData((prev) => ({ ...prev, client_name: prev.client_name || reorder.client_name || "", estimate_title: prev.estimate_title || `${reorder.name}（追加印刷）` }));
+  }, [reorder]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!reorderLine || !reorderOn) return;
+    const items = reorderOn.has("r") ? [reorderLine] : [];
+    setFormData((prev) => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items).total }));
+  }, [reorderLine, reorderOn]);
+
+  // このクライアントの前回の入稿（引き継ぐ明細が無いときに出す）
+  const { data: clientOrders = [] } = useQuery({
+    queryKey: ["printOrders", "recent", formData.client_name],
+    queryFn: () => db.entities.PrintOrder.filter({ client_name: formData.client_name }, "-ordered_on", 3),
+    enabled: !!formData.client_name && !reorderId,
+    retry: false,
+  });
+  const recentOrders = reorderId ? [] : clientOrders;
+
   const carry = useMemo(() => {
     const toggleIn = (setter) => (key) => setter((prev) => { const t = new Set(prev || []); if (t.has(key)) t.delete(key); else t.add(key); return t; });
     if (costSheet && costRows) {
@@ -206,6 +232,14 @@ export default function EstimateCreate() {
         title: `社内見積「${costSheet.title}」`, subtitle: [costSheet.period, st, (costSheet.authors || []).join("・")].filter(Boolean).join("・"),
         linkTo: costSheet.client_id ? `/clients/${costSheet.client_id}` : null, linkLabel: "クライアントカルテで開く",
         rows, selected: costRows, onToggle: toggleIn(setCostRows), onSetAll: (keys) => setCostRows(new Set(keys)), defaultKeys: defaultSelectedRows(costSheet), taxInclusive: false,
+      };
+    }
+    if (reorder && reorderLine && reorderOn) {
+      return {
+        title: `前回の入稿「${reorder.name}」`, subtitle: [`入稿 ${String(reorder.ordered_on).replace(/-/g, "/")}`, reorder.vendor, reorder.estimate_number ? `見積 ${reorder.estimate_number}` : ""].filter(Boolean).join("・"),
+        linkTo: reorder.estimate_id ? `/estimates/${reorder.estimate_id}` : null, linkLabel: "前回の見積を開く",
+        rows: [{ key: "r", label: reorderLine.name, sub: [reorder.source_url ? `入稿先 ${reorder.source_url}` : "", reorder.memo].filter(Boolean).join("・"), qty: reorderLine.quantity, unit: reorderLine.unit, unitPrice: reorderLine.unit_price, amount: reorderLine.amount, cost: reorderLine.cost_price != null ? reorderLine.cost_price * reorderLine.quantity : null }],
+        selected: reorderOn, onToggle: toggleIn(setReorderOn), onSetAll: (keys) => setReorderOn(new Set(keys)), defaultKeys: ["r"], taxInclusive: false,
       };
     }
     if (chatDraft && chatKeys) {
@@ -233,7 +267,7 @@ export default function EstimateCreate() {
       };
     }
     return null;
-  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds, chatDraft, chatKeys, chatMsg, meeting]);
+  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds, chatDraft, chatKeys, chatMsg, meeting, reorder, reorderLine, reorderOn]);
 
   const handleSave = async () => {
     if (!project) {
@@ -304,6 +338,23 @@ export default function EstimateCreate() {
                   ? <>議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の「AI に依頼」で作った見積のたたき台から作ります。要確認の行は作成後に確かめてください</>
                   : <>議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の見積条件から作ります。印刷物は印刷仕様に、制作・開発は明細に入ります</>}
               </p>
+            )}
+            {reorder && (
+              <p className="text-xs text-teal-800 bg-teal-50 border border-teal-200 rounded-md px-3 py-1.5 mt-1 inline-block">
+                {String(reorder.ordered_on).replace(/-/g, "/")} に入稿した「{reorder.name}」の追加印刷として作ります。前回からの価格の変化は、作成後の「印刷費・仕入の価格確認」で確かめられます
+              </p>
+            )}
+            {!carry && recentOrders.length > 0 && (
+              <div className="mt-2 rounded-md border border-teal-200 bg-teal-50/50 px-3 py-2 text-xs space-y-1" data-testid="recent-orders">
+                <p className="font-semibold text-teal-900">このクライアントの前回の入稿（追加印刷ならここから引き継げます）</p>
+                {recentOrders.map((o) => (
+                  <div key={o.id} className="flex items-center gap-2">
+                    <span className="tabular-nums text-muted-foreground w-20 shrink-0">{String(o.ordered_on).replace(/-/g, "/")}</span>
+                    <span className="truncate flex-1">{o.name}{o.quantity != null ? `　${Number(o.quantity).toLocaleString()}${o.unit || ""}` : ""}</span>
+                    <Link to={`/estimates/new?reorder=${o.id}&client=${encodeURIComponent(o.client_name || "")}${o.project_id ? `&project=${o.project_id}` : ""}`} className="shrink-0 text-teal-800 font-semibold hover:underline">引き継ぐ</Link>
+                  </div>
+                ))}
+              </div>
             )}
             {copyFrom && (
               <p className="text-xs text-primary mt-1">見積 {copyFrom.estimate_number}「{copyFrom.estimate_title || copyFrom.print_type || ""}」の{copyLineIds ? "選んだ明細" : "件名・仕様・明細・備考"}を複製して作ります（作成後に見積書画面で直せます）</p>

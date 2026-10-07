@@ -42,6 +42,7 @@ const TABLES = {
   FiscalTarget: 'fiscal_targets',
   CostSheet: 'cost_sheets',
   MeetingChatMessage: 'meeting_chat_messages',
+  PrintOrder: 'print_orders',
   ProjectTask: 'project_tasks',
 };
 
@@ -60,6 +61,11 @@ const WRITABLE_COLUMNS = {
     'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',
     'payee_normalized', 'balance', 'source_hash', 'match_status', 'invoice_id', 'matched_by',
     'memo', 'imported_by', 'scope',
+  ],
+  print_orders: [
+    'estimate_id', 'estimate_number', 'estimate_line_id', 'project_id', 'client_id', 'client_name', 'ordered_on',
+    'name', 'category', 'quantity', 'unit', 'unit_price', 'amount', 'cost_price', 'vendor', 'source_url',
+    'screenshot_path', 'memo', 'created_by', 'created_by_name',
   ],
   cost_sheets: [
     'client_id', 'client_name', 'period', 'title', 'status', 'sheet_date', 'spreadsheet_id', 'sheet_gid', 'sheet_title', 'file_title',

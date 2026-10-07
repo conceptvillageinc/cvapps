@@ -25,6 +25,8 @@ import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
 import { formatPostalCode } from "@/lib/postalCode";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import PrintOrderSuggestDialog from "@/components/printOrders/PrintOrderSuggestDialog";
+import { isPrintLine, orderFromLine } from "@/lib/printOrders";
 import {
   newDocItem, docItemsFromEstimate, computeDocTotals, generateDocumentNumber,
   companyInfoFromSettings, DELIVERY_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
@@ -70,6 +72,7 @@ export default function DeliveryNoteEdit() {
   const [form, setForm] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
+  const [orderSuggest, setOrderSuggest] = useState(null); // { candidates, then } 納品書を作った直後の「入稿記録にしますか？」
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ["deliveryNote", id],
@@ -168,6 +171,18 @@ export default function DeliveryNoteEdit() {
     toast.success(`${est.estimate_number} の明細を${items.length}行取り込みました`);
   };
 
+  const suggestPrintOrders = async (row) => {
+    if (!row.estimate_id) return [];
+    const est = sourceEstimate?.id === row.estimate_id ? sourceEstimate : await db.entities.Estimate.get(row.estimate_id);
+    const inNote = new Set((row.line_items || []).map((li) => li.source_line_id).filter(Boolean));
+    let done = [];
+    try { done = await db.entities.PrintOrder.filter({ estimate_id: est.id }); } catch { return []; } // 入稿記録の SQL が未実行なら聞かない
+    const recorded = new Set(done.map((o) => o.estimate_line_id));
+    return (est.line_items || [])
+      .filter((li) => inNote.has(li.id) && isPrintLine(li) && !recorded.has(li.id))
+      .map((li) => orderFromLine(est, li, { project, user }));
+  };
+
   const save = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -188,7 +203,13 @@ export default function DeliveryNoteEdit() {
       queryClient.invalidateQueries({ queryKey: ["deliveryNote", row.id] });
       toast.success(isNew ? `納品書 ${row.delivery_number} を作成しました` : "保存しました");
       setForm((f) => ({ ...f, ...row, line_items: row.line_items || f.line_items || [] }));
-      if (isNew) navigate(`/delivery-notes/${row.id}`, { replace: true });
+      if (!isNew) return;
+      const go = () => navigate(`/delivery-notes/${row.id}`, { replace: true });
+      // 見積から作った納品書なら、入った印刷の明細を「入稿記録にしますか？」と聞く（まだ記録していない行だけ）
+      suggestPrintOrders(row).then((candidates) => {
+        if (candidates.length) setOrderSuggest({ candidates, then: go });
+        else go();
+      }).catch(() => go());
     },
     onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
   });
@@ -478,6 +499,7 @@ export default function DeliveryNoteEdit() {
         </Card>
       )}
 
+      <PrintOrderSuggestDialog open={!!orderSuggest} candidates={orderSuggest?.candidates || []} onDone={() => { const then = orderSuggest?.then; setOrderSuggest(null); then?.(); }} />
       {!isNew && (
         <DocumentEmailDialog
           open={mailOpen}

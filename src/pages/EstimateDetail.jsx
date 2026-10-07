@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList, PackageCheck
 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -39,6 +40,7 @@ import { autoChecks } from "@/components/estimates/ReviewStep";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { recomputeSubtotals, recomputeRuleRows, usePricingRules } from "@/lib/pricing";
 import { SUBMISSION_FIELDS } from "@/lib/submission";
+import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -494,6 +496,14 @@ export default function EstimateDetail() {
 
       {/* バージョン・商談ステータス */}
       <RevisionPanel estimate={formData} onUpdate={handleUpdate} project={project} />
+
+      {/* この見積の入稿記録（明細の「入稿した」から） */}
+      {formData.schema_version === 2 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><PackageCheck className="w-4 h-4 text-teal-700" /> 入稿履歴（この見積）</CardTitle></CardHeader>
+          <CardContent><PrintOrderHistory where={{ estimate_id: formData.id }} showEstimate={false} emptyText="まだ入稿記録がありません。明細の社内用の欄にある「入稿した」から記録できます" /></CardContent>
+        </Card>
+      )}
 
       {formData.schema_version === 2 ? (
         <>
