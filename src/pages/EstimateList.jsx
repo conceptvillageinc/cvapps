@@ -339,8 +339,8 @@ export default function EstimateList() {
                           <Checkbox aria-label="選択" checked={picked.has(est.id)} onCheckedChange={() => togglePick(est.id)} />
                         </TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground">
+                          {isLatest && <span className="block font-sans text-[10px] font-semibold text-blue-700 leading-3" title={`改訂版 ${versionCount[gid]} 件のうち最新`}>最新版</span>}
                           {est.estimate_number}
-                          {isLatest && <span className="block font-sans text-[10px] font-semibold text-blue-700" title={`改訂版 ${versionCount[gid]} 件のうち最新`}>最新版</span>}
                         </TableCell>
                         <TableCell className="w-[76px]">
                           <SubmissionBadge estimate={est} className="w-[64px] justify-center" />
