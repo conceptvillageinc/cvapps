@@ -342,7 +342,7 @@ export default function EstimateDetail() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false, "purchase_order")}>発注書の雛形（宛先：CV／発行元：クライアント）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false, "purchase_order")}>発注書雛形の作成サポート（宛先：CV／発行元：クライアント）</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => navigate(`/partner-orders/new?estimate=${estimateId}`)}>連携先への発注書（宛先：連携先／発行元：CV）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
