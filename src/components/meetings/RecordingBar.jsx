@@ -20,7 +20,11 @@ export default function RecordingBar() {
         <span className="tabular-nums">{fmtClock(rec.elapsed)}</span>
       </span>
       <span className="truncate max-w-[40vw] text-white/90">{rec.session.title || "議事録"}</span>
-      <span className="text-[11px] text-white/80">別の画面にいても録音は続いています</span>
+      {recording && rec.silentLong ? (
+        <span className="text-[11px] font-semibold bg-amber-300 text-amber-950 rounded px-1.5 py-0.5" data-testid="recording-bar-silent">1 分以上、音を拾えていません。打ち合わせが終わっていたら「録音を終える」を押してください</span>
+      ) : (
+        <span className="text-[11px] text-white/80">別の画面にいても録音は続いています</span>
+      )}
       <div className="flex-1" />
       <div className="flex items-center gap-1.5">
         {rec.state === "finishing" ? (

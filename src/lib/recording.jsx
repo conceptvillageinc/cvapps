@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { toast } from "sonner";
+import { recordingLimits } from "@/lib/meetings";
+import RecordingGuardPrompt from "@/components/meetings/RecordingGuardPrompt";
 
 // ============================================================================
 // 議事録の録音をアプリ全体で持つ。
@@ -13,6 +15,9 @@ import { toast } from "sonner";
 //   - 画面ロック防止（Wake Lock）
 //   - 「録音を終える」で最後の断片を保存し、議事録を「処理待ち（uploaded）」にして
 //     その議事録の画面へ移る
+//   - 止め忘れ対策: 無音が続いたとき・録音時間の上限に達したときに「録音を続けますか？」を
+//     どの画面にいても出し、応答が無ければ自動で録音を終える（無音で終えたときは、
+//     無音になってからの断片を保存しない）。時間はシステム設定 meeting_recording_limits
 // ============================================================================
 
 const SEGMENT_SEC = 5 * 60;
@@ -45,6 +50,7 @@ export function RecordingProvider({ children }) {
   const [segments, setSegments] = useState([]); // { seq, status: uploading|done|error, sec }
   const [error, setError] = useState(null);
   const [wakeLocked, setWakeLocked] = useState(false);
+  const [guard, setGuard] = useState(null); // 止め忘れの確認 { reason: 'silence'|'limit', deadline, silentMin, limitLabel }
 
   // 録音の実体
   const sessionRef = useRef(null);
@@ -67,6 +73,15 @@ export function RecordingProvider({ children }) {
   const onFinishRef = useRef(null);
   const stateRef = useRef("idle");
   const heartbeatRef = useRef(null);
+  // 止め忘れ対策
+  const limitsRef = useRef(recordingLimits([]));
+  const maxSecRef = useRef(0);
+  const guardRef = useRef(null);
+  const lastLoudElapsedRef = useRef(0); // 最後に音を拾ったときの録音経過秒
+  const discardFromRef = useRef(null); // この経過秒より後に始まった断片は保存しない（無音で自動終了したとき）
+  const keptRef = useRef([]); // 保存した断片 { seq, from, sec, id, path }
+  const autoReasonRef = useRef(null);
+  const titleRef = useRef({ original: null, timer: null });
 
   // 録音中の合図: 1 分ごとに meetings.recording_heartbeat_at を更新する（一覧の「レコーディング中」の帯に使う）
   const beat = async () => {
@@ -113,20 +128,81 @@ export function RecordingProvider({ children }) {
       lastTickRef.current = now;
       setElapsed(elapsedRef.current);
       if (elapsedRef.current - segStartRef.current >= SEGMENT_SEC && recRef.current?.state === "recording") rotate();
+      // 画面が裏にあると meter（requestAnimationFrame）が止まるので、音の有無はここでも見る
+      sampleLevel();
+      checkGuards();
     }, 500);
   };
 
-  const meter = () => {
+  // ---- 止め忘れ対策 -------------------------------------------------------
+  const flashTitle = (on) => {
+    const t = titleRef.current;
+    clearInterval(t.timer);
+    if (on) {
+      if (t.original == null) t.original = document.title;
+      let flip = false;
+      t.timer = setInterval(() => { flip = !flip; document.title = flip ? "⚠ 録音を続けますか？" : t.original; }, 1000);
+    } else if (t.original != null) {
+      document.title = t.original;
+      t.original = null;
+    }
+  };
+  const openGuard = (reason) => {
+    const lim = limitsRef.current;
+    const g = { reason, deadline: Date.now() + lim.confirm_min * 60000, silentMin: lim.idle_min, limitLabel: maxSecRef.current >= 3600 ? `${Math.round((maxSecRef.current / 3600) * 10) / 10} 時間` : `${Math.round(maxSecRef.current / 60)} 分` };
+    guardRef.current = g;
+    setGuard(g);
+    flashTitle(true);
+    try { navigator.vibrate?.([300, 150, 300, 150, 300]); } catch { /* 対応していない端末 */ }
+  };
+  const closeGuard = () => { guardRef.current = null; setGuard(null); flashTitle(false); };
+  const checkGuards = () => {
+    if (stateRef.current !== "recording" || finishingRef.current) return;
+    const now = Date.now();
+    const lim = limitsRef.current;
+    const g = guardRef.current;
+    if (g) {
+      // 無音の確認中に話し声が戻ったら、打ち合わせが続いているとみなして閉じる
+      if (g.reason === "silence" && now - lastLoudRef.current < 3000) { closeGuard(); return; }
+      if (now >= g.deadline) autoFinish(g.reason);
+      return;
+    }
+    if (now - lastLoudRef.current >= lim.idle_min * 60000) openGuard("silence");
+    else if (elapsedRef.current >= maxSecRef.current) openGuard("limit");
+  };
+  const continueRecording = () => {
+    const g = guardRef.current;
+    if (!g) return;
+    if (g.reason === "limit") maxSecRef.current = elapsedRef.current + 3600; // 1 時間延ばす
+    lastLoudRef.current = Date.now(); // 無音の数え直し
+    closeGuard();
+  };
+  const autoFinish = (reason) => {
+    autoReasonRef.current = reason;
+    // 無音で終えるときは、無音になってから 30 秒より後に始まった断片を保存しない
+    if (reason === "silence") discardFromRef.current = lastLoudElapsedRef.current + 30;
+    closeGuard();
+    finishRef.current?.();
+  };
+
+  /** マイクの音量を測り、音を拾っていれば「最後に音を拾った時刻」を更新する */
+  const sampleLevel = () => {
     const a = analyserRef.current;
-    if (!a) return;
+    if (!a) return 0;
     const buf = new Uint8Array(a.fftSize);
     a.getByteTimeDomainData(buf);
     let sum = 0;
     for (const v of buf) { const d = (v - 128) / 128; sum += d * d; }
     const lv = Math.min(1, Math.sqrt(sum / buf.length) * 4);
+    if (lv > 0.02 && stateRef.current === "recording") { lastLoudRef.current = Date.now(); lastLoudElapsedRef.current = elapsedRef.current; }
+    return lv;
+  };
+
+  const meter = () => {
+    if (!analyserRef.current) return;
+    const lv = sampleLevel();
     setLevel(lv);
     const now = Date.now();
-    if (lv > 0.02) lastLoudRef.current = now;
     const isQuiet = now - lastLoudRef.current > 10000;
     setQuiet((prev) => (prev === isQuiet ? prev : isQuiet));
     const isLong = now - lastLoudRef.current > 60000;
@@ -139,7 +215,7 @@ export function RecordingProvider({ children }) {
     rafRef.current = requestAnimationFrame(meter);
   };
 
-  const upload = async (seq, blob, sec) => {
+  const upload = async (seq, blob, sec, from = 0) => {
     const meetingId = sessionRef.current?.meetingId;
     setSegments((s) => [...s, { seq, status: "uploading", sec }]);
     const ext = extOf(blob.type || mimeRef.current);
@@ -148,7 +224,8 @@ export function RecordingProvider({ children }) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await db.integrations.Core.UploadFile({ file, path });
-        await db.entities.MeetingSegment.create({ meeting_id: meetingId, seq, storage_path: path, mime_type: file.type, duration_sec: Math.round(sec * 10) / 10, size: blob.size });
+        const row = await db.entities.MeetingSegment.create({ meeting_id: meetingId, seq, storage_path: path, mime_type: file.type, duration_sec: Math.round(sec * 10) / 10, size: blob.size });
+        keptRef.current.push({ seq, from, sec, id: row?.id, path });
         setSegments((s) => s.map((x) => (x.seq === seq ? { ...x, status: "done" } : x)));
         queryClient.invalidateQueries({ queryKey: ["meetingSegments", meetingId] });
         return;
@@ -172,7 +249,9 @@ export function RecordingProvider({ children }) {
     rec.onstop = () => {
       const sec = Math.max(0, elapsedRef.current - from);
       const blob = new Blob(chunks, { type: rec.mimeType || mimeRef.current || "audio/webm" });
-      if (blob.size > 0) uploadsRef.current.push(upload(seq, blob, sec));
+      // 無音で自動終了したとき、無音になってから始まった断片は保存しない
+      const discard = discardFromRef.current != null && from >= discardFromRef.current;
+      if (blob.size > 0 && !discard) uploadsRef.current.push(upload(seq, blob, sec, from));
       if (finishingRef.current) finalize();
     };
     rec.start(1000);
@@ -223,6 +302,16 @@ export function RecordingProvider({ children }) {
       setSegments([]);
       uploadsRef.current = [];
       finishingRef.current = false;
+      keptRef.current = [];
+      discardFromRef.current = null;
+      autoReasonRef.current = null;
+      lastLoudElapsedRef.current = 0;
+      // 止め忘れ対策の時間（システム設定。読めなければ既定値）
+      let settingsList = queryClient.getQueryData(["settings"]);
+      if (!settingsList) { try { settingsList = await db.entities.SystemSettings.list(); } catch { settingsList = []; } }
+      limitsRef.current = recordingLimits(settingsList);
+      maxSecRef.current = limitsRef.current.max_hours * 3600;
+      closeGuard();
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       ctxRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
@@ -248,12 +337,14 @@ export function RecordingProvider({ children }) {
   }, [requestWakeLock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pause = useCallback(() => {
+    closeGuard();
     try { recRef.current?.pause(); } catch { /* noop */ }
     clearInterval(tickRef.current);
     setStateBoth("paused");
   }, []);
 
   const resume = useCallback(() => {
+    lastLoudRef.current = Date.now(); // 一時停止していた時間は無音に数えない
     try { recRef.current?.resume(); } catch { /* noop */ }
     startTicker();
     setStateBoth("recording");
@@ -261,6 +352,7 @@ export function RecordingProvider({ children }) {
 
   const finish = useCallback(() => {
     if (!sessionRef.current || finishingRef.current) return;
+    closeGuard();
     finishingRef.current = true;
     setStateBoth("finishing");
     clearInterval(tickRef.current);
@@ -269,12 +361,26 @@ export function RecordingProvider({ children }) {
       recRef.current?.stop();
     } catch { finalize(); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const finishRef = useRef(null);
+  finishRef.current = finish;
 
   const finalize = async () => {
     const s = sessionRef.current;
     releaseHardware();
     await Promise.all(uploadsRef.current);
-    const totalSec = elapsedRef.current;
+    let totalSec = elapsedRef.current;
+    const auto = autoReasonRef.current;
+    if (discardFromRef.current != null) {
+      // 無音で自動終了: 無音になってから始まった断片（すでに保存した分も）を消し、録音時間をそこまでにする
+      const cut = discardFromRef.current;
+      const drop = keptRef.current.filter((k) => k.from >= cut);
+      for (const k of drop) {
+        try { if (k.id) await db.entities.MeetingSegment.delete(k.id); } catch { /* 残っても処理はできる */ }
+      }
+      if (drop.length) db.storage.remove(drop.map((k) => k.path)).catch(() => {});
+      const kept = keptRef.current.filter((k) => k.from < cut);
+      totalSec = kept.length ? Math.max(...kept.map((k) => k.from + k.sec)) : totalSec;
+    }
     stopHeartbeat();
     try {
       await db.entities.Meeting.update(s.meetingId, { status: "uploaded", audio_duration_sec: Math.round((Number(s.baseDuration) || 0) + totalSec), recording_heartbeat_at: null });
@@ -294,6 +400,10 @@ export function RecordingProvider({ children }) {
     // 議事録の画面に移って処理を始める（その画面にいればそのまま）
     const target = `/meetings/${s.meetingId}`;
     if (locationRef.current.pathname !== target) navigate(target);
+    if (auto === "silence") toast.warning(`無音が ${limitsRef.current.idle_min} 分続き、応答が無かったため録音を自動で終えました。無音になってからの部分は保存していません`, { duration: 30000 });
+    if (auto === "limit") toast.warning(`録音時間の上限に達し、応答が無かったため録音を自動で終えました`, { duration: 30000 });
+    autoReasonRef.current = null;
+    discardFromRef.current = null;
   };
 
   const value = useMemo(() => ({
@@ -301,7 +411,12 @@ export function RecordingProvider({ children }) {
     start, pause, resume, finish, clearError: () => setError(null),
   }), [session, state, elapsed, level, quiet, silentLong, segments, error, wakeLocked, start, pause, resume, finish]);
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {guard && <RecordingGuardPrompt guard={guard} title={session?.title} elapsed={elapsed} onContinue={continueRecording} onFinish={() => finishRef.current?.()} />}
+    </Ctx.Provider>
+  );
 }
 
 export function useRecording() {

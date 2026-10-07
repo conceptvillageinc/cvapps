@@ -26,6 +26,25 @@ export const MEETING_STATUS = {
 
 export const PROCESSING = new Set(["uploaded", "transcribing", "summarizing"]);
 
+/**
+ * 録音の止め忘れ対策（システム設定 meeting_recording_limits）
+ *   idle_min     無音がこの分数続いたら「録音を続けますか？」を出す
+ *   confirm_min  確認を出してから、この分数応答が無ければ自動で録音を終える
+ *   max_hours    録音時間の上限（達したら同じ確認を出す。「続ける」で 1 時間延ばす）
+ */
+export const DEFAULT_RECORDING_LIMITS = { idle_min: 10, confirm_min: 2, max_hours: 3 };
+export function recordingLimits(settings) {
+  const row = (settings || []).find((s) => s.setting_key === "meeting_recording_limits");
+  let v = {};
+  try { v = row ? JSON.parse(row.setting_value) || {} : {}; } catch { v = {}; }
+  const pos = (x, d) => (Number(x) > 0 ? Number(x) : d);
+  return {
+    idle_min: pos(v.idle_min, DEFAULT_RECORDING_LIMITS.idle_min),
+    confirm_min: pos(v.confirm_min, DEFAULT_RECORDING_LIMITS.confirm_min),
+    max_hours: pos(v.max_hours, DEFAULT_RECORDING_LIMITS.max_hours),
+  };
+}
+
 /** 打ち合わせの種類と音声の保存日数（システム設定から） */
 export function useMeetingSettings() {
   const { settings } = useSystemSettings();
@@ -38,7 +57,7 @@ export function useMeetingSettings() {
     } catch { /* 既定のまま */ }
     const r = settings.find((s) => s.setting_key === "meeting_audio_retention_days");
     const retentionDays = r && Number(r.setting_value) > 0 ? Number(r.setting_value) : 30;
-    return { types, retentionDays, typeLabel: (key) => types.find((x) => x.key === key)?.label || key || "" };
+    return { types, retentionDays, recording: recordingLimits(settings), typeLabel: (key) => types.find((x) => x.key === key)?.label || key || "" };
   }, [settings]);
 }
 

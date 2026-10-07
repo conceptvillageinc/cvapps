@@ -14,11 +14,13 @@ import { toast } from "sonner";
  */
 export default function MeetingSettingsCard({ settings, upsertSetting }) {
   const queryClient = useQueryClient();
-  const { types, retentionDays } = useMeetingSettings();
+  const { types, retentionDays, recording } = useMeetingSettings();
   const [selectedType, setSelectedType] = useState(types[0]?.key || "spec");
   const [newType, setNewType] = useState("");
   const [newItem, setNewItem] = useState("");
   const [days, setDays] = useState(String(retentionDays));
+  const [limits, setLimits] = useState({ idle_min: String(recording.idle_min), confirm_min: String(recording.confirm_min), max_hours: String(recording.max_hours) });
+  const limitsChanged = ["idle_min", "confirm_min", "max_hours"].some((k) => String(recording[k]) !== limits[k]);
 
   const { data: checklist = [] } = useQuery({ queryKey: ["meetingChecklists"], queryFn: () => db.entities.MeetingChecklist.list("sort_order") });
   const items = checklist.filter((c) => c.meeting_type === selectedType).sort((a, b) => a.sort_order - b.sort_order);
@@ -48,6 +50,15 @@ export default function MeetingSettingsCard({ settings, upsertSetting }) {
     catch (e) { toast.error("保存できませんでした: " + e.message); }
   };
 
+  const saveLimits = async () => {
+    const v = { idle_min: Number(limits.idle_min), confirm_min: Number(limits.confirm_min), max_hours: Number(limits.max_hours) };
+    if (!(v.idle_min >= 1 && v.idle_min <= 120)) { toast.error("無音の時間は 1〜120 分で入れてください"); return; }
+    if (!(v.confirm_min >= 1 && v.confirm_min <= 30)) { toast.error("応答を待つ時間は 1〜30 分で入れてください"); return; }
+    if (!(v.max_hours >= 0.5 && v.max_hours <= 12)) { toast.error("録音時間の上限は 0.5〜12 時間で入れてください"); return; }
+    try { await upsertSetting(settings, "meeting_recording_limits", JSON.stringify(v), "議事録: 録音の止め忘れ対策"); refresh(); toast.success("保存しました（次に録音を始めたときから使います）"); }
+    catch (e) { toast.error("保存できませんでした: " + e.message); }
+  };
+
   const itemMutation = useMutation({
     mutationFn: async (op) => {
       if (op.type === "add") return db.entities.MeetingChecklist.create({ meeting_type: selectedType, key: `c_${Date.now().toString(36)}`, label: op.label, sort_order: (items[items.length - 1]?.sort_order || 0) + 10, is_active: true });
@@ -70,7 +81,7 @@ export default function MeetingSettingsCard({ settings, upsertSetting }) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2"><Mic className="w-4 h-4" /> 議事録</CardTitle>
-        <CardDescription className="text-xs">打ち合わせの種類と、種類ごとに AI が「確認できたか」を判定する項目。音声の保存日数</CardDescription>
+        <CardDescription className="text-xs">打ち合わせの種類と、種類ごとに AI が「確認できたか」を判定する項目。音声の保存日数と、録音の止め忘れ対策</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <section className="space-y-2">
@@ -80,6 +91,21 @@ export default function MeetingSettingsCard({ settings, upsertSetting }) {
             <span className="text-xs text-muted-foreground">日（過ぎたら音声だけ削除。文字起こしと議事録は残ります）</span>
             <Button size="sm" variant="outline" className="text-xs" onClick={saveDays} disabled={String(retentionDays) === days}>保存</Button>
           </div>
+        </section>
+
+        <section className="space-y-2" data-testid="recording-limits">
+          <Label className="text-xs font-semibold">録音の止め忘れ対策</Label>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
+            <span>無音が</span>
+            <Input type="number" min="1" max="120" value={limits.idle_min} onChange={(e) => setLimits({ ...limits, idle_min: e.target.value })} className="h-8 w-16 text-xs" aria-label="無音の時間（分）" />
+            <span>分続いたとき、または録音が</span>
+            <Input type="number" min="0.5" max="12" step="0.5" value={limits.max_hours} onChange={(e) => setLimits({ ...limits, max_hours: e.target.value })} className="h-8 w-16 text-xs" aria-label="録音時間の上限（時間）" />
+            <span>時間に達したときに「録音を続けますか？」を出し、</span>
+            <Input type="number" min="1" max="30" value={limits.confirm_min} onChange={(e) => setLimits({ ...limits, confirm_min: e.target.value })} className="h-8 w-16 text-xs" aria-label="応答を待つ時間（分）" />
+            <span>分応答が無ければ自動で録音を終える</span>
+            <Button size="sm" variant="outline" className="text-xs h-8" onClick={saveLimits} disabled={!limitsChanged}>保存</Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">無音で自動で終えたときは、無音になってからの部分は保存しません（文字起こしの時間と利用料がかかりません）。上限のときは「1 時間延ばして続ける」を選べます</p>
         </section>
 
         <section className="space-y-2">
