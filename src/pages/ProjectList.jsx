@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat, Filter } from "lucide-react";
+import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat, Filter, X } from "lucide-react";
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
@@ -26,6 +26,27 @@ const VIEWS = [
 
 // 案件一覧（標準）の最初の状態の絞り込み: 進行中・完了（失注・取消は隠す）
 const DEFAULT_STATUS_FILTER = [PROJECT_STATUS_MAP.open.label, PROJECT_STATUS_MAP.completed.label];
+// 並び順の言い方（日付は新しい順／古い順、金額は大きい順／小さい順、文字は昇順／降順）
+const DATE_KEYS = ["registered_at", "due_date", "payment_due_date"];
+const AMOUNT_KEYS = ["expected_revenue", "expected_gross_profit"];
+function sortWord({ key, direction }) {
+  const desc = direction === "desc";
+  if (DATE_KEYS.includes(key)) return desc ? "新しい順" : "古い順";
+  if (AMOUNT_KEYS.includes(key)) return desc ? "大きい順" : "小さい順";
+  return desc ? "降順" : "昇順";
+}
+
+/** 条件の小さな札（ラベル＋値。onClear があれば × で外せる） */
+function CondChip({ label, value, title, onClear }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded border bg-white px-1.5 leading-5 text-foreground/80" title={title}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground max-w-[260px] truncate">{value}</span>
+      {onClear && <button type="button" onClick={onClear} className="text-muted-foreground hover:text-foreground" aria-label={`${label}の条件を外す`}><X className="w-3 h-3" /></button>}
+    </span>
+  );
+}
+
 const sameSet = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
 
 export default function ProjectList() {
@@ -215,7 +236,7 @@ export default function ProjectList() {
                 : `${filtered.length}件 / ${fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)} ${projects.length}件`}
             {view === "standard" && activeFilterCount > 0 && (
               <button onClick={() => setColumnFilters({})} className="ml-2 text-primary hover:underline">
-                列フィルターをすべて解除（{activeFilterCount}件適用中）
+                列フィルターをすべて解除
               </button>
             )}
           </p>
@@ -268,23 +289,24 @@ export default function ProjectList() {
       </div>
 
       {view === "standard" && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950 shrink-0" data-testid="status-filter-note">
-          <Filter className="w-3.5 h-3.5 text-sky-700" />
-          {columnFilters.status ? (
-            <>
-              <span>状態：<b>{columnFilters.status.join("・") || "（なし）"}</b> の案件を表示中</span>
-              {hiddenByStatus.length > 0 && (
-                <span className="text-sky-800/80">（非表示：{hiddenByStatus.map(([label, n]) => `${label} ${n}件`).join("・")}）</span>
-              )}
-              <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>
-              {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">進行中・完了に戻す</button>}
-            </>
-          ) : (
-            <>
-              <span>状態：<b>すべて</b>（失注・取消も含む）を表示中</span>
-              <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">進行中・完了に戻す</button>
-            </>
-          )}
+        // 今の条件（期・検索・列の絞り込み・並び順）を 1 行で。色は付けず、× で個別に外せる
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground shrink-0 -mt-2" data-testid="list-conditions">
+          <Filter className="w-3.5 h-3.5" />
+          <span>{fiscalYear === ALL_YEARS ? "すべての期" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}</span>
+          {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={() => setSearch("")} />}
+          {FILTERABLE_KEYS.map((key) => {
+            const v = columnFilters[key];
+            if (key === "status" && !v) return <CondChip key={key} label="状態" value="すべて" />;
+            if (!v) return null;
+            const shown = v.length > 3 ? `${v.slice(0, 3).join("・")} ほか${v.length - 3}` : v.join("・") || "（なし）";
+            return <CondChip key={key} label={columnDefs[key].label} value={shown} title={v.join("・")} onClear={() => setColumnFilter(key, null)} />;
+          })}
+          {hiddenByStatus.length > 0 && <span>（非表示：{hiddenByStatus.map(([label, n]) => `${label} ${n}件`).join("・")}）</span>}
+          {sortConfig && <CondChip label="並び順" value={`${columnDefs[sortConfig.key]?.label || sortConfig.key}（${sortWord(sortConfig)}）`} />}
+          <span className="ml-1 flex items-center gap-2">
+            {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">状態を進行中・完了に戻す</button>}
+            {columnFilters.status && <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>}
+          </span>
         </div>
       )}
 
