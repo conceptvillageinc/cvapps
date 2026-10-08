@@ -22,6 +22,7 @@ const navItems = [
   { path: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { path: "/meetings", label: "議事録", icon: Mic },
   { path: "/projects", label: "案件一覧", icon: FolderKanban },
+  { path: "/clients", label: "クライアント一覧", icon: UserSquare },
   { path: "/estimates/new", label: "新規見積作成", icon: Plus },
   { path: "/estimates", label: "見積一覧", icon: FileText },
   { path: "/history", label: "提出見積履歴", icon: History },
@@ -39,7 +40,6 @@ const navItems = [
 ];
 
 const adminItems = [
-  { path: "/clients", label: "クライアント一覧", icon: UserSquare },
   { path: "/vendors", label: "印刷所情報", icon: Building2 },
   { path: "/print-types", label: "印刷種別マスタ", icon: Printer },
   { path: "/price-master", label: "価格マスタ", icon: Tag },
