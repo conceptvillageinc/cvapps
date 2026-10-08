@@ -3,6 +3,7 @@ import { Eye } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { formatPostalCode } from "@/lib/postalCode";
+import { toHalfWidth } from "@/lib/halfWidth";
 
 // ============================================================================
 // 納品書・請求書の画面のプレビュー（編集中の内容をそのまま反映する）
@@ -50,7 +51,8 @@ const unitPrice = (p) => { const n = Number(p) || 0; return Number.isInteger(n) 
 const qty = (q) => { const n = Number(q); if (!Number.isFinite(n)) return ""; return Number.isInteger(n) ? n.toLocaleString("ja-JP") : String(n); };
 const dateOf = (d) => (d ? String(d).slice(0, 10) : "");
 
-const Head = ({ children, className = "" }) => <th className={`bg-black text-white font-normal px-1.5 py-1 ${className}`}>{children}</th>;
+// 黒帯の見出し。列の間に白い線（PDF と同じ）
+const Head = ({ children, className = "" }) => <th className={`bg-black text-white font-normal px-1.5 py-1 border-l border-white first:border-l-0 ${className}`}>{children}</th>;
 
 /**
  * @param {object} p
@@ -81,15 +83,19 @@ export default function DocumentPreview({ type, doc, totals, company }) {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[10px]">{doc.client_postal_code ? formatPostalCode(doc.client_postal_code) : ""}</p>
-            <p className="text-[10px] break-words">{doc.client_address}</p>
+            <p className="text-[10px] break-words">{toHalfWidth(doc.client_address)}</p>
             <p className="text-[15px] mt-1 break-words">{doc.client_name || "（クライアント名未入力）"}　{doc.client_honorific ?? "御中"}</p>
           </div>
-          <div className="text-[10px] text-right sm:text-left shrink-0 max-w-[50%]">
+          <div className="text-[10px] text-left shrink-0 max-w-[50%]">
+            {/* 日付・番号は右上（PDF と同じ） */}
+            <table className="w-full mb-3"><tbody>
+              {meta.map(([k, v]) => <tr key={k}><td className="pr-3 text-neutral-600">{k}</td><td className="text-right">{v}</td></tr>)}
+            </tbody></table>
             <p className="text-[11px]">{company.name}{who ? `　${who}` : ""}</p>
             {(company.locations || []).map((loc, i) => (
               <Fragment key={i}>
                 {loc.label && <p className="text-neutral-700">［{loc.label}］</p>}
-                <p className="text-neutral-700">{formatPostalCode(loc.postal || "")}　{loc.address}</p>
+                <p className="text-neutral-700 whitespace-nowrap">{formatPostalCode(loc.postal || "")}　{toHalfWidth(loc.address)}</p>
               </Fragment>
             ))}
             {(company.tel || company.fax) && <p className="text-neutral-700">{[company.tel ? `tel ${company.tel}` : "", company.fax ? `fax ${company.fax}` : ""].filter(Boolean).join("｜")}</p>}
@@ -98,13 +104,8 @@ export default function DocumentPreview({ type, doc, totals, company }) {
 
         <p className="text-center text-[20px] tracking-[0.2em] pt-2">{isInvoice ? "御請求書" : "納品書"}</p>
 
-        {/* 件名・日付・番号 */}
-        <div className="flex items-end justify-between gap-4">
-          <p className="min-w-0 break-words"><span className="text-neutral-600">件名</span>　{doc.title || "—"}</p>
-          <table className="shrink-0 text-[10px]"><tbody>
-            {meta.map(([k, v]) => <tr key={k}><td className="pr-3 text-neutral-600">{k}</td><td>{v}</td></tr>)}
-          </tbody></table>
-        </div>
+        {/* 件名 */}
+        <p className="min-w-0 break-words"><span className="text-neutral-600">件名</span>　{doc.title || "—"}</p>
 
         {/* 小計・消費税・合計 */}
         <table className="w-full max-w-[60%] border border-neutral-400 text-center">

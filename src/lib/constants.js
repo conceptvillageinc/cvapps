@@ -95,7 +95,7 @@ export const COMPANY_INFO = {
   name: "株式会社コンセプト・ヴィレッジ",
   locations: [
     { label: "福島", postal: "〒963-0117", address: "福島県郡山市安積荒井三丁目497-B号 cv-studio" },
-    { label: "沖縄", postal: "〒900-0033", address: "沖縄県那覇市久米２丁目９－１１ Abc久米ビル 3階" },
+    { label: "沖縄", postal: "〒900-0033", address: "沖縄県那覇市久米2丁目9-11 Abc久米ビル 3階" },
   ],
   tel: "024-905-1295",
   fax: "024-505-4866",

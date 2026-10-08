@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
 import { estimateTotals } from './estimatePdf.js';
+import { toHalfWidth } from '../../src/lib/halfWidth.js';
 
 // ============================================================================
 // 発注書の雛形（A4縦）。見積書の内容から作り、クライアントが CV へ発注するときに使う。
@@ -47,6 +48,8 @@ function drawTableHeader(pdf, y, taxInclusive) {
     const label = taxInclusive && (label0 === '単価' || label0 === '金額') ? `${label0}(税込)` : label0;
     pdf.text(label, x + 4, y + 4, { width: w - 8, align, lineBreak: false });
     x += w;
+    // 見出しの列の間に白い線
+    if (x < MARGIN + CONTENT_W - 1) pdf.save().lineWidth(1).strokeColor('#ffffff').moveTo(x, y).lineTo(x, y + HEAD_H).stroke().restore();
   }
   pdf.fillColor('#000');
   return y + HEAD_H;
@@ -89,7 +92,7 @@ function draw(pdf, { estimate, client, company }) {
   // ---- 宛先 = CV ----
   pdf.font('jp').fontSize(8.5).fillColor('#333');
   const loc = (company.locations || [])[0];
-  if (loc) { pdf.text(`〒${formatPostal(loc.postal)}　${loc.address}`, MARGIN, y, { width: 280 }); y += pdf.heightOfString(`〒${formatPostal(loc.postal)}　${loc.address}`, { width: 280 }) + 3; }
+  if (loc) { const a = `〒${formatPostal(loc.postal)}　${toHalfWidth(loc.address)}`; pdf.text(a, MARGIN, y, { width: 280 }); y += pdf.heightOfString(a, { width: 280 }) + 3; }
   pdf.font('jp-bold').fontSize(13).fillColor('#000');
   const toLine = company.name;
   pdf.text(toLine, MARGIN, y, { width: 280 });
@@ -101,11 +104,20 @@ function draw(pdf, { estimate, client, company }) {
   const rx = 320;
   const rw = PAGE.width - MARGIN - rx;
   let ry = MARGIN;
+  // 日付・番号は右上（どの帳票も同じ位置）
+  const meta = [['発注日', '　　　年　　月　　日'], ['発注書番号', `${estimate.estimate_number || ''}-PO`], ['御見積書番号', estimate.estimate_number || '']];
+  const metaX = 380; const metaValX = 450;
+  pdf.font('jp').fontSize(8.5);
+  meta.forEach(([k, v], i) => {
+    pdf.fillColor('#555').text(k, metaX, ry + i * 12, { lineBreak: false });
+    pdf.fillColor('#000').text(v, metaValX, ry + i * 12, { width: PAGE.width - MARGIN - metaValX, align: 'right', lineBreak: false });
+  });
+  ry += meta.length * 12 + 8;
   pdf.font('jp').fontSize(7).fillColor('#555').text('発注者', rx, ry, { width: rw, align: 'right', lineBreak: false }); ry += 10;
   pdf.font('jp-bold').fontSize(10).fillColor('#000');
   pdf.text(estimate.client_name || '', rx, ry, { width: rw, align: 'right' }); ry += pdf.heightOfString(estimate.client_name || '', { width: rw }) + 2;
   pdf.font('jp').fontSize(7.5).fillColor('#333');
-  const addr = [client.postal_code ? `〒${formatPostal(client.postal_code)}` : '', client.address || ''].filter(Boolean).join('　');
+  const addr = [client.postal_code ? `〒${formatPostal(client.postal_code)}` : '', toHalfWidth(client.address || '')].filter(Boolean).join('　');
   const rline = (t) => { pdf.text(t, rx, ry, { width: rw, align: 'right' }); ry += pdf.heightOfString(t, { width: rw }) + 1; };
   rline(addr || '住所: ____________________________');
   rline(client.contact_person ? `ご担当: ${client.contact_person}` : 'ご担当: ______________');
@@ -116,20 +128,13 @@ function draw(pdf, { estimate, client, company }) {
   pdf.font('jp-bold').fontSize(17).fillColor('#1e293b').text('発 注 書', MARGIN, y, { width: CONTENT_W, align: 'center', characterSpacing: 2 });
   y += 30;
 
-  // ---- 件名・番号・発注日 ----
+  // ---- 件名 ----
   pdf.font('jp').fontSize(8).fillColor('#555').text('件名', MARGIN, y, { lineBreak: false });
   pdf.font('jp-bold').fontSize(11).fillColor('#000');
   const title = estimate.estimate_title || '—';
   pdf.text(title, MARGIN, y + 11, { width: 300 });
   const titleH = pdf.heightOfString(title, { width: 300 });
-  const metaX = 380; const metaValX = 450;
-  const meta = [['発注日', '　　　年　　月　　日'], ['発注書番号', `${estimate.estimate_number || ''}-PO`], ['御見積書番号', estimate.estimate_number || '']];
-  pdf.font('jp').fontSize(8.5);
-  meta.forEach(([k, v], i) => {
-    pdf.fillColor('#555').text(k, metaX, y + i * 12, { lineBreak: false });
-    pdf.fillColor('#000').text(v, metaValX, y + i * 12, { width: PAGE.width - MARGIN - metaValX, align: 'right', lineBreak: false });
-  });
-  y += Math.max(11 + titleH, meta.length * 12) + 8;
+  y += 11 + titleH + 8;
 
   // ---- 文言 ----
   pdf.font('jp').fontSize(9).fillColor('#000');

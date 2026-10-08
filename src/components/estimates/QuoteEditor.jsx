@@ -30,6 +30,7 @@ import { isPrintLine, orderFromLine, fmtOrderDate } from "@/lib/printOrders";
 import { useAuth } from "@/lib/AuthContext";
 import SalesCategorySelect, { SalesCategoryChip } from "@/components/estimates/SalesCategorySelect";
 import { formatPostalCode } from "@/lib/postalCode";
+import { toHalfWidth } from "@/lib/halfWidth";
 import { toTaxExcluded } from "@/lib/priceTax";
 import { computeEstimateTotals, lineTaxRate } from "@/lib/estimateTotals";
 
@@ -375,10 +376,18 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 {estimate.client_name || "（クライアント名未入力）"} {estimate.client_honorific ?? "御中"}
               </p>
             </div>
-            <div className="text-right text-xs leading-relaxed text-muted-foreground">
+            <div className="text-xs leading-relaxed text-muted-foreground">
+              {/* 見積日・番号は右上（PDF と同じ） */}
+              <table className="text-xs w-full mb-2">
+                <tbody>
+                  <tr><td className="pr-3 py-0.5">見積日</td><td className="text-foreground text-right">{estimateDate}</td></tr>
+                  <tr><td className="pr-3 py-0.5">見積書番号</td><td className="text-foreground text-right">{estimate.estimate_number}</td></tr>
+                  <tr><td className="pr-3 py-0.5">有効期限</td><td className="text-foreground text-right">{validityMonths}ヶ月（{validUntil}）</td></tr>
+                </tbody>
+              </table>
               <p className="font-semibold text-foreground">{COMPANY_INFO.name} {estimate.person_in_charge}</p>
               {COMPANY_INFO.locations.map(loc => (
-                <p key={loc.label}>［{loc.label}］{loc.postal} {loc.address}</p>
+                <p key={loc.label}>［{loc.label}］{loc.postal} {toHalfWidth(loc.address)}</p>
               ))}
               <p>tel {COMPANY_INFO.tel}｜fax {COMPANY_INFO.fax}</p>
             </div>
@@ -386,15 +395,8 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 
           <div className="text-center text-xl font-bold tracking-[0.3em]">御 見 積 書</div>
 
-          <div className="flex items-start justify-between flex-wrap gap-3 text-xs text-muted-foreground">
-            <div><span className="text-xs">件名</span>　<span className="text-foreground">{estimate.estimate_title || "—"}</span></div>
-            <table className="text-xs">
-              <tbody>
-                <tr><td className="pr-3 py-0.5">見積日</td><td className="text-foreground">{estimateDate}</td></tr>
-                <tr><td className="pr-3 py-0.5">見積書番号</td><td className="text-foreground">{estimate.estimate_number}</td></tr>
-                <tr><td className="pr-3 py-0.5">有効期限</td><td className="text-foreground">{validityMonths}ヶ月（{validUntil}）</td></tr>
-              </tbody>
-            </table>
+          <div className="text-xs text-muted-foreground">
+            <span className="text-xs">件名</span>　<span className="text-foreground">{estimate.estimate_title || "—"}</span>
           </div>
 
           <div className="flex border rounded-lg overflow-hidden divide-x">
@@ -414,7 +416,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-800 text-white text-xs">
+              <tr className="bg-slate-800 text-white text-xs [&>th+th]:border-l [&>th+th]:border-white">
                 <th className="text-left px-3 py-2 font-medium">名称</th>
                 <th className="text-right px-3 py-2 font-medium w-16">数量</th>
                 <th className="text-right px-3 py-2 font-medium w-14">単位</th>
@@ -495,7 +497,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               <div className="text-right text-xs leading-relaxed text-muted-foreground">
                 <p className="font-semibold text-foreground">{COMPANY_INFO.name} {estimate.person_in_charge}</p>
                 {COMPANY_INFO.locations.map(loc => (
-                  <p key={loc.label}>［{loc.label}］{loc.postal} {loc.address}</p>
+                  <p key={loc.label}>［{loc.label}］{loc.postal} {toHalfWidth(loc.address)}</p>
                 ))}
                 <p>tel {COMPANY_INFO.tel}｜fax {COMPANY_INFO.fax}</p>
               </div>

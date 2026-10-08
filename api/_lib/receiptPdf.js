@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
-import { registerFonts, yen, formatPostal } from './docLayout.js';
+import { registerFonts, yen, formatPostal, textV } from './docLayout.js';
+import { toHalfWidth } from '../../src/lib/halfWidth.js';
 import { stampDuty } from '../../src/lib/stampDuty.js';
 
 // ============================================================================
@@ -141,7 +142,9 @@ function drawReceipt(pdf, { receipt, company, stamp, logo, x, y, w, h, paper, co
   pdf.font('jp').fontSize(7).fillColor('#222');
   const loc = (company.locations || [])[0];
   if (loc) {
-    pdf.text(`〒${formatPostal(loc.postal)}　${loc.address || ''}`, rx, ry, { width: rw, lineBreak: false, ellipsis: true });
+    // 住所は英数字を半角にして 1 行に収める（長いときは文字を小さくする）
+    textV(pdf, `〒${formatPostal(loc.postal)}　${toHalfWidth(loc.address || '')}`, rx, ry - 1.5, rw, 10, { size: 7, minSize: 5, color: '#222' });
+    pdf.font('jp').fontSize(7).fillColor('#222');
     ry += 10;
   }
   const telFax = [company.tel ? `tel ${company.tel}` : '', company.fax ? `fax ${company.fax}` : ''].filter(Boolean).join('｜');

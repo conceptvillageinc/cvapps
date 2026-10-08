@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { toHalfWidth } from '../../src/lib/halfWidth.js';
 
 // ============================================================================
 // 見積書・納品書・請求書に共通の帳票レイアウト（A4縦）。
@@ -29,12 +30,13 @@ export const L = {
   clientNameY: 68,
   clientW: 210,
   companyX: 358,
-  companyNameY: 38,
-  companyBodyY: 68,
+  companyNameY: 84, // 自社名（右上の日付・番号の下）
+  companyBodyY: 100,
+  stampY: 70,
   titleY: 196,
   subjectY: 262,
-  metaY: 243,
-  metaStep: 16,
+  metaY: 34, // 日付・番号（右上）
+  metaStep: 13,
   summaryY: 287,
   bandW: 294,
   headH: 16,
@@ -82,8 +84,17 @@ export function textV(pdf, text, x, y, w, h, { align = 'left', size = 8.5, bold 
   // 収まらないときは少し小さくし、それでも長ければ省略記号
   let s = size;
   while (s > minSize && pdf.widthOfString(str) > w) { s -= 0.5; pdf.fontSize(s); }
+  // それでも長ければ末尾を省略記号にする。pdfkit は width を渡すと lineBreak: false でも折り返して
+  // 下の行に重なるので、幅は自分で測って 1 行で置く
+  let out = str;
+  if (pdf.widthOfString(out) > w) {
+    while (out.length > 1 && pdf.widthOfString(`${out}…`) > w) out = out.slice(0, -1);
+    out = `${out}…`;
+  }
+  const tw = pdf.widthOfString(out);
+  const tx = align === 'right' ? x + w - tw : align === 'center' ? x + (w - tw) / 2 : x;
   const lh = pdf.currentLineHeight();
-  pdf.text(str, x, y + (h - lh) / 2, { width: w, align, lineBreak: false, ellipsis: true });
+  pdf.text(out, tx, y + (h - lh) / 2, { lineBreak: false });
   pdf.fillColor(BLACK);
 }
 
@@ -111,7 +122,7 @@ export function drawHeader(pdf, { client, company, person, stamp, logo, allLocat
   pdf.font('jp').fontSize(7.5).fillColor(BLACK);
   const postal = client.postal ? formatPostal(client.postal) : '';
   if (postal) pdf.text(postal, MARGIN, L.clientPostalY, { lineBreak: false });
-  if (client.address) pdf.text(client.address, MARGIN, L.clientAddressY, { width: L.clientW + 60, lineBreak: false, ellipsis: true });
+  if (client.address) textV(pdf, toHalfWidth(client.address), MARGIN, L.clientAddressY - 1.5, L.clientW + 60, 12, { size: 7.5, minSize: 5.5 });
   pdf.font('jp').fontSize(12.5);
   pdf.text(`${client.name || ''}　${client.honorific ?? '御中'}`, MARGIN, L.clientNameY, { width: L.clientW, lineGap: 1 });
 
@@ -120,7 +131,7 @@ export function drawHeader(pdf, { client, company, person, stamp, logo, allLocat
   const rw = PAGE.width - MARGIN - rx;
   pdf.font('jp').fontSize(8.5).fillColor(BLACK);
   const who = person || company.representative || '';
-  pdf.text(`${company.name || ''}${who ? `　${who}` : ''}`, rx, L.companyNameY, { width: rw, lineBreak: false });
+  textV(pdf, `${company.name || ''}${who ? `　${who}` : ''}`, rx, L.companyNameY - 1.5, rw, 14, { size: 8.5, minSize: 6.5 });
 
   let ry = L.companyBodyY;
   pdf.fontSize(7).fillColor('#222');
@@ -128,7 +139,9 @@ export function drawHeader(pdf, { client, company, person, stamp, logo, allLocat
   for (let i = 0; i < locations.length; i++) {
     const loc = locations[i];
     if (loc.label) { pdf.text(`［${loc.label}］`, rx, ry, { lineBreak: false }); ry += 10; }
-    pdf.text(`〒${formatPostal(loc.postal)}　${loc.address || ''}`, rx, ry, { width: rw, lineBreak: false, ellipsis: true });
+    // 住所は英数字を半角にして 1 行に収める（長いときは文字を小さくする）
+    textV(pdf, `〒${formatPostal(loc.postal)}　${toHalfWidth(loc.address || '')}`, rx, ry - 1.5, rw, 10, { size: 7, minSize: 5, color: '#222' });
+    pdf.fontSize(7).fillColor('#222');
     ry += allLocations ? 14 : 10;
     if (!allLocations) break;
   }
@@ -144,7 +157,7 @@ export function drawHeader(pdf, { client, company, person, stamp, logo, allLocat
   // ---- 印影（自社情報の右端に重ねる） ----
   if (stamp) {
     const stampW = Math.max(24, Math.min(120, Number(company.stamp_width) || DEFAULT_STAMP_WIDTH));
-    try { pdf.image(stamp, PAGE.width - MARGIN - stampW + 4, 26, { width: stampW }); } catch { /* 画像が読めなければ省略 */ }
+    try { pdf.image(stamp, PAGE.width - MARGIN - stampW + 4, L.stampY, { width: stampW }); } catch { /* 画像が読めなければ省略 */ }
   }
 }
 
@@ -154,7 +167,7 @@ export function drawTitle(pdf, title) {
 }
 
 /**
- * 件名（左）と日付・番号（右）
+ * 件名（左）と日付・番号（右上。自社情報の上）
  * @param {string} subject
  * @param {Array<[string,string]>} meta  例: [['請求日','2026-08-31'], ['請求書番号','INV-…']]
  */
@@ -185,7 +198,16 @@ export function drawBandHead(pdf, x, y, cols, labels) {
   pdf.rect(x, y, w, L.headH).fill(BLACK);
   let cx = x;
   labels.forEach((l, i) => { textV(pdf, l, cx, y, cols[i], L.headH, { align: 'center', size: 8.5, color: '#fff' }); cx += cols[i]; });
+  drawHeadSeparators(pdf, x, y, cols);
   pdf.fillColor(BLACK);
+}
+
+/** 黒帯の見出しの列の間に白い線を引く（見出しの区切りを見やすくする） */
+export function drawHeadSeparators(pdf, x, y, widths, color = '#ffffff') {
+  let cx = x;
+  pdf.save().lineWidth(1).strokeColor(color);
+  widths.slice(0, -1).forEach((w) => { cx += w; pdf.moveTo(cx, y).lineTo(cx, y + L.headH).stroke(); });
+  pdf.restore();
 }
 
 /**
@@ -267,6 +289,7 @@ export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
   pdf.rect(MARGIN, y, CONTENT_W, L.headH).fill(BLACK);
   let cx = MARGIN;
   columns.forEach(([label], i) => { textV(pdf, label, cx, y, widths[i], L.headH, { align: 'center', size: 8.5, color: '#fff' }); cx += widths[i]; });
+  drawHeadSeparators(pdf, MARGIN, y, widths);
   pdf.fillColor(BLACK);
 
   const amountW = widths[widths.length - 1];
