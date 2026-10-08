@@ -25,6 +25,65 @@ const VIEWS = [
   { key: "next", label: "案件別ネクストアクション" },
 ];
 
+// 案件一覧（標準）の列の並び
+const COLUMN_ORDER = ["registered_at", "client_name", "due_date", "name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "payment_due_date", "project_number"];
+
+/** 案件一覧（標準）の 1 マス */
+function ProjectCell({ col, p, st }) {
+  switch (col) {
+    case "project_number": return (
+      <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
+    );
+    case "client_name": return (
+      <TableCell className="text-sm font-medium max-w-[220px] truncate" title={p.client_name}>{p.client_name}</TableCell>
+    );
+    case "name": return (
+      <TableCell className="text-sm max-w-[320px]">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate" title={p.name}>{p.name}</span>
+          {p.is_recurring && <Repeat className="w-3 h-3 text-teal-600 shrink-0" title="定期売上" />}
+        </div>
+      </TableCell>
+    );
+    case "deal_probability": return (
+      <TableCell>
+        {p.deal_probability && (
+          <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>
+        )}
+      </TableCell>
+    );
+    case "phase": return (
+      <TableCell>
+        {p.phase && <Badge className={`text-[10px] ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}
+      </TableCell>
+    );
+    case "status": return (
+      <TableCell>
+        <Badge className={`text-[10px] whitespace-nowrap ${st.color}`}>{st.label}</Badge>
+      </TableCell>
+    );
+    case "expected_revenue": return (
+      <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
+    );
+    case "expected_gross_profit": return (
+      <TableCell className={`text-right text-sm tabular-nums ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>
+        {yen(p.expected_gross_profit)}
+        {Number(p.expected_revenue) > 0 && <span className="block text-[10px] text-muted-foreground">{Math.round((Number(p.expected_gross_profit) / Number(p.expected_revenue)) * 100)}%</span>}
+      </TableCell>
+    );
+    case "due_date": return (
+      <TableCell className="text-xs whitespace-nowrap">{p.due_date || "—"}</TableCell>
+    );
+    case "payment_due_date": return (
+      <TableCell className="text-xs whitespace-nowrap">{p.payment_due_date || "—"}</TableCell>
+    );
+    case "registered_at": return (
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{p.registered_at}</TableCell>
+    );
+    default: return <TableCell />;
+  }
+}
+
 // 案件一覧（標準）の最初の状態の絞り込み: 進行中・完了（失注・取消は隠す）
 const DEFAULT_STATUS_FILTER = [PROJECT_STATUS_MAP.open.label, PROJECT_STATUS_MAP.completed.label];
 // 並び順の言い方（日付は新しい順／古い順、金額は大きい順／小さい順、文字は昇順／降順）
@@ -322,7 +381,7 @@ export default function ProjectList() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
-                    {Object.entries(columnDefs).map(([key, def]) => (
+                    {COLUMN_ORDER.map((key) => [key, columnDefs[key]]).map(([key, def]) => (
                       <TableHead key={key} className={`text-xs text-white whitespace-nowrap ${key.includes("revenue") || key.includes("profit") ? "text-right" : ""}`}>
                         {def.label}
                         {FILTERABLE_KEYS.includes(key) && (
@@ -351,33 +410,7 @@ export default function ProjectList() {
                     const st = PROJECT_STATUS_MAP[p.status] || PROJECT_STATUS_MAP.open;
                     return (
                       <TableRow key={p.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/projects/${p.id}`)}>
-                        <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
-                        <TableCell className="text-sm font-medium max-w-[220px] truncate" title={p.client_name}>{p.client_name}</TableCell>
-                        <TableCell className="text-sm max-w-[320px]">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate" title={p.name}>{p.name}</span>
-                            {p.is_recurring && <Repeat className="w-3 h-3 text-teal-600 shrink-0" title="定期売上" />}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {p.deal_probability && (
-                            <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {p.phase && <Badge className={`text-[10px] ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={`text-[10px] whitespace-nowrap ${st.color}`}>{st.label}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
-                        <TableCell className={`text-right text-sm tabular-nums ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>
-                          {yen(p.expected_gross_profit)}
-                          {Number(p.expected_revenue) > 0 && <span className="block text-[10px] text-muted-foreground">{Math.round((Number(p.expected_gross_profit) / Number(p.expected_revenue)) * 100)}%</span>}
-                        </TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">{p.due_date || "—"}</TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">{p.payment_due_date || "—"}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{p.registered_at}</TableCell>
+                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} st={st} />)}
                         <TableCell>
                           <Link to={`/projects/${p.id}`} onClick={(e) => e.stopPropagation()}>
                             <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
@@ -387,10 +420,10 @@ export default function ProjectList() {
                     );
                   })}
                   <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium">
-                    <TableCell colSpan={6} className="text-xs text-muted-foreground">表示中の合計（{filtered.length}件）</TableCell>
+                    <TableCell colSpan={COLUMN_ORDER.indexOf("expected_revenue")} className="text-xs text-muted-foreground">表示中の合計（{filtered.length}件）</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{yen(totals.revenue)}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{yen(totals.gross)}</TableCell>
-                    <TableCell colSpan={4}></TableCell>
+                    <TableCell colSpan={COLUMN_ORDER.length - COLUMN_ORDER.indexOf("expected_gross_profit")}></TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
