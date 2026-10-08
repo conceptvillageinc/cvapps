@@ -15,6 +15,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { isOffDay } from "@/lib/jpHolidays";
 import { toast } from "sonner";
 import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check } from "lucide-react";
+import { CondChip, ConditionsRow, joinValues } from "@/components/projects/ListConditions";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -474,7 +475,7 @@ const NEXT_COLS = [
   { key: "next_action", label: "ネクストアクション" },
 ];
 
-export function NextActionView({ projects, isLoading }) {
+export function NextActionView({ projects, isLoading, search = "", onClearSearch }) {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const today = todayString();
   const settings = useSystemSettings();
@@ -517,8 +518,23 @@ export function NextActionView({ projects, isLoading }) {
   useScrollToRowOnce(!isLoading && !settings.isLoading, '[data-group="month"]');
   const emptyCount = projects.filter((p) => !(p.next_action || "").trim()).length;
 
+  const colLabel = (key) => NEXT_COLS.find((c) => c.key === key)?.label || key;
+  const valueLabel = (v) => (v === EMPTY_VALUE ? "（空欄）" : v);
+
   return (
     <div className="flex flex-col h-full min-h-0 gap-3">
+      {/* 今の条件を 1 行で（案件一覧の標準と同じ見た目） */}
+      <ConditionsRow className="-mt-2">
+        <span>すべての期</span>
+        <CondChip label="状態" value="進行中" title="このタブは進行中の案件だけを表示します" />
+        {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={onClearSearch} />}
+        {Object.keys(filters).filter((k) => filters[k]).map((k) => {
+          const vals = filters[k].map(valueLabel);
+          return <CondChip key={k} label={colLabel(k)} value={joinValues(vals)} title={vals.join("・")} onClear={() => setFilter(k, null)} />;
+        })}
+        {onlyEmpty && <CondChip label="ネクストアクション" value="空の案件だけ" onClear={() => setOnlyEmpty(false)} />}
+        <CondChip label="並び順" value={sort ? `${colLabel(sort.key)}（${sort.dir === "desc" ? "降順" : "昇順"}）` : "完了予定（月ごと）"} />
+      </ConditionsRow>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground shrink-0">
         <span>
           進行中 {projects.length}件　／　表示 {total}件（先月以前 {groups[0].rows.length}・今月 {groups[1].rows.length}・来月以降 {groups[2].rows.length}・予定日なし {groups[3].rows.length}）

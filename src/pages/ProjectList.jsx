@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat, Filter, X } from "lucide-react";
+import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat } from "lucide-react";
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
+import { CondChip, ConditionsRow, joinValues } from "@/components/projects/ListConditions";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
@@ -34,19 +35,6 @@ function sortWord({ key, direction }) {
   if (DATE_KEYS.includes(key)) return desc ? "新しい順" : "古い順";
   if (AMOUNT_KEYS.includes(key)) return desc ? "大きい順" : "小さい順";
   return desc ? "降順" : "昇順";
-}
-
-/** 条件の小さな札。何の条件か（ラベル）は札の外の左に、札の中には値だけを出す。onClear があれば × で外せる */
-function CondChip({ label, value, title, onClear }) {
-  return (
-    <span className="inline-flex items-center gap-1 ml-1">
-      <span>{label}</span>
-      <span className="inline-flex items-center gap-1 rounded border bg-white px-1.5 leading-5" title={title || value}>
-        <span className="font-medium text-foreground max-w-[260px] truncate">{value}</span>
-        {onClear && <button type="button" onClick={onClear} className="text-muted-foreground hover:text-foreground" aria-label={`${label}の条件を外す`}><X className="w-3 h-3" /></button>}
-      </span>
-    </span>
-  );
 }
 
 const sameSet = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
@@ -292,16 +280,14 @@ export default function ProjectList() {
 
       {view === "standard" && (
         // 今の条件（期・検索・列の絞り込み・並び順）を 1 行で。色は付けず、× で個別に外せる
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-muted-foreground shrink-0 -mt-2" data-testid="list-conditions">
-          <Filter className="w-3.5 h-3.5" />
+        <ConditionsRow className="-mt-2">
           <span>{fiscalYear === ALL_YEARS ? "すべての期" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}</span>
           {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={() => setSearch("")} />}
           {FILTERABLE_KEYS.map((key) => {
             const v = columnFilters[key];
             if (key === "status" && !v) return <CondChip key={key} label="状態" value="すべて" />;
             if (!v) return null;
-            const shown = v.length > 3 ? `${v.slice(0, 3).join("・")} ほか${v.length - 3}` : v.join("・") || "（なし）";
-            return <CondChip key={key} label={columnDefs[key].label} value={shown} title={v.join("・")} onClear={() => setColumnFilter(key, null)} />;
+            return <CondChip key={key} label={columnDefs[key].label} value={joinValues(v)} title={v.join("・")} onClear={() => setColumnFilter(key, null)} />;
           })}
           {hiddenByStatus.length > 0 && <span>（非表示：{hiddenByStatus.map(([label, n]) => `${label} ${n}件`).join("・")}）</span>}
           {sortConfig && <CondChip label="並び順" value={`${columnDefs[sortConfig.key]?.label || sortConfig.key}（${sortWord(sortConfig)}）`} />}
@@ -309,13 +295,13 @@ export default function ProjectList() {
             {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">状態を進行中・完了に戻す</button>}
             {columnFilters.status && <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>}
           </span>
-        </div>
+        </ConditionsRow>
       )}
 
       {view === "daily" ? (
         <DailyView projects={dailyRows} isLoading={isLoading} />
       ) : view === "next" ? (
-        <NextActionView projects={nextRows} isLoading={openLoading} />
+        <NextActionView projects={nextRows} isLoading={openLoading} search={search} onClearSearch={() => setSearch("")} />
       ) : (
       <Card>
         <CardContent className="p-0">
