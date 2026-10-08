@@ -468,6 +468,7 @@ const NEXT_COLS = [
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度" },
   { key: "phase", label: "フェーズ" },
+  { key: "status", label: "状態" },
   { key: "expected_revenue", label: "受注見込", num: true },
   { key: "expected_cost", label: "発注見込", num: true },
   { key: "confirmed_cost", label: "仕入合計(税抜)", num: true },
@@ -628,11 +629,13 @@ function NextGroupRows({ group: g }) {
           <TableCell className="text-xs whitespace-nowrap">{p.due_date ? withWeekday(p.due_date).slice(5) : <span className="text-muted-foreground">—</span>}</TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.confirmed_revenue)}</TableCell>
           <TableCell className="text-sm max-w-[320px]">
-            <Link to={`/projects/${p.id}`} className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>
+            {/* クライアント名（小さく）を上、案件名を下に */}
             <span className="block text-[10px] text-muted-foreground truncate">{p.client_name}</span>
+            <Link to={`/projects/${p.id}`} className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>
           </TableCell>
           <TableCell>{p.deal_probability && <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>}</TableCell>
           <TableCell>{p.phase && <Badge className={`text-[10px] whitespace-nowrap ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}</TableCell>
+          <TableCell>{(() => { const st = PROJECT_STATUS_MAP[p.status] || PROJECT_STATUS_MAP.open; return <Badge className={`text-[10px] whitespace-nowrap ${st.color}`}>{st.label}</Badge>; })()}</TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_cost)}</TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.confirmed_cost)}</TableCell>
@@ -641,7 +644,7 @@ function NextGroupRows({ group: g }) {
         </TableRow>
       ))}
       <TableRow className="bg-blue-50/40 hover:bg-blue-50/40">
-        <TableCell colSpan={5} className="py-1.5 text-right text-[11px] text-slate-600">小計（{g.rows.length}件）</TableCell>
+        <TableCell colSpan={NEXT_COLS.findIndex((c) => c.key === "expected_revenue")} className="py-1.5 text-right text-[11px] text-slate-600">小計（{g.rows.length}件）</TableCell>
         <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.sums.expected_revenue)}</TableCell>
         <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.sums.expected_cost)}</TableCell>
         <TableCell className="py-1.5 text-right text-xs tabular-nums font-medium">{yen(g.sums.confirmed_cost)}</TableCell>
