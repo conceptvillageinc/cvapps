@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat } from "lucide-react";
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
-import { CondChip, ConditionsRow, joinValues } from "@/components/projects/ListConditions";
+import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
@@ -24,6 +24,9 @@ const VIEWS = [
   { key: "daily", label: "速報デイリー" },
   { key: "next", label: "案件別ネクストアクション" },
 ];
+
+// 条件の札の並び（並び順のあと。受注確度 → 状態 の順で、ほかの列はその間）
+const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status"];
 
 // 案件一覧（標準）の列の並び
 const COLUMN_ORDER = ["registered_at", "client_name", "due_date", "name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "payment_due_date", "project_number"];
@@ -123,10 +126,10 @@ export default function ProjectList() {
       : db.entities.Project.list("-registered_at"),
   });
 
-  // ネクストアクションは期に関係なく「進行中」の案件すべてを見る
-  const { data: openProjects = [], isLoading: openLoading } = useQuery({
-    queryKey: ["projects", "open", "all"],
-    queryFn: () => db.entities.Project.filter({ status: "open" }, "due_date"),
+  // ネクストアクションは期に関係なくすべての案件を読み、タブの中で状態を絞り込む（最初は進行中・完了）
+  const { data: nextProjects = [], isLoading: nextLoading } = useQuery({
+    queryKey: ["projects", "all", "next"],
+    queryFn: () => db.entities.Project.list("due_date"),
     enabled: view === "next",
   });
 
@@ -169,7 +172,8 @@ export default function ProjectList() {
       const def = columnDefs[key];
       const fromData = new Set(projects.map(def.getValue));
       const merged = Array.from(new Set([...(def.master || []), ...fromData]));
-      result[key] = merged.sort((a, b) => a.localeCompare(b, "ja"));
+      // 状態は決まった順（進行中・完了・失注・取消）、ほかは 50 音順
+      result[key] = key === "status" ? merged : merged.sort((a, b) => a.localeCompare(b, "ja"));
     }
     return result;
      
@@ -252,7 +256,7 @@ export default function ProjectList() {
   };
   // 速報デイリー: 取消・失注は含めない
   const dailyRows = useMemo(() => projects.filter((p) => p.status !== "cancelled" && p.status !== "lost").filter(matchesSearch), [projects, search]);
-  const nextRows = useMemo(() => openProjects.filter(matchesSearch), [openProjects, search]);
+  const nextRows = useMemo(() => nextProjects.filter(matchesSearch), [nextProjects, search]);
 
   const totals = useMemo(() => ({
     revenue: filtered.reduce((s, p) => s + Number(p.expected_revenue || 0), 0),
@@ -270,6 +274,11 @@ export default function ProjectList() {
     project_number: "text", client_name: "text", expected_revenue: "amount", expected_gross_profit: "amount",
     due_date: "date", payment_due_date: "date", registered_at: "date",
   };
+  // 並び順の札で選べる並び（列の並びの順に、各列の 2 方向）
+  const sortChoices = [
+    ...COLUMN_ORDER.filter((k) => sortKinds[k]).flatMap((k) => sortOpts[sortKinds[k]].map((o) => ({ id: `${k}:${o.value}`, label: `${columnDefs[k].label}（${sortWord({ key: k, direction: o.value })}）`, value: { key: k, direction: o.value } }))),
+    { id: "none", label: "並べ替えなし", value: null },
+  ];
 
   const fixedTop = view === "daily" || view === "next"; // 上部を固定し、表だけをスクロールする
   return (
@@ -281,7 +290,7 @@ export default function ProjectList() {
             {view === "daily"
               ? `${dailyRows.length}件 / ${fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}`
               : view === "next"
-                ? `進行中 ${nextRows.length}件（すべての期）`
+                ? "すべての期の案件"
                 : `${filtered.length}件 / ${fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)} ${projects.length}件`}
             {view === "standard" && activeFilterCount > 0 && (
               <button onClick={() => setColumnFilters({})} className="ml-2 text-primary hover:underline">
@@ -323,7 +332,7 @@ export default function ProjectList() {
           </button>
         ))}
         <span className="ml-auto text-[11px] text-muted-foreground pr-1">
-          {view === "daily" ? "今日を先頭に表示。上に戻ると前の日（取消・失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（進行中の案件のみ・期をまたいで表示）" : ""}
+          {view === "daily" ? "今日を先頭に表示。上に戻ると前の日（取消・失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（期をまたいで表示）" : ""}
         </span>
       </div>
 
@@ -342,14 +351,27 @@ export default function ProjectList() {
         <ConditionsRow className="-mt-2">
           <span>{fiscalYear === ALL_YEARS ? "すべての期" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}</span>
           {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={() => setSearch("")} />}
-          {FILTERABLE_KEYS.map((key) => {
+          {/* 並び順 → 受注確度 → 状態 の順（そのほかの列の絞り込みは間に入る）。札をクリックするとその場で変えられる */}
+          <CondChip
+            label="並び順"
+            value={sortConfig ? `${columnDefs[sortConfig.key]?.label || sortConfig.key}（${sortWord(sortConfig)}）` : "なし（登録順）"}
+            editor={(close) => (
+              <SortEditor
+                options={sortChoices}
+                currentId={sortConfig ? `${sortConfig.key}:${sortConfig.direction}` : "none"}
+                onChange={setSortConfig}
+                close={close}
+              />
+            )}
+          />
+          {CHIP_ORDER.map((key) => {
             const v = columnFilters[key];
-            if (key === "status" && !v) return <CondChip key={key} label="状態" value="すべて" />;
+            const editor = () => <CheckListEditor options={columnOptions[key]} selected={v ?? null} onChange={(next) => setColumnFilter(key, next)} />;
+            if (key === "status" && !v) return <CondChip key={key} label="状態" value="すべて" editor={editor} />;
             if (!v) return null;
-            return <CondChip key={key} label={columnDefs[key].label} value={joinValues(v)} title={v.join("・")} onClear={() => setColumnFilter(key, null)} />;
+            return <CondChip key={key} label={columnDefs[key].label} value={joinValues(v)} title={v.join("・")} onClear={() => setColumnFilter(key, null)} editor={editor} />;
           })}
           {hiddenByStatus.length > 0 && <span>（非表示：{hiddenByStatus.map(([label, n]) => `${label} ${n}件`).join("・")}）</span>}
-          {sortConfig && <CondChip label="並び順" value={`${columnDefs[sortConfig.key]?.label || sortConfig.key}（${sortWord(sortConfig)}）`} />}
           <span className="ml-1 flex items-center gap-2">
             {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">状態を進行中・完了に戻す</button>}
             {columnFilters.status && <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>}
@@ -360,7 +382,7 @@ export default function ProjectList() {
       {view === "daily" ? (
         <DailyView projects={dailyRows} isLoading={isLoading} />
       ) : view === "next" ? (
-        <NextActionView projects={nextRows} isLoading={openLoading} search={search} onClearSearch={() => setSearch("")} />
+        <NextActionView projects={nextRows} isLoading={nextLoading} search={search} onClearSearch={() => setSearch("")} />
       ) : (
       <Card>
         <CardContent className="p-0">

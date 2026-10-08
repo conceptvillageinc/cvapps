@@ -9,13 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
+import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
 import { todayString, fiscalYearOf, fiscalYearLabel } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { isOffDay } from "@/lib/jpHolidays";
 import { toast } from "sonner";
 import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check } from "lucide-react";
-import { CondChip, ConditionsRow, joinValues } from "@/components/projects/ListConditions";
+import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -78,7 +78,7 @@ const SORTABLE = { deal_probability: "dealProbabilityOptions", phase: "phaseOpti
 function useColumnSort() {
   const [sort, setSort] = useState(null); // { key, dir: "asc" | "desc" } | null
   const toggle = (key) => setSort((cur) => (!cur || cur.key !== key ? { key, dir: "asc" } : cur.dir === "asc" ? { key, dir: "desc" } : null));
-  return [sort, toggle];
+  return [sort, toggle, setSort];
 }
 
 /** 選択肢の順で並べる比較関数。空は最後。並べ替えが無ければ null */
@@ -475,11 +475,19 @@ const NEXT_COLS = [
   { key: "next_action", label: "ネクストアクション" },
 ];
 
-export function NextActionView({ projects, isLoading, search = "", onClearSearch }) {
+const sameStatus = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
+
+// 案件別ネクストアクションの状態の絞り込み（最初は進行中・完了）
+const NEXT_STATUS_KEYS = Object.keys(PROJECT_STATUS_MAP);
+const NEXT_DEFAULT_STATUS = ["open", "completed"];
+
+export function NextActionView({ projects: allProjects, isLoading, search = "", onClearSearch }) {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(NEXT_DEFAULT_STATUS); // null = すべて
+  const projects = useMemo(() => (statusFilter ? allProjects.filter((p) => statusFilter.includes(p.status || "open")) : allProjects), [allProjects, statusFilter]);
   const today = todayString();
   const settings = useSystemSettings();
-  const [sort, toggleSort] = useColumnSort();
+  const [sort, toggleSort, setSort] = useColumnSort();
   // 受注確度は「A」と「要注意（A）」を初期値にする（朝会で新規売上の進捗を見るため）
   const defaultFilters = useMemo(() => {
     const picks = (settings.dealProbabilityOptions || []).filter((v) => v === "A" || /要注意/.test(v));
@@ -498,7 +506,7 @@ export function NextActionView({ projects, isLoading, search = "", onClearSearch
     const mk = (key, label) => ({ key, label, rows: [], sums: { expected_revenue: 0, expected_cost: 0, confirmed_cost: 0, other_cost: 0 } });
     const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
     const gs = [
-      mk("past", "先月以前（完了予定日を過ぎています）"),
+      mk("past", "先月以前（完了予定日が先月以前）"),
       mk("month", `今月（${y}年${m}月）完了予定`),
       mk("later", `来月以降（${nextMonthStart.slice(0, 4)}年${Number(nextMonthStart.slice(5, 7))}月〜）`),
       mk("none", "完了予定日なし"),
@@ -524,20 +532,45 @@ export function NextActionView({ projects, isLoading, search = "", onClearSearch
   return (
     <div className="flex flex-col h-full min-h-0 gap-3">
       {/* 今の条件を 1 行で（案件一覧の標準と同じ見た目） */}
+      {/* 並び順 → 受注確度 → 状態 の順（フェーズは間に入る）。札をクリックするとその場で変えられる */}
       <ConditionsRow className="-mt-2">
         <span>すべての期</span>
-        <CondChip label="状態" value="進行中" title="このタブは進行中の案件だけを表示します" />
         {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={onClearSearch} />}
-        {Object.keys(filters).filter((k) => filters[k]).map((k) => {
+        <CondChip
+          label="並び順"
+          value={sort ? `${colLabel(sort.key)}（${sort.dir === "desc" ? "降順" : "昇順"}）` : "完了予定（月ごと）"}
+          editor={(close) => (
+            <SortEditor
+              options={[
+                { id: "none", label: "完了予定（月ごと）", value: null },
+                ...Object.keys(SORTABLE).flatMap((k) => [["asc", "昇順"], ["desc", "降順"]].map(([dir, w]) => ({ id: `${k}:${dir}`, label: `${colLabel(k)}（${w}）`, value: { key: k, dir } }))),
+              ]}
+              currentId={sort ? `${sort.key}:${sort.dir}` : "none"}
+              onChange={setSort}
+              close={close}
+            />
+          )}
+        />
+        {Object.keys(SORTABLE).filter((k) => filters[k]).map((k) => {
           const vals = filters[k].map(valueLabel);
-          return <CondChip key={k} label={colLabel(k)} value={joinValues(vals)} title={vals.join("・")} onClear={() => setFilter(k, null)} />;
+          const options = filterCandidates(k, allProjects, settings);
+          return (
+            <CondChip key={k} label={colLabel(k)} value={joinValues(vals)} title={vals.join("・")} onClear={() => setFilter(k, null)}
+              editor={() => <CheckListEditor options={options} selected={filters[k]} onChange={(next) => setFilter(k, next)} labelOf={valueLabel} />} />
+          );
         })}
+        <CondChip
+          label="状態"
+          value={statusFilter ? joinValues(statusFilter.map((k) => PROJECT_STATUS_MAP[k]?.label || k)) : "すべて"}
+          onClear={statusFilter ? () => setStatusFilter(null) : undefined}
+          editor={() => <CheckListEditor options={NEXT_STATUS_KEYS} selected={statusFilter} onChange={setStatusFilter} labelOf={(k) => PROJECT_STATUS_MAP[k]?.label || k} />}
+        />
         {onlyEmpty && <CondChip label="ネクストアクション" value="空の案件だけ" onClear={() => setOnlyEmpty(false)} />}
-        <CondChip label="並び順" value={sort ? `${colLabel(sort.key)}（${sort.dir === "desc" ? "降順" : "昇順"}）` : "完了予定（月ごと）"} />
+        {!sameStatus(statusFilter, NEXT_DEFAULT_STATUS) && <button type="button" onClick={() => setStatusFilter(NEXT_DEFAULT_STATUS)} className="ml-1 text-primary hover:underline">状態を進行中・完了に戻す</button>}
       </ConditionsRow>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground shrink-0">
         <span>
-          進行中 {projects.length}件　／　表示 {total}件（先月以前 {groups[0].rows.length}・今月 {groups[1].rows.length}・来月以降 {groups[2].rows.length}・予定日なし {groups[3].rows.length}）
+          対象 {projects.length}件　／　表示 {total}件（先月以前 {groups[0].rows.length}・今月 {groups[1].rows.length}・来月以降 {groups[2].rows.length}・予定日なし {groups[3].rows.length}）
         </span>
         <label className="flex items-center gap-1.5 cursor-pointer select-none">
           <input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} className="w-3.5 h-3.5" />
@@ -550,7 +583,7 @@ export function NextActionView({ projects, isLoading, search = "", onClearSearch
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : projects.length === 0 ? (
-            <Empty text="進行中の案件がありません" />
+            <Empty text="表示する案件がありません（状態の絞り込みを確認してください）" />
           ) : (
             <div>
               <PlainTable>
