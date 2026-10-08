@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { FileSpreadsheet, Loader2, Search, Download, CheckCircle2, AlertTriangle, ChevronDown, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { matchClients } from "@/components/clients/ClientCombobox";
+import { ordersFromCostSheets, COST_LINE_PREFIX } from "@/lib/costSheetOrders";
 
 // ============================================================================
 // 原価計算表（社内見積）の取り込み
@@ -85,6 +86,65 @@ function ClientPicker({ value, onChange, clients, fileClientName, label }) {
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * 取り込み済みの社内見積から、過去の入稿記録を作る（最終納品チェック ✓ の付いた印刷の行）。
+ *   すでに作った行は作らない（入稿記録の estimate_line_id に社内見積の行の目印を入れている）
+ */
+function PastPrintOrders() {
+  const queryClient = useQueryClient();
+  const [plan, setPlan] = useState(null); // { rows, sheets, clients }
+  const [busy, setBusy] = useState(false);
+  const check = async () => {
+    setBusy(true);
+    try {
+      const [sheets, orders] = await Promise.all([db.entities.CostSheet.list("-imported_at"), db.entities.PrintOrder.list("-ordered_on")]);
+      const existing = new Set(orders.map((o) => o.estimate_line_id).filter((k) => String(k || "").startsWith(COST_LINE_PREFIX)));
+      const rows = ordersFromCostSheets(sheets, existing);
+      setPlan({ rows, sheets: new Set(rows.map((r) => r.estimate_line_id.split(":")[1])).size, clients: new Set(rows.map((r) => r.client_name)).size, done: existing.size });
+    } catch (e) {
+      toast.error("社内見積を読めませんでした: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const run = async () => {
+    setBusy(true);
+    try {
+      for (let i = 0; i < plan.rows.length; i += 50) await db.entities.PrintOrder.createMany(plan.rows.slice(i, i + 50));
+      queryClient.invalidateQueries({ queryKey: ["printOrders"] });
+      toast.success(`${plan.rows.length} 行を入稿記録にしました`);
+      setPlan({ ...plan, rows: [], created: plan.rows.length });
+    } catch (e) {
+      toast.error("入稿記録を作れませんでした: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-md border px-3 py-2.5 space-y-1.5 text-xs" data-testid="past-print-orders">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">過去の入稿記録を作る</span>
+        <span className="text-muted-foreground">取り込み済みの社内見積で、右端の最終納品チェック（✓）が付いた印刷の行を、クライアントカルテの「入稿」に入稿記録として足します</span>
+        <Button type="button" size="sm" variant="outline" className="h-7 text-xs ml-auto" onClick={check} disabled={busy}>{busy && !plan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null} 対象を確認する</Button>
+      </div>
+      {plan && (
+        <div className="flex flex-wrap items-center gap-2 rounded bg-muted/40 px-2.5 py-1.5">
+          {plan.created ? (
+            <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {plan.created} 行を入稿記録にしました（クライアントカルテの「入稿」と社内見積の行に「入稿済」が出ます）</span>
+          ) : plan.rows.length === 0 ? (
+            <span className="text-muted-foreground">新しく作る行はありません{plan.done ? `（作成済み ${plan.done} 行）` : ""}</span>
+          ) : (
+            <>
+              <span>社内見積 {plan.sheets} 件・{plan.clients} 社から <b>{plan.rows.length} 行</b> が対象です{plan.done ? `（作成済みの ${plan.done} 行は作りません）` : ""}。入稿日は社内見積のタブ名の日付（無ければ記入日）を目安に入れます</span>
+              <Button type="button" size="sm" className="h-7 text-xs ml-auto gap-1" onClick={run} disabled={busy}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} {plan.rows.length} 行を入稿記録にする</Button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -171,7 +231,7 @@ export default function CostSheetImportCard() {
                   const r = results.find((x) => x.id === f.id);
                   return (
                     <tr key={f.id} className="border-t">
-                      <td className="px-2 py-1"><div className="line-clamp-2 break-all leading-snug" title={f.name}>{shortFileName(f.name)}</div>{r && (r.ok ? <><div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}</div>{r.note && <div className="text-[10px] text-amber-700">{r.note}</div>}</> : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
+                      <td className="px-2 py-1"><div className="line-clamp-2 break-all leading-snug" title={f.name}>{shortFileName(f.name)}</div>{r && (r.ok ? <><div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}{r.orders ? `・入稿記録 ${r.orders} 行` : ""}</div>{r.note && <div className="text-[10px] text-amber-700">{r.note}</div>}</> : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
                       <td className="px-2 py-1 whitespace-nowrap">{f.period}</td>
                       <td className="px-2 py-1">
                         <ClientPicker value={clientOf(f)} onChange={(id) => setOverrides((o) => ({ ...o, [f.id]: id }))} clients={sortedClients} fileClientName={f.client_name} label={`${f.name} のクライアント`} />
@@ -185,7 +245,8 @@ export default function CostSheetImportCard() {
             </table>
           </div>
         )}
-        <p className="text-[11px] text-muted-foreground">テンプレのタブ（金額の無いもの）は飛ばします。タブ名の「_失注」は失注、「_入稿日」「_日付」は入稿済として扱います。全タブに同じ画像（ロゴ・注意書き）は外し、行の近くに貼ったスクショだけを残します</p>
+        <PastPrintOrders />
+        <p className="text-[11px] text-muted-foreground">取り込むと、最終納品チェック（✓）の付いた印刷の行は入稿記録にも足します（すでにある行は足しません）。テンプレのタブ（金額の無いもの）は飛ばします。タブ名の「_失注」は失注、「_入稿日」「_日付」は入稿済として扱います。全タブに同じ画像（ロゴ・注意書き）は外し、行の近くに貼ったスクショだけを残します</p>
       </CardContent>
     </Card>
   );

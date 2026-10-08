@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Image as ImageIcon, CopyPlus, Check, Minus, Link2, FileSpreadsheet } from "lucide-react";
+import { ExternalLink, Image as ImageIcon, CopyPlus, Check, Minus, Link2, FileSpreadsheet, PackageCheck } from "lucide-react";
+import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
+import { costLineKey } from "@/lib/costSheetOrders";
+import { fmtOrderDate } from "@/lib/printOrders";
 import { COST_SHEET_STATUS, groupLabel, groupLines, finalTotals, defaultSelectedRows } from "@/lib/costSheets";
 
 // ============================================================================
@@ -41,7 +45,7 @@ function Thumb({ image, size = "h-12" }) {
   );
 }
 
-function LineRow({ l, images, hasFinal, checked, onToggle }) {
+function LineRow({ l, images, hasFinal, checked, onToggle, orders = [], onOpenOrder }) {
   const muted = hasFinal && !l.final;
   const rowImages = images.filter((im) => im.near_row === l.row);
   const isDiscount = /割引/.test(l.name) || Number(l.adjusted) < 0;
@@ -56,6 +60,15 @@ function LineRow({ l, images, hasFinal, checked, onToggle }) {
       <td className="px-2 py-1.5 text-[11px] text-muted-foreground whitespace-nowrap">{l.section}</td>
       <td className="px-2 py-1.5">
         <div className={`text-[12.5px] ${l.final ? "font-semibold" : "font-medium"} ${isDiscount ? "text-red-700" : ""}`}>{l.name || <span className="text-muted-foreground">（項目名なし）</span>}</div>
+        {orders.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {orders.map((o) => (
+              <button key={o.id} type="button" onClick={() => onOpenOrder?.(o)} className="inline-flex items-center gap-1 rounded-full border border-teal-300 bg-teal-50 px-1.5 leading-4 text-[9.5px] font-semibold text-teal-800 hover:bg-teal-100" title="入稿記録を開く" data-testid="cost-ordered-chip">
+                <PackageCheck className="w-2.5 h-2.5" /> 入稿済 {fmtOrderDate(o.ordered_on)}
+              </button>
+            ))}
+          </div>
+        )}
         {l.memo && <div className="text-[11px] text-muted-foreground whitespace-pre-line line-clamp-4" title={l.memo}>{l.memo}</div>}
         {(l.author || l.entered_on) && <div className="text-[10px] text-muted-foreground/70 mt-0.5">{[l.author, fmtDate(l.entered_on)].filter(Boolean).join("・")}</div>}
       </td>
@@ -99,6 +112,22 @@ function LineRow({ l, images, hasFinal, checked, onToggle }) {
 export default function CostSheetPane({ sheet, clientName }) {
   const navigate = useNavigate();
   const groups = useMemo(() => groupLines(sheet.lines), [sheet.lines]);
+  // この社内見積の行から作った入稿記録（最終納品チェックから作ったもの）
+  const { data: clientOrders = [], refetch: refetchOrders } = useQuery({
+    queryKey: ["printOrders", "costSheet", sheet.client_id || sheet.client_name],
+    queryFn: () => db.entities.PrintOrder.filter(sheet.client_id ? { client_id: sheet.client_id } : { client_name: sheet.client_name }, "-ordered_on"),
+    retry: false,
+  });
+  const ordersByRow = useMemo(() => {
+    const m = new Map();
+    for (const l of sheet.lines || []) {
+      const key = costLineKey(sheet.id, l.row);
+      const list = clientOrders.filter((o) => o.estimate_line_id === key);
+      if (list.length) m.set(l.row, list);
+    }
+    return m;
+  }, [clientOrders, sheet.id, sheet.lines]);
+  const [openOrder, setOpenOrder] = useState(null);
   const images = sheet.images || [];
   const fin = useMemo(() => finalTotals(sheet.lines), [sheet.lines]);
   const hasFinal = !!fin;
@@ -196,7 +225,7 @@ export default function CostSheetPane({ sheet, clientName }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {g.lines.map((l) => <LineRow key={l.row} l={l} images={images} hasFinal={hasFinal} checked={selected.has(l.row)} onToggle={() => toggle(l.row)} />)}
+                  {g.lines.map((l) => <LineRow key={l.row} l={l} images={images} hasFinal={hasFinal} checked={selected.has(l.row)} onToggle={() => toggle(l.row)} orders={ordersByRow.get(l.row)} onOpenOrder={setOpenOrder} />)}
                 </tbody>
               </table>
               {imgs.length > 0 && (
@@ -215,6 +244,7 @@ export default function CostSheetPane({ sheet, clientName }) {
           </div>
         )}
       </div>
+      <PrintOrderDialog open={!!openOrder} onOpenChange={(v) => { if (!v) setOpenOrder(null); }} order={openOrder} onSaved={() => refetchOrders()} />
     </div>
   );
 }

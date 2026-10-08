@@ -1,3 +1,4 @@
+import { isPrintCostLine, costLineKey, ordersFromCostSheets } from '../src/lib/costSheetOrders.js';
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { getAccessToken } from './_lib/gmail.js';
 import { readXlsx, colLetter } from './_lib/xlsx.js';
@@ -112,6 +113,22 @@ function matchClient(name, clients) {
   return clients.find((c) => normName(c.name) === n) || clients.find((c) => normName(c.name).includes(n) || n.includes(normName(c.name))) || null;
 }
 
+/**
+ * 最終納品チェック（T 列の ✓）が付いた印刷の行を入稿記録にする（すでにある行は作らない）。作った件数を返す。
+ *   入稿記録の SQL（0031）が未実行なら何もしない。
+ */
+async function addPrintOrders(admin, cs) {
+  const keys = (cs.lines || []).filter(isPrintCostLine).map((l) => costLineKey(cs.id, l.row));
+  if (keys.length === 0) return 0;
+  const { data: existing, error } = await admin.from('print_orders').select('estimate_line_id').in('estimate_line_id', keys);
+  if (error) return 0;
+  const rows = ordersFromCostSheets([cs], new Set((existing || []).map((e) => e.estimate_line_id)));
+  if (rows.length === 0) return 0;
+  const { error: e2 } = await admin.from('print_orders').insert(rows);
+  if (e2) { console.error('[cost-sheet-import] print_orders', e2.message); return 0; }
+  return rows.length;
+}
+
 export default async function handler(req, res) {
   if (!requirePost(req, res)) return;
   const user = await requireMember(req, res);
@@ -202,11 +219,12 @@ export default async function handler(req, res) {
           authors: parsed.authors, last_entry_date: parsed.last_entry_date || null,
           lines: parsed.lines, images, imported_at: new Date().toISOString(), imported_by: user.id,
         };
-        const { error } = await admin.from('cost_sheets').upsert(row, { onConflict: 'spreadsheet_id,sheet_gid' });
+        const { data: saved, error } = await admin.from('cost_sheets').upsert(row, { onConflict: 'spreadsheet_id,sheet_gid' }).select('id').single();
         if (error) throw new Error(`保存できませんでした（${sheet.name}）: ${error.message}`);
-        results.push({ sheet: sheet.name, title: parsed.title, status: parsed.status, lines: parsed.lines.length, images: images.length, sell_total: parsed.sell_total, cost_total: parsed.cost_total });
+        const orders = await addPrintOrders(admin, { ...row, id: saved.id });
+        results.push({ sheet: sheet.name, title: parsed.title, status: parsed.status, lines: parsed.lines.length, images: images.length, sell_total: parsed.sell_total, cost_total: parsed.cost_total, orders });
       }
-      res.status(200).json({ file: fileMeta.name, mode, note: mode === 'values' ? 'ファイルが大きく画像付きで書き出せなかったため、数字と文字だけを取り込みました（スクショは入っていません）' : '', client_id: clientId, client_name: clientName, period: title.period, sheets: results, imported: results.filter((r) => !r.skipped).length, skipped: results.filter((r) => r.skipped).length });
+      res.status(200).json({ orders: results.reduce((n, r) => n + (r.orders || 0), 0), file: fileMeta.name, mode, note: mode === 'values' ? 'ファイルが大きく画像付きで書き出せなかったため、数字と文字だけを取り込みました（スクショは入っていません）' : '', client_id: clientId, client_name: clientName, period: title.period, sheets: results, imported: results.filter((r) => !r.skipped).length, skipped: results.filter((r) => r.skipped).length });
       return;
     }
 
