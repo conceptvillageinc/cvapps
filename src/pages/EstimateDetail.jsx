@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList, PackageCheck
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList, PackageCheck, FolderKanban
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -30,6 +30,7 @@ import DesignFeeTable from "@/components/estimates/DesignFeeTable";
 import RevisionPanel from "@/components/estimates/RevisionPanel";
 import { convertLegacyEstimate, summarizeConversion } from "@/lib/convertLegacyEstimate";
 import { estimateQuery } from "@/lib/estimateQuery";
+import ProjectLinkDialog from "@/components/estimates/ProjectLinkDialog";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
@@ -134,6 +135,7 @@ export default function EstimateDetail() {
   // 新形式: ステップ（quote = 見積書を作る / review = レビュー・承認）と依頼ツール
   const [step, setStep] = useState("quote");
   const [toolOpen, setToolOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false); // 案件に紐づける（あとから）
   const [toolStep, setToolStep] = useState(null);
   const { rules: pricingRules } = usePricingRules();
   const { grossMarginTarget } = useSystemSettings();
@@ -310,13 +312,19 @@ export default function EstimateDetail() {
               {formData.status === "review_pending" && formData.review_requested_to_name && (
                 <span className="ml-2 inline-flex items-center gap-1 text-amber-700"><UserCheck className="w-3 h-3" /> 相談先: {formData.review_requested_to_name}</span>
               )}
-              {project && (
+              {" · "}
+              {project ? (
                 <>
-                  {" · "}
                   <Link to={`/projects/${project.id}`} className="text-primary hover:underline">
                     案件 {project.project_number} {project.name}
                   </Link>
+                  <button type="button" onClick={() => setLinkOpen(true)} className="ml-1.5 text-muted-foreground hover:text-primary hover:underline" data-testid="project-link-change">変更</button>
                 </>
+              ) : (
+                // 案件を選ばずに作った見積は、あとから案件に紐づけられる
+                <button type="button" onClick={() => setLinkOpen(true)} className="inline-flex items-center gap-1 rounded border border-dashed border-amber-400 bg-amber-50 px-1.5 text-amber-800 hover:bg-amber-100" data-testid="project-link-open">
+                  <FolderKanban className="w-3 h-3" /> 案件未設定・案件に紐づける
+                </button>
               )}
             </p>
           </div>
@@ -661,6 +669,13 @@ export default function EstimateDetail() {
         </TabsContent>
       </Tabs>
       )}
+      <ProjectLinkDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        estimate={formData}
+        current={project || null}
+        onLinked={(p) => handleUpdate({ project_id: p?.id || null })}
+      />
     </div>
   );
 }
