@@ -195,7 +195,7 @@ function Thinking() {
   return (
     <div className="mt-2 flex gap-2 items-center text-xs text-teal-800" data-testid="chat-thinking">
       <span className="w-6 h-6 shrink-0 rounded-full bg-teal-700 text-white flex items-center justify-center"><Loader2 className="w-3 h-3 animate-spin" /></span>
-      AI が議事録と資料を読んで回答を作っています…（資料が多いと 1〜2 分かかります。この画面を離れても・ブラウザを閉じても続き、届くと自動で表示されます）
+      AI が議事録と資料を読んで回答を作っています…（資料が多いと 1〜2 分かかります。この画面から離れても（ブラウザを閉じても）バックグラウンド処理を行います。完了するとまたこのブラウザで確認ができます。）
     </div>
   );
 }
