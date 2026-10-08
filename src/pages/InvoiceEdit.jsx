@@ -20,6 +20,7 @@ import {
 import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, Truck, Send, CircleCheck, Undo2, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
+import DocumentPreview, { useDocPreviewPrefs, DocPreviewSwitches } from "@/components/documents/DocumentPreview";
 import ClientCombobox from "@/components/clients/ClientCombobox";
 import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
 import { Mail } from "lucide-react";
@@ -91,6 +92,7 @@ export default function InvoiceEdit() {
   const company = useMemo(() => companyInfoFromSettings(settings), [settings]);
 
   const [form, setForm] = useState(null);
+  const pv = useDocPreviewPrefs(); // プレビューの表示・左右（見積書の画面と同じ）
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
   const [paidOpen, setPaidOpen] = useState(false);
@@ -313,8 +315,8 @@ export default function InvoiceEdit() {
   const isOverdue = form.status === "sent" && form.due_date && form.due_date < todayString();
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+    <div className={`mx-auto space-y-5 ${pv.show ? "max-w-[1800px]" : "max-w-5xl"}`}>
+      <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <Button variant="ghost" size="icon" onClick={() => navigate("/invoices")}><ArrowLeft className="w-4 h-4" /></Button>
           <div className="min-w-0">
@@ -330,7 +332,7 @@ export default function InvoiceEdit() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {!isNew && (
             <>
               <Button size="sm" className="gap-1.5 text-xs" onClick={previewPdf} disabled={pdfLoading}>
@@ -381,6 +383,7 @@ export default function InvoiceEdit() {
             {save.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {isNew ? "作成" : "保存"}
           </Button>
         </div>
+        <DocPreviewSwitches prefs={pv} />
       </div>
 
       {form.status === "paid" && (
@@ -389,8 +392,10 @@ export default function InvoiceEdit() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card className="lg:col-span-2">
+      <div className={`grid grid-cols-1 gap-5 items-start ${pv.show ? "2xl:grid-cols-2" : ""}`}>
+      <div className={`min-w-0 space-y-5 ${pv.left ? "2xl:order-last" : ""}`}>
+      <div className={`grid grid-cols-1 ${pv.show ? "" : "lg:grid-cols-3"} gap-5`}>
+        <Card className={pv.show ? "" : "lg:col-span-2"}>
           <CardHeader className="pb-3"><CardTitle className="text-sm">宛先・件名</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5 sm:col-span-2">
@@ -409,7 +414,7 @@ export default function InvoiceEdit() {
             <div className="space-y-1.5">
               <Label className="text-xs">郵便番号</Label>
               <Input value={form.client_postal_code || ""} onChange={(e) => set("client_postal_code", e.target.value)} className="h-9 font-mono" disabled={locked} />
-              {form.client_postal_code && <p className="text-[10px] text-muted-foreground">〒{formatPostalCode(form.client_postal_code)}</p>}
+              {form.client_postal_code && <p className="text-[10px] text-muted-foreground">{formatPostalCode(form.client_postal_code)}</p>}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">住所</Label>
@@ -608,6 +613,14 @@ export default function InvoiceEdit() {
           </CardContent>
         </Card>
       )}
+
+      </div>
+      {pv.show && (
+        <aside className="min-w-0 2xl:sticky 2xl:top-0 2xl:max-h-[calc(100vh-6rem)] 2xl:overflow-y-auto">
+          <DocumentPreview type="invoice" doc={form} totals={totals} company={company} />
+        </aside>
+      )}
+      </div>
 
       {!isNew && (
         <DocumentEmailDialog

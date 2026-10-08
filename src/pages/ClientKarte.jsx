@@ -303,7 +303,7 @@ export default function ClientKarte() {
             <CardContent className="pt-4 space-y-3">
               <Field label="メール">{client.email}{Array.isArray(client.cc_emails) && client.cc_emails.filter(Boolean).length > 0 && <span className="block text-[10px] text-muted-foreground">CC: {client.cc_emails.filter(Boolean).join(", ")}</span>}</Field>
               <Field label="電話">{client.phone}</Field>
-              <Field label="住所">{client.postal_code ? `〒${formatPostalCode(client.postal_code)} ` : ""}{client.address}</Field>
+              <Field label="住所">{client.postal_code ? `${formatPostalCode(client.postal_code)} ` : ""}{client.address}</Field>
               <Field label="請求書の送付">
                 {INVOICE_DELIVERY_METHODS[client.invoice_delivery_method] || "—"}
                 {client.has_recurring_billing && <Badge className="ml-2 text-[9px] bg-teal-100 text-teal-700 hover:bg-teal-100">定期売上あり</Badge>}

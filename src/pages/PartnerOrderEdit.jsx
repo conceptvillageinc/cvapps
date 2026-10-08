@@ -131,8 +131,8 @@ export default function PartnerOrderEdit() {
 
   // 納品先の初期文: CV は会社情報の最初の拠点、クライアント直送は見積のクライアントの住所
   const deliveryPreset = (kind) => {
-    if (kind === "cv") { const loc = (company.locations || [])[0]; return loc ? `${company.name}　〒${formatPostalCode(loc.postal)} ${loc.address || ""}` : company.name; }
-    if (kind === "client") { const c = clients.find((x) => x.name === estimate?.client_name); return c ? `${c.name}　〒${formatPostalCode(c.postal_code || "")} ${c.address || ""}` : (estimate?.client_name || ""); }
+    if (kind === "cv") { const loc = (company.locations || [])[0]; return loc ? `${company.name}　${formatPostalCode(loc.postal)} ${loc.address || ""}` : company.name; }
+    if (kind === "client") { const c = clients.find((x) => x.name === estimate?.client_name); return c ? `${c.name}　${formatPostalCode(c.postal_code || "")} ${c.address || ""}` : (estimate?.client_name || ""); }
     return "";
   };
   useEffect(() => {
