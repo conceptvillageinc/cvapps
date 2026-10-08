@@ -120,8 +120,8 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
     });
     drawTitle(pdf, '御見積書');
     drawSubjectAndMeta(pdf, estimate.estimate_title || estimate.print_type || '', [
-      ['見積日', fmtDate(estimateDate)],
       ['見積書番号', estimate.estimate_number || ''],
+      ['発行日', fmtDate(estimateDate)],
       ['有効期限', fmtDate(validUntil)],
     ]);
     let y = drawSummary(pdf, { subtotal: totals.subtotal, tax: totals.tax, total: totals.total, totalLabel: '見積金額' });

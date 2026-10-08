@@ -85,8 +85,8 @@ function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, pag
   drawTitle(pdf, isInvoice ? '御請求書' : '納品書');
 
   const meta = isInvoice
-    ? [['請求日', fmtDate(doc.invoice_date)], ['請求書番号', doc.invoice_number], ['登録番号', company.registration_number || '']]
-    : [['納品日', fmtDate(doc.delivery_date)], ['納品書番号', doc.delivery_number], ['登録番号', company.registration_number || '']];
+    ? [['請求書番号', doc.invoice_number], ['請求日', fmtDate(doc.invoice_date)], ['登録番号', company.registration_number || '']]
+    : [['納品書番号', doc.delivery_number], ['納品日', fmtDate(doc.delivery_date)], ['登録番号', company.registration_number || '']];
   drawSubjectAndMeta(pdf, doc.title || '', meta);
 
   let y = drawSummary(pdf, { subtotal: doc.subtotal, tax: doc.tax, total: doc.total, totalLabel: isInvoice ? '請求金額' : '合計金額' });

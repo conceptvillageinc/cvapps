@@ -67,8 +67,8 @@ export default function DocumentPreview({ type, doc, totals, company }) {
   const breakdown = totals.tax_breakdown?.length ? totals.tax_breakdown : [{ rate: 10, taxable: totals.subtotal, tax: totals.tax }];
   const hasReduced = items.some((li) => Number(li.tax_rate) === 8);
   const meta = isInvoice
-    ? [["請求日", dateOf(doc.invoice_date)], ["請求書番号", doc.invoice_number || "（作成時に採番）"], ["登録番号", company.registration_number || ""]]
-    : [["納品日", dateOf(doc.delivery_date)], ["納品書番号", doc.delivery_number || "（作成時に採番）"], ["登録番号", company.registration_number || ""]];
+    ? [["請求書番号", doc.invoice_number || "（作成時に採番）"], ["請求日", dateOf(doc.invoice_date)], ["登録番号", company.registration_number || ""]]
+    : [["納品書番号", doc.delivery_number || "（作成時に採番）"], ["納品日", dateOf(doc.delivery_date)], ["登録番号", company.registration_number || ""]];
   const who = doc.person_in_charge || company.representative || "";
   const banks = (company.bank_accounts || []).map((b) => `${b.bank || ""} ${b.branch || ""}（${b.type || "普通"}）${b.number || ""}${b.holder ? ` ${b.holder}` : ""}`.trim());
   const cols = isInvoice ? 5 : 4;

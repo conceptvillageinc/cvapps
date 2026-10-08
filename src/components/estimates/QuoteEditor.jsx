@@ -380,8 +380,8 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               {/* 見積日・番号は右上（PDF と同じ） */}
               <table className="text-xs w-full mb-2">
                 <tbody>
-                  <tr><td className="pr-3 py-0.5">見積日</td><td className="text-foreground text-right">{estimateDate}</td></tr>
                   <tr><td className="pr-3 py-0.5">見積書番号</td><td className="text-foreground text-right">{estimate.estimate_number}</td></tr>
+                  <tr><td className="pr-3 py-0.5">発行日</td><td className="text-foreground text-right">{estimateDate}</td></tr>
                   <tr><td className="pr-3 py-0.5">有効期限</td><td className="text-foreground text-right">{validityMonths}ヶ月（{validUntil}）</td></tr>
                 </tbody>
               </table>

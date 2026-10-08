@@ -68,7 +68,7 @@ function drawPage(pdf, { order, company, stamp, logo, rows, rowsPerPage, page, p
     logo,
   });
   drawTitle(pdf, '発 注 書');
-  drawSubjectAndMeta(pdf, order.title || '', [['発注日', fmtDate(order.order_date)], ['発注書番号', order.po_number], ['登録番号', company.registration_number || '']]);
+  drawSubjectAndMeta(pdf, order.title || '', [['発注書番号', order.po_number], ['発注日', fmtDate(order.order_date)], ['登録番号', company.registration_number || '']]);
   let y = drawSummary(pdf, { subtotal: order.subtotal, tax: order.tax, total: order.total, totalLabel: '発注金額' });
   const deliveryTo = [KIND_LABEL[order.delivery_to_kind] || '', order.delivery_to || ''].filter(Boolean).join('\n');
   y = drawOrderBand(pdf, y + 8, { dueDate: order.due_date, deliveryTo, paymentTerms: order.payment_terms });

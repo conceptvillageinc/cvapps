@@ -105,7 +105,7 @@ function draw(pdf, { estimate, client, company }) {
   const rw = PAGE.width - MARGIN - rx;
   let ry = MARGIN;
   // 日付・番号は右上（どの帳票も同じ位置）
-  const meta = [['発注日', '　　　年　　月　　日'], ['発注書番号', `${estimate.estimate_number || ''}-PO`], ['御見積書番号', estimate.estimate_number || '']];
+  const meta = [['発注書番号', `${estimate.estimate_number || ''}-PO`], ['発注日', '　　　年　　月　　日'], ['御見積書番号', estimate.estimate_number || '']];
   const metaX = 380; const metaValX = 450;
   pdf.font('jp').fontSize(8.5);
   meta.forEach(([k, v], i) => {
