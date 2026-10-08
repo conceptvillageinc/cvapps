@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions';
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { claude, MODEL, normalizeSchema, textOf, fileBlock } from './_lib/claude.js';
 import { getAccessToken } from './_lib/gmail.js';
@@ -12,9 +13,11 @@ import { flattenDesignCatalog } from '../src/lib/designCatalog.js';
 // 議事録の「AI に依頼」。議事録ごとのやり取りは meeting_chat_messages に残し、全メンバーが読める。
 //
 //   { action: 'send', meeting_id, message, attachments: [{ path, name, type, size }] }
-//       依頼を保存 → 議事録・文字起こし・添付資料・そのクライアントの社内見積と過去の見積・
-//       価格マスタ・デザイン費マスタを Claude に渡して回答を作る → 回答を保存して返す。
-//       見積の依頼なら回答に「たたき台」（draft）が付く。
+//       依頼を保存してすぐ返し（202）、回答は裏で作り続ける（waitUntil。画面を離れても・ブラウザを
+//       閉じても止まらない）。議事録・文字起こし・添付資料・そのクライアントの社内見積と過去の見積・
+//       価格マスタ・デザイン費マスタを Claude に渡して回答を作り、回答を保存する。画面は回答が
+//       届くまで読み直す。見積の依頼なら回答に「たたき台」（draft）が付く。
+//       回答を作れなかったときは、理由を書いた回答（draft.error = true）を残す。
 //   { action: 'sheet', message_id }
 //       回答のたたき台を Google スプレッドシートに出力する（依頼した本人のマイドライブ）。
 // ============================================================================
@@ -138,7 +141,10 @@ const SYSTEM = `あなたは株式会社コンセプト・ヴィレッジ（デ�
 /** 過去のやり取りを Claude の会話にする（同じ役が続くときはつなぐ） */
 function historyMessages(rows) {
   const out = [];
+  // 回答を作れなかったやり取り（エラーの回答と、その依頼）は会話の流れに入れない
+  const failed = new Set(rows.filter((m) => m.role === 'assistant' && m.draft?.error).map((m) => m.reply_to));
   for (const m of rows) {
+    if ((m.role === 'assistant' && m.draft?.error) || failed.has(m.id)) continue;
     let text = m.content || '';
     if (m.role === 'user' && (m.attachments || []).length) text += `\n（添付: ${m.attachments.map((a) => a.name).join('、')}）`;
     if (m.role === 'assistant' && m.draft?.items?.length) {
@@ -198,6 +204,12 @@ async function send(req, res, user) {
     .insert({ meeting_id: meetingId, role: 'user', content: text, attachments: files, author_id: user.id, author_name: name }).select().single();
   if (insErr) throw new Error(`依頼を保存できませんでした: ${insErr.message}`);
 
+  // 回答づくりは裏で続ける（この関数の応答を返したあとも、maxDuration まで動く）
+  waitUntil(answerRequest({ admin, user, meeting, meetingId, text, files, history, mine, name }));
+  res.status(202).json({ request: mine, pending: true });
+}
+
+async function answerRequest({ admin, user, meeting, meetingId, text, files, history, mine, name }) {
   try {
     // 添付（今回の依頼の分）。PDF・画像はそのまま、Word・Excel・PowerPoint・テキストは本文を取り出す
     const content = [];
@@ -256,11 +268,16 @@ async function send(req, res, user) {
     const { data: saved, error: e2 } = await admin.from('meeting_chat_messages')
       .insert({ meeting_id: meetingId, role: 'assistant', content: reply, draft, reply_to: mine.id, author_id: user.id, author_name: name }).select().single();
     if (e2) throw new Error(`回答を保存できませんでした: ${e2.message}`);
-    res.status(200).json({ request: mine, reply: saved });
+    return saved;
   } catch (err) {
-    // 回答が作れなかった依頼は消す（画面は入力欄に文面を戻す）。添付ファイルは画面側が消す
-    await admin.from('meeting_chat_messages').delete().eq('id', mine.id);
-    throw err;
+    // 回答を作れなかったことを、理由つきの回答として残す（依頼は残すので、文面をコピーして出し直せる）
+    console.error('meeting-chat answer failed', err);
+    await admin.from('meeting_chat_messages').insert({
+      meeting_id: meetingId, role: 'assistant', reply_to: mine.id, author_id: user.id, author_name: name,
+      content: `回答を作れませんでした：${String(err?.message || err).slice(0, 300)}\nお手数ですが、もう一度依頼してください。`,
+      draft: { error: true },
+    });
+    return null;
   }
 }
 

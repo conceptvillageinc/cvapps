@@ -178,6 +178,28 @@ function FragmentGroup({ g }) {
  * @param {object} p.meeting
  * @param {object[]} p.references   議事録の「参考資料」（summary.attachments）。ここから選んで添付できる
  */
+// 回答を作っている依頼: 回答がまだ無く、依頼から 6 分以内（サーバーの上限は 5 分）
+const PENDING_MS = 6 * 60 * 1000;
+const createdMs = (m) => new Date(m.created_at || m.created_date || 0).getTime();
+const repliedIds = (messages) => new Set(messages.filter((m) => m.role === "assistant" && m.reply_to).map((m) => m.reply_to));
+function pendingIds(messages, now) {
+  const replied = repliedIds(messages);
+  return messages.filter((m) => m.role === "user" && !replied.has(m.id) && now - createdMs(m) < PENDING_MS).map((m) => m.id);
+}
+function expiredIds(messages, now) {
+  const replied = repliedIds(messages);
+  return messages.filter((m) => m.role === "user" && !replied.has(m.id) && now - createdMs(m) >= PENDING_MS && now - createdMs(m) < 24 * 3600 * 1000).map((m) => m.id);
+}
+
+function Thinking() {
+  return (
+    <div className="mt-2 flex gap-2 items-center text-xs text-teal-800" data-testid="chat-thinking">
+      <span className="w-6 h-6 shrink-0 rounded-full bg-teal-700 text-white flex items-center justify-center"><Loader2 className="w-3 h-3 animate-spin" /></span>
+      AI が議事録と資料を読んで回答を作っています…（資料が多いと 1〜2 分かかります。この画面を離れても・ブラウザを閉じても続き、届くと自動で表示されます）
+    </div>
+  );
+}
+
 export default function MeetingChat({ meeting, references = EMPTY }) {
   const meetingId = meeting.id;
   const queryClient = useQueryClient();
@@ -192,7 +214,21 @@ export default function MeetingChat({ meeting, references = EMPTY }) {
   const { data: messages = EMPTY, isLoading } = useQuery({
     queryKey: ["meetingChat", meetingId],
     queryFn: () => db.entities.MeetingChatMessage.filter({ meeting_id: meetingId }, "created_at"),
+    // 回答を作っている依頼があるあいだは 3 秒ごとに読み直す（回答はサーバーの裏で作るので、画面を離れても続く）
+    refetchInterval: (q) => (pendingIds(q.state.data || EMPTY, Date.now()).length > 0 ? 3000 : false),
+    staleTime: 0,
   });
+  // 回答待ちの依頼が時間切れになったかを見直すため、待っているあいだは 15 秒ごとに描き直す
+  const [now, setNow] = useState(() => Date.now());
+  const pending = new Set(pendingIds(messages, now));
+  const expired = new Set(expiredIds(messages, now));
+  const waiting = pending.size > 0;
+  useEffect(() => {
+    if (!waiting) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, [waiting]);
+  useEffect(() => { setNow(Date.now()); }, [messages]);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["meetingChat", meetingId] });
   useEffect(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }, [messages.length, sending]);
 
@@ -227,8 +263,9 @@ export default function MeetingChat({ meeting, references = EMPTY }) {
     setText("");
     setFiles([]);
     try {
+      // 依頼を保存したらすぐ戻る（回答はサーバーが作り続け、届いたら一覧に出る）
       await db.functions.invoke("meetingChat", { action: "send", meeting_id: meetingId, message: body, attachments: req.attachments });
-      refresh();
+      await refresh();
     } catch (e) {
       toast.error("回答を作れませんでした: " + e.message);
       setText(body);
@@ -261,6 +298,8 @@ export default function MeetingChat({ meeting, references = EMPTY }) {
                 <p className="text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">{m.author_name || "（不明）"}</span>　{when(m.created_at || m.created_date)}</p>
                 <div className="mt-0.5 rounded-md bg-muted/40 px-3 py-2 text-[13px] whitespace-pre-wrap">{m.content}</div>
                 {(m.attachments || []).length > 0 && <div className="mt-1 flex flex-wrap gap-1">{m.attachments.map((a) => <FileChip key={a.path} a={a} />)}</div>}
+                {pending.has(m.id) && <Thinking />}
+                {expired.has(m.id) && <p className="mt-1.5 text-[11px] text-amber-800">回答が届きませんでした（時間切れ）。お手数ですが、もう一度依頼してください</p>}
               </div>
             </div>
           ) : (
@@ -271,7 +310,7 @@ export default function MeetingChat({ meeting, references = EMPTY }) {
                   <span><span className="font-semibold text-teal-800">AI（Claude）</span>　{m.author_name ? `${m.author_name} の依頼への回答` : ""}　{when(m.created_at || m.created_date)}</span>
                   <button type="button" onClick={() => copy(m.content)} className="ml-auto inline-flex items-center gap-0.5 hover:text-foreground"><Copy className="w-3 h-3" /> コピー</button>
                 </p>
-                <div className="rounded-md border px-3 py-2 bg-white"><RichText text={m.content} /></div>
+                <div className={`rounded-md border px-3 py-2 ${m.draft?.error ? "border-amber-300 bg-amber-50 text-amber-900" : "bg-white"}`}><RichText text={m.content} /></div>
                 {m.draft?.items?.length > 0 && <DraftCard msg={m} meetingId={meetingId} onSheet={refresh} />}
               </div>
             </div>
@@ -285,9 +324,9 @@ export default function MeetingChat({ meeting, references = EMPTY }) {
                   {sending.attachments.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{sending.attachments.map((a) => <FileChip key={a.path} a={a} />)}</div>}
                 </div>
               </div>
-              <div className="flex gap-2 items-center text-xs text-teal-800" data-testid="chat-thinking">
+              <div className="flex gap-2 items-center text-xs text-teal-800" data-testid="chat-sending">
                 <span className="w-7 h-7 shrink-0 rounded-full bg-teal-700 text-white flex items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin" /></span>
-                AI が議事録と資料を読んで回答を作っています…（資料が多いと 1〜2 分かかります。この画面を離れると回答は保存されますが表示されません）
+                依頼を送っています…
               </div>
             </>
           )}
