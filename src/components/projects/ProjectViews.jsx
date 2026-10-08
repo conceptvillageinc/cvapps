@@ -16,6 +16,7 @@ import { isOffDay } from "@/lib/jpHolidays";
 import { toast } from "sonner";
 import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check } from "lucide-react";
 import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
+import InlineBadgeSelect from "@/components/projects/InlineBadgeSelect";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -633,9 +634,10 @@ function NextGroupRows({ group: g }) {
             <span className="block text-[10px] text-muted-foreground truncate">{p.client_name}</span>
             <Link to={`/projects/${p.id}`} className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>
           </TableCell>
-          <TableCell>{p.deal_probability && <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>}</TableCell>
-          <TableCell>{p.phase && <Badge className={`text-[10px] whitespace-nowrap ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}</TableCell>
-          <TableCell>{(() => { const st = PROJECT_STATUS_MAP[p.status] || PROJECT_STATUS_MAP.open; return <Badge className={`text-[10px] whitespace-nowrap ${st.color}`}>{st.label}</Badge>; })()}</TableCell>
+          {/* 受注確度・フェーズ・状態は札をクリックしてその場で変えられる */}
+          <TableCell><InlineBadgeSelect project={p} field="deal_probability" /></TableCell>
+          <TableCell><InlineBadgeSelect project={p} field="phase" /></TableCell>
+          <TableCell><InlineBadgeSelect project={p} field="status" /></TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_cost)}</TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.confirmed_cost)}</TableCell>

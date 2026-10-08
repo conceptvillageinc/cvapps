@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat } from "lucide-react";
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
 import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
+import InlineBadgeSelect from "@/components/projects/InlineBadgeSelect";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
-import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
+import { PROJECT_STATUS_MAP } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { DailyView, NextActionView } from "@/components/projects/ProjectViews";
 
@@ -32,7 +32,7 @@ const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status"];
 const COLUMN_ORDER = ["registered_at", "client_name", "due_date", "name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "payment_due_date", "project_number"];
 
 /** 案件一覧（標準）の 1 マス */
-function ProjectCell({ col, p, st }) {
+function ProjectCell({ col, p }) {
   switch (col) {
     case "project_number": return (
       <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
@@ -48,23 +48,10 @@ function ProjectCell({ col, p, st }) {
         </div>
       </TableCell>
     );
-    case "deal_probability": return (
-      <TableCell>
-        {p.deal_probability && (
-          <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>
-        )}
-      </TableCell>
-    );
-    case "phase": return (
-      <TableCell>
-        {p.phase && <Badge className={`text-[10px] ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}
-      </TableCell>
-    );
-    case "status": return (
-      <TableCell>
-        <Badge className={`text-[10px] whitespace-nowrap ${st.color}`}>{st.label}</Badge>
-      </TableCell>
-    );
+    // 受注確度・フェーズ・状態は札をクリックしてその場で変えられる
+    case "deal_probability": return <TableCell><InlineBadgeSelect project={p} field="deal_probability" /></TableCell>;
+    case "phase": return <TableCell><InlineBadgeSelect project={p} field="phase" /></TableCell>;
+    case "status": return <TableCell><InlineBadgeSelect project={p} field="status" /></TableCell>;
     case "expected_revenue": return (
       <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
     );
@@ -429,10 +416,9 @@ export default function ProjectList() {
                 </TableHeader>
                 <TableBody>
                   {sorted.map((p) => {
-                    const st = PROJECT_STATUS_MAP[p.status] || PROJECT_STATUS_MAP.open;
                     return (
                       <TableRow key={p.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/projects/${p.id}`)}>
-                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} st={st} />)}
+                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} />)}
                         <TableCell>
                           <Link to={`/projects/${p.id}`} onClick={(e) => e.stopPropagation()}>
                             <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
