@@ -27,6 +27,7 @@ import { formatPostalCode } from "@/lib/postalCode";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import PrintOrderSuggestDialog from "@/components/printOrders/PrintOrderSuggestDialog";
 import { isPrintLine, orderFromLine } from "@/lib/printOrders";
+import { estimateQuery } from "@/lib/estimateQuery";
 import {
   newDocItem, docItemsFromEstimate, computeDocTotals, generateDocumentNumber,
   companyInfoFromSettings, DELIVERY_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
@@ -82,11 +83,8 @@ export default function DeliveryNoteEdit() {
 
   const sourceEstimateId = searchParams.get("estimate");
   const sourceProjectId = searchParams.get("project");
-  const { data: sourceEstimate } = useQuery({
-    queryKey: ["estimate", sourceEstimateId],
-    queryFn: () => db.entities.Estimate.get(sourceEstimateId),
-    enabled: isNew && !!sourceEstimateId,
-  });
+  // 見積は開くたびに読み直してから写す（直したばかりの明細を写すため。キーの形は見積の画面とそろえる）
+  const { data: sourceEstimate, isFetchedAfterMount: sourceEstimateFresh } = useQuery({ ...estimateQuery(sourceEstimateId, { fresh: true }), enabled: isNew && !!sourceEstimateId });
   const projectId = form?.project_id || sourceProjectId || sourceEstimate?.project_id || null;
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -120,7 +118,7 @@ export default function DeliveryNoteEdit() {
       if (existing) setForm({ ...emptyForm(user), ...existing, line_items: existing.line_items || [] });
       return;
     }
-    if (sourceEstimateId && !sourceEstimate) return;
+    if (sourceEstimateId && (!sourceEstimate || !sourceEstimateFresh)) return;
     if (sourceProjectId && !project) return;
     const base = emptyForm(user);
     if (sourceEstimate) {
@@ -140,7 +138,7 @@ export default function DeliveryNoteEdit() {
     base.notes = company.delivery_notes || "";
     setForm(base);
      
-  }, [isNew, existing, sourceEstimate, project, sourceEstimateId, sourceProjectId, company.delivery_notes]);
+  }, [isNew, existing, sourceEstimate, sourceEstimateFresh, project, sourceEstimateId, sourceProjectId, company.delivery_notes]);
 
   // クライアントマスタから住所・郵便番号を補う
   useEffect(() => {
@@ -213,6 +211,11 @@ export default function DeliveryNoteEdit() {
     },
     onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
   });
+  // 請求書・領収書を作る前に、画面で直した内容を保存しておく（保存前の内容が写らないように）
+  const saveThenGo = async (path) => {
+    try { await save.mutateAsync(); } catch { return; }
+    navigate(path);
+  };
 
   const remove = useMutation({
     mutationFn: () => db.entities.DeliveryNote.delete(id),
@@ -289,11 +292,11 @@ export default function DeliveryNoteEdit() {
                   <Receipt className="w-3.5 h-3.5" /> 請求書を開く
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(`/invoices/new?delivery=${id}`)}>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => saveThenGo(`/invoices/new?delivery=${id}`)}>
                   <Receipt className="w-3.5 h-3.5" /> 請求書を作成
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(`/receipts/new?delivery=${id}`)} title="この納品書の明細から領収書を作ります">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => saveThenGo(`/receipts/new?delivery=${id}`)} title="この納品書の明細から領収書を作ります">
                 <ReceiptText className="w-3.5 h-3.5" /> 領収書を発行{receipts.length > 0 ? `（${receipts.length}）` : ""}
               </Button>
               <AlertDialog>

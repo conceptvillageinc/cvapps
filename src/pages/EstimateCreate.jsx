@@ -23,6 +23,7 @@ import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { conditionsToEstimate } from "@/lib/meetingConditions";
 import { draftToLineItems, draftAmount, draftCost } from "@/lib/meetingChat";
 import { lineFromOrder } from "@/lib/printOrders";
+import { estimateQuery } from "@/lib/estimateQuery";
 
 export default function EstimateCreate() {
   const navigate = useNavigate();
@@ -52,11 +53,7 @@ export default function EstimateCreate() {
   const copyLineIds = searchParams.get("lines");
   const chatId = searchParams.get("chat"); // 議事録の「AI に依頼」の見積のたたき台から
   const reorderId = searchParams.get("reorder"); // 入稿履歴の「この内容で追加印刷の見積を作る」から
-  const { data: copyFrom } = useQuery({
-    queryKey: ["estimate", copyFromId],
-    queryFn: () => db.entities.Estimate.get(copyFromId),
-    enabled: !!copyFromId,
-  });
+  const { data: copyFrom } = useQuery(estimateQuery(copyFromId, { fresh: true }));
   const { data: lockedProject } = useQuery({
     queryKey: ["project", lockedProjectId],
     queryFn: () => db.entities.Project.get(lockedProjectId),
