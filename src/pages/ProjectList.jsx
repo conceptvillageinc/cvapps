@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat } from "lucide-react";
+import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat, Filter } from "lucide-react";
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
@@ -24,6 +24,10 @@ const VIEWS = [
   { key: "next", label: "案件別ネクストアクション" },
 ];
 
+// 案件一覧（標準）の最初の状態の絞り込み: 進行中・完了（失注・取消は隠す）
+const DEFAULT_STATUS_FILTER = [PROJECT_STATUS_MAP.open.label, PROJECT_STATUS_MAP.completed.label];
+const sameSet = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
+
 export default function ProjectList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -32,8 +36,8 @@ export default function ProjectList() {
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
   const [search, setSearch] = useState(searchParams.get("q") || "");
-  // 既定では進行中の案件だけを表示する
-  const [columnFilters, setColumnFilters] = useState({ status: [PROJECT_STATUS_MAP.open.label] });
+  // 既定では進行中・完了の案件を表示する（失注・取消は隠す）
+  const [columnFilters, setColumnFilters] = useState({ status: DEFAULT_STATUS_FILTER });
   const [sortConfig, setSortConfig] = useState({ key: "registered_at", direction: "desc" });
   const [createOpen, setCreateOpen] = useState(false);
   // 表示ビュー（標準／速報デイリー／案件別ネクストアクション）。URL の ?view= で共有できる
@@ -119,6 +123,23 @@ export default function ProjectList() {
     });
      
   }, [projects, search, columnFilters, columnDefs]);
+
+  // 状態の絞り込みで隠れている案件の数（状態ごと。検索・ほかの列の絞り込みは効かせたうえで数える）
+  const hiddenByStatus = useMemo(() => {
+    const selected = columnFilters.status;
+    if (!selected) return [];
+    const q = search.trim().toLowerCase();
+    const counts = new Map();
+    for (const p of projects) {
+      const label = columnDefs.status.getValue(p);
+      if (selected.includes(label)) continue;
+      if (q && ![p.project_number, p.client_name, p.name, p.notes].filter(Boolean).join(" ").toLowerCase().includes(q)) continue;
+      if (FILTERABLE_KEYS.some((key) => key !== "status" && columnFilters[key] && !columnFilters[key].includes(columnDefs[key].getValue(p)))) continue;
+      counts.set(label, (counts.get(label) || 0) + 1);
+    }
+    return [...counts.entries()];
+  }, [projects, search, columnFilters, columnDefs]);
+  const statusIsDefault = sameSet(columnFilters.status, DEFAULT_STATUS_FILTER);
 
   const sorted = useMemo(() => {
     if (!sortConfig) return filtered;
@@ -245,6 +266,27 @@ export default function ProjectList() {
           className="pl-9"
         />
       </div>
+
+      {view === "standard" && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950 shrink-0" data-testid="status-filter-note">
+          <Filter className="w-3.5 h-3.5 text-sky-700" />
+          {columnFilters.status ? (
+            <>
+              <span>状態：<b>{columnFilters.status.join("・") || "（なし）"}</b> の案件を表示中</span>
+              {hiddenByStatus.length > 0 && (
+                <span className="text-sky-800/80">（非表示：{hiddenByStatus.map(([label, n]) => `${label} ${n}件`).join("・")}）</span>
+              )}
+              <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>
+              {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">進行中・完了に戻す</button>}
+            </>
+          ) : (
+            <>
+              <span>状態：<b>すべて</b>（失注・取消も含む）を表示中</span>
+              <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">進行中・完了に戻す</button>
+            </>
+          )}
+        </div>
+      )}
 
       {view === "daily" ? (
         <DailyView projects={dailyRows} isLoading={isLoading} />
