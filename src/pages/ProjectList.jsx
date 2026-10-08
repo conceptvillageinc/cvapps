@@ -36,11 +36,10 @@ function sortWord({ key, direction }) {
   return desc ? "降順" : "昇順";
 }
 
-/** 条件の小さな札（ラベル＋値。onClear があれば × で外せる） */
+/** 条件の小さな札（値だけを出す。何の条件かはカーソルを合わせると出る。onClear があれば × で外せる） */
 function CondChip({ label, value, title, onClear }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded border bg-white px-1.5 leading-5 text-foreground/80" title={title}>
-      <span className="text-muted-foreground">{label}</span>
+    <span className="inline-flex items-center gap-1 rounded border bg-white px-1.5 leading-5" title={`${label}：${title || value}`}>
       <span className="font-medium text-foreground max-w-[260px] truncate">{value}</span>
       {onClear && <button type="button" onClick={onClear} className="text-muted-foreground hover:text-foreground" aria-label={`${label}の条件を外す`}><X className="w-3 h-3" /></button>}
     </span>
@@ -296,7 +295,7 @@ export default function ProjectList() {
           {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={() => setSearch("")} />}
           {FILTERABLE_KEYS.map((key) => {
             const v = columnFilters[key];
-            if (key === "status" && !v) return <CondChip key={key} label="状態" value="すべて" />;
+            if (key === "status" && !v) return <CondChip key={key} label="状態" value="すべての状態" />;
             if (!v) return null;
             const shown = v.length > 3 ? `${v.slice(0, 3).join("・")} ほか${v.length - 3}` : v.join("・") || "（なし）";
             return <CondChip key={key} label={columnDefs[key].label} value={shown} title={v.join("・")} onClear={() => setColumnFilter(key, null)} />;
