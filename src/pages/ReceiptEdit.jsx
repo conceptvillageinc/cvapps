@@ -55,8 +55,10 @@ export default function ReceiptEdit() {
   const { data: existing, isLoading } = useQuery({ queryKey: ["receipt", id], queryFn: () => db.entities.Receipt.get(id), enabled: !isNew });
   const deliveryId = searchParams.get("delivery") || existing?.delivery_note_id || null;
   const invoiceId = searchParams.get("invoice") || existing?.invoice_id || null;
-  const { data: deliveryNote } = useQuery({ queryKey: ["deliveryNote", deliveryId], queryFn: () => db.entities.DeliveryNote.get(deliveryId), enabled: !!deliveryId });
-  const { data: invoice } = useQuery({ queryKey: ["invoice", invoiceId], queryFn: () => db.entities.Invoice.get(invoiceId), enabled: !!invoiceId && !deliveryId });
+  // 元の帳票は開くたびに読み直す（直したばかりの明細を写すため）
+  const { data: deliveryNote, isFetchedAfterMount: deliveryFresh } = useQuery({ queryKey: ["deliveryNote", deliveryId], queryFn: () => db.entities.DeliveryNote.get(deliveryId), enabled: !!deliveryId, staleTime: 0 });
+  const { data: invoice, isFetchedAfterMount: invoiceFresh } = useQuery({ queryKey: ["invoice", invoiceId], queryFn: () => db.entities.Invoice.get(invoiceId), enabled: !!invoiceId && !deliveryId, staleTime: 0 });
+  const sourceFresh = deliveryId ? deliveryFresh : invoiceFresh;
   const source = deliveryNote || invoice || null;
   const sourceType = deliveryNote ? "delivery" : invoice ? "invoice" : null;
   // 同じ元から出した他の領収書（含めた行に印を付ける）
@@ -71,7 +73,8 @@ export default function ReceiptEdit() {
     enabled: !isNew,
   });
 
-  const sourceItems = useMemo(() => (source?.line_items || []).filter((li) => li && (li.name || li.amount)), [source]);
+  // 以前の版で納品書から作った請求書は行に id が無いことがあるので、並び順で補う
+  const sourceItems = useMemo(() => (source?.line_items || []).map((li, i) => (li && !li.id ? { ...li, id: `row${i}` } : li)).filter((li) => li && (li.name || li.amount)), [source]);
   const receiptedElsewhere = useMemo(() => {
     const m = new Map();
     for (const r of siblings) {
@@ -90,7 +93,7 @@ export default function ReceiptEdit() {
       setSelected(new Set((existing.line_items || []).map((li) => li.source_item_id).filter(Boolean)));
       return;
     }
-    if ((deliveryId || invoiceId) && !source) return;
+    if ((deliveryId || invoiceId) && (!source || !sourceFresh)) return; // 読み直した元の明細で初期化する
     const base = {
       delivery_note_id: deliveryNote?.id || null,
       invoice_id: invoice?.id || deliveryNote?.invoice_id || null,
@@ -113,7 +116,7 @@ export default function ReceiptEdit() {
     // 初期値は全行。すでに他の領収書に含めた行は外しておく
     setSelected(new Set(sourceItems.filter((li) => !receiptedElsewhere.has(li.id)).map((li) => li.id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNew, existing, source, deliveryId, invoiceId]);
+  }, [isNew, existing, source, sourceFresh, deliveryId, invoiceId]);
 
   // 選んだ行から明細を作る（編集中はいつでも元の明細から組み直す）
   const items = useMemo(() => {

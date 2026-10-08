@@ -24,6 +24,7 @@ import { todayString } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { lineTaxRate, toTaxExclusiveUnitPrice } from "@/lib/estimateTotals";
 import { formatPostalCode } from "@/lib/postalCode";
+import { estimateQuery } from "@/lib/estimateQuery";
 import {
   computeDocTotals, generateDocumentNumber, companyInfoFromSettings, PARTNER_ORDER_STATUS_MAP, DELIVERY_TO_KINDS, paymentTermsFromSettings,
   TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
@@ -72,8 +73,8 @@ export default function PartnerOrderEdit() {
 
   const { data: existing, isLoading } = useQuery({ queryKey: ["partnerOrder", id], queryFn: () => db.entities.PartnerOrder.get(id), enabled: !isNew });
   const estimateId = searchParams.get("estimate") || existing?.estimate_id || null;
-  // 見積の画面と同じキー・同じ形（配列で持って先頭を使う）にそろえる。別の形で持つとキャッシュが混ざる
-  const { data: estimate } = useQuery({ queryKey: ["estimate", estimateId], queryFn: () => db.entities.Estimate.filter({ id: estimateId }), select: (d) => (Array.isArray(d) ? d[0] : d), enabled: !!estimateId });
+  // 見積の画面と同じキー・同じ形（src/lib/estimateQuery.js）。別の形で持つとキャッシュが混ざる
+  const { data: estimate } = useQuery(estimateQuery(estimateId));
   const { data: clients = [] } = useQuery({ queryKey: ["clients"], queryFn: () => db.entities.Client.list("-name") });
   const { data: vendors = [] } = useQuery({ queryKey: ["printVendors"], queryFn: () => db.entities.PrintVendor.list("name") });
   const { data: siblings = [] } = useQuery({

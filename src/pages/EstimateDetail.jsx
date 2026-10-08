@@ -29,6 +29,7 @@ import ReviewPanel from "@/components/estimates/ReviewPanel";
 import DesignFeeTable from "@/components/estimates/DesignFeeTable";
 import RevisionPanel from "@/components/estimates/RevisionPanel";
 import { convertLegacyEstimate, summarizeConversion } from "@/lib/convertLegacyEstimate";
+import { estimateQuery } from "@/lib/estimateQuery";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
@@ -61,12 +62,7 @@ export default function EstimateDetail() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const { data: estimate, isLoading } = useQuery({
-    queryKey: ["estimate", estimateId],
-    queryFn: () => db.entities.Estimate.filter({ id: estimateId }),
-    select: (data) => data[0],
-    enabled: !!estimateId,
-  });
+  const { data: estimate, isLoading } = useQuery(estimateQuery(estimateId));
 
   const { data: emailLogs = [] } = useQuery({
     queryKey: ["emailLogs", estimateId],
@@ -342,7 +338,7 @@ export default function EstimateDetail() {
               <Button variant="outline" size="sm" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }} className="gap-1.5 text-xs">
                 <Mail className="w-3.5 h-3.5" /> 見積書を送付
               </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate(`/delivery-notes/new?estimate=${estimateId}`)} className="gap-1.5 text-xs">
+              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs">
                 <Truck className="w-3.5 h-3.5" /> 納品書を作成
               </Button>
               <DropdownMenu>
@@ -353,7 +349,7 @@ export default function EstimateDetail() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false, "purchase_order")}>発注書雛形の作成サポート（宛先：CV／発行元：クライアント）</DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs" onClick={() => navigate(`/partner-orders/new?estimate=${estimateId}`)}>連携先への発注書（宛先：連携先／発行元：CV）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/partner-orders/new?estimate=${estimateId}`); }}>連携先への発注書（宛先：連携先／発行元：CV）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>

@@ -60,13 +60,18 @@ function emptyForm(user) {
 
 /** 納品書の明細を請求書の明細に写す（取引日 = 納品日） */
 function itemsFromDeliveryNote(dn) {
-  return (dn.line_items || []).map((li) => newDocItem({
+  // 行の id は新しく振る（納品書の行の id は持ち込まない。id が無いと 1 行の編集・削除が全行に効いてしまう）
+  return (dn.line_items || []).map(({ id: _sourceId, ...li }) => newDocItem({
     ...li,
-    id: undefined,
     transaction_date: dn.delivery_date,
     delivery_note_id: dn.id,
     delivery_number: dn.delivery_number,
   }));
+}
+
+/** id の無い行に id を振る（以前の版で納品書から作った請求書は、行に id が無いことがある） */
+function withLineIds(items) {
+  return (items || []).map((li) => (li.id ? li : { ...li, id: newDocItem().id }));
 }
 
 /**
@@ -98,10 +103,12 @@ export default function InvoiceEdit() {
   });
   const sourceDeliveryId = searchParams.get("delivery");
   const sourceProjectId = searchParams.get("project");
-  const { data: sourceDelivery } = useQuery({
+  // 納品書は開くたびに読み直してから写す（直したばかりの明細・請求済みの状態を写すため）
+  const { data: sourceDelivery, isFetchedAfterMount: sourceDeliveryFresh } = useQuery({
     queryKey: ["deliveryNote", sourceDeliveryId],
     queryFn: () => db.entities.DeliveryNote.get(sourceDeliveryId),
     enabled: isNew && !!sourceDeliveryId,
+    staleTime: 0,
   });
   const projectId = form?.project_id || sourceProjectId || sourceDelivery?.project_id || null;
   const { data: project } = useQuery({
@@ -142,10 +149,10 @@ export default function InvoiceEdit() {
   useEffect(() => {
     if (form) return;
     if (!isNew) {
-      if (existing) setForm({ ...emptyForm(user), ...existing, line_items: existing.line_items || [] });
+      if (existing) setForm({ ...emptyForm(user), ...existing, line_items: withLineIds(existing.line_items) });
       return;
     }
-    if (sourceDeliveryId && !sourceDelivery) return;
+    if (sourceDeliveryId && (!sourceDelivery || !sourceDeliveryFresh)) return;
     if (sourceProjectId && !project) return;
     const base = emptyForm(user);
     if (sourceDelivery) {
@@ -166,7 +173,7 @@ export default function InvoiceEdit() {
     base.notes = company.invoice_notes || "";
     setForm(base);
      
-  }, [isNew, existing, sourceDelivery, project, sourceDeliveryId, sourceProjectId, company.invoice_notes]);
+  }, [isNew, existing, sourceDelivery, sourceDeliveryFresh, project, sourceDeliveryId, sourceProjectId, company.invoice_notes]);
 
   // クライアントマスタから住所・送付方法を補う
   useEffect(() => {
@@ -237,6 +244,7 @@ export default function InvoiceEdit() {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["invoice", row.id] });
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveryNote"] }); // 納品書の画面の「請求書を開く／作成」を新しくする
       toast.success(isNew ? `請求書 ${row.invoice_number} を作成しました` : "保存しました");
       setForm((f) => ({ ...f, ...row, line_items: row.line_items || f.line_items || [] }));
       if (isNew) navigate(`/invoices/${row.id}`, { replace: true });
@@ -262,6 +270,7 @@ export default function InvoiceEdit() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveryNote"] });
       toast.success("請求書を削除しました");
       navigate("/invoices");
     },
@@ -333,7 +342,7 @@ export default function InvoiceEdit() {
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}>
                 <Mail className="w-3.5 h-3.5" /> メール送付
               </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(`/receipts/new?invoice=${id}`)} title="この請求書の明細から領収書を作ります">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={async () => { try { await save.mutateAsync(); } catch { return; } navigate(`/receipts/new?invoice=${id}`); }} title="この請求書の明細から領収書を作ります">
                 <ReceiptText className="w-3.5 h-3.5" /> 領収書を発行{receipts.length > 0 ? `（${receipts.length}）` : ""}
               </Button>
               {form.status === "draft" && (
