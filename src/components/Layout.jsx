@@ -11,6 +11,7 @@ import { useSalesCategories } from "@/lib/salesCategory";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import RecordingBar from "@/components/meetings/RecordingBar";
 import { useScrollHoverPause, ScrollHoverShield } from "@/hooks/use-smooth-scroll";
+import PageErrorBoundary from "@/components/PageErrorBoundary";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -213,7 +214,7 @@ export default function Layout() {
         {/* Page content */}
         <main ref={mainRef} className="flex-1 overflow-y-auto p-4 lg:p-6">
           <ScrollHoverShield shieldRef={shieldRef} />
-          <Outlet />
+          <PageErrorBoundary resetKey={location.pathname}><Outlet /></PageErrorBoundary>
         </main>
       </div>
     </div>

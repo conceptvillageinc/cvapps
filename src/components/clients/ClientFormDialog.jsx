@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { isValidPostalCode, formatPostalCode, formatPostalInput } from "@/lib/postalCode";
+import { isValidPostalCode, formatPostalCode, formatPostalInput, normalizePostalCode } from "@/lib/postalCode";
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ClientImageReader from "@/components/clients/ClientImageReader";
 
