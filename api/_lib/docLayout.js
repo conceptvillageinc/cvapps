@@ -14,8 +14,6 @@ import { toHalfWidth } from '../../src/lib/halfWidth.js';
 // ============================================================================
 
 const FONT_DIR = path.join(process.cwd(), 'api', '_lib', 'fonts');
-const FONT_REGULAR = path.join(FONT_DIR, 'NotoSansJP-400.ttf');
-const FONT_BOLD = path.join(FONT_DIR, 'NotoSansJP-700.ttf');
 
 export const PAGE = { width: 595.28, height: 841.89 };
 export const MARGIN = 40;
@@ -72,9 +70,116 @@ export function formatPostal(v) {
   return d.length === 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : String(v || '');
 }
 
+// 日本語フォント（Noto Sans JP）に無い文字（α β μ Ω などのギリシャ文字、Ⅰ Ⅱ のローマ数字、≒ ✔ など）は、
+// 代わりのフォントで描く（そのままだと四角の文字化けになる）。順に Noto Sans → DejaVu Sans で探す。
+const FALLBACKS = {
+  jp: [['fb-noto', 'NotoSans-400.ttf'], ['fb-dejavu', 'DejaVuSans.ttf']],
+  'jp-bold': [['fb-noto-bold', 'NotoSans-700.ttf'], ['fb-dejavu-bold', 'DejaVuSans-Bold.ttf']],
+};
+const fontCache = new Map();
+const readFont = (file) => { if (!fontCache.has(file)) fontCache.set(file, fs.readFileSync(path.join(FONT_DIR, file))); return fontCache.get(file); };
+
 export function registerFonts(pdf) {
-  pdf.registerFont('jp', fs.readFileSync(FONT_REGULAR));
-  pdf.registerFont('jp-bold', fs.readFileSync(FONT_BOLD));
+  pdf.registerFont('jp', readFont('NotoSansJP-400.ttf'));
+  pdf.registerFont('jp-bold', readFont('NotoSansJP-700.ttf'));
+  for (const list of Object.values(FALLBACKS)) for (const [name, file] of list) pdf.registerFont(name, readFont(file));
+  installFallback(pdf);
+}
+
+/**
+ * pdf.text / widthOfString を、足りない文字だけ代わりのフォントで描く・測るようにする。
+ *   今のフォント（jp / jp-bold）に無い文字を区切りにして、フォントを切り替えながら continued でつなぐ。
+ */
+function installFallback(pdf) {
+  const origFont = pdf.font.bind(pdf);
+  const origText = pdf.text.bind(pdf);
+  const origWidth = pdf.widthOfString.bind(pdf);
+  let alias = null;
+  pdf.font = (src, ...rest) => { if (typeof src === 'string') alias = src; return origFont(src, ...rest); };
+  const has = new Map(); // フォント名 → fontkit のフォント
+  const fk = (name) => { if (!has.has(name)) { origFont(name); has.set(name, pdf._font.font); } return has.get(name); };
+  const runsOf = (str) => {
+    const chain = FALLBACKS[alias];
+    if (!chain || !str) return null;
+    const base = fk(alias);
+    let missing = false;
+    for (const ch of str) if (!base.hasGlyphForCodePoint(ch.codePointAt(0))) { missing = true; break; }
+    if (!missing) { origFont(alias); return null; }
+    const runs = [];
+    for (const ch of str) {
+      const cp = ch.codePointAt(0);
+      let name = alias;
+      if (!base.hasGlyphForCodePoint(cp)) name = chain.map(([n]) => n).find((n) => fk(n).hasGlyphForCodePoint(cp)) || alias;
+      const last = runs[runs.length - 1];
+      if (last && last.font === name) last.text += ch; else runs.push({ font: name, text: ch });
+    }
+    origFont(alias);
+    return runs;
+  };
+  // 足りない文字を含む文字列は、折り返しも自分で行い、1 行ずつフォントを切り替えながら描く
+  //   （pdfkit の continued + width は行をまとめて最後に描くため、途中のフォント切り替えが効かない）
+  // 描く・測るあいだは alias も run のフォントにしておく（pdfkit が中で widthOfString を呼ぶと、
+  // alias のままだと元のフォントに戻されて幅がずれるため）
+  const runWidth = (runs) => runs.reduce((w, r) => { alias = r.font; origFont(r.font); return w + origWidth(r.text); }, 0);
+  const drawLine = (line, x, y, w, align) => {
+    const runs = runsOf(line) || [{ font: alias, text: line }];
+    const keep = alias;
+    const lw = runWidth(runs);
+    let cx = align === 'right' && w ? x + w - lw : align === 'center' && w ? x + (w - lw) / 2 : x;
+    for (const r of runs) { alias = r.font; origFont(r.font); origText(r.text, cx, y, { lineBreak: false }); cx += origWidth(r.text); }
+    origFont(keep);
+    alias = keep;
+  };
+  pdf.text = (text, x, y, options) => {
+    const str = text === null || text === undefined ? '' : String(text);
+    const runs = runsOf(str);
+    if (!runs) return origText(text, x, y, options);
+    const hasXY = typeof x === 'number';
+    const opts = (hasXY ? options : x) || {};
+    const x0 = hasXY ? x : pdf.x;
+    const y0 = hasXY ? y : pdf.y;
+    const width = opts.width;
+    const lineH = pdf.currentLineHeight(true) + (opts.lineGap || 0);
+    // 行に分ける（改行 → 幅で 1 文字ずつ折り返す）。幅が無い・lineBreak: false なら 1 行
+    let lines = str.split('\n');
+    if (width && opts.lineBreak !== false) {
+      const wrapped = [];
+      for (const para of lines) {
+        let cur = '';
+        for (const ch of para) {
+          if (cur && pdf.widthOfString(cur + ch) > width) { wrapped.push(cur); cur = ch.trim() ? ch : ''; } else cur += ch;
+        }
+        wrapped.push(cur);
+      }
+      lines = wrapped;
+    } else if (opts.lineBreak === false) {
+      lines = [lines.join(' ')];
+    }
+    // 高さの指定があれば入る行数まで。あふれたら最後の行を省略記号にする
+    if (opts.height) {
+      const max = Math.max(1, Math.floor((opts.height + 0.01) / lineH));
+      if (lines.length > max) {
+        lines = lines.slice(0, max);
+        let last = lines[max - 1];
+        while (last && width && pdf.widthOfString(`${last}…`) > width) last = last.slice(0, -1);
+        lines[max - 1] = `${last}…`;
+      }
+    }
+    lines.forEach((line, i) => drawLine(line, x0, y0 + i * lineH, width, opts.align));
+    pdf.x = x0;
+    pdf.y = y0 + lines.length * lineH;
+    return pdf;
+  };
+  pdf.widthOfString = (str, options) => {
+    const runs = runsOf(String(str ?? ''));
+    if (!runs) return origWidth(str, options);
+    const keep = alias;
+    let w = 0;
+    for (const r of runs) { alias = r.font; origFont(r.font); w += origWidth(r.text, options); }
+    origFont(keep);
+    alias = keep;
+    return w;
+  };
 }
 
 /** 1行の文字を枠 (x, y, w, h) の上下中央に置く */
@@ -123,8 +228,14 @@ export function drawHeader(pdf, { client, company, person, stamp, logo, allLocat
   const postal = client.postal ? formatPostal(client.postal) : '';
   if (postal) pdf.text(postal, MARGIN, L.clientPostalY, { lineBreak: false });
   if (client.address) textV(pdf, toHalfWidth(client.address), MARGIN, L.clientAddressY - 1.5, L.clientW + 60, 12, { size: 7.5, minSize: 5.5 });
-  pdf.font('jp').fontSize(12.5);
-  pdf.text(`${client.name || ''}　${client.honorific ?? '御中'}`, MARGIN, L.clientNameY, { width: L.clientW, lineGap: 1 });
+  // 宛名は 1 行に収まるよう少し小さくする（「御中」が「御／中」に割れないように）。それでもとても長いときだけ折り返す
+  const honor = client.honorific ?? '御中';
+  const nameText = `${client.name || ''}　${honor}`;
+  let ns = 12.5;
+  pdf.font('jp').fontSize(ns);
+  while (ns > 9.5 && pdf.widthOfString(nameText) > L.clientW + 60) { ns -= 0.5; pdf.fontSize(ns); }
+  if (pdf.widthOfString(nameText) <= L.clientW + 60) pdf.text(nameText, MARGIN, L.clientNameY, { lineBreak: false });
+  else pdf.text(nameText, MARGIN, L.clientNameY, { width: L.clientW + 60, lineGap: 1 });
 
   // ---- 自社情報 ----
   const rx = L.companyX;

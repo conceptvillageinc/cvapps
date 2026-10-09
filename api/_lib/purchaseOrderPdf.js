@@ -1,6 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import PDFDocument from 'pdfkit';
+import { registerFonts } from './docLayout.js';
 import { estimateTotals } from './estimatePdf.js';
 import { toHalfWidth } from '../../src/lib/halfWidth.js';
 
@@ -14,10 +13,6 @@ import { toHalfWidth } from '../../src/lib/halfWidth.js';
 //   印影は押さない（クライアントが記入する書類のため）
 // 番号は「見積番号-PO」。
 // ============================================================================
-
-const FONT_DIR = path.join(process.cwd(), 'api', '_lib', 'fonts');
-const FONT_REGULAR = path.join(FONT_DIR, 'NotoSansJP-400.ttf');
-const FONT_BOLD = path.join(FONT_DIR, 'NotoSansJP-700.ttf');
 
 const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 40;
@@ -68,8 +63,7 @@ export function renderPurchaseOrderPdf({ estimate, client, company }) {
     pdf.on('data', (c) => chunks.push(c));
     pdf.on('end', () => resolve(Buffer.concat(chunks)));
     pdf.on('error', reject);
-    pdf.registerFont('jp', fs.readFileSync(FONT_REGULAR));
-    pdf.registerFont('jp-bold', fs.readFileSync(FONT_BOLD));
+    registerFonts(pdf); // 日本語フォントに無い文字（α など）は代わりのフォントで描く
     try {
       draw(pdf, { estimate, client: client || {}, company });
     } catch (err) { reject(err); return; }
