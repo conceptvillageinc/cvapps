@@ -4,13 +4,13 @@ import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, Users, UserSquare, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, UserSquare, ArrowUp, ArrowDown, ArrowUpDown, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { normalizePostalCode, isValidPostalCode, formatPostalCode, formatPostalInput } from "@/lib/postalCode";
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ClientFormDialog from "@/components/clients/ClientFormDialog";
+import FreeePartnerImport from "@/components/clients/FreeePartnerImport";
 
 
 // クリックしてその場で編集できるセル。フォーカスを外すと自動保存される。
@@ -77,6 +77,7 @@ export default function ClientManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
+  const [freeeOpen, setFreeeOpen] = useState(false); // freee の取引先 CSV から郵便番号・住所を補う
 
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
@@ -163,10 +164,16 @@ export default function ClientManagement() {
           <h1 className="text-xl font-bold text-foreground">クライアント一覧</h1>
           <p className="text-sm text-muted-foreground mt-0.5">取引先情報を管理します（各項目はクリックでその場編集できます）</p>
         </div>
-        <Button onClick={openNew} size="sm">
-          <Plus className="w-4 h-4 mr-1" /> 新規追加
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => setFreeeOpen(true)} title="freee の取引先一覧の CSV から、空の郵便番号・住所を埋めます">
+            <MapPin className="w-4 h-4" /> freee の取引先 CSV から郵便番号・住所を補う
+          </Button>
+          <Button onClick={openNew} size="sm">
+            <Plus className="w-4 h-4 mr-1" /> 新規追加
+          </Button>
+        </div>
       </div>
+      <FreeePartnerImport open={freeeOpen} onOpenChange={setFreeeOpen} clients={clients} />
 
       <Input
         placeholder="クライアント名・担当者・メールで検索..."
