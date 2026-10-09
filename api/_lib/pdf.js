@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import {
   PAGE_MARGINS, registerFonts, yen, fmtQty, fmtUnitPrice, fmtDate,
   drawHeader, drawTitle, drawSubjectAndMeta, drawSummary, drawBankBand,
-  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, rowsFor, packRows,
+  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, drawContinuationHeader, paginateRows,
 } from './docLayout.js';
 
 // ============================================================================
@@ -46,18 +46,18 @@ export function renderDocumentPdf({ type, doc, company, stamp, logo = null }) {
     // 表の開始位置は帯の下（請求書は振込先の枠の下）。行数はそこから決まる
     const summaryBottom = 287 + 16 + 26;
     const tableY = isInvoice ? tableTop(summaryBottom + 8 + 16 + 55, { afterBank: true }) : tableTop(summaryBottom);
-    const rowsPerPage = rowsFor(tableY);
     const columns = isInvoice
       ? [['取引日', 82, 'center'], ['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']]
       : [['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']];
     // 長い名称は折り返して行を高くするので、ページ分けは高さで行う
-    const pagedRows = packRows(pdf, rows, columns, rowsPerPage);
+    // 最後のページ以外は下まで使い、内訳・備考は最後のページだけ。2 ページ目以降は見出しが 1 行だけ
+    const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY);
     const pages = pagedRows.length;
 
     try {
       for (let p = 0; p < pages; p++) {
         if (p > 0) pdf.addPage();
-        drawPage(pdf, { type, doc, company, stamp, logo, rows: pagedRows[p], rowsPerPage, page: p + 1, pages, columns });
+        drawPage(pdf, { type, doc, company, stamp, logo, rows: pagedRows[p], rowsPerPage: caps[p], page: p + 1, pages, columns });
       }
     } catch (err) {
       reject(err);
@@ -73,6 +73,24 @@ function titleOf(type, doc) {
 
 function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, page, pages, columns }) {
   const isInvoice = type === 'invoice';
+
+  // 2 ページ目以降は 1 行の見出しだけにして、すぐ明細表を続ける
+  if (page > 1) {
+    const y = drawContinuationHeader(pdf, {
+      title: isInvoice ? '御請求書' : '納品書',
+      numberLabel: isInvoice ? '請求書番号' : '納品書番号',
+      number: isInvoice ? doc.invoice_number : doc.delivery_number,
+      clientName: doc.client_name,
+      honorific: doc.client_honorific || '御中',
+    });
+    const tableBottom = drawTable(pdf, y, { columns, rows, rowsPerPage });
+    if (page === pages) {
+      const breakdown = Array.isArray(doc.tax_breakdown) && doc.tax_breakdown.length > 0 ? doc.tax_breakdown : [{ rate: 10, taxable: doc.subtotal, tax: doc.tax }];
+      drawNotes(pdf, drawBreakdown(pdf, tableBottom, breakdown), doc.notes);
+    }
+    drawPageNumber(pdf, page, pages);
+    return;
+  }
 
   drawHeader(pdf, {
     client: { postal: doc.client_postal_code, address: doc.client_address, name: doc.client_name, honorific: doc.client_honorific || '御中' },

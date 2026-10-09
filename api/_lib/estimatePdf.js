@@ -1,8 +1,8 @@
 import PDFDocument from 'pdfkit';
 import {
-  PAGE_MARGINS, registerFonts, signedYen, fmtQty, fmtUnitPrice, packRows,
-  drawHeader, drawTitle, drawSubjectAndMeta, drawSummary,
-  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, rowsFor,
+  PAGE_MARGINS, registerFonts, signedYen, fmtQty, fmtUnitPrice,
+  drawHeader, drawTitle, drawSubjectAndMeta, drawSummary, drawContinuationHeader, paginateRows,
+  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop,
 } from './docLayout.js';
 
 // ============================================================================
@@ -96,7 +96,6 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
 
   const summaryBottom = 287 + 16 + 26;
   const tableY = tableTop(summaryBottom);
-  const rowsPerPage = rowsFor(tableY);
 
   const columns = [
     ['摘要', 0, 'left'],
@@ -105,11 +104,23 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
     [taxInclusive ? '明細金額(税込)' : '明細金額', 88, 'right'],
   ];
   // 長い名称は折り返して行を高くするので、ページ分けは高さで行う
-  const pagedRows = packRows(pdf, rows, columns, rowsPerPage);
+  // 最後のページ以外は下まで使い、内訳・備考は最後のページだけ。2 ページ目以降は見出しが 1 行だけ
+  const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY);
   const pages = pagedRows.length;
 
   for (let p = 0; p < pages; p++) {
-    if (p > 0) pdf.addPage();
+    if (p > 0) {
+      // 2 ページ目以降は 1 行の見出しだけにして、すぐ明細表を続ける
+      pdf.addPage();
+      const y = drawContinuationHeader(pdf, { title: '御見積書', numberLabel: '見積書番号', number: estimate.estimate_number, clientName: estimate.client_name, honorific: estimate.client_honorific ?? '御中' });
+      const tableBottom = drawTable(pdf, y, { columns, rows: pagedRows[p], rowsPerPage: caps[p] });
+      if (p === pages - 1) {
+        const bb = drawBreakdown(pdf, tableBottom, totals.breakdown);
+        drawNotes(pdf, bb, estimate.additional_notes);
+      }
+      drawPageNumber(pdf, p + 1, pages);
+      continue;
+    }
 
     drawHeader(pdf, {
       client: { postal: client.postal_code, address: client.address, name: estimate.client_name, honorific: estimate.client_honorific ?? '御中' },
@@ -126,7 +137,7 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
     ]);
     let y = drawSummary(pdf, { subtotal: totals.subtotal, tax: totals.tax, total: totals.total, totalLabel: '見積金額' });
     y = tableTop(y);
-    const tableBottom = drawTable(pdf, y, { columns, rows: pagedRows[p], rowsPerPage });
+    const tableBottom = drawTable(pdf, y, { columns, rows: pagedRows[p], rowsPerPage: caps[p] });
 
     if (p === pages - 1) {
       const bb = drawBreakdown(pdf, tableBottom, totals.breakdown);

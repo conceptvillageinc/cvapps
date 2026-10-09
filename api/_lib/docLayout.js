@@ -379,13 +379,14 @@ export function measureRow(pdf, row, columns) {
 }
 
 /** 行をページごとに分ける（1 ページ rowsPerPage 行分の高さ。折り返す行は複数行分を使う） */
-export function packRows(pdf, rows, columns, rowsPerPage) {
+export function packRows(pdf, rows, columns, rowsPerPage, restRowsPerPage = rowsPerPage) {
   const pages = [];
   let cur = [];
   let used = 0;
   for (const row of rows) {
     const units = measureRow(pdf, row, columns);
-    if (used + units > rowsPerPage && cur.length > 0) { pages.push(cur); cur = []; used = 0; }
+    const cap = pages.length === 0 ? rowsPerPage : restRowsPerPage; // 2 ページ目以降は見出しが小さい分、行が多く入る
+    if (used + units > cap && cur.length > 0) { pages.push(cur); cur = []; used = 0; }
     cur.push({ ...row, units });
     used += units;
   }
@@ -482,9 +483,63 @@ export function drawPageNumber(pdf, page, pages) {
     .text(`${page} / ${pages}`, MARGIN, L.pageNoY, { width: CONTENT_W, align: 'center', lineBreak: false });
 }
 
+/**
+ * 2 ページ目以降の見出し（宛名・自社情報・表題・金額欄は 1 ページ目だけに出し、ここでは 1 行にまとめる）
+ *   左: 「御見積書（続き）」  右: 番号と宛名。戻り値は明細表を始める y
+ */
+export const CONT_TABLE_Y = MARGIN + 34;
+export function drawContinuationHeader(pdf, { title, numberLabel, number, clientName, honorific = '御中' }) {
+  textV(pdf, `${title}（続き）`, MARGIN, MARGIN, 220, 18, { size: 12.5 });
+  const rx = MARGIN + 220;
+  const rw = CONTENT_W - 220;
+  textV(pdf, `${numberLabel}　${number || ''}`, rx, MARGIN - 1, rw, 10, { align: 'right', size: 8.5 });
+  textV(pdf, `${clientName || ''}　${honorific}`, rx, MARGIN + 10, rw, 10, { align: 'right', size: 8, color: '#333' });
+  pdf.lineWidth(0.6).moveTo(MARGIN, MARGIN + 24).lineTo(MARGIN + CONTENT_W, MARGIN + 24).stroke(LINE);
+  return CONT_TABLE_Y;
+}
+
 /** 明細表の開始位置。請求書は振込先の枠がある分だけ下がる */
 export function tableTop(bandBottom, { afterBank = false } = {}) {
   return bandBottom + (afterBank ? L.tableGap : L.tableGapNoBank);
+}
+
+/** 最後のページ以外に入る行数（内訳・備考は最後のページだけなので、ページ番号の上まで使う） */
+export function rowsForFull(tableY) {
+  return Math.max(5, Math.floor((L.pageNoY - 14 - tableY - L.headH) / L.rowH));
+}
+
+/**
+ * 行をページに分ける。最後のページ以外は下まで使い、最後のページは内訳・備考の分を空ける。
+ * @returns {{ pages: object[][], caps: number[] }}  caps はページごとの行数（drawTable の rowsPerPage）
+ */
+export function paginateRows(pdf, rows, columns, firstTableY, restTableY = CONT_TABLE_Y) {
+  const full = (i) => rowsForFull(i === 0 ? firstTableY : restTableY);
+  const last = (i) => rowsFor(i === 0 ? firstTableY : restTableY);
+  const pages = [[]];
+  const used = [0];
+  for (const row of rows) {
+    const units = measureRow(pdf, row, columns);
+    const i = pages.length - 1;
+    if (used[i] + units > full(i) && pages[i].length > 0) {
+      // ページの最後が見出しの行（▼…）だけになるときは、見出しも次のページへ送る
+      const carry = [];
+      while (pages[i].length > 1 && pages[i][pages[i].length - 1].kind === 'text') { const h = pages[i].pop(); used[i] -= h.units; carry.unshift(h); }
+      pages.push(carry); used.push(carry.reduce((n, r) => n + r.units, 0));
+    }
+    pages[pages.length - 1].push({ ...row, units });
+    used[used.length - 1] += units;
+  }
+  // 最後のページに内訳・備考が入らなければ、あふれた行を次のページへ送る
+  for (;;) {
+    const i = pages.length - 1;
+    if (used[i] <= last(i)) break;
+    const move = [];
+    while (pages[i].length > 1 && used[i] > last(i)) { const r = pages[i].pop(); used[i] -= r.units; move.unshift(r); }
+    if (move.length === 0) break;
+    pages.push(move); used.push(move.reduce((n, r) => n + r.units, 0));
+  }
+  const caps = pages.map((_, i) => (i === pages.length - 1 ? last(i) : full(i)));
+  return { pages, caps };
 }
 
 /** 1ページに入る行数（表の開始位置から内訳・備考の分を空けて計算） */

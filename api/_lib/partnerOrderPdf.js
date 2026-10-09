@@ -1,8 +1,7 @@
 import PDFDocument from 'pdfkit';
-import {
-  PAGE, MARGIN, CONTENT_W, PAGE_MARGINS, L, LINE, registerFonts, yen, fmtQty, fmtUnitPrice, fmtDate,
+import { MARGIN, PAGE_MARGINS, L, LINE, registerFonts, yen, fmtQty, fmtUnitPrice, fmtDate,
   drawHeader, drawTitle, drawSubjectAndMeta, drawSummary, drawBandHead, textV, paragraphV,
-  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, rowsFor, packRows,
+  drawTable, drawBreakdown, drawNotes, drawPageNumber, tableTop, drawContinuationHeader, paginateRows,
 } from './docLayout.js';
 
 // ============================================================================
@@ -32,13 +31,13 @@ export function renderPartnerOrderPdf({ order, company, stamp, logo = null }) {
     const summaryBottom = L.summaryY + L.headH + L.summaryBodyH;
     const bandBottom = summaryBottom + 8 + L.headH + 55;
     const tableY = tableTop(bandBottom + 14, { afterBank: true });
-    const rowsPerPage = rowsFor(tableY);
-    const pagedRows = packRows(pdf, rows, columns, rowsPerPage);
+    // 最後のページ以外は下まで使い、内訳・備考は最後のページだけ。2 ページ目以降は見出しが 1 行だけ
+    const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY);
     const pages = pagedRows.length;
     try {
       for (let p = 0; p < pages; p++) {
         if (p > 0) pdf.addPage();
-        drawPage(pdf, { order, company, stamp, logo, rows: pagedRows[p], rowsPerPage, page: p + 1, pages, columns });
+        drawPage(pdf, { order, company, stamp, logo, rows: pagedRows[p], rowsPerPage: caps[p], page: p + 1, pages, columns });
       }
     } catch (err) { reject(err); return; }
     pdf.end();
@@ -60,6 +59,17 @@ function drawOrderBand(pdf, y, { dueDate, deliveryTo, paymentTerms }) {
 }
 
 function drawPage(pdf, { order, company, stamp, logo, rows, rowsPerPage, page, pages, columns }) {
+  // 2 ページ目以降は 1 行の見出しだけにして、すぐ明細表を続ける
+  if (page > 1) {
+    const y = drawContinuationHeader(pdf, { title: '発注書', numberLabel: '発注書番号', number: order.po_number, clientName: order.partner_name, honorific: order.partner_honorific || '御中' });
+    const tableBottom = drawTable(pdf, y, { columns, rows, rowsPerPage });
+    if (page === pages) {
+      const breakdown = Array.isArray(order.tax_breakdown) && order.tax_breakdown.length ? order.tax_breakdown : [{ rate: 10, taxable: order.subtotal, tax: order.tax }];
+      drawNotes(pdf, drawBreakdown(pdf, tableBottom, breakdown), order.notes);
+    }
+    drawPageNumber(pdf, page, pages);
+    return;
+  }
   drawHeader(pdf, {
     client: { postal: order.partner_postal_code, address: order.partner_address, name: order.partner_name, honorific: order.partner_honorific || '御中' },
     company,
