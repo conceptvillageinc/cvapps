@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { FileSpreadsheet, Loader2, Search, Download, CheckCircle2, AlertTriangle, ChevronDown, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { matchClients } from "@/components/clients/ClientCombobox";
-import { ordersFromCostSheets, COST_LINE_PREFIX } from "@/lib/costSheetOrders";
+import { ordersFromCostSheets, parseCostLineKey, COST_SHEET_ORDER_AUTHOR } from "@/lib/costSheetOrders";
 
 // ============================================================================
 // 原価計算表（社内見積）の取り込み
@@ -90,20 +90,27 @@ function ClientPicker({ value, onChange, clients, fileClientName, label }) {
 }
 
 /**
- * 取り込み済みの社内見積から、過去の入稿記録を作る（最終納品チェック ✓ の付いた印刷の行）。
- *   すでに作った行は作らない（入稿記録の estimate_line_id に社内見積の行の目印を入れている）
+ * 取り込み済みの社内見積から、過去の入稿記録を作る（最終納品チェック ✓ の付いた印刷の行を、小見出しごとに 1 件に）。
+ *   以前 1 行ずつ作った入稿記録（社内見積の取り込みで自動で作ったもの）は消して、まとめた形で作り直す。
+ *   ただし、あとからスクショ・メモなどを編集したものは残す（その行はまとめに入れない）。手で登録した入稿記録は触らない。
  */
+const editedAfterCreate = (o) => o.updated_at && o.created_at && new Date(o.updated_at) - new Date(o.created_at) > 5000;
 function PastPrintOrders() {
   const queryClient = useQueryClient();
-  const [plan, setPlan] = useState(null); // { rows, sheets, clients }
+  const [plan, setPlan] = useState(null); // { rows, remove, kept, sheets, clients }
   const [busy, setBusy] = useState(false);
   const check = async () => {
     setBusy(true);
     try {
       const [sheets, orders] = await Promise.all([db.entities.CostSheet.list("-imported_at"), db.entities.PrintOrder.list("-ordered_on")]);
-      const existing = new Set(orders.map((o) => o.estimate_line_id).filter((k) => String(k || "").startsWith(COST_LINE_PREFIX)));
-      const rows = ordersFromCostSheets(sheets, existing);
-      setPlan({ rows, sheets: new Set(rows.map((r) => r.estimate_line_id.split(":")[1])).size, clients: new Set(rows.map((r) => r.client_name)).size, done: existing.size });
+      // 1 行ずつ作った自動の記録（編集していないもの）は作り直す
+      const single = orders.filter((o) => { const k = parseCostLineKey(o.estimate_line_id); return k && !k.grouped && o.created_by_name === COST_SHEET_ORDER_AUTHOR; });
+      const remove = single.filter((o) => !editedAfterCreate(o));
+      const removeIds = new Set(remove.map((o) => o.id));
+      const keep = orders.filter((o) => !removeIds.has(o.id));
+      const rows = ordersFromCostSheets(sheets, keep);
+      const grouped = keep.filter((o) => parseCostLineKey(o.estimate_line_id)?.grouped).length;
+      setPlan({ rows, remove, kept: single.length - remove.length, grouped, sheets: new Set(rows.map((r) => r.estimate_line_id.split(":")[1])).size, clients: new Set(rows.map((r) => r.client_name)).size });
     } catch (e) {
       toast.error("社内見積を読めませんでした: " + e.message);
     } finally {
@@ -113,33 +120,43 @@ function PastPrintOrders() {
   const run = async () => {
     setBusy(true);
     try {
+      // 先に作ってから消す（途中で止まっても記録が消えたままにならないように）
       for (let i = 0; i < plan.rows.length; i += 50) await db.entities.PrintOrder.createMany(plan.rows.slice(i, i + 50));
+      const ids = plan.remove.map((o) => o.id);
+      for (let i = 0; i < ids.length; i += 100) await db.entities.PrintOrder.deleteMany(ids.slice(i, i + 100));
       queryClient.invalidateQueries({ queryKey: ["printOrders"] });
-      toast.success(`${plan.rows.length} 行を入稿記録にしました`);
-      setPlan({ ...plan, rows: [], created: plan.rows.length });
+      toast.success(`${plan.rows.length} 件の入稿記録にまとめました`);
+      setPlan({ ...plan, rows: [], remove: [], created: plan.rows.length, removed: ids.length });
     } catch (e) {
-      toast.error("入稿記録を作れませんでした: " + e.message);
+      const hint = /items/.test(e.message) ? "（先に Supabase で SQL 0032_print_order_items.sql を実行してください）" : "";
+      toast.error("入稿記録を作れませんでした: " + e.message + hint);
     } finally {
       setBusy(false);
     }
   };
+  const todo = plan && (plan.rows.length > 0 || plan.remove.length > 0);
   return (
     <div className="rounded-md border px-3 py-2.5 space-y-1.5 text-xs" data-testid="past-print-orders">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-semibold">過去の入稿記録を作る</span>
-        <span className="text-muted-foreground">取り込み済みの社内見積で、右端の最終納品チェック（✓）が付いた印刷の行を、クライアントカルテの「入稿」に入稿記録として足します</span>
+        <span className="text-muted-foreground">取り込み済みの社内見積で、右端の最終納品チェック（✓）が付いた印刷の行を、小見出しごとに 1 件（サイズ・送料などは内訳）にまとめて、クライアントカルテの「入稿」に足します</span>
         <Button type="button" size="sm" variant="outline" className="h-7 text-xs ml-auto" onClick={check} disabled={busy}>{busy && !plan ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null} 対象を確認する</Button>
       </div>
       {plan && (
-        <div className="flex flex-wrap items-center gap-2 rounded bg-muted/40 px-2.5 py-1.5">
-          {plan.created ? (
-            <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {plan.created} 行を入稿記録にしました（クライアントカルテの「入稿」と社内見積の行に「入稿済」が出ます）</span>
-          ) : plan.rows.length === 0 ? (
-            <span className="text-muted-foreground">新しく作る行はありません{plan.done ? `（作成済み ${plan.done} 行）` : ""}</span>
+        <div className="flex flex-wrap items-center gap-2 rounded bg-muted/40 px-2.5 py-1.5" data-testid="past-print-orders-plan">
+          {plan.created != null ? (
+            <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> {plan.created} 件の入稿記録にまとめました{plan.removed ? `（1 行ずつの記録 ${plan.removed} 件は消しました）` : ""}</span>
+          ) : !todo ? (
+            <span className="text-muted-foreground">新しく作る記録はありません{plan.grouped ? `（まとめ済み ${plan.grouped} 件）` : ""}</span>
           ) : (
             <>
-              <span>社内見積 {plan.sheets} 件・{plan.clients} 社から <b>{plan.rows.length} 行</b> が対象です{plan.done ? `（作成済みの ${plan.done} 行は作りません）` : ""}。入稿日は社内見積のタブ名の日付（無ければ記入日）を目安に入れます</span>
-              <Button type="button" size="sm" className="h-7 text-xs ml-auto gap-1" onClick={run} disabled={busy}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} {plan.rows.length} 行を入稿記録にする</Button>
+              <span>
+                社内見積 {plan.sheets} 件・{plan.clients} 社から <b>{plan.rows.length} 件</b>の入稿記録にまとめます。
+                {plan.remove.length > 0 && <>以前 1 行ずつ作った <b>{plan.remove.length} 件</b>は消して置き換えます。</>}
+                {plan.kept > 0 && <span className="text-muted-foreground">あとで編集した {plan.kept} 件はそのまま残します。</span>}
+                <span className="text-muted-foreground">同じ内容（クライアント・入稿日・品名・金額が同じ）は 1 件だけにします。入稿日は社内見積のタブ名の日付（無ければ記入日）を目安に入れます</span>
+              </span>
+              <Button type="button" size="sm" className="h-7 text-xs ml-auto gap-1" onClick={run} disabled={busy} data-testid="past-print-orders-run">{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} {plan.rows.length} 件にまとめる</Button>
             </>
           )}
         </div>

@@ -27,6 +27,7 @@ import MeetingAttachments from "@/components/meetings/MeetingAttachments";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import { SUBMISSION_STATUS, submissionOf } from "@/lib/submission";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
+import { orderItems } from "@/lib/printOrders";
 import { lineShots } from "@/lib/lineShots";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
@@ -178,8 +179,8 @@ export default function ClientKarte() {
     }
     if (tab === "printOrders") {
       return printOrders
-        .filter((o) => has(o.name, o.vendor, o.memo, o.estimate_number, o.source_url))
-        .map((o) => ({ id: o.id, number: o.estimate_number || "", date: fmtDate(o.ordered_on), title: o.name || "（品名なし）", total: o.amount, sub: [o.quantity != null ? `${Number(o.quantity).toLocaleString()}${o.unit || ""}` : "", o.vendor].filter(Boolean).join("　"), badge: { label: "入稿", cls: "bg-teal-50 text-teal-800" }, raw: o }));
+        .filter((o) => has(o.name, o.vendor, o.memo, o.estimate_number, o.source_url, ...orderItems(o).map((it) => it.name)))
+        .map((o) => ({ id: o.id, number: o.estimate_number || "", date: fmtDate(o.ordered_on), title: o.name || "（品名なし）", total: o.amount, sub: [o.quantity != null ? `${Number(o.quantity).toLocaleString()}${o.unit || ""}` : "", orderItems(o).length ? `内訳 ${orderItems(o).map((it) => it.name).join("・")}` : "", o.vendor].filter(Boolean).join("　"), badge: { label: "入稿", cls: "bg-teal-50 text-teal-800" }, raw: o }));
     }
     if (tab === "meetings") {
       return meetings

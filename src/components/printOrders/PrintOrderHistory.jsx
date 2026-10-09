@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, PackageCheck, ExternalLink, Search, Copy, ImageIcon } from "lucide-react";
 import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
-import { fmtOrderDate } from "@/lib/printOrders";
+import { fmtOrderDate, orderItems } from "@/lib/printOrders";
+import PrintOrderItems from "@/components/printOrders/PrintOrderItems";
 
 const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 
@@ -54,7 +55,7 @@ export default function PrintOrderHistory({ where, showEstimate = true, emptyTex
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
-    return rows.filter((r) => [r.name, r.vendor, r.memo, r.estimate_number, r.source_url].filter(Boolean).join(" ").toLowerCase().includes(s));
+    return rows.filter((r) => [r.name, r.vendor, r.memo, r.estimate_number, r.source_url, ...orderItems(r).map((it) => it.name)].filter(Boolean).join(" ").toLowerCase().includes(s));
   }, [rows, q]);
 
   const reorder = (o) => navigate(`/estimates/new?reorder=${o.id}${o.client_name ? `&client=${encodeURIComponent(o.client_name)}` : ""}${o.project_id ? `&project=${o.project_id}` : ""}`);
@@ -82,10 +83,15 @@ export default function PrintOrderHistory({ where, showEstimate = true, emptyTex
               <div className="min-w-0 flex-1 basis-[240px]">
                 <p className="text-sm font-medium leading-snug">{o.name}</p>
                 <p className="text-[11px] text-muted-foreground tabular-nums">
-                  {o.quantity != null ? `${Number(o.quantity).toLocaleString()}${o.unit || ""}` : ""} × {yen(o.unit_price)} ＝ <b className="text-foreground">{yen(o.amount)}</b>
-                  {o.cost_price != null && <>　原価単価 {yen(o.cost_price)}</>}
+                  {orderItems(o).length > 0 ? (
+                    <>{o.quantity != null ? `${Number(o.quantity).toLocaleString()}${o.unit || ""}　` : ""}合計 <b className="text-foreground">{yen(o.amount)}</b></>
+                  ) : (
+                    <>{o.quantity != null ? `${Number(o.quantity).toLocaleString()}${o.unit || ""}` : ""} × {yen(o.unit_price)} ＝ <b className="text-foreground">{yen(o.amount)}</b>
+                      {o.cost_price != null && <>　原価単価 {yen(o.cost_price)}</>}</>
+                  )}
                   {o.vendor && <>　仕入先 {o.vendor}</>}
                 </p>
+                <PrintOrderItems order={o} className="my-1" />
                 {o.source_url && (
                   <a href={o.source_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline max-w-full truncate" title={o.source_url}>
                     <ExternalLink className="w-3 h-3 shrink-0" /> <span className="truncate">{o.source_url}</span>

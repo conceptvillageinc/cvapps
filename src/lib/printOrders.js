@@ -62,4 +62,26 @@ export function lineFromOrder(o) {
   };
 }
 
+/** 入稿記録の内訳（社内見積の小見出しごとにまとめた記録の行）。1 行だけのときは内訳として出さない */
+export const orderItems = (o) => (Array.isArray(o?.items) && o.items.length > 1 ? o.items : []);
+
+/**
+ * 入稿記録から、追加印刷の見積の明細を作る（内訳があれば内訳の行ごと。M 4枚・XL 1枚・送料 など）
+ * @returns {object[]}
+ */
+export function linesFromOrder(o) {
+  const items = orderItems(o);
+  if (items.length === 0) return [lineFromOrder(o)];
+  return items.map((it, i) => {
+    const line = lineFromOrder({
+      ...o,
+      name: it.extra || String(o.name).includes(it.name) ? it.name : `${o.name} ${it.name}`,
+      quantity: it.quantity, unit: it.unit || "式", unit_price: it.unit_price, amount: it.amount, cost_price: it.cost_price,
+      vendor: it.vendor || "", source_url: it.source_url || "",
+      screenshot_path: i === 0 ? o.screenshot_path : null,
+    });
+    return { ...line, id: `${line.id}_${i}` };
+  });
+}
+
 export const fmtOrderDate = (ymd) => String(ymd || "").replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$1/$2/$3");

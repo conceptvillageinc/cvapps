@@ -22,7 +22,7 @@ import { format } from "date-fns";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { conditionsToEstimate } from "@/lib/meetingConditions";
 import { draftToLineItems, draftAmount, draftCost } from "@/lib/meetingChat";
-import { lineFromOrder } from "@/lib/printOrders";
+import { linesFromOrder } from "@/lib/printOrders";
 import { estimateQuery } from "@/lib/estimateQuery";
 
 export default function EstimateCreate() {
@@ -195,18 +195,19 @@ export default function EstimateCreate() {
   // 右の「引き継ぐ明細」パネルに出す内容
   // 追加印刷: 入稿記録の明細を引き継ぐ（左の「引き継ぐ明細」で外せる）
   const { data: reorder } = useQuery({ queryKey: ["printOrder", reorderId], queryFn: () => db.entities.PrintOrder.get(reorderId), enabled: !!reorderId, retry: false });
-  const reorderLine = useMemo(() => (reorder ? lineFromOrder(reorder) : null), [reorder]);
-  const [reorderOn, setReorderOn] = useState(null); // Set<"r">
+  // 内訳のある入稿記録（社内見積の小見出しごとにまとめたもの）は、内訳の行ごとの明細にする
+  const reorderLines = useMemo(() => (reorder ? linesFromOrder(reorder).map((li, i) => ({ ...li, _key: `r${i}` })) : null), [reorder]);
+  const [reorderOn, setReorderOn] = useState(null); // Set<"r0" | "r1" …>
   useEffect(() => {
-    if (!reorder || reorderOn) return;
-    setReorderOn(new Set(["r"]));
+    if (!reorder || !reorderLines || reorderOn) return;
+    setReorderOn(new Set(reorderLines.map((li) => li._key)));
     setFormData((prev) => ({ ...prev, client_name: prev.client_name || reorder.client_name || "", estimate_title: prev.estimate_title || `${reorder.name}（追加印刷）` }));
   }, [reorder]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!reorderLine || !reorderOn) return;
-    const items = reorderOn.has("r") ? [reorderLine] : [];
+    if (!reorderLines || !reorderOn) return;
+    const items = reorderLines.filter((li) => reorderOn.has(li._key)).map(({ _key, ...li }) => li);
     setFormData((prev) => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items).total }));
-  }, [reorderLine, reorderOn]);
+  }, [reorderLines, reorderOn]);
 
   // このクライアントの前回の入稿（引き継ぐ明細が無いときに出す）
   const { data: clientOrders = [] } = useQuery({
@@ -231,12 +232,12 @@ export default function EstimateCreate() {
         rows, selected: costRows, onToggle: toggleIn(setCostRows), onSetAll: (keys) => setCostRows(new Set(keys)), defaultKeys: defaultSelectedRows(costSheet), taxInclusive: false,
       };
     }
-    if (reorder && reorderLine && reorderOn) {
+    if (reorder && reorderLines && reorderOn) {
       return {
         title: `前回の入稿「${reorder.name}」`, subtitle: [`入稿 ${String(reorder.ordered_on).replace(/-/g, "/")}`, reorder.vendor, reorder.estimate_number ? `見積 ${reorder.estimate_number}` : ""].filter(Boolean).join("・"),
         linkTo: reorder.estimate_id ? `/estimates/${reorder.estimate_id}` : null, linkLabel: "前回の見積を開く",
-        rows: [{ key: "r", label: reorderLine.name, sub: [reorder.source_url ? `入稿先 ${reorder.source_url}` : "", reorder.memo].filter(Boolean).join("・"), qty: reorderLine.quantity, unit: reorderLine.unit, unitPrice: reorderLine.unit_price, amount: reorderLine.amount, cost: reorderLine.cost_price != null ? reorderLine.cost_price * reorderLine.quantity : null }],
-        selected: reorderOn, onToggle: toggleIn(setReorderOn), onSetAll: (keys) => setReorderOn(new Set(keys)), defaultKeys: ["r"], taxInclusive: false,
+        rows: reorderLines.map((li, i) => ({ key: li._key, label: li.name, sub: i === 0 ? [reorder.source_url ? `入稿先 ${reorder.source_url}` : "", reorder.memo].filter(Boolean).join("・") : (li.source_url ? `入稿先 ${li.source_url}` : ""), qty: li.quantity, unit: li.unit, unitPrice: li.unit_price, amount: li.amount, cost: li.cost_price != null ? li.cost_price * li.quantity : null })),
+        selected: reorderOn, onToggle: toggleIn(setReorderOn), onSetAll: (keys) => setReorderOn(new Set(keys)), defaultKeys: reorderLines.map((li) => li._key), taxInclusive: false,
       };
     }
     if (chatDraft && chatKeys) {
@@ -264,7 +265,7 @@ export default function EstimateCreate() {
       };
     }
     return null;
-  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds, chatDraft, chatKeys, chatMsg, meeting, reorder, reorderLine, reorderOn]);
+  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds, chatDraft, chatKeys, chatMsg, meeting, reorder, reorderLines, reorderOn]);
 
   const handleSave = async () => {
     if (!project) {

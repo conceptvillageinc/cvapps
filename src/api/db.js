@@ -65,7 +65,7 @@ const WRITABLE_COLUMNS = {
   print_orders: [
     'estimate_id', 'estimate_number', 'estimate_line_id', 'project_id', 'client_id', 'client_name', 'ordered_on',
     'name', 'category', 'quantity', 'unit', 'unit_price', 'amount', 'cost_price', 'vendor', 'source_url',
-    'screenshot_path', 'memo', 'created_by', 'created_by_name',
+    'screenshot_path', 'memo', 'created_by', 'created_by_name', 'items',
   ],
   cost_sheets: [
     'client_id', 'client_name', 'period', 'title', 'status', 'sheet_date', 'spreadsheet_id', 'sheet_gid', 'sheet_title', 'file_title',
@@ -349,6 +349,13 @@ function createEntity(entityName) {
     async delete(id) {
       unwrap(await supabase.from(table).delete().eq('id', id));
       return { id };
+    },
+
+    /** 複数行をまとめて削除する（作り直し用） */
+    async deleteMany(ids) {
+      if (!ids || ids.length === 0) return [];
+      unwrap(await supabase.from(table).delete().in('id', ids));
+      return ids;
     },
   };
 }

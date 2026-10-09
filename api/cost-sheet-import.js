@@ -1,4 +1,4 @@
-import { isPrintCostLine, costLineKey, ordersFromCostSheets } from '../src/lib/costSheetOrders.js';
+import { costLineGroups, ordersFromCostSheets } from '../src/lib/costSheetOrders.js';
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { getAccessToken } from './_lib/gmail.js';
 import { readXlsx, colLetter } from './_lib/xlsx.js';
@@ -114,15 +114,19 @@ function matchClient(name, clients) {
 }
 
 /**
- * 最終納品チェック（T 列の ✓）が付いた印刷の行を入稿記録にする（すでにある行は作らない）。作った件数を返す。
- *   入稿記録の SQL（0031）が未実行なら何もしない。
+ * 最終納品チェック（T 列の ✓）が付いた印刷の行を、小見出しごとに 1 件の入稿記録にする（すでにある行は作らない）。作った件数を返す。
+ *   同じクライアントの入稿記録と、入稿日・品名・金額が同じものは作らない（同じ内容のタブが 2 枚ある場合）。
+ *   入稿記録の SQL（0031・0032）が未実行なら何もしない。
  */
 async function addPrintOrders(admin, cs) {
-  const keys = (cs.lines || []).filter(isPrintCostLine).map((l) => costLineKey(cs.id, l.row));
-  if (keys.length === 0) return 0;
-  const { data: existing, error } = await admin.from('print_orders').select('estimate_line_id').in('estimate_line_id', keys);
-  if (error) return 0;
-  const rows = ordersFromCostSheets([cs], new Set((existing || []).map((e) => e.estimate_line_id)));
+  if (costLineGroups(cs).length === 0) return 0;
+  const cols = 'estimate_line_id, items, client_id, client_name, ordered_on, name, amount';
+  const queries = [admin.from('print_orders').select(cols).like('estimate_line_id', `costsheet:${cs.id}:%`)];
+  if (cs.client_id) queries.push(admin.from('print_orders').select(cols).eq('client_id', cs.client_id));
+  if (cs.client_name) queries.push(admin.from('print_orders').select(cols).eq('client_name', cs.client_name));
+  const results = await Promise.all(queries);
+  if (results.some((r) => r.error)) return 0;
+  const rows = ordersFromCostSheets([cs], results.flatMap((r) => r.data || []));
   if (rows.length === 0) return 0;
   const { error: e2 } = await admin.from('print_orders').insert(rows);
   if (e2) { console.error('[cost-sheet-import] print_orders', e2.message); return 0; }

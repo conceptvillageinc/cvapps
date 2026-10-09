@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Image as ImageIcon, CopyPlus, Check, Minus, Link2, FileSpreadsheet, PackageCheck } from "lucide-react";
 import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
-import { costLineKey } from "@/lib/costSheetOrders";
+import { costRowsOfOrder } from "@/lib/costSheetOrders";
 import { fmtOrderDate } from "@/lib/printOrders";
 import { COST_SHEET_STATUS, groupLabel, groupLines, finalTotals, defaultSelectedRows } from "@/lib/costSheets";
 
@@ -119,14 +119,15 @@ export default function CostSheetPane({ sheet, clientName }) {
     retry: false,
   });
   const ordersByRow = useMemo(() => {
+    // 小見出しごとにまとめた入稿記録は、内訳の行すべてに「入稿済」を出す
     const m = new Map();
-    for (const l of sheet.lines || []) {
-      const key = costLineKey(sheet.id, l.row);
-      const list = clientOrders.filter((o) => o.estimate_line_id === key);
-      if (list.length) m.set(l.row, list);
+    for (const o of clientOrders) {
+      const { sheetId, rows } = costRowsOfOrder(o);
+      if (sheetId !== String(sheet.id)) continue;
+      for (const r of rows) m.set(r, [...(m.get(r) || []), o]);
     }
     return m;
-  }, [clientOrders, sheet.id, sheet.lines]);
+  }, [clientOrders, sheet.id]);
   const [openOrder, setOpenOrder] = useState(null);
   const images = sheet.images || [];
   const fin = useMemo(() => finalTotals(sheet.lines), [sheet.lines]);

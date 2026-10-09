@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, ImagePlus, X, ExternalLink, PackageCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { orderItems } from "@/lib/printOrders";
+import PrintOrderItems from "@/components/printOrders/PrintOrderItems";
 
 const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 
@@ -102,10 +104,15 @@ export default function PrintOrderDialog({ open, onOpenChange, order, onSaved })
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm space-y-0.5">
           <p className="font-medium">{form.name || "（品名なし）"}</p>
           <p className="text-xs text-muted-foreground tabular-nums">
-            {form.quantity != null ? `${Number(form.quantity).toLocaleString()}${form.unit || ""}` : ""} × {yen(form.unit_price)} ＝ <b className="text-foreground">{yen(form.amount)}</b>
-            {form.cost_price != null && <>　原価単価 {yen(form.cost_price)}</>}
+            {orderItems(form).length > 0 ? (
+              <>{form.quantity != null ? `${Number(form.quantity).toLocaleString()}${form.unit || ""}　` : ""}合計 <b className="text-foreground">{yen(form.amount)}</b></>
+            ) : (
+              <>{form.quantity != null ? `${Number(form.quantity).toLocaleString()}${form.unit || ""}` : ""} × {yen(form.unit_price)} ＝ <b className="text-foreground">{yen(form.amount)}</b>
+                {form.cost_price != null && <>　原価単価 {yen(form.cost_price)}</>}</>
+            )}
             {form.vendor && <>　仕入先 {form.vendor}</>}
           </p>
+          <PrintOrderItems order={form} className="pt-0.5" />
           {form.estimate_number && <p className="text-[11px] text-muted-foreground">見積 {form.estimate_number}{form.client_name ? `・${form.client_name}` : ""}</p>}
         </div>
         <div className="space-y-3">
