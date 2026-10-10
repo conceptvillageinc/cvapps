@@ -183,6 +183,11 @@ export default function CostSheetImportCard() {
 
   const clientOf = (f) => overrides[f.id] ?? f.client_id ?? "";
   const unmatched = (files || []).filter((f) => !clientOf(f));
+  // 今日まだ取り込んでいないもの（途中で失敗したファイルは前回の日付のまま）
+  const today = new Date().toLocaleDateString("sv-SE");
+  const notToday = (files || []).filter((f) => clientOf(f) && (!f.imported_at || new Date(f.imported_at).toLocaleDateString("sv-SE") !== today));
+  const failedFiles = results.filter((r) => !r.ok);
+  const failedTabs = results.filter((r) => r.ok).flatMap((r) => (r.failed || []).map((t) => ({ ...t, file: r.name })));
 
   const run = async (targets) => {
     if (targets.length === 0) return;
@@ -193,7 +198,7 @@ export default function CostSheetImportCard() {
       setProgress((p) => ({ ...p, current: f.name }));
       try {
         const r = await db.functions.invoke("costSheetImport", { action: "import", spreadsheetId: f.id, clientId: clientOf(f) || null, clientName: f.client_name });
-        out.push({ id: f.id, name: f.name, ok: true, ...r.data });
+        out.push({ id: f.id, name: f.name, ...r.data, ok: true });
       } catch (e) {
         out.push({ id: f.id, name: f.name, ok: false, error: e.message });
       }
@@ -203,7 +208,8 @@ export default function CostSheetImportCard() {
     setRunning(false);
     queryClient.invalidateQueries({ queryKey: ["costSheets"] });
     const ok = out.filter((r) => r.ok);
-    toast.success(`${ok.length} ファイル（${ok.reduce((s, r) => s + (r.imported || 0), 0)} 件の社内見積）を取り込みました${out.length - ok.length ? `。失敗 ${out.length - ok.length}` : ""}`);
+    const tabFails = ok.reduce((n, r) => n + (r.failed?.length || 0), 0);
+    toast.success(`${ok.length} ファイル（${ok.reduce((s, r) => s + (r.imported || 0), 0)} 件の社内見積）を取り込みました${out.length - ok.length ? `。失敗 ${out.length - ok.length} ファイル` : ""}${tabFails ? `。読めなかったタブ ${tabFails}` : ""}`);
     setFiles((prev) => (prev || []).map((f) => (ok.some((r) => r.id === f.id) ? { ...f, imported_at: new Date().toISOString() } : f)));
   };
 
@@ -230,9 +236,25 @@ export default function CostSheetImportCard() {
               <span className="font-semibold">{files.length} ファイル</span>
               {unmatched.length > 0 ? <span className="text-amber-700 inline-flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> クライアントが決まっていないもの {unmatched.length}（右の欄で選んでください）</span> : <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> 全部クライアントに紐づきました</span>}
               <div className="ml-auto flex gap-1.5">
+                {notToday.length > 0 && notToday.length < files.filter((f) => clientOf(f)).length && (
+                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => run(notToday)} disabled={running} data-testid="cost-sheet-not-today">今日まだ取り込んでいない {notToday.length} 件を取り込む</Button>
+                )}
                 <Button type="button" size="sm" className="h-7 text-xs gap-1" onClick={() => run(files.filter((f) => clientOf(f)))} disabled={running || files.filter((f) => clientOf(f)).length === 0}>{running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 紐づいたものを全部取り込む</Button>
               </div>
             </div>
+            {!running && failedFiles.length + failedTabs.length > 0 && (
+              <div className="px-3 py-2 text-[11px] border-b bg-red-50 text-red-800 space-y-1" data-testid="cost-sheet-failures">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <b>{failedFiles.length > 0 && `取り込めなかったファイル ${failedFiles.length} 件`}{failedFiles.length > 0 && failedTabs.length > 0 && "・"}{failedTabs.length > 0 && `読めなかったタブ ${failedTabs.length} 件`}</b>
+                  {failedFiles.length > 0 && <Button type="button" size="sm" variant="outline" className="h-6 text-[11px] ml-auto" onClick={() => run(files.filter((f) => failedFiles.some((r) => r.id === f.id)))}>失敗したファイルだけもう一度</Button>}
+                </div>
+                <ul className="list-disc pl-5 space-y-0.5">
+                  {failedFiles.map((r) => <li key={r.id}>{shortFileName(r.name)}：{r.error}</li>)}
+                  {failedTabs.map((t, i) => <li key={i}>{shortFileName(t.file)}「{t.sheet}」：{t.error}</li>)}
+                </ul>
+              </div>
+            )}
             {running && <div className="px-3 py-1.5 text-[11px] text-muted-foreground border-b">取り込み中 {progress.done}/{progress.total}　{progress.current}（1 ファイルに数十秒かかることがあります）</div>}
             <table className="w-full text-xs table-fixed">
               <colgroup><col /><col className="w-12" /><col className="w-[36%]" /><col className="w-24" /><col className="w-20" /></colgroup>
@@ -242,7 +264,7 @@ export default function CostSheetImportCard() {
                   const r = results.find((x) => x.id === f.id);
                   return (
                     <tr key={f.id} className="border-t">
-                      <td className="px-2 py-1"><div className="line-clamp-2 break-all leading-snug" title={f.name}>{shortFileName(f.name)}</div>{r && (r.ok ? <><div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}{r.orders ? `・入稿記録 ${r.orders} 行` : ""}</div>{r.note && <div className="text-[10px] text-amber-700">{r.note}</div>}</> : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
+                      <td className="px-2 py-1"><div className="line-clamp-2 break-all leading-snug" title={f.name}>{shortFileName(f.name)}</div>{r && (r.ok ? <><div className="text-[10px] text-emerald-700">取り込み {r.imported} 件{r.skipped ? `（空のタブ ${r.skipped}）` : ""}{r.orders ? `・入稿記録 ${r.orders} 行` : ""}</div>{r.note && <div className="text-[10px] text-amber-700">{r.note}</div>}{r.failed?.length > 0 && <div className="text-[10px] text-red-700">読めなかったタブ: {r.failed.map((t) => `「${t.sheet}」${t.error}`).join("／")}</div>}</> : <div className="text-[10px] text-red-700">{r.error}</div>)}</td>
                       <td className="px-2 py-1 whitespace-nowrap">{f.period}</td>
                       <td className="px-2 py-1">
                         <ClientPicker value={clientOf(f)} onChange={(id) => setOverrides((o) => ({ ...o, [f.id]: id }))} clients={sortedClients} fileClientName={f.client_name} label={`${f.name} のクライアント`} />

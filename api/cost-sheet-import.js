@@ -232,32 +232,38 @@ export default async function handler(req, res) {
       const tpl = templateImageHashes(wb.sheets);
       const results = [];
       for (const sheet of wb.sheets) {
-        const parsed = parseCostSheet(sheet, { templateHashes: tpl });
-        if (isEmptySheet(parsed)) { results.push({ sheet: sheet.name, skipped: true }); continue; }
-        const dir = `cost-sheets/${spreadsheetId}/${sheet.sheetId}`;
-        const images = [];
-        for (let i = 0; i < parsed.images.length; i++) {
-          const im = parsed.images[i];
-          const path = `${dir}/${i + 1}-${im.sha.slice(0, 8)}.${im.ext === 'jpeg' ? 'jpg' : im.ext}`;
-          const { error } = await admin.storage.from('uploads').upload(path, im.data, { contentType: `image/${im.ext === 'jpg' ? 'jpeg' : im.ext}`, upsert: true });
-          if (error) throw new Error(`画像を保存できませんでした: ${error.message}`);
-          images.push({ path, row: im.row, col: im.col, group: im.group, section: im.section, near_row: im.near_row, width: im.width, height: im.height });
+        // 1 枚のタブで失敗しても、ほかのタブは取り込む（失敗したタブは結果に error を入れる）
+        try {
+          const parsed = parseCostSheet(sheet, { templateHashes: tpl });
+          if (isEmptySheet(parsed)) { results.push({ sheet: sheet.name, skipped: true }); continue; }
+          const dir = `cost-sheets/${spreadsheetId}/${sheet.sheetId}`;
+          const images = [];
+          for (let i = 0; i < parsed.images.length; i++) {
+            const im = parsed.images[i];
+            const path = `${dir}/${i + 1}-${im.sha.slice(0, 8)}.${im.ext === 'jpeg' ? 'jpg' : im.ext}`;
+            const { error } = await admin.storage.from('uploads').upload(path, im.data, { contentType: `image/${im.ext === 'jpg' ? 'jpeg' : im.ext}`, upsert: true });
+            if (error) throw new Error(`画像を保存できませんでした: ${error.message}`);
+            images.push({ path, row: im.row, col: im.col, group: im.group, section: im.section, near_row: im.near_row, width: im.width, height: im.height });
+          }
+          const row = {
+            client_id: clientId, client_name: clientName, period: title.period,
+            title: parsed.title, status: parsed.status, sheet_date: parsed.sheet_date || null,
+            spreadsheet_id: spreadsheetId, sheet_gid: sheet.sheetId, sheet_title: sheet.name, file_title: fileMeta.name,
+            sheet_url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheet.sheetId}`,
+            sell_total: parsed.sell_total, cost_total: parsed.cost_total, gross: parsed.gross, margin: parsed.margin,
+            authors: parsed.authors, last_entry_date: parsed.last_entry_date || null,
+            lines: parsed.lines, images, imported_at: new Date().toISOString(), imported_by: user.id,
+          };
+          const { data: saved, error } = await admin.from('cost_sheets').upsert(row, { onConflict: 'spreadsheet_id,sheet_gid' }).select('id').single();
+          if (error) throw new Error(`保存できませんでした（${sheet.name}）: ${error.message}`);
+          const orders = await addPrintOrders(admin, { ...row, id: saved.id });
+          results.push({ sheet: sheet.name, title: parsed.title, status: parsed.status, lines: parsed.lines.length, images: images.length, sell_total: parsed.sell_total, cost_total: parsed.cost_total, orders });
+        } catch (e) {
+          console.error('[cost-sheet-import] sheet', sheet.name, e?.message);
+          results.push({ sheet: sheet.name, error: e?.message || String(e) });
         }
-        const row = {
-          client_id: clientId, client_name: clientName, period: title.period,
-          title: parsed.title, status: parsed.status, sheet_date: parsed.sheet_date || null,
-          spreadsheet_id: spreadsheetId, sheet_gid: sheet.sheetId, sheet_title: sheet.name, file_title: fileMeta.name,
-          sheet_url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheet.sheetId}`,
-          sell_total: parsed.sell_total, cost_total: parsed.cost_total, gross: parsed.gross, margin: parsed.margin,
-          authors: parsed.authors, last_entry_date: parsed.last_entry_date || null,
-          lines: parsed.lines, images, imported_at: new Date().toISOString(), imported_by: user.id,
-        };
-        const { data: saved, error } = await admin.from('cost_sheets').upsert(row, { onConflict: 'spreadsheet_id,sheet_gid' }).select('id').single();
-        if (error) throw new Error(`保存できませんでした（${sheet.name}）: ${error.message}`);
-        const orders = await addPrintOrders(admin, { ...row, id: saved.id });
-        results.push({ sheet: sheet.name, title: parsed.title, status: parsed.status, lines: parsed.lines.length, images: images.length, sell_total: parsed.sell_total, cost_total: parsed.cost_total, orders });
       }
-      res.status(200).json({ orders: results.reduce((n, r) => n + (r.orders || 0), 0), file: fileMeta.name, mode, note: mode === 'values' ? 'ファイルが大きく画像付きで書き出せなかったため、数字と文字だけを取り込みました（スクショは入っていません）' : '', client_id: clientId, client_name: clientName, period: title.period, sheets: results, imported: results.filter((r) => !r.skipped).length, skipped: results.filter((r) => r.skipped).length });
+      res.status(200).json({ orders: results.reduce((n, r) => n + (r.orders || 0), 0), file: fileMeta.name, mode, note: mode === 'values' ? 'ファイルが大きく画像付きで書き出せなかったため、数字と文字だけを取り込みました（スクショは入っていません）' : '', client_id: clientId, client_name: clientName, period: title.period, sheets: results, imported: results.filter((r) => !r.skipped && !r.error).length, skipped: results.filter((r) => r.skipped).length, failed: results.filter((r) => r.error).map((r) => ({ sheet: r.sheet, error: r.error })) });
       return;
     }
 

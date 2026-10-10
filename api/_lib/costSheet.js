@@ -36,14 +36,26 @@ const MARK_COLS = ['C', 'D', 'E', 'F', 'G'];
 /** 「20251002」「251002」「2025/10/02」→ 2025-10-02。読めなければ "" */
 export function parseEntryDate(v) {
   if (v === null || v === undefined || v === '') return '';
-  if (typeof v === 'number' && v > 20000 && v < 80000) { // Excel のシリアル値
-    const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+  if (typeof v === 'number' && v > 36000 && v < 55000) { // Excel のシリアル値（1998〜2050 年ごろ）
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000);
     return d.toISOString().slice(0, 10);
   }
   const s = String(v).replace(/\.0+$/, '').replace(/[^\d]/g, '');
-  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-  if (/^\d{6}$/.test(s)) return `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4, 6)}`;
+  if (/^\d{8}$/.test(s)) return validYmd(+s.slice(0, 4), +s.slice(4, 6), +s.slice(6, 8));
+  if (/^\d{6}$/.test(s)) return validYmd(2000 + +s.slice(0, 2), +s.slice(2, 4), +s.slice(4, 6));
   return '';
+}
+
+/**
+ * 本当にある日付なら 'YYYY-MM-DD'、無ければ ''（「250200」の日 00 は、その月の 1 日として目安に入れる）。
+ *   書き間違い（「703304」→ 2070-33-04 など）を DB に入れると、そのファイルの取り込み全体が止まるため。
+ */
+function validYmd(y, m, d) {
+  if (d === 0) d = 1;
+  if (y < 2000 || y > 2049 || m < 1 || m > 12 || d < 1 || d > 31) return '';
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return ''; // 2/30 など
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
 /** ファイル名「【原価計算表】14期_ホップジャパン_社内見積」→ { period: "14期", client_name: "ホップジャパン" } */
