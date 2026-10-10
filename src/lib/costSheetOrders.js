@@ -1,6 +1,6 @@
 // ============================================================================
-// 社内見積（原価計算表）の「最終納品チェック」（T 列の ✓）が付いた印刷の行を、入稿記録にする。
-//   過去に入稿したものに ✓ を付けていたため、取り込み済みの社内見積から入稿記録を作り直す。
+// 社内見積（原価計算表）の「最終納品チェック」（T 列の ✓）が付いた行・黄色で塗った行（入稿したしるし）のうち、
+//   印刷の行を入稿記録にする。過去に入稿したものに ✓ や黄色を付けていたため、取り込み済みの社内見積から入稿記録を作り直す。
 //   同じタブの同じ小見出し（例: ユニフォーム（ポロシャツ）ブラック）の ✓ の行は 1 件にまとめ、
 //   サイズなどの行と送料・袋入れは内訳（items）に残す。数量は本体の行だけを足す。
 //   入稿記録の estimate_line_id に「costsheet:社内見積の id:g先頭の行番号」を入れて、同じ行を二重に作らない
@@ -36,9 +36,15 @@ const EXTRA_RE = /送料|配送|運賃|梱包|発送|袋入れ|袋詰|封入|手
 /** 送料・袋入れなどの付帯の行か */
 export const isExtraCostLine = (l) => EXTRA_RE.test(String(l?.name || ""));
 
-/** 入稿記録の本体にする行か: 最終納品チェックがあり、印刷の区分（または入稿先 URL のある行）。割引・送料などは除く */
+/**
+ * 入稿した行か: 最終納品チェック（✓）があるか、行が黄色で塗られている（入稿したしるし）。
+ *   失注のタブの黄色は、提案した行の印のことがあるので入れない。
+ */
+export const isOrderedCostLine = (cs, l) => !!l && (!!l.final || (!!l.yellow && cs?.status !== "lost"));
+
+/** 入稿記録の本体にする行か: 入稿した行（✓ か黄色）で、印刷の区分（または入稿先 URL のある行）。割引・送料などは除く */
 export function isPrintCostLine(l) {
-  if (!l || !l.final) return false;
+  if (!l || !(l.final || l.yellow)) return false;
   const text = `${l.group || ""} ${l.section || ""} ${l.name || ""}`;
   if (/割引/.test(text)) return false;
   if (isExtraCostLine(l)) return false;
@@ -50,6 +56,9 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const lineAmount = (l) => Math.round(Number(l.adjusted || 0) || Number(l.sell_total || 0));
 const groupName = (g) => String(g || "").replace(/^【(.+?)】\s*/, "$1 ").trim();
 const uniq = (arr) => [...new Set(arr.filter(Boolean))];
+const oneLine = (t) => String(t || "").replace(/\s+/g, " ").trim();
+// テンプレートの区分の札（B 列の縦書き「パッケージ」「その他制作物」など）。品名には使わない
+const isGenericSection = (t) => /^(パッケ[ーｰ|｜I1l－-]?ジ|その他(の)?制作物|その他|制作物|印刷物|印刷費|パッケージ以外(の制作物)?)$/.test(String(t || "").replace(/\s+/g, ""));
 
 /**
  * 社内見積 1 枚の ✓ の行を、入稿記録 1 件ずつのまとまりに分ける。
@@ -62,7 +71,7 @@ export function costLineGroups(cs, skipRows = new Set()) {
   const buckets = [];
   const byKey = new Map();
   for (const l of cs.lines || []) {
-    if (!l || !l.final || skipRows.has(l.row)) continue;
+    if (!isOrderedCostLine(cs, l) || skipRows.has(l.row)) continue;
     const isMain = isPrintCostLine(l);
     const isExtra = !isMain && isExtraCostLine(l);
     if (!isMain && !isExtra) continue;
@@ -90,7 +99,7 @@ export function orderFromCostGroup(cs, g) {
   // 「〃」は上の行と同じ品名
   let prevName = "";
   const items = all.map((l) => {
-    const name = !l.name || l.name === "〃" ? prevName || g.section || groupName(g.group) : l.name;
+    const name = !l.name || l.name === "〃" ? prevName || oneLine(g.section) || groupName(g.group) : oneLine(l.name);
     prevName = name;
     const qty = Number(l.qty) || null;
     const amount = lineAmount(l);
@@ -113,17 +122,22 @@ export function orderFromCostGroup(cs, g) {
   const qty = units.length <= 1 ? mains.reduce((s, it) => s + (Number(it.quantity) || 0), 0) : 0;
   const amount = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
   const cost = items.reduce((s, it) => s + (Number(it.cost_price) || 0) * (Number(it.quantity) || 1), 0);
-  const base = g.section || groupName(g.group);
-  // 本体が 1 行だけで、品名が小見出しと違えば「小見出し／品名」
-  const name = mains.length === 1 && mains[0].name && mains[0].name !== base && !base.includes(mains[0].name)
-    ? (base ? `${base}／${mains[0].name}` : mains[0].name)
-    : base || mains[0]?.name || "";
+  // 品名: 小見出し（例: ユニフォーム（ポロシャツ）ブラック）。小見出しがテンプレートの区分の札だけなら、本体の先頭の品名（複数なら「ほか」）
+  const section = isGenericSection(g.section) ? "" : oneLine(g.section);
+  const mainNames = uniq(mains.map((it) => oneLine(it.name)));
+  let name;
+  if (section) {
+    // 本体が 1 行だけで、品名が小見出しと違えば「小見出し／品名」
+    name = mainNames.length === 1 && mainNames[0] !== section && !section.includes(mainNames[0]) ? `${section}／${mainNames[0]}` : section;
+  } else {
+    name = mainNames.length > 1 ? `${mainNames[0]} ほか` : mainNames[0] || oneLine(groupName(g.group));
+  }
   const first = all[0];
   const rows = new Set(all.map((l) => l.row));
   const shot = (cs.images || []).find((im) => rows.has(im.near_row))?.path || null;
   const day = (v) => (v ? String(v).slice(0, 10) : "");
   const orderedOn = day(cs.sheet_date) || day(first.entered_on) || day(cs.last_entry_date) || day(cs.imported_at) || new Date().toISOString().slice(0, 10);
-  const groupText = `${String(g.group || "").replace(/パッケージ以外/g, "")} ${g.section || ""} ${name}`;
+  const groupText = `${String(g.group || "").replace(/パッケージ以外/g, "")} ${section} ${name}`;
   const single = items.length === 1;
   return {
     estimate_id: null,
@@ -144,12 +158,15 @@ export function orderFromCostGroup(cs, g) {
     vendor: uniq(mains.map((it) => it.vendor)).join("・"),
     source_url: mains.find((it) => it.source_url)?.source_url || "",
     screenshot_path: shot,
-    memo: [`社内見積「${[cs.period, cs.title].filter(Boolean).join(" ")}」の最終納品チェックから（入稿日は目安）`, ...uniq(all.map((l) => l.memo))].join("\n"),
+    memo: [`社内見積「${[cs.period, cs.title].filter(Boolean).join(" ")}」の${all.some((l) => l.final) ? (all.some((l) => !l.final && l.yellow) ? "最終納品チェック・黄色の行" : "最終納品チェック") : "黄色で塗った行"}から（入稿日は目安）`, ...uniq(all.map((l) => l.memo))].join("\n"),
     items,
     created_by: null,
     created_by_name: COST_SHEET_ORDER_AUTHOR,
   };
 }
+
+const editedAfterCreate = (o) => !!(o.updated_at && o.created_at && new Date(o.updated_at) - new Date(o.created_at) > 5000);
+const rowsSig = (o) => `${o.estimate_line_id}|${costRowsOfOrder(o).rows.slice().sort((a, b) => a - b).join(",")}|${Math.round(Number(o.amount) || 0)}`;
 
 const dupKey = (o) => [o.client_id || o.client_name || "", String(o.ordered_on || "").slice(0, 10), String(o.name || "").replace(/\s+/g, ""), Math.round(Number(o.amount) || 0)].join("|");
 
@@ -178,4 +195,29 @@ export function ordersFromCostSheets(sheets, existing = []) {
     }
   }
   return out;
+}
+
+/**
+ * 社内見積から作る入稿記録の作り直しの計画。
+ *   社内見積の取り込みで自動で作った記録（編集していないもの）は、今の ✓・黄色でまとめ直す。
+ *   中身が変わらないものはそのまま、変わったものは消して作り直す。手で登録した記録・あとで編集した記録は残し、その行はまとめに入れない。
+ * @param {object[]} sheets  対象の社内見積
+ * @param {object[]} orders  入稿記録（対象の社内見積の分と、同じクライアントの分。created_at・updated_at も使う）
+ * @returns {{ create: object[], remove: object[], unchanged: number, kept: number }}
+ */
+export function planCostSheetOrders(sheets, orders) {
+  const ids = new Set((sheets || []).map((cs) => String(cs.id)));
+  const auto = (orders || []).filter((o) => o.created_by_name === COST_SHEET_ORDER_AUTHOR && ids.has(costRowsOfOrder(o).sheetId || ""));
+  const redo = auto.filter((o) => !editedAfterCreate(o));
+  const redoIds = new Set(redo.map((o) => o.id));
+  const fresh = ordersFromCostSheets(sheets, (orders || []).filter((o) => !redoIds.has(o.id)));
+  const bySig = new Map(redo.map((o) => [rowsSig(o), o]));
+  const create = [];
+  const same = new Set();
+  for (const o of fresh) {
+    const hit = bySig.get(rowsSig(o));
+    if (hit && !same.has(hit.id)) same.add(hit.id);
+    else create.push(o);
+  }
+  return { create, remove: redo.filter((o) => !same.has(o.id)), unchanged: same.size, kept: auto.length - redo.length };
 }

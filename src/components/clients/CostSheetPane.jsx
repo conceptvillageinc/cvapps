@@ -50,11 +50,11 @@ function LineRow({ l, images, hasFinal, checked, onToggle, orders = [], onOpenOr
   const rowImages = images.filter((im) => im.near_row === l.row);
   const isDiscount = /割引/.test(l.name) || Number(l.adjusted) < 0;
   return (
-    <tr className={`border-t align-top ${l.final ? "bg-emerald-50/60" : muted ? "text-muted-foreground/80" : ""}`} data-row={l.row}>
+    <tr className={`border-t align-top ${l.final ? "bg-emerald-50/60" : l.yellow ? "bg-yellow-50" : muted ? "text-muted-foreground/80" : ""}`} data-row={l.row}>
       <td className="px-2 py-1.5 text-center w-12 whitespace-nowrap">
         <span className="inline-flex items-center gap-1">
           <Checkbox checked={checked} onCheckedChange={onToggle} aria-label={`${l.name || "この行"} を新規見積に使う`} />
-          {l.final ? <Check className="w-3.5 h-3.5 text-emerald-600" aria-label="最終納品" /> : <span className="w-3.5" />}
+          {l.final ? <Check className="w-3.5 h-3.5 text-emerald-600" aria-label="最終納品" /> : l.yellow ? <span className="w-3 h-3 rounded-sm bg-yellow-300 border border-yellow-500" title="シートで黄色に塗られた行（入稿したしるし）" aria-label="黄色の行" data-testid="cost-yellow-mark" /> : <span className="w-3.5" />}
         </span>
       </td>
       <td className="px-2 py-1.5 text-[11px] text-muted-foreground whitespace-nowrap">{l.section}</td>

@@ -60,12 +60,43 @@ function resolvePath(baseDir, target) {
   return parts.join('/');
 }
 
+// 既定の色番号（indexed）のうち、よく使うもの
+const INDEXED = { 5: 'FFFF00', 13: 'FFFF00', 2: 'FF0000', 3: '00FF00', 4: '0000FF', 9: 'FFFFFF', 1: 'FFFFFF', 8: '000000', 0: '000000' };
+
+/** styles.xml から、xf の番号ごとの塗りの色（'RRGGBB'。塗り無し・白は null）を作る */
+function readFillsByXf(xml) {
+  if (!xml) return [];
+  const fills = [];
+  const fillsXml = /<fills\b[^>]*>([\s\S]*?)<\/fills>/.exec(xml)?.[1] || '';
+  const fRe = /<fill>([\s\S]*?)<\/fill>|<fill\/>/g;
+  let fm;
+  while ((fm = fRe.exec(fillsXml))) {
+    const body = fm[1] || '';
+    if (!/patternType="solid"/.test(body)) { fills.push(null); continue; }
+    const fg = /<fgColor\s([^>]*)\/?>/.exec(body)?.[1] || '';
+    const rgb = /rgb="([0-9A-Fa-f]{6,8})"/.exec(fg)?.[1];
+    const idx = /indexed="(\d+)"/.exec(fg)?.[1];
+    const hex = rgb ? rgb.slice(-6).toUpperCase() : (idx !== undefined ? INDEXED[Number(idx)] || null : null);
+    fills.push(hex && hex !== 'FFFFFF' ? hex : null);
+  }
+  const xfsXml = /<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/.exec(xml)?.[1] || '';
+  const out = [];
+  const xRe = /<xf\s([^>]*?)\/?>/g;
+  let xm;
+  while ((xm = xRe.exec(xfsXml))) {
+    const fillId = /fillId="(\d+)"/.exec(xm[1])?.[1];
+    out.push(fillId !== undefined ? fills[Number(fillId)] ?? null : null);
+  }
+  return out;
+}
+
 /**
  * xlsx を読む。
  * @param {Buffer|ArrayBuffer} buffer
  * @param {{ withImages?: boolean }} [opts]
- * @returns {Promise<{ sheets: { name, sheetId, cells: Map<string, string|number|boolean>, maxRow, images: { row, col, cx, cy, data: Buffer, ext }[] }[] }>}
+ * @returns {Promise<{ sheets: { name, sheetId, cells: Map<string, string|number|boolean>, fills: Map<string, string>, maxRow, images: { row, col, cx, cy, data: Buffer, ext }[] }[] }>}
  *   cells は "H7" のような参照をキーにした値。row/col は 1 始まり。images の row/col も 1 始まり（貼り付け位置の左上のセル）。
+ *   fills は塗りのあるセルの色（"FFFF00" のような 6 桁。条件付き書式の色は入らない）。
  */
 export async function readXlsx(buffer, { withImages = true } = {}) {
   const zip = await JSZip.loadAsync(buffer);
@@ -79,6 +110,9 @@ export async function readXlsx(buffer, { withImages = true } = {}) {
     let m;
     while ((m = re.exec(sstXml))) sst.push(textOf(m[1]));
   }
+
+  // セルの塗りの色（styles.xml の cellXfs → fills）。xf の番号 → 'RRGGBB'（塗り無しは null）
+  const xfFill = readFillsByXf(await text('xl/styles.xml'));
 
   const wbXml = await text('xl/workbook.xml');
   const wbRels = parseRels(await text('xl/_rels/workbook.xml.rels'));
@@ -95,6 +129,7 @@ export async function readXlsx(buffer, { withImages = true } = {}) {
     const sheetPath = resolvePath('xl', target);
     const xml = await text(sheetPath);
     const cells = new Map();
+    const fills = new Map(); // "F75" → "FFFF00"（塗りのあるセルだけ。値の無いセルも入れる）
     let maxRow = 0;
     const cRe = /<c\s([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
     let cm;
@@ -102,6 +137,8 @@ export async function readXlsx(buffer, { withImages = true } = {}) {
       const a = cm[1]; const body = cm[2] || '';
       const ref = /r="([A-Z]+\d+)"/.exec(a)?.[1];
       if (!ref) continue;
+      const si = /\bs="(\d+)"/.exec(a)?.[1];
+      if (si !== undefined && xfFill[Number(si)]) fills.set(ref, xfFill[Number(si)]);
       const t = /\bt="([^"]+)"/.exec(a)?.[1] || 'n';
       let value = null;
       if (t === 'inlineStr') value = textOf(body);
@@ -150,7 +187,7 @@ export async function readXlsx(buffer, { withImages = true } = {}) {
         }
       }
     }
-    sheets.push({ name, sheetId, cells, maxRow, images });
+    sheets.push({ name, sheetId, cells, fills, maxRow, images });
   }
   return { sheets };
 }

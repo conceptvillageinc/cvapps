@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { cellRef } from './xlsx.js';
 
 // ============================================================================
 // 「【原価計算表】◯期_クライアント名_社内見積」のタブ 1 枚を、アプリの「社内見積（原価計算表）」1 件にする。
@@ -20,6 +19,19 @@ const END_RE = /見積り?作成注意事項|注意事項チェック/;
 const num = (v) => { if (v === null || v === undefined || v === '') return 0; const n = Number(String(v).replace(/[,¥￥\s]/g, '')); return Number.isFinite(n) ? n : 0; };
 const str = (v) => (v === null || v === undefined ? '' : String(v).trim());
 const isTrue = (v) => v === true || /^(true|1|✓|〇|○)$/i.test(str(v));
+
+/**
+ * 入稿したしるしの黄色（#FFFF00 に近い、濃い黄色）か。
+ *   テンプレートの入力欄のクリーム色（#FFF2CC）や、見出しの黄土色（#FFD966・#FFE599）は入れない。
+ */
+export function isMarkYellow(hex) {
+  const m = /^([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/i.exec(String(hex || ''));
+  if (!m) return false;
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16));
+  return r >= 0xe6 && g >= 0xe6 && b <= 0x66;
+}
+// 黄色を見る列（NO.・記入日時・記入者名・項目・備考）。このうち 2 つ以上が黄色なら入稿した行
+const MARK_COLS = ['C', 'D', 'E', 'F', 'G'];
 
 /** 「20251002」「251002」「2025/10/02」→ 2025-10-02。読めなければ "" */
 export function parseEntryDate(v) {
@@ -65,6 +77,8 @@ const sha1 = (buf) => createHash('sha1').update(buf).digest('hex');
  */
 export function parseCostSheet(sheet, { templateHashes = new Set() } = {}) {
   const get = (col, row) => sheet.cells.get(`${col}${row}`);
+  const fillAt = (col, row) => sheet.fills?.get(`${col}${row}`) || null;
+  const isMarked = (row) => MARK_COLS.filter((c) => isMarkYellow(fillAt(c, row))).length >= 2;
   const { title, status, sheet_date } = parseTabName(sheet.name);
   const cost_total = Math.round(num(get('G', 7)));
   const sell_total = Math.round(num(get('H', 7)));
@@ -124,6 +138,7 @@ export function parseCostSheet(sheet, { templateHashes = new Set() } = {}) {
       vendor: str(get(COL.vendor, r)),
       url: str(get(COL.url, r)) || (/^https?:\/\//.test(str(get(COL.vendor, r))) ? str(get(COL.vendor, r)) : ''),
       final: isTrue(get(COL.final, r)),
+      yellow: isMarked(r), // 行が黄色で塗られている（入稿したしるし。✓ が無いこともある）
     });
   }
   // 仕入先の列に URL が入っているときは、仕入先名を空にする

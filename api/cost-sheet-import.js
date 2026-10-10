@@ -1,4 +1,4 @@
-import { costLineGroups, ordersFromCostSheets } from '../src/lib/costSheetOrders.js';
+import { planCostSheetOrders } from '../src/lib/costSheetOrders.js';
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { getAccessToken } from './_lib/gmail.js';
 import { readXlsx, colLetter } from './_lib/xlsx.js';
@@ -72,7 +72,7 @@ export async function loadWorkbook(token, spreadsheetId) {
   return { wb: await readValuesOnly(token, spreadsheetId), mode: 'values' };
 }
 
-/** Sheets API でタブごとの値（A〜T 列、計算済みの値）を読み、readXlsx と同じ形にする。画像は無し */
+/** Sheets API でタブごとの値（A〜T 列、計算済みの値）と C〜G 列の背景色を読み、readXlsx と同じ形にする。画像は無し */
 async function readValuesOnly(token, spreadsheetId) {
   const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
   const meta = await (await gapi(token, `${SHEETS}/${spreadsheetId}?fields=sheets.properties(sheetId,title,index)`)).json();
@@ -93,8 +93,30 @@ async function readValuesOnly(token, spreadsheetId) {
           if (r + 1 > maxRow) maxRow = r + 1;
         });
       });
-      sheets.push({ name: p.title, sheetId: p.sheetId, cells, maxRow, images: [] });
+      sheets.push({ name: p.title, sheetId: p.sheetId, cells, fills: new Map(), maxRow, images: [] });
     });
+    // 背景色（C〜G 列。黄色で塗った行＝入稿したしるしを見るため）。読めなくても値の取り込みは続ける
+    try {
+      const fr = chunk.map((p) => `ranges=${encodeURIComponent(`'${p.title.replace(/'/g, "''")}'!C1:G400`)}`).join('&');
+      const fields = encodeURIComponent('sheets(properties(sheetId),data(startRow,startColumn,rowData(values(effectiveFormat(backgroundColor)))))');
+      const fmt = await (await gapi(token, `${SHEETS}/${spreadsheetId}?${fr}&fields=${fields}`)).json();
+      for (const sh of fmt.sheets || []) {
+        const target = sheets.find((x) => x.sheetId === sh.properties?.sheetId);
+        if (!target) continue;
+        for (const d of sh.data || []) {
+          (d.rowData || []).forEach((row, r) => {
+            (row.values || []).forEach((v, c) => {
+              const bg = v?.effectiveFormat?.backgroundColor;
+              if (!bg) return;
+              const hex = [bg.red, bg.green, bg.blue].map((x) => Math.round((x || 0) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+              if (hex !== 'FFFFFF') target.fills.set(`${colLetter((d.startColumn || 0) + c + 1)}${(d.startRow || 0) + r + 1}`, hex);
+            });
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[cost-sheet-import] background colors', e?.message);
+    }
   }
   return { sheets };
 }
@@ -114,23 +136,30 @@ function matchClient(name, clients) {
 }
 
 /**
- * 最終納品チェック（T 列の ✓）が付いた印刷の行を、小見出しごとに 1 件の入稿記録にする（すでにある行は作らない）。作った件数を返す。
+ * 最終納品チェック（T 列の ✓）・黄色で塗った印刷の行を、小見出しごとに 1 件の入稿記録にする。作った件数を返す。
+ *   このタブから自動で作った入稿記録（編集していないもの）は、今の ✓・黄色でまとめ直す（中身が同じものはそのまま）。
  *   同じクライアントの入稿記録と、入稿日・品名・金額が同じものは作らない（同じ内容のタブが 2 枚ある場合）。
  *   入稿記録の SQL（0031・0032）が未実行なら何もしない。
  */
 async function addPrintOrders(admin, cs) {
-  if (costLineGroups(cs).length === 0) return 0;
-  const cols = 'estimate_line_id, items, client_id, client_name, ordered_on, name, amount';
+  const cols = 'id, estimate_line_id, items, client_id, client_name, ordered_on, name, amount, created_by_name, created_at, updated_at';
   const queries = [admin.from('print_orders').select(cols).like('estimate_line_id', `costsheet:${cs.id}:%`)];
   if (cs.client_id) queries.push(admin.from('print_orders').select(cols).eq('client_id', cs.client_id));
   if (cs.client_name) queries.push(admin.from('print_orders').select(cols).eq('client_name', cs.client_name));
   const results = await Promise.all(queries);
   if (results.some((r) => r.error)) return 0;
-  const rows = ordersFromCostSheets([cs], results.flatMap((r) => r.data || []));
-  if (rows.length === 0) return 0;
-  const { error: e2 } = await admin.from('print_orders').insert(rows);
-  if (e2) { console.error('[cost-sheet-import] print_orders', e2.message); return 0; }
-  return rows.length;
+  const seen = new Set();
+  const orders = results.flatMap((r) => r.data || []).filter((o) => (seen.has(o.id) ? false : seen.add(o.id)));
+  const { create, remove } = planCostSheetOrders([cs], orders);
+  if (create.length > 0) {
+    const { error } = await admin.from('print_orders').insert(create);
+    if (error) { console.error('[cost-sheet-import] print_orders', error.message); return 0; }
+  }
+  if (remove.length > 0) {
+    const { error } = await admin.from('print_orders').delete().in('id', remove.map((o) => o.id));
+    if (error) console.error('[cost-sheet-import] print_orders delete', error.message);
+  }
+  return create.length;
 }
 
 export default async function handler(req, res) {
