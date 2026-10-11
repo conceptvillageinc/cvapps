@@ -26,7 +26,8 @@ import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
 import { lineShots, shotsPatch, MAX_LINE_SHOTS } from "@/lib/lineShots";
-import { isPrintLine, orderFromLine, fmtOrderDate, linesFromOrder } from "@/lib/printOrders";
+import { isPrintLine, orderFromLine, fmtOrderDate } from "@/lib/printOrders";
+import { masterCellPrice, masterCellToItem, orderToItems, pastLineToItem } from "@/lib/lineSources";
 import { searchItems } from "@/lib/itemSearch";
 import { useItemSearchData, ItemSearchBar, ItemSearchResults } from "@/components/estimates/ItemSearch";
 import { useAuth } from "@/lib/AuthContext";
@@ -266,44 +267,11 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     closeAddPanel();
   };
 
-  // 価格マスタのセルの原価・出し値（税別・その数量の合計）
-  const priceOfCell = (entry, cell) => {
-    const quantity = cell.quantity || 1;
-    const cost = toTaxExcluded(cell.price, entry.price_tax_mode);
-    return { cost, price: applyMarkup(cost / quantity, markupRateFor(rules, entry.category)) * quantity };
-  };
-
-  // 価格マスタのセル → 明細（区分は価格マスタの紙／紙以外から）
-  const itemFromMasterCell = (entry, cell) => {
-    const catLabel = LINE_ITEM_CATEGORIES.find(c => c.paperGroup === entry.paper_type_group)?.label || "印刷費（紙）";
-    const quantity = cell.quantity || 1;
-    // 税込表示のマスタは原価を税別に直す
-    const costPerUnit = toTaxExcluded(cell.price, entry.price_tax_mode) / quantity;
-    const markupRate = markupRateFor(rules, entry.category);
-    const unitPrice = applyMarkup(costPerUnit, markupRate);
-    return {
-      row_type: "item",
-      category: catLabel,
-      // クライアント向けの名称には印刷会社・納期を出さず、社内メモに入れる
-      name: entry.category,
-      memo: `${entry.vendor_name}・${cell.label}納期`,
-      quantity,
-      unit: "枚",
-      unit_price: unitPrice,
-      amount: unitPrice * quantity,
-      cost_price: Math.round(costPerUnit * 100) / 100,
-      markup_rate: markupRate,
-      source_type: "price_master",
-      source_ref: entry.id,
-    };
-  };
-  // 入稿記録 → 明細（内訳のある記録は内訳の行ごと）
-  const itemsFromOrder = (order) => linesFromOrder(order).map((li) => ({ ...li, id: uid() }));
-  // 過去見積の明細 → 明細（複製元を残す。価格確認の結果は持ってこない）
-  const itemFromPastLine = (c) => {
-    const { price_check: _pc, ...li } = c.line;
-    return { ...li, id: uid(), copied_from: c.estimate.estimate_number, copied_from_id: c.estimate.id };
-  };
+  // 探した候補 → 明細（見積書の画面と新規見積作成で共通: src/lib/lineSources.js）
+  const priceOfCell = (entry, cell) => masterCellPrice(entry, cell, rules);
+  const itemFromMasterCell = (entry, cell) => masterCellToItem(entry, cell, rules);
+  const itemsFromOrder = orderToItems;
+  const itemFromPastLine = (c) => pastLineToItem(c.line, c.estimate);
 
   const pickPriceMasterCell = (entry, cell) => {
     addItem(itemFromMasterCell(entry, cell));

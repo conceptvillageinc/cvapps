@@ -26,6 +26,7 @@ import { linesFromOrder } from "@/lib/printOrders";
 import { estimateQuery } from "@/lib/estimateQuery";
 import { searchItems, similarEstimates } from "@/lib/itemSearch";
 import { useItemSearchData } from "@/components/estimates/ItemSearch";
+import ItemChips from "@/components/estimates/ItemChips";
 
 export default function EstimateCreate() {
   const navigate = useNavigate();
@@ -526,6 +527,12 @@ export default function EstimateCreate() {
               onChange={e => setFormData(prev => ({ ...prev, estimate_title: e.target.value }))}
               placeholder="例: チラシ制作費"
             />
+            {!carry && !meetingId && (
+              <div className="space-y-1.5 pt-2">
+                <Label className="text-xs font-medium">作るもの <span className="text-muted-foreground font-normal">（任意。件名が広くても、品目ごとに前回の入稿・価格マスタ・過去見積から明細を入れられます）</span></Label>
+                <ItemChips clientName={formData.client_name} data={searchData} onLinesChange={(lines) => setFormData((prev) => ({ ...prev, line_items: lines, total_amount: computeEstimateTotals(lines).total }))} />
+              </div>
+            )}
             {!carry && (similarEsts.length > 0 || similarOrders.length > 0) && (
               <div className="rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs space-y-1.5" data-testid="similar-past">
                 <p className="font-semibold text-amber-900 inline-flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> 似た過去の見積・入稿があります（引き継ぐと明細をそのまま持ってこられます）</p>
@@ -566,7 +573,7 @@ export default function EstimateCreate() {
       <div className="flex items-center justify-end gap-2 pb-6">
         <Button variant="outline" onClick={() => navigate(-1)} disabled={saving}>キャンセル</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2" size="lg">
-          <Save className="w-4 h-4" /> {carry ? `${formData.line_items.length} 行の明細で作成して明細入力へ` : "作成して明細入力へ"}
+          <Save className="w-4 h-4" /> {carry || formData.line_items?.length ? `${formData.line_items.length} 行の明細で作成して明細入力へ` : "作成して明細入力へ"}
         </Button>
       </div>
     </div>
