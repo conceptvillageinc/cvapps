@@ -6,7 +6,7 @@ import { parseCostSheet, templateImageHashes, parseFileTitle, isEmptySheet } fro
 
 // ============================================================================
 // POST /api/cost-sheet-import
-//   { action: "list", folderUrl? }           … 原価計算表（スプレッドシート）を列挙する。URL が空なら 14期・13期のフォルダ両方。
+//   { action: "list", folderUrl? }           … 原価計算表（スプレッドシート）を列挙する。URL が空なら 14期・13期のフォルダ両方（中のフォルダも 1 段見る）。
 //                                             フォルダやスプレッドシートの URL を貼れば、それだけ（複数可）。期はファイル名から読む
 //   { action: "import", spreadsheetId, clientId?, clientName? } … 1 ファイルを xlsx に書き出して読み、タブごとに cost_sheets へ入れる
 //
@@ -186,15 +186,25 @@ export default async function handler(req, res) {
       }
       if (folderIds.length === 0 && sheetIds.length === 0) folderIds.push(...DEFAULT_FOLDER_IDS);
       const files = [];
-      for (const folderId of folderIds) {
+      const listIn = async (folderId, mime) => {
+        const out = [];
         let pageToken = '';
         do {
-          const q = encodeURIComponent(`'${folderId}' in parents and mimeType='${SHEET_MIME}' and trashed=false`);
+          const q = encodeURIComponent(`'${folderId}' in parents and mimeType='${mime}' and trashed=false`);
           const r = await gapi(token, `${DRIVE}/files?q=${q}&fields=nextPageToken,files(id,name,modifiedTime,size)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? `&pageToken=${pageToken}` : ''}`);
           const data = await r.json();
-          files.push(...(data.files || []));
+          out.push(...(data.files || []));
           pageToken = data.nextPageToken || '';
         } while (pageToken);
+        return out;
+      };
+      for (const folderId of folderIds) {
+        files.push(...(await listIn(folderId, SHEET_MIME)));
+        // クライアントごとのフォルダ（「【原価計算表】14期_吾妻食品_社内見積」フォルダの中に原価計算表がある）も 1 段だけ見る。
+        //   中の原価計算表・社内見積だけ（「ECサイト整理」などほかのシートは入れない）
+        for (const sub of await listIn(folderId, 'application/vnd.google-apps.folder')) {
+          files.push(...(await listIn(sub.id, SHEET_MIME)).filter((f) => /原価計算表|社内見積/.test(f.name)));
+        }
       }
       for (const id of sheetIds) {
         const r = await gapi(token, `${DRIVE}/files/${id}?fields=id,name,modifiedTime,size&supportsAllDrives=true`);

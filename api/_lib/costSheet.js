@@ -64,6 +64,9 @@ export function parseFileTitle(title) {
   const m = /(\d+)\s*期[_＿\s]+(.+?)[_＿\s]*社内見積/.exec(t);
   if (m) return { period: `${m[1]}期`, client_name: m[2].trim() };
   const p = /(\d+)\s*期/.exec(t);
+  // 「※社内のみ［マルト御中］店舗販促ツール…お見積（社内見積もり検討用）」のように［クライアント御中］で書いたもの
+  const br = /[［[]\s*([^］\]]+?)\s*(?:御中|様)?\s*[］\]]/.exec(t);
+  if (br) return { period: p ? `${p[1]}期` : '', client_name: br[1].trim() };
   return { period: p ? `${p[1]}期` : '', client_name: t.replace(/【[^】]*】/g, '').replace(/社内見積/g, '').replace(/^[_＿\s]+|[_＿\s]+$/g, '') };
 }
 
