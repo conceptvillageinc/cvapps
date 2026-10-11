@@ -2,7 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/AuthContext";
 import { vendorTaxMode, toTaxExcluded, PRICE_READ_NOTES } from "@/lib/priceTax";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { masterForLine, syncMasterFromCheck, mergeGrid } from "@/lib/priceMasterSync";
 import { db } from "@/api/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -153,7 +154,7 @@ function ShotReader({ li, masters, printVendors, onCompare }) {
                 )}
                 <div className="flex flex-wrap items-center gap-2">
                   <Button type="button" size="sm" className="h-7 px-2 text-[11px] bg-teal-600 hover:bg-teal-700" disabled={!cell} onClick={() => onCompare(shot, mode, saveMaster)}>比べる</Button>
-                  <label className="inline-flex items-center gap-1 text-[10.5px] text-muted-foreground"><input type="checkbox" checked={saveMaster} onChange={(e) => setSaveMaster(e.target.checked)} /> 価格マスタにも登録する（次から自動で比べられます）</label>
+                  <label className="inline-flex items-center gap-1 text-[10.5px] text-muted-foreground"><input type="checkbox" checked={saveMaster} onChange={(e) => setSaveMaster(e.target.checked)} /> {masterForLine(li, masters) ? "価格マスタもこの価格表に更新する" : "価格マスタにも登録する（次から自動で比べられます）"}</label>
                   <button type="button" className="text-[10.5px] text-teal-700 hover:underline ml-auto" onClick={() => setShot(null)}>別のスクショにする</button>
                 </div>
               </>
@@ -235,6 +236,9 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
   const carried = useMemo(() => priceCheckTargets(items), [items]);
   const [busy, setBusy] = useState(() => new Set());
   const [open, setOpen] = useState(true);
+  // 置き換え・「変わりなし」の確認のときに、価格マスタも今の価格（・確認日）にする
+  const [syncMaster, setSyncMaster] = useState(true);
+  const queryClient = useQueryClient();
   const { data: masters = [] } = useQuery({ queryKey: ["priceMaster"], queryFn: () => db.entities.PriceMaster.list("-last_updated"), enabled: carried.length > 0 });
   const { data: printVendors = [] } = useQuery({ queryKey: ["printVendors"], queryFn: () => db.entities.PrintVendor.list(), enabled: carried.length > 0 });
 
@@ -293,7 +297,22 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
     toast.success(`${up} 行の価格を確認しました`);
   };
 
-  const replace = (li) => patchItems({ [li.id]: (cur) => replaceWithCurrent(cur) });
+  // 価格マスタも今の価格に（置き換え・変わりなしの確認のとき。チェックを外せばしない）
+  const syncMasters = async (lines) => {
+    if (!syncMaster) return;
+    let price = 0; let date = 0;
+    for (const li of lines) {
+      try {
+        const r = await syncMasterFromCheck(li, li.price_check, masters, printVendors);
+        if (r.action === "price") price += 1; else if (r.action === "date") date += 1;
+      } catch (e) { toast.error("価格マスタを更新できませんでした: " + e.message); }
+    }
+    if (price + date > 0) {
+      queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
+      toast.success(`価格マスタも更新しました（${[price ? `価格 ${price} 件` : "", date ? `確認日 ${date} 件` : ""].filter(Boolean).join("・")}）`);
+    }
+  };
+  const replace = (li) => { patchItems({ [li.id]: (cur) => replaceWithCurrent(cur) }); syncMasters([li]); };
   const manual = (li, total, mode) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: checkManual(cur, total, mode, userName) }) }); toast.success("入れた金額で比べました"); };
   const shotCompare = async (li, shot, mode, saveMaster) => {
     const pc = checkWithShot(li, shot.grid, shot.pick, mode, shot.path, userName);
@@ -301,21 +320,33 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
     toast.success(`スクショの価格で比べました（${PRICE_CHECK_STATUS[pc.status]?.label || ""}）`);
     if (saveMaster) {
       try {
-        await db.entities.PriceMaster.create({
-          category: li.name, vendor_name: vendorOf(li, masters) || "（仕入先未登録）", spec_summary: shot.spec || "",
-          paper_type_group: /紙以外/.test(li.category || "") ? "紙以外" : "紙", price_grid: shot.grid, last_updated: new Date().toISOString().slice(0, 10),
-          screenshot_url: shot.path, source_url: li.source_url || null, price_tax_mode: mode,
-        });
-        toast.success("価格マスタにも登録しました");
+        // 同じマスタ（この行のマスタ・同じ URL・同じ品名と仕入先）があれば上書きし、無いときだけ作る
+        const existing = masterForLine(li, masters);
+        if (existing) {
+          await db.entities.PriceMaster.update(existing.id, {
+            price_grid: mergeGrid(existing.price_grid, shot.grid), last_updated: new Date().toISOString().slice(0, 10),
+            screenshot_url: shot.path, price_tax_mode: mode, ...(existing.spec_summary ? {} : { spec_summary: shot.spec || "" }),
+          });
+          toast.success(`価格マスタ「${existing.category}（${existing.vendor_name}）」を更新しました`);
+        } else {
+          await db.entities.PriceMaster.create({
+            category: li.name, vendor_name: vendorOf(li, masters) || "（仕入先未登録）", spec_summary: shot.spec || "",
+            paper_type_group: /紙以外/.test(li.category || "") ? "紙以外" : "紙", price_grid: shot.grid, last_updated: new Date().toISOString().slice(0, 10),
+            screenshot_url: shot.path, source_url: li.source_url || null, price_tax_mode: mode,
+          });
+          toast.success("価格マスタにも登録しました");
+        }
+        queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       } catch (e) { toast.error("価格マスタに登録できませんでした: " + e.message); }
     }
   };
-  const same = (li) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: markSame(cur, userName) }) }); toast.success("変わりなしとして確認済みにしました"); };
+  const same = (li) => { patchItems({ [li.id]: (cur) => ({ ...cur, price_check: markSame(cur, userName) }) }); toast.success("変わりなしとして確認済みにしました"); syncMasters([{ ...li, price_check: { ...(li.price_check || {}), status: "same", source: "manual_same" } }]); };
   const replaceAllUp = () => {
     const targets = carried.filter((li) => ["up", "down"].includes(li.price_check?.status) && li.price_check?.current_cost != null);
     const patches = Object.fromEntries(targets.map((li) => [li.id, (cur) => replaceWithCurrent(cur)]));
     patchItems(patches);
     toast.success(`${targets.length} 行を今の原価に置き換えました`);
+    syncMasters(targets);
   };
 
   const count = (st) => carried.filter((li) => (li.price_check?.status || "none") === st).length;
@@ -333,6 +364,9 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
             {["same", "up", "down", "unknown", "replaced", "none"].map((st) => count(st) > 0 && <Badge key={st} className={`${PRICE_CHECK_STATUS[st].cls} hover:${PRICE_CHECK_STATUS[st].cls} font-normal`}>{PRICE_CHECK_STATUS[st].label} {count(st)}</Badge>)}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
+            <label className="inline-flex items-center gap-1 text-[10.5px] text-teal-900 mr-1" title="置き換えるとき・変わりなしと確認したときに、その行の価格マスタも今の価格（と最終更新日）にします。マスタが無い行は何もしません" data-testid="sync-master">
+              <input type="checkbox" checked={syncMaster} onChange={(e) => setSyncMaster(e.target.checked)} /> 価格マスタも今の価格に更新
+            </label>
             {changed.length > 0 && <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1 bg-background" onClick={replaceAllUp}>変わった {changed.length} 行を今の原価に置き換える</Button>}
             <Button size="sm" className="h-7 text-[11px] gap-1 bg-teal-600 hover:bg-teal-700" onClick={() => run(carried)} disabled={busy.size > 0}>{busy.size > 0 ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} まとめて今の価格を確認</Button>
             <button type="button" onClick={() => setOpen((v) => !v)} className="p-1 text-muted-foreground hover:text-foreground" aria-label={open ? "たたむ" : "開く"}>{open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
@@ -396,6 +430,9 @@ export default function CarriedPriceCheck({ estimate, onUpdate, onOpenRequestToo
                         {pc.error && pc.status === "unknown" && <div className="text-slate-600">確認できませんでした（下の「次にやること」へ）</div>}
                         {pc.error && pc.status !== "unknown" && <div className="text-slate-600">{pc.error}</div>}
                         {!pc.status && <div>{li.source_url || masterOf(li, masters)?.source_url ? "入稿先 URL を読み直します" : "価格マスタで探します"}</div>}
+                        {syncMaster && (pc.status === "up" || pc.status === "down") && pc.source !== "master" && masterForLine(li, masters) && (
+                          <div className="text-teal-700">置き換えると、価格マスタ「{masterForLine(li, masters).category}・{masterForLine(li, masters).vendor_name}」も今の価格にします</div>
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex flex-wrap justify-end gap-1">

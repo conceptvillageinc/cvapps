@@ -10,6 +10,7 @@ import { Loader2, ImagePlus, X, ExternalLink, PackageCheck, Trash2 } from "lucid
 import { toast } from "sonner";
 import { orderItems } from "@/lib/printOrders";
 import PrintOrderItems from "@/components/printOrders/PrintOrderItems";
+import { touchMasterOnOrder } from "@/lib/priceMasterSync";
 
 const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 
@@ -69,6 +70,8 @@ export default function PrintOrderDialog({ open, onOpenChange, order, onSaved })
     try {
       const saved = isNew ? await db.entities.PrintOrder.create(form) : await db.entities.PrintOrder.update(form.id, form);
       toast.success(isNew ? "入稿記録を残しました" : "入稿記録を直しました");
+      // 価格マスタから入れた明細を入稿したら、そのマスタの最終更新日（確認日）を入稿日にする
+      if (isNew && form._master_id && await touchMasterOnOrder(form._master_id, form.ordered_on).catch(() => false)) queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       queryClient.invalidateQueries({ queryKey: ["printOrders"] });
       onSaved?.(saved);
       onOpenChange(false);

@@ -34,6 +34,8 @@ export function orderFromLine(estimate, li, { project = null, user = null } = {}
     memo: "",
     created_by: user?.id || null,
     created_by_name: user?.full_name || user?.email || "",
+    // 保存はしない（入稿したときに、この価格マスタの最終更新日を入稿日にするため）
+    _master_id: li.source_type === "price_master" ? li.source_ref || null : null,
   };
 }
 

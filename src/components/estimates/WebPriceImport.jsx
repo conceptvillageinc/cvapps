@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { normSearch, similarity } from "@/lib/itemSearch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { PRICE_READ_NOTES, PRICE_TAX_MODES, toTaxExcluded, vendorTaxMode } from "@/lib/priceTax";
@@ -136,10 +137,24 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
   }, [printVendors]);
 
   // 同じURLの価格マスタがあれば、新規作成ではなく更新する
-  const existing = useMemo(
+  const sameUrl = useMemo(
     () => (url ? masters.find((m) => m.source_url && m.source_url.trim() === url.trim()) : null),
     [masters, url],
   );
+  // URL は違うが、同じメーカーで商品名・仕様が似たマスタ（重複して作らないよう、上書きも選べる）
+  const [overwriteId, setOverwriteId] = useState("");
+  const similarMasters = useMemo(() => {
+    if (sameUrl || !category) return [];
+    const v = normSearch(vendorName).replace(/\s+/g, "");
+    return masters
+      .filter((m) => !v || normSearch(m.vendor_name).replace(/\s+/g, "") === v)
+      .map((m) => ({ m, score: Math.max(similarity(`${category} ${specSummary || ""}`, `${m.category} ${m.spec_summary || ""}`), similarity(category, m.category)) }))
+      .filter((x) => x.score >= 0.7)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map((x) => x.m);
+  }, [masters, sameUrl, category, specSummary, vendorName]);
+  const existing = sameUrl || (overwriteId ? masters.find((m) => m.id === overwriteId) || null : null);
 
   const columns = useMemo(() => {
     const seen = [];
@@ -316,8 +331,8 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
             <Label className="text-xs font-semibold">価格ページの URL <span className="text-destructive">*</span></Label>
             <Input value={url} onChange={(e) => onUrlChange(e.target.value)} placeholder="https://www.graphic.jp/price/..." className="h-10" autoFocus />
             <p className="text-[10px] text-muted-foreground">読み取りに使わなくても、価格の根拠として価格マスタに保存します。後日「価格マスタ」から同じページを開いて更新できます</p>
-            {existing && (
-              <p className="text-[10px] text-primary">この URL は価格マスタに登録済み（{existing.category}・{existing.vendor_name}）。読み取り結果でその 1 件を更新します</p>
+            {sameUrl && (
+              <p className="text-[10px] text-primary">この URL は価格マスタに登録済み（{sameUrl.category}・{sameUrl.vendor_name}）。読み取り結果でその 1 件を更新します</p>
             )}
           </div>
 
@@ -455,6 +470,15 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
             </span>
           </div>
 
+          {!sameUrl && similarMasters.length > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] space-y-1" data-testid="similar-master">
+                <p className="font-semibold text-amber-900">似た価格マスタがあります。同じ商品なら上書きすると重複しません</p>
+                <label className="flex items-center gap-1.5"><input type="radio" name="pm-overwrite" checked={!overwriteId} onChange={() => setOverwriteId("")} /> 新しく登録する</label>
+                {similarMasters.map((m) => (
+                  <label key={m.id} className="flex items-center gap-1.5"><input type="radio" name="pm-overwrite" checked={overwriteId === m.id} onChange={() => setOverwriteId(m.id)} /> 「{m.category}{m.spec_summary ? `（${m.spec_summary}）` : ""}・{m.vendor_name}」に上書きする <span className="text-muted-foreground">更新 {String(m.last_updated || "—").replace(/-/g, "/")}</span></label>
+                ))}
+              </div>
+            )}
           <div className="flex items-center justify-between border-t pt-4">
             <Button variant="outline" onClick={() => { setError(null); setStep(2); }} className="gap-1.5" disabled={!!loading}><ArrowLeft className="w-4 h-4" /> 戻る（読み直す）</Button>
             <div className="flex items-center gap-3">

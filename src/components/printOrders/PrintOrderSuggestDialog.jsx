@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Loader2, PackageCheck, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { todayString } from "@/lib/fiscal";
+import { touchMasterOnOrder } from "@/lib/priceMasterSync";
 
 const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 
@@ -32,6 +33,9 @@ export default function PrintOrderSuggestDialog({ open, candidates, onDone }) {
     try {
       await db.entities.PrintOrder.createMany(rows.map((r) => ({ ...r, ordered_on: date })));
       queryClient.invalidateQueries({ queryKey: ["printOrders"] });
+      // 価格マスタから入れた明細は、そのマスタの最終更新日（確認日）を入稿日にする
+      for (const id of new Set(rows.map((r) => r._master_id).filter(Boolean))) await touchMasterOnOrder(id, date).catch(() => false);
+      queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       toast.success(`${rows.length} 行を入稿記録にしました`);
       onDone();
     } catch (e) {

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Download,
+import { Download, Search, Lightbulb,
   Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp, PackageCheck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,7 +26,9 @@ import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
 import { lineShots, shotsPatch, MAX_LINE_SHOTS } from "@/lib/lineShots";
-import { isPrintLine, orderFromLine, fmtOrderDate } from "@/lib/printOrders";
+import { isPrintLine, orderFromLine, fmtOrderDate, linesFromOrder } from "@/lib/printOrders";
+import { searchItems } from "@/lib/itemSearch";
+import { useItemSearchData, ItemSearchBar, ItemSearchResults } from "@/components/estimates/ItemSearch";
 import { useAuth } from "@/lib/AuthContext";
 import SalesCategorySelect, { SalesCategoryChip } from "@/components/estimates/SalesCategorySelect";
 import { formatPostalCode } from "@/lib/postalCode";
@@ -120,6 +122,10 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     queryKey: ["priceMaster"],
     queryFn: () => db.entities.PriceMaster.list("-last_updated"),
   });
+
+  // 似たもの探し（価格マスタ・入稿記録・過去見積の明細）
+  const searchData = useItemSearchData();
+  const [pmQuery, setPmQuery] = useState(""); // 印刷費のパネルの検索
 
   // 価格マスタ一覧：選択済みセル（selected=true）が1つ以上あるレコードのみ対象
   const priceMasterEntriesWithSelection = useMemo(() => {
@@ -242,6 +248,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     setAddPanel(null);
     setPriceMasterPick(null);
     setPmCategory(null);
+    setPmQuery("");
     setManualForm({ name: "", quantity: 1, unit: "式", unit_price: 0, cost: "", outsourcing: "" });
   };
 
@@ -259,15 +266,24 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     closeAddPanel();
   };
 
-  const pickPriceMasterCell = (entry, cell) => {
-    const catDef = LINE_ITEM_CATEGORIES.find(c => c.key === addPanel);
+  // 価格マスタのセルの原価・出し値（税別・その数量の合計）
+  const priceOfCell = (entry, cell) => {
+    const quantity = cell.quantity || 1;
+    const cost = toTaxExcluded(cell.price, entry.price_tax_mode);
+    return { cost, price: applyMarkup(cost / quantity, markupRateFor(rules, entry.category)) * quantity };
+  };
+
+  // 価格マスタのセル → 明細（区分は価格マスタの紙／紙以外から）
+  const itemFromMasterCell = (entry, cell) => {
+    const catLabel = LINE_ITEM_CATEGORIES.find(c => c.paperGroup === entry.paper_type_group)?.label || "印刷費（紙）";
     const quantity = cell.quantity || 1;
     // 税込表示のマスタは原価を税別に直す
     const costPerUnit = toTaxExcluded(cell.price, entry.price_tax_mode) / quantity;
     const markupRate = markupRateFor(rules, entry.category);
     const unitPrice = applyMarkup(costPerUnit, markupRate);
-    addItem({
-      category: catDef.label,
+    return {
+      row_type: "item",
+      category: catLabel,
       // クライアント向けの名称には印刷会社・納期を出さず、社内メモに入れる
       name: entry.category,
       memo: `${entry.vendor_name}・${cell.label}納期`,
@@ -279,9 +295,30 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
       markup_rate: markupRate,
       source_type: "price_master",
       source_ref: entry.id,
-    });
+    };
+  };
+  // 入稿記録 → 明細（内訳のある記録は内訳の行ごと）
+  const itemsFromOrder = (order) => linesFromOrder(order).map((li) => ({ ...li, id: uid() }));
+  // 過去見積の明細 → 明細（複製元を残す。価格確認の結果は持ってこない）
+  const itemFromPastLine = (c) => {
+    const { price_check: _pc, ...li } = c.line;
+    return { ...li, id: uid(), copied_from: c.estimate.estimate_number, copied_from_id: c.estimate.id };
+  };
+
+  const pickPriceMasterCell = (entry, cell) => {
+    addItem(itemFromMasterCell(entry, cell));
     closeAddPanel();
   };
+
+  // 明細の 1 行を、探した候補で置き換える（入稿記録は内訳の行ごとに広げる）
+  const replaceItem = (id, items) => {
+    const idx = lineItems.findIndex(i => i.id === id);
+    if (idx < 0 || items.length === 0) return;
+    const next = [...lineItems];
+    next.splice(idx, 1, ...items.map((it, k) => ({ ...it, id: k === 0 ? id : uid() })));
+    commitItems(next);
+  };
+  const similarFor = useMemo(() => (name) => searchItems(name, searchData, { mode: "similar", limit: 5, excludeEstimateId: estimate.id }), [searchData, estimate.id]);
 
   const submitManual = () => {
     if (!manualForm.name) {
@@ -659,6 +696,16 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               </div>
             </div>
 
+            {/* 品名・仕様で探す（価格マスタ・前回の入稿・過去見積の明細）。押すとそのまま明細に入る */}
+            <ItemSearchBar
+              data={searchData}
+              excludeEstimateId={estimate.id}
+              priceOf={priceOfCell}
+              onPickCell={(entry, cell) => addItem(itemFromMasterCell(entry, cell))}
+              onPickOrder={(order) => commitItems([...lineItems, ...itemsFromOrder(order)])}
+              onPickLine={(c) => commitItems([...lineItems, itemFromPastLine(c)])}
+            />
+
             {/* table-fixed: 数量・単価などの入力欄が幅を取りすぎて「名称」が縦長に潰れないよう、
                 各列の幅を固定し、残り幅をすべて名称に回す */}
             <div className="overflow-x-auto">
@@ -720,6 +767,10 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                     orders={printOrders.filter((o) => o.estimate_line_id === li.id)}
                     onRecordOrder={() => recordOrder(li)}
                     onOpenOrder={(o) => setOrderDraft(o)}
+                    similarFor={similarFor}
+                    priceOf={priceOfCell}
+                    onReplaceWith={(items) => replaceItem(li.id, items)}
+                    toItems={{ cell: itemFromMasterCell, order: itemsFromOrder, line: itemFromPastLine }}
                   />
                 ))}
               </tbody>
@@ -839,7 +890,21 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
             </div>
           )}
 
-          {(addPanel === "print_paper" || addPanel === "print_nonpaper") && !priceMasterPick && (() => {
+          {(addPanel === "print_paper" || addPanel === "print_nonpaper") && !priceMasterPick && (
+            <div className="relative mb-3">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input value={pmQuery} onChange={(e) => setPmQuery(e.target.value)} placeholder="商品名・仕様・仕入先で探す（紙・紙以外をまたいで）例: A0 ポスター" className="h-9 pl-8 text-xs" aria-label="価格マスタを探す" data-testid="pm-search" autoFocus />
+            </div>
+          )}
+          {(addPanel === "print_paper" || addPanel === "print_nonpaper") && !priceMasterPick && pmQuery.trim() && (
+            <ItemSearchResults
+              results={searchItems(pmQuery, { masters: priceMasterEntries }, { mode: "all", kinds: ["master"], limit: 30 })}
+              priceOf={priceOfCell}
+              onPickCell={pickPriceMasterCell}
+              maxCells={20}
+            />
+          )}
+          {(addPanel === "print_paper" || addPanel === "print_nonpaper") && !priceMasterPick && !pmQuery.trim() && (() => {
             // 商品（大カテゴリ）→ 仕様 → メーカー の順に選ぶ。同じ商品のメーカーは原価・出し値を横並びで比べられる
             const group = LINE_ITEM_CATEGORIES.find(c => c.key === addPanel)?.paperGroup;
             const entries = priceMasterEntriesWithSelection.filter(e => e.paper_type_group === group);
@@ -1045,7 +1110,45 @@ function RowActions({ onDuplicate, onRemove }) {
   );
 }
 
-function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove, onDuplicate, onMove, orders = [], onRecordOrder, onOpenOrder }) {
+/**
+ * 明細の品名を手で入れたとき、似た価格マスタ・前回の入稿・過去見積の明細があれば知らせる。
+ *   押すと候補が開き、選ぶとこの行をその内容（単価・原価・仕入先など）で置き換える。
+ */
+function SimilarHint({ item, similarFor, priceOf, onReplaceWith, toItems }) {
+  const [hidden, setHidden] = useState(false);
+  const [open, setOpen] = useState(false);
+  const typed = (!item.source_type || item.source_type === "manual") && !item.copied_from && !item.source_ref;
+  const name = String(item.name || "").trim();
+  const res = useMemo(() => (typed && !hidden && name.length >= 2 && similarFor ? similarFor(name) : null), [typed, hidden, name, similarFor]);
+  if (!res || res.total === 0) return null;
+  const parts = [["価格マスタ", res.masters.length], ["前回の入稿", res.orders.length], ["過去見積", res.lines.length]].filter(([, n]) => n > 0).map(([l, n]) => `${l} ${n}`);
+  const pick = (items) => { setOpen(false); onReplaceWith(items); };
+  return (
+    <div className="flex items-center gap-1 mt-0.5 px-1.5" data-testid="similar-hint">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-2 leading-5 text-[10px] font-medium text-amber-900 hover:bg-amber-100" title={`似たものがあります（${parts.join("・")}）。押すと候補を出し、選ぶとこの行を置き換えます`}>
+            <Lightbulb className="w-3 h-3" /> 似た候補 {res.masters.length + res.orders.length + res.lines.length}件
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[560px] max-h-[60vh] overflow-y-auto p-2.5" align="start">
+          <p className="text-[11px] text-muted-foreground mb-2">「{name}」に似たもの。選ぶと、この行をその内容（品名・数量・単価・原価・仕入先）で置き換えます</p>
+          <ItemSearchResults
+            results={res}
+            priceOf={priceOf}
+            pickLabel="この行を置き換え"
+            onPickCell={(entry, cell) => pick([toItems.cell(entry, cell)])}
+            onPickOrder={(order) => pick(toItems.order(order))}
+            onPickLine={(c) => pick([toItems.line(c)])}
+          />
+        </PopoverContent>
+      </Popover>
+      <button type="button" className="text-muted-foreground/70 hover:text-foreground" onClick={() => setHidden(true)} title="この行では出さない" aria-label="似た候補を閉じる"><X className="w-3 h-3" /></button>
+    </div>
+  );
+}
+
+function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove, onDuplicate, onMove, orders = [], onRecordOrder, onOpenOrder, similarFor, priceOf, onReplaceWith, toItems }) {
   const handle = <RowHandle onDragStart={onDragStart} onDragEnd={onDragEnd} onMove={onMove} isFirst={isFirst} isLast={isLast} />;
   if (item.row_type === "subtotal") {
     return (
@@ -1095,6 +1198,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
       <td className="px-1 py-2 align-top">{handle}</td>
       <td className="px-3 py-2 align-top">
         <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />
+        {similarFor && <SimilarHint item={item} similarFor={similarFor} priceOf={priceOf} onReplaceWith={onReplaceWith} toItems={toItems} />}
         {(item.category || item.name) && (
           <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex flex-wrap items-center gap-1">
             {orders.map((o) => (

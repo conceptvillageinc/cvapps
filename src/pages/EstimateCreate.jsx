@@ -13,7 +13,7 @@ import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, DEFAULT_VALIDITY_MONTHS 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Save, ArrowLeft, ChevronsUpDown, Check, Plus, FolderKanban } from "lucide-react";
+import { Save, ArrowLeft, ChevronsUpDown, Check, Plus, FolderKanban, Lightbulb, PackageCheck, History } from "lucide-react";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -24,6 +24,8 @@ import { conditionsToEstimate } from "@/lib/meetingConditions";
 import { draftToLineItems, draftAmount, draftCost } from "@/lib/meetingChat";
 import { linesFromOrder } from "@/lib/printOrders";
 import { estimateQuery } from "@/lib/estimateQuery";
+import { searchItems, similarEstimates } from "@/lib/itemSearch";
+import { useItemSearchData } from "@/components/estimates/ItemSearch";
 
 export default function EstimateCreate() {
   const navigate = useNavigate();
@@ -223,6 +225,18 @@ export default function EstimateCreate() {
     retry: false,
   });
   const recentOrders = reorderId ? [] : clientOrders;
+
+  // 件名に似た過去の見積・入稿記録（引き継ぐものがまだ無いときに、件名の下に出す）
+  const searchData = useItemSearchData();
+  const [titleQ, setTitleQ] = useState("");
+  useEffect(() => { const t = setTimeout(() => setTitleQ(formData.estimate_title || ""), 300); return () => clearTimeout(t); }, [formData.estimate_title]);
+  const similarEsts = useMemo(() => similarEstimates(titleQ, searchData.estimates, { clientName: formData.client_name }), [titleQ, searchData.estimates, formData.client_name]);
+  const similarOrders = useMemo(() => searchItems(titleQ, { orders: searchData.orders }, { mode: "similar", kinds: ["order"], limit: 4 }).orders, [titleQ, searchData.orders]);
+  const carryFrom = (key, id) => {
+    const next = new URLSearchParams(searchParams);
+    next.set(key, id);
+    navigate(`/estimates/new?${next.toString()}`);
+  };
 
   const carry = useMemo(() => {
     const toggleIn = (setter) => (key) => setter((prev) => { const t = new Set(prev || []); if (t.has(key)) t.delete(key); else t.add(key); return t; });
@@ -512,6 +526,29 @@ export default function EstimateCreate() {
               onChange={e => setFormData(prev => ({ ...prev, estimate_title: e.target.value }))}
               placeholder="例: チラシ制作費"
             />
+            {!carry && (similarEsts.length > 0 || similarOrders.length > 0) && (
+              <div className="rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs space-y-1.5" data-testid="similar-past">
+                <p className="font-semibold text-amber-900 inline-flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> 似た過去の見積・入稿があります（引き継ぐと明細をそのまま持ってこられます）</p>
+                {similarEsts.map(({ estimate: e, sameClient }) => (
+                  <div key={e.id} className="flex items-center gap-2">
+                    <History className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                    <span className="tabular-nums text-muted-foreground w-20 shrink-0">{String(e.estimate_date || e.created_date || "").slice(0, 10).replace(/-/g, "/")}</span>
+                    <span className="truncate flex-1">見積 {e.estimate_number}「{e.estimate_title || "（件名なし）"}」<span className="text-muted-foreground">{e.client_name}{sameClient ? "（同じクライアント）" : ""}・{(e.line_items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal").length} 行</span></span>
+                    <span className="tabular-nums shrink-0">¥{Math.round(Number(e.total_amount) || 0).toLocaleString()}</span>
+                    <button type="button" onClick={() => carryFrom("copy_from", e.id)} className="shrink-0 text-sky-800 font-semibold hover:underline" data-testid="similar-copy">引き継ぐ</button>
+                  </div>
+                ))}
+                {similarOrders.map((o) => (
+                  <div key={o.id} className="flex items-center gap-2">
+                    <PackageCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                    <span className="tabular-nums text-muted-foreground w-20 shrink-0">{String(o.date).replace(/-/g, "/")}</span>
+                    <span className="truncate flex-1">入稿「{o.title}」<span className="text-muted-foreground">{o.client}{o.quantity != null ? `・${Number(o.quantity).toLocaleString()}${o.unit || ""}` : ""}</span></span>
+                    <span className="tabular-nums shrink-0">¥{Math.round(Number(o.amount) || 0).toLocaleString()}</span>
+                    <button type="button" onClick={() => carryFrom("reorder", o.id)} className="shrink-0 text-teal-800 font-semibold hover:underline" data-testid="similar-reorder">引き継ぐ</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
