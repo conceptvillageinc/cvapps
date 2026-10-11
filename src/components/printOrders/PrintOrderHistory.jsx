@@ -58,7 +58,16 @@ export default function PrintOrderHistory({ where, showEstimate = true, emptyTex
     return rows.filter((r) => [r.name, r.vendor, r.memo, r.estimate_number, r.source_url, ...orderItems(r).map((it) => it.name)].filter(Boolean).join(" ").toLowerCase().includes(s));
   }, [rows, q]);
 
-  const reorder = (o) => navigate(`/estimates/new?reorder=${o.id}${o.client_name ? `&client=${encodeURIComponent(o.client_name)}` : ""}${o.project_id ? `&project=${o.project_id}` : ""}`);
+  // 内訳のある記録は、追加印刷の見積に入れる行を選べる（最初は全部）。記録 id → 外した内訳の番号
+  const [off, setOff] = useState({});
+  const pickedOf = (o) => new Set(orderItems(o).map((_, i) => i).filter((i) => !(off[o.id] || []).includes(i)));
+  const toggleItem = (o, i) => setOff((m) => { const cur = m[o.id] || []; return { ...m, [o.id]: cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i] }; });
+  const reorder = (o) => {
+    const n = orderItems(o).length;
+    const picked = [...pickedOf(o)];
+    const only = n > 0 && picked.length < n ? `&reorder_items=${picked.join(",")}` : "";
+    navigate(`/estimates/new?reorder=${o.id}${only}${o.client_name ? `&client=${encodeURIComponent(o.client_name)}` : ""}${o.project_id ? `&project=${o.project_id}` : ""}`);
+  };
 
   return (
     <div className="space-y-2" data-testid="print-order-history">
@@ -91,7 +100,7 @@ export default function PrintOrderHistory({ where, showEstimate = true, emptyTex
                   )}
                   {o.vendor && <>　仕入先 {o.vendor}</>}
                 </p>
-                <PrintOrderItems order={o} className="my-1" />
+                <PrintOrderItems order={o} className="my-1" selected={pickedOf(o)} onToggle={(i) => toggleItem(o, i)} />
                 {o.source_url && (
                   <a href={o.source_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline max-w-full truncate" title={o.source_url}>
                     <ExternalLink className="w-3 h-3 shrink-0" /> <span className="truncate">{o.source_url}</span>
@@ -104,8 +113,8 @@ export default function PrintOrderHistory({ where, showEstimate = true, emptyTex
                 </p>
               </div>
               <Shot path={o.screenshot_path} />
-              <Button type="button" size="sm" variant="outline" className="h-8 text-xs gap-1 shrink-0 border-teal-300 text-teal-800 hover:bg-teal-50" onClick={(e) => { e.stopPropagation(); reorder(o); }} data-testid="reorder">
-                <Copy className="w-3.5 h-3.5" /> この内容で追加印刷の見積を作る
+              <Button type="button" size="sm" variant="outline" className="h-8 text-xs gap-1 shrink-0 border-teal-300 text-teal-800 hover:bg-teal-50" onClick={(e) => { e.stopPropagation(); reorder(o); }} disabled={orderItems(o).length > 0 && pickedOf(o).size === 0} data-testid="reorder">
+                <Copy className="w-3.5 h-3.5" /> {orderItems(o).length > 0 && pickedOf(o).size < orderItems(o).length ? `選んだ ${pickedOf(o).size} 行で追加印刷の見積を作る` : "この内容で追加印刷の見積を作る"}
               </Button>
             </div>
           ))}

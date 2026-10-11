@@ -53,6 +53,7 @@ export default function EstimateCreate() {
   const copyLineIds = searchParams.get("lines");
   const chatId = searchParams.get("chat"); // 議事録の「AI に依頼」の見積のたたき台から
   const reorderId = searchParams.get("reorder"); // 入稿履歴の「この内容で追加印刷の見積を作る」から
+  const reorderItems = searchParams.get("reorder_items"); // 入稿履歴で選んだ内訳の番号（無ければ全部）
   const { data: copyFrom } = useQuery(estimateQuery(copyFromId, { fresh: true }));
   const { data: lockedProject } = useQuery({
     queryKey: ["project", lockedProjectId],
@@ -200,8 +201,13 @@ export default function EstimateCreate() {
   const [reorderOn, setReorderOn] = useState(null); // Set<"r0" | "r1" …>
   useEffect(() => {
     if (!reorder || !reorderLines || reorderOn) return;
-    setReorderOn(new Set(reorderLines.map((li) => li._key)));
-    setFormData((prev) => ({ ...prev, client_name: prev.client_name || reorder.client_name || "", estimate_title: prev.estimate_title || `${reorder.name}（追加印刷）` }));
+    const only = reorderItems != null ? new Set(reorderItems.split(",").filter(Boolean).map((n) => `r${n}`)) : null;
+    const on = reorderLines.filter((li) => !only || only.has(li._key));
+    setReorderOn(new Set(on.map((li) => li._key)));
+    // 一部だけ選んだときは、選んだ行の品名を件名に（送料などは除く）
+    const names = [...new Set(on.filter((li) => !/送料|配送|運賃|梱包|発送|袋入れ|袋詰|封入|手数料/.test(li.name)).map((li) => li.name))];
+    const title = only && on.length < reorderLines.length && names.length ? `${names[0]}${names.length > 1 ? " ほか" : ""}` : reorder.name;
+    setFormData((prev) => ({ ...prev, client_name: prev.client_name || reorder.client_name || "", estimate_title: prev.estimate_title || `${title}（追加印刷）` }));
   }, [reorder]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!reorderLines || !reorderOn) return;
