@@ -17,8 +17,8 @@ import PassbookImportDialog from "@/components/payments/PassbookImportDialog";
 import { useAuth } from "@/lib/AuthContext";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { useCashAccess } from "@/lib/useCashAccess";
-import { todayString } from "@/lib/fiscal";
-import { buildCashPlan, autoSafetyLine, CATEGORIES, directionOf, addDays } from "@/lib/cashPlan";
+import { todayString, fiscalYearOf, fiscalYearRange } from "@/lib/fiscal";
+import { buildCashPlan, autoSafetyLine, CATEGORIES, directionOf, addDays, diffDays } from "@/lib/cashPlan";
 
 const RECEIVABLE_FROM_DEFAULT = "2026-10-01"; // 入金確認の区切りが未設定のとき
 
@@ -55,7 +55,14 @@ export default function CashPlan() {
   const [tab, setTab] = useState("plan"); // plan | items | settings
   const [horizon, setHorizon] = useState(90);
   const today = todayString();
-  const { cashSafetyLine, cardPayDay, settings } = useSystemSettings();
+  const { cashSafetyLine, cardPayDay, settings, fiscalYearStartMonth } = useSystemSettings();
+  // 今期末まで（会計期の最終日）。期末まで 30 日を切っていたら来期末まで
+  const fyEnd = (() => {
+    const fy = fiscalYearOf(today, fiscalYearStartMonth);
+    let { to } = fiscalYearRange(fy, fiscalYearStartMonth);
+    if (diffDays(today, to) < 30) to = fiscalYearRange(fy + 1, fiscalYearStartMonth).to;
+    return { date: to, days: Math.max(1, diffDays(today, to)) };
+  })();
   // 入金予定はこの日から数える（入金確認の区切りの翌日。CV アプリでの資金繰り表の本格稼働は 2026/10 から）
   const cutover = settings.find((x) => x.setting_key === "payments_cutover_date")?.setting_value || "";
   const receivableFrom = cutover ? addDays(cutover, 1) : RECEIVABLE_FROM_DEFAULT;
@@ -105,7 +112,7 @@ export default function CashPlan() {
       {tab === "plan" && (loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
       ) : (
-        <PlanView receivableFrom={receivableFrom} plan={plan} today={today} horizon={horizon} setHorizon={setHorizon} safetyLine={safetyLine} autoLine={cashSafetyLine === null} itemsCount={items.length} />
+        <PlanView receivableFrom={receivableFrom} fyEnd={fyEnd} plan={plan} today={today} horizon={horizon} setHorizon={setHorizon} safetyLine={safetyLine} autoLine={cashSafetyLine === null} itemsCount={items.length} />
       ))}
     </div>
   );
@@ -118,7 +125,7 @@ function StatusBadge({ status }) {
   return <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-400 text-white px-3 py-1 text-sm font-bold">残高なし</span>;
 }
 
-function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, itemsCount, receivableFrom = "" }) {
+function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, itemsCount, receivableFrom = "", fyEnd = null }) {
   const [open, setOpen] = useState(() => new Set());
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -154,6 +161,7 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
           </div>
           <div className="flex gap-1 md:ml-auto">
             {[30, 90, 180].map((n) => <Button key={n} size="sm" variant={horizon === n ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(n)}>{n}日</Button>)}
+            {fyEnd && <Button size="sm" variant={horizon === fyEnd.days ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(fyEnd.days)} data-testid="horizon-fy">期末まで（{Number(fyEnd.date.slice(5, 7))}/{Number(fyEnd.date.slice(8, 10))}）</Button>}
           </div>
         </CardContent>
       </Card>
@@ -198,7 +206,7 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">口座残高の推移（今日から {horizon} 日）</CardTitle>
+          <CardTitle className="text-sm">口座残高の推移（今日から {horizon} 日{fyEnd && horizon === fyEnd.days ? `・今期末 ${fyEnd.date.replace(/-/g, "/")} まで` : ""}）</CardTitle>
           <CardDescription className="text-xs">青＝確定の予定だけ、オレンジ＝未請求の案件の見込も足した場合。赤い横線が安全ライン。棒はその日の確定の入金（緑）と支払（赤）</CardDescription>
         </CardHeader>
         <CardContent>
