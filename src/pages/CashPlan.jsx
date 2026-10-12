@@ -119,10 +119,10 @@ export default function CashPlan() {
 }
 
 function StatusBadge({ status }) {
-  if (status === "danger") return <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600 text-white px-3 py-1 text-sm font-bold"><ShieldX className="w-4 h-4" /> 危険</span>;
-  if (status === "warn") return <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 text-white px-3 py-1 text-sm font-bold"><ShieldAlert className="w-4 h-4" /> 注意</span>;
-  if (status === "ok") return <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 text-white px-3 py-1 text-sm font-bold"><ShieldCheck className="w-4 h-4" /> 安全</span>;
-  return <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-400 text-white px-3 py-1 text-sm font-bold">残高なし</span>;
+  if (status === "danger") return <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full bg-red-600 text-white px-3 py-1 text-sm font-bold"><ShieldX className="w-4 h-4" /> 危険</span>;
+  if (status === "warn") return <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full bg-amber-500 text-white px-3 py-1 text-sm font-bold"><ShieldAlert className="w-4 h-4" /> 注意</span>;
+  if (status === "ok") return <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full bg-emerald-600 text-white px-3 py-1 text-sm font-bold"><ShieldCheck className="w-4 h-4" /> 安全</span>;
+  return <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full bg-slate-400 text-white px-3 py-1 text-sm font-bold">残高なし</span>;
 }
 
 function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, itemsCount, receivableFrom = "", fyEnd = null }) {
@@ -141,28 +141,46 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
   const eventDays = plan.days.filter((d, i) => i === 0 || d.events.length > 0);
   const statusText = {
     ok: `${horizon} 日先まで、確定の予定だけで安全ライン（${yen(safetyLine)}）を下回りません`,
-    warn: `${jpFull(plan.firstBelow)} に残高が安全ライン（${yen(safetyLine)}）を下回ります。入金の前倒しか支払の調整を考えてください`,
-    danger: `${jpFull(plan.firstNegative)} に残高がマイナスになります。それまでに資金の手当てが必要です`,
+    warn: `確定では ${jpFull(plan.firstBelow)} に残高が安全ライン（${yen(safetyLine)}）を下回ります。入金の前倒しか支払の調整を考えてください`,
+    danger: `確定では ${jpFull(plan.firstNegative)} に残高がマイナスになります。それまでに資金の手当てが必要です`,
     unknown: "残高の起点がありません。下の「通帳・画面の画像・明細CSV」から、通帳の画像・残高照会の画面・明細 CSV を取り込んでください",
   }[plan.status];
+  // 見込込み（未請求の案件の入金・発注も足した線）での判定
+  const statusAllText = {
+    ok: `${horizon} 日先まで、見込込みでも安全ライン（${yen(safetyLine)}）を下回りません`,
+    warn: `見込込みでは ${jpFull(plan.firstBelowAll)} に残高が安全ライン（${yen(safetyLine)}）を下回ります`,
+    danger: `見込込みでも ${jpFull(plan.firstNegativeAll)} に残高がマイナスになります`,
+    unknown: "",
+  }[plan.statusAll];
   const toggle = (date) => setOpen((s) => { const t = new Set(s); if (t.has(date)) t.delete(date); else t.add(date); return t; });
   const tick = (v, i) => (i % Math.max(1, Math.round(horizon / 12)) === 0 ? v : "");
 
   return (
     <>
       <Card className={plan.status === "danger" ? "border-red-300 bg-red-50/40" : plan.status === "warn" ? "border-amber-300 bg-amber-50/40" : plan.status === "ok" ? "border-emerald-300 bg-emerald-50/30" : ""}>
-        <CardContent className="p-4 flex flex-col md:flex-row md:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <StatusBadge status={plan.status} />
-            <div>
-              <p className="text-sm font-medium">{statusText}</p>
-              <p className="text-[11px] text-muted-foreground">判定は「確定」の線（請求済の入金・支払い先まとめ・カード・登録した定期支払）だけで行います。未請求の案件の見込は入れていません</p>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <StatusBadge status={plan.status} />
+              <div>
+                <p className="text-sm font-medium">{statusText}</p>
+                <p className="text-[11px] text-muted-foreground">判定は「確定」の線（請求済の入金・支払い先まとめ・カード・登録した定期支払）だけで行います。未請求の案件の見込は入れていません</p>
+              </div>
+            </div>
+            <div className="flex gap-1 md:ml-auto">
+              {[30, 90, 180].map((n) => <Button key={n} size="sm" variant={horizon === n ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(n)}>{n}日</Button>)}
+              {fyEnd && <Button size="sm" variant={horizon === fyEnd.days ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(fyEnd.days)} data-testid="horizon-fy">期末まで（{Number(fyEnd.date.slice(5, 7))}/{Number(fyEnd.date.slice(8, 10))}）</Button>}
             </div>
           </div>
-          <div className="flex gap-1 md:ml-auto">
-            {[30, 90, 180].map((n) => <Button key={n} size="sm" variant={horizon === n ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(n)}>{n}日</Button>)}
-            {fyEnd && <Button size="sm" variant={horizon === fyEnd.days ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(fyEnd.days)} data-testid="horizon-fy">期末まで（{Number(fyEnd.date.slice(5, 7))}/{Number(fyEnd.date.slice(8, 10))}）</Button>}
-          </div>
+          {statusAllText && (
+            <div className={`flex items-center gap-3 rounded-md border px-3 py-2 ${plan.statusAll === "danger" ? "border-red-200 bg-red-50/60" : plan.statusAll === "warn" ? "border-amber-200 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/50"}`} data-testid="cashplan-status-all">
+              <StatusBadge status={plan.statusAll} />
+              <div>
+                <p className="text-sm font-medium">{statusAllText}</p>
+                <p className="text-[11px] text-muted-foreground">「残高（見込込み）」の線での判定です。確定の予定に、未請求の案件の入金見込・発注見込と、期日を過ぎた未入金を足しています</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

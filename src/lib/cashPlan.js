@@ -131,6 +131,7 @@ export function buildCashPlan({ today, horizonDays = 90, bankTxs, invoices, proj
   let balSure = total; let balAll = total;
   let minSure = { balance: total, date: today }; let minAll = { balance: total, date: today };
   let firstBelow = null; let firstNegative = null;
+  let firstBelowAll = null; let firstNegativeAll = null; // 見込込みの線
   const line = safetyLine;
   for (let i = 0; i <= horizonDays; i++) {
     const date = addDays(today, i);
@@ -145,14 +146,18 @@ export function buildCashPlan({ today, horizonDays = 90, bankTxs, invoices, proj
     if (balAll < minAll.balance) minAll = { balance: balAll, date };
     if (line !== null && firstBelow === null && balSure < line) firstBelow = date;
     if (firstNegative === null && balSure < 0) firstNegative = date;
+    if (line !== null && firstBelowAll === null && balAll < line) firstBelowAll = date;
+    if (firstNegativeAll === null && balAll < 0) firstNegativeAll = date;
     days.push({ date, in_sure: inSure, out_sure: outSure, in_fc: inFc, out_fc: outFc, balance_sure: Math.round(balSure), balance_all: Math.round(balAll), events: todays });
   }
   const status = accounts.length === 0 ? "unknown" : firstNegative ? "danger" : (line !== null && firstBelow) ? "warn" : "ok";
+  const statusAll = accounts.length === 0 ? "unknown" : firstNegativeAll ? "danger" : (line !== null && firstBelowAll) ? "warn" : "ok";
   return {
     anchor: { total, date: anchorDate, accounts, missing: accounts.length === 0 },
     days, events, overdue,
     min: { ...minSure, balance: Math.round(minSure.balance) }, minAll: { ...minAll, balance: Math.round(minAll.balance) },
     firstBelow, firstNegative, status, safetyLine: line,
+    firstBelowAll, firstNegativeAll, statusAll,
     stale: anchorDate ? diffDays(anchorDate, today) : null,
   };
 }
