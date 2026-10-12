@@ -15,7 +15,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { autoDailyTarget, countBusinessDays } from "@/lib/dailyTarget";
 import { forPayments } from "@/lib/bankImportActions";
 import { toast } from "sonner";
-import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check } from "lucide-react";
+import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
 import InlineBadgeSelect from "@/components/projects/InlineBadgeSelect";
 
@@ -236,9 +236,20 @@ function useDailyTarget(today) {
 
 const ymdSlash = (s) => String(s || "").replace(/-/g, "/");
 
+const DETAIL_KEY = "cv.dailyTarget.showDetail";
+const readDetail = () => { try { return window.localStorage.getItem(DETAIL_KEY) === "1"; } catch { return false; } };
+
 function DailyTargetCard({ dt }) {
   const { fy, fiscalYearStartMonth, manual, row, mode, modeRow, auto } = dt;
   const queryClient = useQueryClient();
+  // 計算の内訳・説明は開閉できる（初めは閉じる。開閉はこのブラウザに覚える）
+  const [showDetail, setShowDetail] = useState(readDetail);
+  const toggleDetail = () => setShowDetail((v) => { try { window.localStorage.setItem(DETAIL_KEY, v ? "0" : "1"); } catch { /* 保存できない環境では今回だけ */ } return !v; });
+  const detailButton = (
+    <button type="button" onClick={toggleDetail} className="mt-1 inline-flex items-center gap-0.5 text-[10.5px] text-primary hover:underline" aria-expanded={showDetail} data-testid="daily-target-detail-toggle">
+      {showDetail ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />} {showDetail ? "計算の内訳を閉じる" : "計算の内訳"}
+    </button>
+  );
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const upsert = async (key, value, description, existing) => {
@@ -283,11 +294,16 @@ function DailyTargetCard({ dt }) {
                   ? <span className="text-2xl font-bold tabular-nums" data-testid="daily-target-value">{yen(auto.daily)}</span>
                   : <span className="text-lg font-bold text-emerald-700" data-testid="daily-target-value">目標到達済み（+{yen(-auto.gap)}）</span>}
               </div>
-              <p className="text-[10.5px] text-muted-foreground mt-1 tabular-nums leading-relaxed" data-testid="daily-target-formula">
-                今期の粗利目標 {yen(auto.target)} − 着地見込 {yen(auto.landing)} ＝ 残り <b className="text-foreground">{yen(Math.max(0, auto.gap))}</b><br />
-                ÷ 残り営業日 <b className="text-foreground">{auto.days}日</b>（今日〜{ymdSlash(auto.fyEnd)}）
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">今日の目標は朝の時点で固定（今日登録した案件は明日の目標に反映）。着地見込は<Link to="/sales-report" className="text-primary hover:underline">売上粗利管理表</Link>と同じ計算です</p>
+              {detailButton}
+              {showDetail && (
+                <>
+                  <p className="text-[10.5px] text-muted-foreground mt-1 tabular-nums leading-relaxed" data-testid="daily-target-formula">
+                    今期の粗利目標 {yen(auto.target)} − 着地見込 {yen(auto.landing)} ＝ 残り <b className="text-foreground">{yen(Math.max(0, auto.gap))}</b><br />
+                    ÷ 残り営業日 <b className="text-foreground">{auto.days}日</b>（今日〜{ymdSlash(auto.fyEnd)}）
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">今日の目標は朝の時点で固定（今日登録した案件は明日の目標に反映）。着地見込は<Link to="/sales-report" className="text-primary hover:underline">売上粗利管理表</Link>と同じ計算です</p>
+                </>
+              )}
             </>
           )
         ) : editing ? (
@@ -302,10 +318,11 @@ function DailyTargetCard({ dt }) {
               <span className="text-2xl font-bold tabular-nums" data-testid="daily-target-value">{manual > 0 ? yen(manual) : <span className="text-base text-muted-foreground">未設定</span>}</span>
               <button type="button" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={() => { setDraft(manual ? String(manual) : ""); setEditing(true); }}><Pencil className="w-3 h-3" /> {manual > 0 ? "変更" : "設定する"}</button>
             </div>
-            {auto.hasTarget && <p className="text-[10.5px] text-muted-foreground mt-1">自動計算なら {auto.gap > 0 ? yen(auto.daily) : "目標到達済み"}（残り {yen(Math.max(0, auto.gap))} ÷ {auto.days}営業日）</p>}
+            {detailButton}
+            {showDetail && auto.hasTarget && <p className="text-[10.5px] text-muted-foreground mt-1">自動計算なら {auto.gap > 0 ? yen(auto.daily) : "目標到達済み"}（残り {yen(Math.max(0, auto.gap))} ÷ {auto.days}営業日）</p>}
           </>
         )}
-        <p className="text-[10px] text-muted-foreground mt-1">実績に計上するのは、受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）です</p>
+        {showDetail && <p className="text-[10px] text-muted-foreground mt-1">実績に計上するのは、受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）です</p>}
       </CardContent>
     </Card>
   );
