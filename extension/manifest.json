@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "CV AX KIT アシスタント",
+  "version": "1.0.0",
+  "description": "CV アプリ（cv-ax.jp）の「グラフィックで調べる」で、グラフィックの価格ページを開いて読み取ります。価格を見るだけで、注文・ログインなどはしません。",
+  "minimum_chrome_version": "116",
+  "background": { "service_worker": "background.js" },
+  "permissions": ["scripting", "tabs", "storage"],
+  "host_permissions": ["https://www.graphic.jp/*", "<all_urls>"],
+  "content_scripts": [
+    { "matches": ["https://cv-ax.jp/*", "https://www.cv-ax.jp/*"], "js": ["bridge.js"], "run_at": "document_start" }
+  ],
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" }
+}

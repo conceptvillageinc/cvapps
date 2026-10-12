@@ -19,6 +19,10 @@ import {
   SPEC_EXTRACT_SCHEMA, specExtractPrompt, specsFromResult, PRICE_SHOT_SCHEMA, priceShotPrompt, familyName,
 } from "@/lib/printSpecList";
 import CostSheetWriteDialog from "@/components/printSpecs/CostSheetWriteDialog";
+import AssistantGuideDialog from "@/components/printSpecs/AssistantGuideDialog";
+import { detectAssistant, lookupItem } from "@/lib/graphicLookup";
+
+const LOOKUP_LIMIT = 10;
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const unitYen = (n) => (Number(n) ? `¥${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—");
@@ -50,6 +54,12 @@ export default function PrintSpecList() {
   const [writeOpen, setWriteOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [reading, setReading] = useState(null); // スクショを読んでいる行 id
+  // グラフィックで調べる（拡張機能）
+  const [assistant, setAssistant] = useState("");
+  const [lookup, setLookup] = useState(null); // { running, current, step, status: { [id]: { state: run|ok|fail, text } } }
+  const [guideOpen, setGuideOpen] = useState(false);
+  const cancelRef = useRef(false);
+  useEffect(() => { detectAssistant().then(setAssistant); }, []);
   const autoStarted = useRef(false);
 
   useEffect(() => {
@@ -78,7 +88,8 @@ export default function PrintSpecList() {
   }, [items, title, dirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const edit = (next) => { setItems(next); setDirty(true); };
-  const setRow = (rid, patch) => edit(items.map((it) => (it.id === rid ? { ...it, ...patch } : it)));
+  // 調べている間も行が書き換わるので、いまの値から直す
+  const setRow = (rid, patch) => { setItems((cur) => cur.map((it) => (it.id === rid ? { ...it, ...patch } : it))); setDirty(true); };
   const move = (i, d) => { const next = [...items]; const [x] = next.splice(i, 1); next.splice(i + d, 0, x); edit(next); };
 
   const extract = async ({ replace = false } = {}) => {
@@ -124,6 +135,32 @@ export default function PrintSpecList() {
     } catch (e) { toast.error("読み取れませんでした: " + e.message); }
     finally { setReading(null); }
   };
+  const runLookup = async (targets) => {
+    const v = assistant || await detectAssistant();
+    setAssistant(v);
+    if (!v) { setGuideOpen(true); return; }
+    const list = targets.slice(0, LOOKUP_LIMIT);
+    if (targets.length > LOOKUP_LIMIT) toast.message(`一度に調べるのは ${LOOKUP_LIMIT} 件までです。残りはもう一度押してください`);
+    cancelRef.current = false;
+    const status = {};
+    setLookup({ running: true, current: null, step: "", status });
+    let okCount = 0;
+    for (const it of list) {
+      if (cancelRef.current) break;
+      status[it.id] = { state: "run", text: "グラフィックを開いています…" };
+      setLookup({ running: true, current: it.id, status: { ...status } });
+      const r = await lookupItem(it, {
+        isCancelled: () => cancelRef.current,
+        onStep: ({ step, reason }) => { status[it.id] = { state: "run", text: `${step} 手目: ${reason || ""}` }; setLookup({ running: true, current: it.id, status: { ...status } }); },
+      });
+      if (r.ok) { setRow(it.id, r.patch); okCount++; status[it.id] = { state: "ok", text: `${r.steps} 手で見つかりました${r.patch.needs_check ? "（仕様の違いあり・要確認）" : ""}` }; }
+      else status[it.id] = { state: "fail", text: r.reason || "見つかりませんでした" };
+      setLookup({ running: true, current: null, status: { ...status } });
+    }
+    setLookup({ running: false, current: null, status: { ...status } });
+    toast.success(`${okCount} / ${list.length} 件の価格をグラフィックで調べました${okCount < list.length ? "。見つからなかった行は手で入れてください" : ""}`);
+  };
+
   const openShot = async (path) => { try { window.open(await db.storage.signedUrl(path, 600), "_blank", "noopener"); } catch (e) { toast.error(e.message); } };
 
   const recordOutput = async (out) => {
@@ -276,7 +313,13 @@ export default function PrintSpecList() {
             <h2 className="font-bold">② 仕入（税抜）を入れる</h2>
             <span className="text-xs text-muted-foreground">{confirmed ? "グラフィックで見た価格を入れるか、価格ページのスクショから読み取ります" : "①を確定すると入れられます"}</span>
             <div className="flex-1" />
-            <Button size="sm" variant="outline" className="gap-1.5" disabled title="CV アプリの Chrome 拡張機能で、グラフィックを自動で調べます（次のステップで追加）"><Search className="w-4 h-4" /> グラフィックで調べる<span className="ml-1 rounded bg-slate-200 px-1 text-[10px] text-slate-600">拡張機能・準備中</span></Button>
+            {lookup?.running
+              ? <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { cancelRef.current = true; }}><Loader2 className="w-4 h-4 animate-spin" /> 調べています… 止める</Button>
+              : <Button size="sm" className="gap-1.5" disabled={!confirmed || items.length === 0} onClick={() => runLookup(items.filter((it) => !(Number(it.cost_total) > 0)).length ? items.filter((it) => !(Number(it.cost_total) > 0)) : items)} data-testid="graphic-lookup-run"
+                  title="Chrome 拡張機能「CV AX KIT アシスタント」がグラフィックを開いて、価格・URL・スクショを入れます">
+                  <Search className="w-4 h-4" /> グラフィックで調べる（{items.filter((it) => !(Number(it.cost_total) > 0)).length || items.length} 件）
+                </Button>}
+            <span className={`text-[10px] ${assistant ? "text-emerald-700" : "text-muted-foreground"}`}>{assistant ? `拡張機能 v${assistant}` : "拡張機能なし"}</span>
           </div>
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full text-xs" data-testid="print-spec-prices">
@@ -295,7 +338,14 @@ export default function PrintSpecList() {
                   const a = specAmounts(it, rules);
                   return (
                     <tr key={it.id} className="border-t align-top" data-testid="print-spec-price-row">
-                      <td className="px-2 py-1.5"><p className="font-medium">{it.name || "（品目なし）"}</p><p className="text-[11px] text-muted-foreground">{specMemo({ ...it, price_note: "", notes: "" })}{it.quantity ? `　${Number(it.quantity).toLocaleString()}${it.unit || ""}` : ""}</p></td>
+                      <td className="px-2 py-1.5">
+                        <p className="font-medium flex items-center gap-1.5">{it.name || "（品目なし）"}
+                          {it.checked_at && <span className={`rounded px-1 text-[10px] ${it.needs_check ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{it.needs_check ? "グラフィック・要確認" : "グラフィックで確認"}</span>}
+                          {confirmed && !lookup?.running && <button type="button" className="text-[10px] text-primary hover:underline" onClick={() => runLookup([it])}>調べ直す</button>}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">{specMemo({ ...it, price_note: "", notes: "" })}{it.quantity ? `　${Number(it.quantity).toLocaleString()}${it.unit || ""}` : ""}</p>
+                        {lookup?.status?.[it.id] && <p data-testid="graphic-lookup-status" className={`mt-0.5 text-[11px] flex items-center gap-1 ${lookup.status[it.id].state === "fail" ? "text-red-600" : lookup.status[it.id].state === "ok" ? "text-emerald-700" : "text-primary"}`}>{lookup.status[it.id].state === "run" && <Loader2 className="w-3 h-3 animate-spin" />}{lookup.status[it.id].text}</p>}
+                      </td>
                       <td className="px-1 py-1"><Input type="number" value={it.cost_total ?? ""} disabled={!confirmed} onChange={(e) => setRow(it.id, { cost_total: e.target.value === "" ? "" : Number(e.target.value) })} className={`h-7 text-xs text-right tabular-nums ${confirmed && !(Number(it.cost_total) > 0) ? "border-amber-300" : ""}`} aria-label={`${it.name}の仕入`} /></td>
                       <td className="px-1 py-1.5 text-right tabular-nums">{unitYen(a.costUnit)}</td>
                       <td className="px-1 py-1"><div className="flex gap-1"><Input value={it.price_url || ""} disabled={!confirmed} onChange={(e) => setRow(it.id, { price_url: e.target.value })} placeholder="https://www.graphic.jp/…" className="h-7 text-xs" />{it.price_url && <a href={it.price_url} target="_blank" rel="noreferrer" className="shrink-0 grid place-items-center w-7 text-primary" aria-label="価格ページを開く"><ExternalLink className="w-3.5 h-3.5" /></a>}</div></td>
@@ -387,6 +437,7 @@ export default function PrintSpecList() {
         </CardContent>
       </Card>
 
+      <AssistantGuideDialog open={guideOpen} onOpenChange={setGuideOpen} onRetry={async () => { const v = await detectAssistant(); setAssistant(v); if (v) { setGuideOpen(false); toast.success("拡張機能が見つかりました"); } else toast.error("まだ見つかりません。拡張機能を入れたあと、このページを読み込み直してください"); }} />
       <CostSheetWriteDialog
         open={writeOpen} onOpenChange={setWriteOpen}
         list={{ ...list, items, title }} rules={rules}

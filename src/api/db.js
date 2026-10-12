@@ -503,6 +503,7 @@ const integrations = {
 // Base44 のサーバー関数名 → Vercel Function のパス
 const FUNCTION_ROUTES = {
   printSpecs: 'print-specs',
+  graphicAgent: 'graphic-agent',
   fetchPriceFromUrl: 'fetch-price',
   sendEstimateEmail: 'send-estimate-email',
   sendDocumentEmail: 'send-document-email',

@@ -484,7 +484,6 @@ export default function MeetingDetail() {
 
           {/* 確認事項・指標 */}
           <div className="space-y-4">
-            <MeetingPrintSpecs meeting={meeting} />
             <Card>
               <CardContent className="pt-4 space-y-2">
                 <p className="text-sm font-bold">確認事項（{typeLabel(meeting.meeting_type)}）</p>
@@ -507,6 +506,7 @@ export default function MeetingDetail() {
                 <p className="text-[10px] text-muted-foreground">未確認の項目は「保留・次回までの確認事項」に入っています</p>
               </CardContent>
             </Card>
+            <MeetingPrintSpecs meeting={meeting} />
 
             {meeting.analysis && (
               <Card>

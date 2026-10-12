@@ -64,6 +64,9 @@
     },
     "api/print-specs.js": {
       "maxDuration": 60
+    },
+    "api/graphic-agent.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
