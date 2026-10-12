@@ -83,3 +83,24 @@ export function fileBlock({ bytes, contentType }) {
 
   throw new Error(`対応していないファイル形式です: ${contentType || '不明'}（PDFまたは画像を選んでください）`);
 }
+
+/**
+ * Claude API のエラーを、画面に出せる日本語にする（API キーなどの内部情報は出さない）。
+ * @returns {{ status: number, message: string, fatal: boolean }}  fatal は「何度やっても同じ」（残高不足・キーの不備）
+ */
+export function aiError(err) {
+  const raw = `${err?.message || ''} ${JSON.stringify(err?.error || '')}`;
+  if (/credit balance is too low|billing/i.test(raw)) {
+    return { status: 402, fatal: true, message: 'AI の利用残高（Anthropic のクレジット）が足りません。管理者が Anthropic Console の「Plans & Billing」でクレジットを追加してください（追加すると、すぐ使えるようになります）' };
+  }
+  if (err?.status === 401 || /authentication|invalid x-api-key/i.test(raw)) {
+    return { status: 500, fatal: true, message: 'AI の API キーが正しくありません。管理者が Vercel の ANTHROPIC_API_KEY を確かめてください' };
+  }
+  if (err?.status === 429 || /rate.?limit/i.test(raw)) {
+    return { status: 429, fatal: false, message: 'AI が混み合っています。少し待ってからもう一度お試しください' };
+  }
+  if (err?.status === 529 || /overloaded/i.test(raw)) {
+    return { status: 503, fatal: false, message: 'AI が混み合っています。少し待ってからもう一度お試しください' };
+  }
+  return { status: 500, fatal: false, message: err?.message || 'AI の呼び出しに失敗しました' };
+}

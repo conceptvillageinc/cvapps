@@ -164,6 +164,7 @@ function PrintSpecListPage() {
       setRow(it.id, { ...(r.ok ? r.patch : {}), lookup_log: log });
       if (r.ok) { okCount++; status[it.id] = { state: "ok", text: `${r.steps} 手で見つかりました${r.patch.needs_check ? "（仕様の違いあり・要確認）" : ""}` }; }
       else status[it.id] = { state: "fail", text: r.reason || "見つかりませんでした" };
+      if (r.fatal) { toast.error(r.reason, { duration: 15000 }); setLookup({ running: false, current: null, status: { ...status } }); return; }
       setLookup({ running: true, current: null, status: { ...status } });
     }
     setLookup({ running: false, current: null, status: { ...status } });

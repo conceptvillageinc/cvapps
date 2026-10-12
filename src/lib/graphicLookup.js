@@ -98,7 +98,9 @@ export async function lookupItem(item, { onStep, isCancelled } = {}) {
     }
     return { ok: false, reason: `${MAX_STEPS} 手で価格にたどり着けませんでした`, steps: MAX_STEPS, trace, debug: debugOf(lastSnap) };
   } catch (e) {
-    return { ok: false, reason: e.message, steps: history.length, trace, debug: debugOf(lastSnap) };
+    // 残高不足・キーの不備は、ほかの品目でも同じなので、まとめて止める
+    const fatal = /クレジット|API キー/.test(e.message || "");
+    return { ok: false, fatal, reason: e.message, steps: history.length, trace, debug: debugOf(lastSnap) };
   } finally {
     // 閉じ終わってから次の品目に進む（重なるとウィンドウを見失うため）
     if (session) await callAssistant("close", { session_id: session }).catch(() => {});

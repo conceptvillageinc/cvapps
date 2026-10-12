@@ -1,5 +1,5 @@
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
-import { claude, MODEL, normalizeSchema, textOf, fileBlock } from './_lib/claude.js';
+import { claude, MODEL, normalizeSchema, textOf, fileBlock, aiError } from './_lib/claude.js';
 
 // ============================================================================
 // POST /api/llm
@@ -106,6 +106,7 @@ export default async function handler(req, res) {
   } catch (err) {
     // APIキーやURLなど内部情報が画面に出ないよう、ログはサーバーに残して要約だけ返す
     console.error('[api/llm]', err);
-    res.status(500).json({ error: err.message || 'AI呼び出しに失敗しました' });
+    const e = aiError(err);
+    res.status(e.status).json({ error: e.message });
   }
 }

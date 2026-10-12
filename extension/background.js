@@ -101,6 +101,20 @@ function snapshotPage() {
     if (el.disabled) e.disabled = true;
     if (el.closest(NAV)) { e.nav = true; nav.push(e); } else main.push(e);
   }
+  // a・button 以外で押せるもの（カーソルが指の形の div など。「正方形・長方形」のような形状のカード）
+  const pointer = (el) => { try { return getComputedStyle(el).cursor === "pointer"; } catch { return false; } };
+  for (const el of document.querySelectorAll("div, li, span, img, label, dd, dt, td, th, p, figure, section, article, h2, h3, h4, h5")) {
+    if (el.closest("[data-cv-id]") || !pointer(el)) continue;
+    if (el.parentElement && pointer(el.parentElement)) continue; // いちばん外側だけ
+    if (el.querySelector('a[href], button, input, select, textarea')) continue; // 中に本物のボタンがあればそちらを使う
+    if (!visible(el)) continue;
+    const t = txt(el.innerText || el.querySelector("img")?.alt || el.getAttribute("alt") || el.getAttribute("title") || "");
+    if (!t) continue;
+    const id = String(++n);
+    el.setAttribute("data-cv-id", id);
+    const e = { id, tag: el.tagName.toLowerCase(), role: "clickable", text: t.slice(0, 80) };
+    if (el.closest(NAV)) { e.nav = true; nav.push(e); } else main.push(e);
+  }
   // 本文（ヘッダー・メニュー・フッターを除いた部分）
   const clone = document.body.cloneNode(true);
   clone.querySelectorAll(NAV + ", script, style, noscript, svg").forEach((x) => x.remove());
@@ -125,7 +139,14 @@ function actOnPage(action, id, value) {
   el.scrollIntoView({ block: "center" });
   const fire = (t) => el.dispatchEvent(new Event(t, { bubbles: true }));
   if (action === "click") {
-    if (el.tagName === "INPUT" && /radio|checkbox/.test(el.type) && el.closest("label")) el.closest("label").click(); else el.click();
+    const target = el.tagName === "INPUT" && /radio|checkbox/.test(el.type) && el.closest("label") ? el.closest("label") : el;
+    // マウスで押したときと同じ順にイベントを出す（mousedown で反応する作りのページもあるため）
+    const o = { bubbles: true, cancelable: true, view: window };
+    try { target.dispatchEvent(new PointerEvent("pointerdown", o)); } catch { /* 古いブラウザ */ }
+    target.dispatchEvent(new MouseEvent("mousedown", o));
+    try { target.dispatchEvent(new PointerEvent("pointerup", o)); } catch { /* 古いブラウザ */ }
+    target.dispatchEvent(new MouseEvent("mouseup", o));
+    target.click();
     return { ok: true };
   }
   if (action === "select") {

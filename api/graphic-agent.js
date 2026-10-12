@@ -1,5 +1,5 @@
 import { requireMember, requirePost } from './_lib/guard.js';
-import { claude, normalizeSchema, textOf } from './_lib/claude.js';
+import { claude, normalizeSchema, textOf, aiError } from './_lib/claude.js';
 import { AGENT_STEP_SCHEMA, agentSystemPrompt, agentStepPrompt, guardAction } from '../src/lib/graphicAgent.js';
 
 // ============================================================================
@@ -37,6 +37,7 @@ export default async function handler(req, res) {
     res.status(200).json(guardAction(out, snapshot));
   } catch (err) {
     console.error('[api/graphic-agent]', err);
-    res.status(500).json({ error: err.message || 'AI の呼び出しに失敗しました' });
+    const e = aiError(err);
+    res.status(e.status).json({ error: e.message, fatal: e.fatal });
   }
 }
