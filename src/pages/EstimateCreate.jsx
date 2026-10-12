@@ -22,6 +22,8 @@ import { format } from "date-fns";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { conditionsToEstimate } from "@/lib/meetingConditions";
 import { draftToLineItems, draftAmount, draftCost } from "@/lib/meetingChat";
+import { specsToLineItems } from "@/lib/printSpecList";
+import { usePricingRules } from "@/lib/pricing";
 import { linesFromOrder } from "@/lib/printOrders";
 import { estimateQuery } from "@/lib/estimateQuery";
 import { useItemSearchData } from "@/components/estimates/ItemSearch";
@@ -54,6 +56,7 @@ export default function EstimateCreate() {
   // 選んだ明細だけ複製するとき（カルテの「選択した明細を複製」）
   const copyLineIds = searchParams.get("lines");
   const chatId = searchParams.get("chat"); // 議事録の「AI に依頼」の見積のたたき台から
+  const specsId = searchParams.get("specs"); // 印刷仕様の一覧（価格調べ）から
   const reorderId = searchParams.get("reorder"); // 入稿履歴の「この内容で追加印刷の見積を作る」から
   const reorderItems = searchParams.get("reorder_items"); // 入稿履歴で選んだ内訳の番号（無ければ全部）
   const { data: copyFrom } = useQuery(estimateQuery(copyFromId, { fresh: true }));
@@ -135,7 +138,7 @@ export default function EstimateCreate() {
       meeting_id: meeting.id,
       meeting_budget: from.meeting_budget,
       // AI のたたき台から作るときは、明細はたたき台の方を使う（見積条件の印刷仕様・明細は入れない）
-      ...(chatId ? {} : { print_specs: from.print_specs, line_items: from.line_items, total_amount: computeEstimateTotals(from.line_items).total }),
+      ...(chatId || specsId ? {} : { print_specs: from.print_specs, line_items: from.line_items, total_amount: computeEstimateTotals(from.line_items).total }),
     }));
   }, [meeting]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -167,6 +170,22 @@ export default function EstimateCreate() {
     const items = draftToLineItems(chatDraft, [...chatKeys], `議事録の AI 依頼（${chatMsg.author_name || ""}）`);
     setFormData((prev) => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items).total }));
   }, [chatDraft, chatKeys]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 印刷仕様の一覧（価格調べ）の行。左の「引き継ぐ明細」で選び直せる
+  const { rules: pricingRules } = usePricingRules();
+  const { data: specList } = useQuery({ queryKey: ["printSpecList", specsId], queryFn: () => db.entities.PrintSpecList.get(specsId), enabled: !!specsId });
+  const specItems = useMemo(() => (specList?.items?.length ? specsToLineItems(specList.items, pricingRules, `印刷仕様の一覧「${specList.title || ""}」`) : null), [specList, pricingRules]);
+  const [specKeys, setSpecKeys] = useState(null); // Set<一覧の行 id>
+  useEffect(() => {
+    if (!specList?.items?.length || specKeys) return;
+    setSpecKeys(new Set(specList.items.map((it) => it.id)));
+    setFormData((prev) => ({ ...prev, client_name: prev.client_name || specList.client_name || "", estimate_title: prev.estimate_title || specList.title || "" }));
+  }, [specList]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!specItems || !specKeys) return;
+    const items = specItems.filter((_, i) => specKeys.has(specList.items[i].id));
+    setFormData((prev) => ({ ...prev, line_items: items, total_amount: computeEstimateTotals(items).total }));
+  }, [specItems, specKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 複製元の見積から件名・仕様・明細・備考を引き継ぐ（明細の id は振り直し、複製元を残す）。右の「引き継ぐ明細」で選び直せる
   const copySource = useMemo(() => (copyFrom?.schema_version === 2 ? (copyFrom.line_items || []) : []), [copyFrom]);
@@ -263,6 +282,17 @@ export default function EstimateCreate() {
         rows, selected: chatKeys, onToggle: toggleIn(setChatKeys), onSetAll: (keys) => setChatKeys(new Set(keys)), defaultKeys: chatDraft.items.map((it) => it.key), taxInclusive: false,
       };
     }
+    if (specList && specItems && specKeys) {
+      const rows = specList.items.map((it, i) => ({
+        key: it.id, label: specItems[i].name, sub: [it.print_type, it.price_url ? "グラフィック" : "", !(Number(it.cost_total) > 0) ? "仕入未入力" : ""].filter(Boolean).join("・"),
+        qty: specItems[i].quantity, unit: specItems[i].unit, unitPrice: specItems[i].unit_price, amount: specItems[i].amount, cost: specItems[i].cost_price ? specItems[i].cost_price * specItems[i].quantity : null,
+      }));
+      return {
+        title: `印刷仕様の一覧「${specList.title || ""}」`, subtitle: [specList.client_name, specList.created_by].filter(Boolean).join("・"),
+        linkTo: `/print-specs/${specList.id}`, linkLabel: "一覧を開く",
+        rows, selected: specKeys, onToggle: toggleIn(setSpecKeys), onSetAll: (keys) => setSpecKeys(new Set(keys)), defaultKeys: specList.items.map((it) => it.id), taxInclusive: false,
+      };
+    }
     if (copyFrom && copyIds) {
       const rows = copySource.map((li) => ({
         key: li.id, kind: li.row_type, label: li.row_type === "text" ? (li.text || "（見出し）") : (li.name || "（項目名なし）"),
@@ -276,7 +306,7 @@ export default function EstimateCreate() {
       };
     }
     return null;
-  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds, chatDraft, chatKeys, chatMsg, meeting, reorder, reorderLines, reorderOn]);
+  }, [costSheet, costRows, copyFrom, copyIds, copySource, copyDefaultIds, specList, specItems, specKeys, chatDraft, chatKeys, chatMsg, meeting, reorder, reorderLines, reorderOn]);
 
   const handleSave = async () => {
     if (!project) {
@@ -343,7 +373,9 @@ export default function EstimateCreate() {
             <p className="text-xs text-muted-foreground mt-0.5">案件を選んで基本情報を入力後、見積書画面で明細を追加します</p>
             {meeting && (
               <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-1.5 mt-1 inline-block">
-                {chatId
+                {specsId
+                  ? <>議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の印刷仕様の一覧から作ります。売価は仕入 × 掛け率（パッケージ 1.3／それ以外 1.35）です</>
+                  : chatId
                   ? <>議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の「AI に依頼」で作った見積のたたき台から作ります。要確認の行は作成後に確かめてください</>
                   : <>議事録「{meeting.title}」（{String(meeting.held_at || "").replace(/-/g, "/")}）の見積条件から作ります。印刷物は印刷仕様に、制作・開発は明細に入ります</>}
               </p>

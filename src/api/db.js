@@ -42,6 +42,7 @@ const TABLES = {
   FiscalTarget: 'fiscal_targets',
   CostSheet: 'cost_sheets',
   MeetingChatMessage: 'meeting_chat_messages',
+  PrintSpecList: 'print_spec_lists',
   PrintOrder: 'print_orders',
   ProjectTask: 'project_tasks',
 };
@@ -141,6 +142,7 @@ const WRITABLE_COLUMNS = {
   meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
   payees: ['name', 'bank_info', 'notes', 'sort_order', 'is_active'],
   payables: ['pay_month', 'payee_id', 'payee_name', 'bank_info', 'amount_coolagri', 'amount_cvdigital', 'amount_cv', 'paid', 'memo', 'sort_order', 'due_date', 'file_paths', 'invoices'],
+  print_spec_lists: ['meeting_id', 'client_id', 'client_name', 'project_id', 'title', 'items', 'status', 'outputs', 'created_by'],
   card_charges: ['charged_at', 'charge_month', 'merchant', 'amount', 'holder', 'card_label', 'memo', 'entity', 'source', 'fingerprint', 'card_brand'],
   cash_plan_items: ['kind', 'name', 'category', 'direction', 'amount', 'day_of_month', 'start_month', 'end_month', 'on_date', 'memo', 'is_active', 'sort_order'],
   meeting_checklists: ['meeting_type', 'key', 'label', 'sort_order', 'is_active'],
@@ -500,6 +502,7 @@ const integrations = {
 
 // Base44 のサーバー関数名 → Vercel Function のパス
 const FUNCTION_ROUTES = {
+  printSpecs: 'print-specs',
   fetchPriceFromUrl: 'fetch-price',
   sendEstimateEmail: 'send-estimate-email',
   sendDocumentEmail: 'send-document-email',

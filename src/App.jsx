@@ -27,6 +27,7 @@ import MyProfile from '@/pages/MyProfile';
 import MeetingList from '@/pages/MeetingList';
 import MeetingNew from '@/pages/MeetingNew';
 import MeetingDetail from '@/pages/MeetingDetail';
+import PrintSpecList from '@/pages/PrintSpecList';
 import SystemSettingsPage from '@/pages/SystemSettings';
 import UserManagement from '@/pages/UserManagement';
 import ClientManagement from '@/pages/ClientManagement';
@@ -108,6 +109,7 @@ const AuthenticatedApp = () => {
           <Route path="/meetings" element={<MeetingList />} />
           <Route path="/meetings/new" element={<MeetingNew />} />
           <Route path="/meetings/:id" element={<MeetingDetail />} />
+          <Route path="/print-specs/:id" element={<PrintSpecList />} />
           <Route path="/settings" element={<SystemSettingsPage />} />
           <Route path="/users" element={<UserManagement />} />
           <Route path="/clients" element={<ClientManagement />} />

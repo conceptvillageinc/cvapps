@@ -25,6 +25,7 @@ import MeetingRecorder from "@/components/meetings/MeetingRecorder";
 import MeetingAttachments from "@/components/meetings/MeetingAttachments";
 import MeetingChat from "@/components/meetings/MeetingChat";
 import MeetingLinkDialog from "@/components/meetings/MeetingLinkDialog";
+import MeetingPrintSpecs from "@/components/meetings/MeetingPrintSpecs";
 import { useAuth } from "@/lib/AuthContext";
 import { useRecording } from "@/lib/recording";
 
@@ -483,6 +484,7 @@ export default function MeetingDetail() {
 
           {/* 確認事項・指標 */}
           <div className="space-y-4">
+            <MeetingPrintSpecs meeting={meeting} />
             <Card>
               <CardContent className="pt-4 space-y-2">
                 <p className="text-sm font-bold">確認事項（{typeLabel(meeting.meeting_type)}）</p>
