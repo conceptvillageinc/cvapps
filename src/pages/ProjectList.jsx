@@ -16,6 +16,9 @@ import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/l
 import { PROJECT_STATUS_MAP } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { DailyView, NextActionView } from "@/components/projects/ProjectViews";
+import MonthEndView from "@/components/projects/MonthEndView";
+import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
+import { projectDelivery, isDeliveryDue, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const ALL_YEARS = "all";
@@ -23,17 +26,20 @@ const VIEWS = [
   { key: "standard", label: "標準" },
   { key: "daily", label: "速報デイリー" },
   { key: "next", label: "案件別ネクストアクション" },
+  { key: "monthend", label: "月末チェック（納品・請求）" },
 ];
 
 // 条件の札の並び（並び順のあと。受注確度 → 状態 の順で、ほかの列はその間）
-const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status"];
+const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status", "delivery"];
 
 // 案件一覧（標準）の列の並び
-const COLUMN_ORDER = ["registered_at", "client_name", "due_date", "name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "payment_due_date", "project_number"];
+const COLUMN_ORDER = ["registered_at", "client_name", "due_date", "name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "delivery", "payment_due_date", "project_number"];
 
 /** 案件一覧（標準）の 1 マス */
-function ProjectCell({ col, p }) {
+function ProjectCell({ col, p, delivery, today }) {
   switch (col) {
+    // 納品・請求（納品書・請求書のつながりから自動。完了予定が今月中か過ぎた未納品は赤）
+    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><DeliveryBadge info={delivery} due={isDeliveryDue(p, today)} /></TableCell>;
     case "project_number": return (
       <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
     );
@@ -117,7 +123,7 @@ export default function ProjectList() {
   const { data: nextProjects = [], isLoading: nextLoading } = useQuery({
     queryKey: ["projects", "all", "next"],
     queryFn: () => db.entities.Project.list("due_date"),
-    enabled: view === "next",
+    enabled: view === "next" || view === "monthend",
   });
 
   const { data: clients = [] } = useQuery({
@@ -137,6 +143,10 @@ export default function ProjectList() {
     return years;
   }, [currentFy]);
 
+  // 納品・請求の状態（納品書から自動で決める）
+  const deliveryIndex = useDeliveryIndex();
+  const today = todayString();
+
   const columnDefs = useMemo(() => ({
     project_number: { label: "案件番号", getValue: (p) => p.project_number || "" },
     client_name: { label: "クライアント", getValue: (p) => p.client_name || "" },
@@ -149,9 +159,10 @@ export default function ProjectList() {
     due_date: { label: "完了予定", getValue: (p) => p.due_date || "" },
     payment_due_date: { label: "入金予定", getValue: (p) => p.payment_due_date || "" },
     registered_at: { label: "登録日", getValue: (p) => p.registered_at || "" },
-  }), [dealProbabilityOptions, phaseOptions]);
+    delivery: { label: "納品・請求", getValue: (p) => DELIVERY_STATE[projectDelivery(p, deliveryIndex.byProject).state].label, master: DELIVERY_STATE_ORDER.map((k) => DELIVERY_STATE[k].label) },
+  }), [dealProbabilityOptions, phaseOptions, deliveryIndex]);
 
-  const FILTERABLE_KEYS = ["client_name", "deal_probability", "phase", "status"];
+  const FILTERABLE_KEYS = ["client_name", "deal_probability", "phase", "status", "delivery"];
 
   const columnOptions = useMemo(() => {
     const result = {};
@@ -159,8 +170,8 @@ export default function ProjectList() {
       const def = columnDefs[key];
       const fromData = new Set(projects.map(def.getValue));
       const merged = Array.from(new Set([...(def.master || []), ...fromData]));
-      // 状態は決まった順（進行中・完了・失注・取消）、ほかは 50 音順
-      result[key] = key === "status" ? merged : merged.sort((a, b) => a.localeCompare(b, "ja"));
+      // 状態・納品請求は決まった順、ほかは 50 音順
+      result[key] = key === "status" || key === "delivery" ? merged : merged.sort((a, b) => a.localeCompare(b, "ja"));
     }
     return result;
      
@@ -276,7 +287,7 @@ export default function ProjectList() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {view === "daily"
               ? `${dailyRows.length}件 / ${fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}`
-              : view === "next"
+              : view === "next" || view === "monthend"
                 ? "すべての期の案件"
                 : `${filtered.length}件 / ${fiscalYear === ALL_YEARS ? "全期間" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)} ${projects.length}件`}
             {view === "standard" && activeFilterCount > 0 && (
@@ -319,7 +330,7 @@ export default function ProjectList() {
           </button>
         ))}
         <span className="ml-auto text-[11px] text-muted-foreground pr-1">
-          {view === "daily" ? "今日を先頭に表示。上に戻ると前の日（取消・失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（期をまたいで表示）" : ""}
+          {view === "daily" ? "今日を先頭に表示。上に戻ると前の日（取消・失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（期をまたいで表示）" : view === "monthend" ? "完了予定がその月の案件と、前の月までで請求が済んでいない案件を担当者ごとに" : ""}
         </span>
       </div>
 
@@ -370,6 +381,8 @@ export default function ProjectList() {
         <DailyView projects={dailyRows} isLoading={isLoading} />
       ) : view === "next" ? (
         <NextActionView projects={nextRows} isLoading={nextLoading} search={search} onClearSearch={() => setSearch("")} />
+      ) : view === "monthend" ? (
+        <MonthEndView projects={nextRows} isLoading={nextLoading} deliveryIndex={deliveryIndex} />
       ) : (
       <Card>
         <CardContent className="p-0">
@@ -418,7 +431,7 @@ export default function ProjectList() {
                   {sorted.map((p) => {
                     return (
                       <TableRow key={p.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/projects/${p.id}`)}>
-                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} />)}
+                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} delivery={key === "delivery" ? projectDelivery(p, deliveryIndex.byProject) : null} today={today} />)}
                         <TableCell>
                           <Link to={`/projects/${p.id}`} onClick={(e) => e.stopPropagation()}>
                             <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />

@@ -20,6 +20,9 @@ import { getDealProbabilityColor, getPhaseColor, PRINT_TYPES } from "@/lib/const
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
+import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
+import { estimateDelivery, isDeliveryDue, DELIVERY_STATE } from "@/lib/deliveryStatus";
+import { todayString } from "@/lib/fiscal";
 import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submission";
 import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
@@ -74,6 +77,10 @@ export default function EstimateList() {
     queryFn: () => db.entities.Project.list("-registered_at"),
   });
   const projectById = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects]);
+  // 納品・請求の状態（提出済の見積だけ。納品書のつながりから自動で決める）
+  const deliveryIndex = useDeliveryIndex();
+  const today = todayString();
+  const deliveryOf = (e) => estimateDelivery(e, deliveryIndex.byEstimate, { submitted: submissionOf(e) === "submitted" });
   const probabilityOf = (e) => (e.project_id && projectById[e.project_id]?.deal_probability) || e.deal_probability || "";
   const phaseOf = (e) => (e.project_id && projectById[e.project_id]?.phase) || e.phase || "";
 
@@ -98,6 +105,7 @@ export default function EstimateList() {
   const columnDefs = useMemo(() => ({
     estimate_number: { label: "見積番号", getValue: e => e.estimate_number || "" },
     submission: { label: "提出", getValue: e => SUBMISSION_STATUS[submissionOf(e)].label },
+    delivery: { label: "納品・請求", getValue: e => { const d = deliveryOf(e); return d ? DELIVERY_STATE[d.state].label : "—"; } },
     client_name: { label: "クライアント", getValue: e => e.client_name || "" },
     print_type: { label: "印刷物種別", getValue: e => e.print_type || "", master: PRINT_TYPES },
     deal_probability: { label: "受注確度", getValue: probabilityOf, master: dealProbabilityMaster },
@@ -106,7 +114,7 @@ export default function EstimateList() {
     desired_delivery_date: { label: "希望納期", getValue: e => e.desired_delivery_date || "—" },
     created_date: { label: "作成日", getValue: e => format(new Date(e.created_date), "yyyy-MM-dd") },
     person_in_charge: { label: "作成担当者", getValue: e => e.person_in_charge || "" },
-    }), [dealProbabilityMaster, phaseMaster, projectById]);
+    }), [dealProbabilityMaster, phaseMaster, projectById, deliveryIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 各列の選択肢（マスタ + 実データにある値の和集合。存在するものだけ表示）
   const columnOptions = useMemo(() => {
@@ -121,7 +129,7 @@ export default function EstimateList() {
   }, [estimates, columnDefs]);
 
   // 注意：見積番号/合計金額/作成日は並び替え専用のため、リストはcolumnDefsには含めず別途フィルター対象外にする
-  const FILTERABLE_KEYS = ["client_name", "print_type", "deal_probability", "phase", "desired_delivery_date", "person_in_charge"];
+  const FILTERABLE_KEYS = ["delivery", "client_name", "print_type", "deal_probability", "phase", "desired_delivery_date", "person_in_charge"];
 
   const setColumnFilter = (key, values) => {
     setColumnFilters(prev => ({ ...prev, [key]: values }));
@@ -193,6 +201,8 @@ export default function EstimateList() {
         return <TableCell key={key} className="text-xs font-mono text-muted-foreground">{latest}{est.estimate_number}</TableCell>;
       case "submission":
         return <TableCell key={key} className="w-[76px]">{latest}<SubmissionBadge estimate={est} className="w-[64px] justify-center" /></TableCell>;
+      case "delivery":
+        return <TableCell key={key}>{latest}<DeliveryBadge info={deliveryOf(est)} due={isDeliveryDue(est.project_id ? projectById[est.project_id] : null, today)} /></TableCell>;
       case "client_name":
         return (
           <TableCell key={key} className="text-sm">

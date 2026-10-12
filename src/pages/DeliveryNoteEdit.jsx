@@ -27,6 +27,7 @@ import { todayString } from "@/lib/fiscal";
 import { formatPostalCode } from "@/lib/postalCode";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import PrintOrderSuggestDialog from "@/components/printOrders/PrintOrderSuggestDialog";
+import DeliveryLinePicker, { deliveredElsewhereMap } from "@/components/documents/DeliveryLinePicker";
 import { isPrintLine, orderFromLine } from "@/lib/printOrders";
 import { estimateQuery } from "@/lib/estimateQuery";
 import {
@@ -87,6 +88,15 @@ export default function DeliveryNoteEdit() {
   const sourceProjectId = searchParams.get("project");
   // 見積は開くたびに読み直してから写す（直したばかりの明細を写すため。キーの形は見積の画面とそろえる）
   const { data: sourceEstimate, isFetchedAfterMount: sourceEstimateFresh } = useQuery({ ...estimateQuery(sourceEstimateId, { fresh: true }), enabled: isNew && !!sourceEstimateId });
+  // 紐づく見積（新規は元の見積、既存は保存した見積）と、同じ見積から作ったほかの納品書（分納）
+  const linkedEstimateId = isNew ? sourceEstimateId : form?.estimate_id || null;
+  const { data: savedEstimate } = useQuery({ ...estimateQuery(linkedEstimateId), enabled: !isNew && !!linkedEstimateId });
+  const linkedEstimate = isNew ? sourceEstimate : savedEstimate;
+  const { data: siblingNotes = [], isFetched: siblingsFetched } = useQuery({
+    queryKey: ["deliveryNotes", "byEstimate", linkedEstimateId],
+    queryFn: () => db.entities.DeliveryNote.filter({ estimate_id: linkedEstimateId }),
+    enabled: !!linkedEstimateId,
+  });
   const projectId = form?.project_id || sourceProjectId || sourceEstimate?.project_id || null;
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -120,7 +130,7 @@ export default function DeliveryNoteEdit() {
       if (existing) setForm({ ...emptyForm(user), ...existing, line_items: existing.line_items || [] });
       return;
     }
-    if (sourceEstimateId && (!sourceEstimate || !sourceEstimateFresh)) return;
+    if (sourceEstimateId && (!sourceEstimate || !sourceEstimateFresh || !siblingsFetched)) return;
     if (sourceProjectId && !project) return;
     const base = emptyForm(user);
     if (sourceEstimate) {
@@ -131,7 +141,14 @@ export default function DeliveryNoteEdit() {
         client_honorific: sourceEstimate.client_honorific || "御中",
         title: sourceEstimate.estimate_title || "",
         delivery_date: sourceEstimate.desired_delivery_date || todayString(),
-        line_items: docItemsFromEstimate(sourceEstimate),
+        // ほかの納品書で納品済みの行は最初から外す（分納）。下の「今回納品する行を選ぶ」で選び直せる
+        line_items: (() => {
+          const done = deliveredElsewhereMap(siblingNotes, null);
+          const all = docItemsFromEstimate(sourceEstimate);
+          const rest = all.filter((li) => !done.has(li.source_line_id));
+          if (rest.length < all.length) toast.info(`ほかの納品書で納品済みの ${all.length - rest.length} 行は外しています`);
+          return rest;
+        })(),
         person_in_charge: sourceEstimate.person_in_charge || base.person_in_charge,
       });
     } else if (project) {
@@ -140,7 +157,7 @@ export default function DeliveryNoteEdit() {
     base.notes = company.delivery_notes || "";
     setForm(base);
      
-  }, [isNew, existing, sourceEstimate, sourceEstimateFresh, project, sourceEstimateId, sourceProjectId, company.delivery_notes]);
+  }, [isNew, existing, sourceEstimate, sourceEstimateFresh, siblingsFetched, project, sourceEstimateId, sourceProjectId, company.delivery_notes]);
 
   // クライアントマスタから住所・郵便番号を補う
   useEffect(() => {
@@ -400,6 +417,10 @@ export default function DeliveryNoteEdit() {
           </CardContent>
         </Card>
       </div>
+
+      {linkedEstimate && !locked && (
+        <DeliveryLinePicker estimate={linkedEstimate} siblings={siblingNotes} noteId={isNew ? null : id} items={form.line_items} onChange={(items) => set("line_items", items)} />
+      )}
 
       <Card>
         <CardHeader className="pb-3">
