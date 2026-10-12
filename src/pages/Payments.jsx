@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Upload, Loader2, Landmark, Check, X, Search, Sparkles, Link2, Undo2, BookOpen } from "lucide-react";
 import { importBankCsvFile, importResultText, forPayments } from "@/lib/bankImportActions";
 import PassbookImportDialog from "@/components/payments/PassbookImportDialog";
+import CutoverDialog, { CUTOVER_KEY } from "@/components/payments/CutoverDialog";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import { toast } from "sonner";
 import { suggestInvoices, isConfident, BANK_LABELS } from "@/lib/bankImport";
 
@@ -29,6 +31,9 @@ export default function Payments() {
   const [pickFor, setPickFor] = useState(null); // 手動で請求書を選ぶ対象の明細
   const [pickSearch, setPickSearch] = useState("");
   const [passbookOpen, setPassbookOpen] = useState(false);
+  const [cutoverOpen, setCutoverOpen] = useState(false);
+  const { settings } = useSystemSettings();
+  const cutover = settings.find((x) => x.setting_key === CUTOVER_KEY)?.setting_value || "";
 
   // 資金繰り表で取り込んだ明細（scope=cashplan）は資金繰り表だけで使うので、ここには出さない
   const { data: txs = [], isLoading } = useQuery({
@@ -135,6 +140,11 @@ export default function Payments() {
             銀行の入出金明細（CSV か通帳の画像）を取り込み、請求書と照合します。未照合 {unmatched.length}件
             {confidentCount > 0 && <span className="text-emerald-700">（自動で確定できるもの {confidentCount}件）</span>}
           </p>
+          <p className="text-xs text-muted-foreground mt-0.5" data-testid="cutover-note">
+            {cutover ? <>{cutover.replace(/-/g, "/")} までの入金予定分は、CV アプリ導入前のため入金確認済みにしています。</> : <>CV アプリで管理し始める前の分は、まとめて入金確認済みにできます。</>}
+            <button type="button" className="ml-1 text-primary hover:underline" onClick={() => setCutoverOpen(true)} data-testid="cutover-open">{cutover ? "区切りを変える" : "過去分をまとめて入金確認済みにする"}</button>
+          </p>
+          <CutoverDialog open={cutoverOpen} onOpenChange={setCutoverOpen} invoices={invoices} txs={txs} />
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importCsv} />
