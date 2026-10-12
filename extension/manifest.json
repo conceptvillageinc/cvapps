@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CV AX KIT アシスタント",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "CV アプリ（cv-ax.jp）の「グラフィックで調べる」で、グラフィックの価格ページを開いて読み取ります。価格を見るだけで、注文・ログインなどはしません。",
   "minimum_chrome_version": "116",
   "background": { "service_worker": "background.js" },

@@ -160,7 +160,9 @@ function PrintSpecListPage() {
         isCancelled: () => cancelRef.current,
         onStep: ({ step, reason }) => { status[it.id] = { state: "run", text: `${step} 手目: ${reason || ""}` }; setLookup({ running: true, current: it.id, status: { ...status } }); },
       });
-      if (r.ok) { setRow(it.id, r.patch); okCount++; status[it.id] = { state: "ok", text: `${r.steps} 手で見つかりました${r.patch.needs_check ? "（仕様の違いあり・要確認）" : ""}` }; }
+      const log = { at: new Date().toISOString(), ok: r.ok, reason: r.reason || "", steps: r.steps, trace: r.trace || [], debug: r.debug || null };
+      setRow(it.id, { ...(r.ok ? r.patch : {}), lookup_log: log });
+      if (r.ok) { okCount++; status[it.id] = { state: "ok", text: `${r.steps} 手で見つかりました${r.patch.needs_check ? "（仕様の違いあり・要確認）" : ""}` }; }
       else status[it.id] = { state: "fail", text: r.reason || "見つかりませんでした" };
       setLookup({ running: true, current: null, status: { ...status } });
     }
@@ -351,6 +353,8 @@ function PrintSpecListPage() {
                           {confirmed && !lookup?.running && <button type="button" className="text-[10px] text-primary hover:underline" onClick={() => runLookup([it])}>調べ直す</button>}
                         </p>
                         <p className="text-[11px] text-muted-foreground">{specMemo({ ...it, price_note: "", notes: "" })}{it.quantity ? `　${Number(it.quantity).toLocaleString()}${it.unit || ""}` : ""}</p>
+                        {!lookup?.status?.[it.id] && it.lookup_log && !it.lookup_log.ok && <p className="mt-0.5 text-[11px] text-red-600">前回グラフィックで見つからなかった理由: {it.lookup_log.reason}</p>}
+                        {it.lookup_log && !lookup?.running && <LookupLog log={it.lookup_log} item={it} />}
                         {lookup?.status?.[it.id] && <p data-testid="graphic-lookup-status" className={`mt-0.5 text-[11px] flex items-center gap-1 ${lookup.status[it.id].state === "fail" ? "text-red-600" : lookup.status[it.id].state === "ok" ? "text-emerald-700" : "text-primary"}`}>{lookup.status[it.id].state === "run" && <Loader2 className="w-3 h-3 animate-spin" />}{lookup.status[it.id].text}</p>}
                       </td>
                       <td className="px-1 py-1"><Input type="number" value={it.cost_total ?? ""} disabled={!confirmed} onChange={(e) => setRow(it.id, { cost_total: e.target.value === "" ? "" : Number(e.target.value) })} className={`h-7 text-xs text-right tabular-nums ${confirmed && !(Number(it.cost_total) > 0) ? "border-amber-300" : ""}`} aria-label={`${it.name}の仕入`} /></td>
@@ -464,5 +468,35 @@ function ShotPicker({ onPick, disabled, busy }) {
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />} 読む
       </Button>
     </>
+  );
+}
+
+/** グラフィックで調べた経過（何を押したか）と、うまくいかなかったときの診断情報のコピー */
+function LookupLog({ log, item }) {
+  const [open, setOpen] = useState(false);
+  const copy = async () => {
+    const lines = [
+      `【グラフィックで調べた経過】${item.name}（${[item.size, item.paper, item.colors, item.quantity ? `${item.quantity}${item.unit || ""}` : ""].filter(Boolean).join("／")}）`,
+      `結果: ${log.ok ? "見つかった" : `見つからなかった（${log.reason}）`}　${log.steps} 手　${new Date(log.at).toLocaleString("ja-JP")}`,
+      ...(log.trace || []).map((t) => `${t.step}. ${t.page} ${t.action}${t.target ? ` 「${t.target}」` : ""}${t.value ? ` = ${t.value}` : ""} … ${t.reason || ""}`),
+      ...(log.debug ? [
+        "", `【最後のページ】${log.debug.title} ${log.debug.url}`,
+        "【選択肢・ボタン】", ...(log.debug.controls || []),
+        "【表】", ...(log.debug.tables || []).flatMap((t) => [`- ${t.title || "（見出しなし）"}`, ...t.rows]),
+        "【本文（先頭）】", log.debug.text || "",
+      ] : []),
+    ];
+    try { await navigator.clipboard.writeText(lines.join("\n")); toast.success("経過をコピーしました。チャットに貼り付けて送ってください"); } catch { toast.error("コピーできませんでした"); }
+  };
+  return (
+    <div className="mt-0.5 text-[11px]">
+      <button type="button" className="text-muted-foreground hover:underline" onClick={() => setOpen((v) => !v)}>{open ? "経過を閉じる" : `経過を見る（${log.steps || 0} 手）`}</button>
+      <button type="button" className="ml-2 text-primary hover:underline" onClick={copy}>経過をコピー</button>
+      {open && (
+        <ol className="mt-1 max-h-48 overflow-y-auto rounded border bg-muted/30 px-2 py-1 space-y-0.5">
+          {(log.trace || []).map((t) => <li key={t.step} className="text-muted-foreground"><span className="tabular-nums">{t.step}.</span> {t.reason || `${t.action} ${t.target || ""}`}</li>)}
+        </ol>
+      )}
+    </div>
   );
 }

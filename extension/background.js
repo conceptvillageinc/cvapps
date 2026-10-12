@@ -18,18 +18,26 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 開いているウィンドウ（サービスワーカーが止まっても忘れないよう storage.session に置く）
 async function sessions() { return (await chrome.storage.session.get("sessions")).sessions || {}; }
 async function saveSessions(s) { await chrome.storage.session.set({ sessions: s }); }
+// 読み書きを 1 つずつ順番に行う（前の品目のウィンドウを閉じるのと、次の品目のウィンドウを開くのが重なっても、記録を消さない）
+let lock = Promise.resolve();
+function withSessions(fn) {
+  const run = lock.then(async () => { const all = await sessions(); const out = await fn(all); await saveSessions(all); return out; });
+  lock = run.catch(() => {});
+  return run;
+}
 async function getSession(id) {
   const s = (await sessions())[String(id)];
   if (!s) throw new Error("調べるためのウィンドウが見つかりません（閉じられた可能性があります）");
   return s;
 }
-async function touch(id, patch = {}) { const all = await sessions(); if (all[id]) { all[id] = { ...all[id], ...patch, at: Date.now() }; await saveSessions(all); } }
+async function touch(id, patch = {}) { await withSessions((all) => { if (all[id]) all[id] = { ...all[id], ...patch, at: Date.now() }; }); }
 async function closeStale() {
-  const all = await sessions();
-  for (const [id, s] of Object.entries(all)) {
-    if (Date.now() - (s.at || 0) > SESSION_TTL_MS) { try { await chrome.windows.remove(s.windowId); } catch { /* もう無い */ } delete all[id]; }
-  }
-  await saveSessions(all);
+  const stale = await withSessions((all) => {
+    const out = [];
+    for (const [id, s] of Object.entries(all)) if (Date.now() - (s.at || 0) > SESSION_TTL_MS) { out.push(s.windowId); delete all[id]; }
+    return out;
+  });
+  for (const w of stale) { try { await chrome.windows.remove(w); } catch { /* もう無い */ } }
 }
 
 /** タブの読み込みが落ち着くまで待つ（移動が無ければ短く待つだけ） */
@@ -60,34 +68,55 @@ async function assertGraphic(tabId) {
 function snapshotPage() {
   const visible = (el) => { const r = el.getBoundingClientRect(); const st = getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none"; };
   const txt = (s) => String(s || "").replace(/\s+/g, " ").trim();
+  const NAV = "header, nav, footer, aside, [role=navigation], [role=banner], [role=contentinfo], #header, #footer, .header, .footer, .gnav, .global-nav, .breadcrumb";
   const labelOf = (el) => {
     if (el.id) { const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l) return txt(l.innerText); }
     const p = el.closest("label"); if (p) return txt(p.innerText);
-    return txt(el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("placeholder") || el.name || "");
+    const aria = el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("placeholder");
+    if (aria) return txt(aria);
+    // 選択肢の見出し（直前の見出し・dt・th）
+    const box = el.closest("tr, dd, li, .form-group, .item, fieldset, div");
+    const head = box?.querySelector("th, dt, legend, h2, h3, h4, .title, .label");
+    return txt(head?.innerText || el.name || "").slice(0, 40);
   };
-  const sel = 'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [role="tab"], [role="radio"], [role="option"]';
+  const sel = 'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [role="tab"], [role="radio"], [role="option"], [onclick]';
   let n = 0;
-  const elements = [];
+  const main = []; const nav = [];
   for (const el of document.querySelectorAll(sel)) {
     const isChoice = el.tagName === "INPUT" && /radio|checkbox/.test(el.type);
-    if (!isChoice && !visible(el)) continue;
-    if (isChoice && !visible(el) && !(el.closest("label") && visible(el.closest("label")))) continue;
+    const lab = isChoice ? el.closest("label") : null;
+    if (!visible(el) && !(lab && visible(lab))) continue;
     const id = String(++n);
     el.setAttribute("data-cv-id", id);
     const e = { id, tag: el.tagName.toLowerCase() };
     if (el.type && el.tagName === "INPUT") e.type = el.type;
     if (el.getAttribute("role")) e.role = el.getAttribute("role");
-    const t = el.tagName === "SELECT" ? "" : txt(el.innerText || el.value || el.alt || "");
+    const t = el.tagName === "SELECT" ? "" : txt(el.innerText || el.value || el.alt || el.querySelector?.("img")?.alt || "");
     if (t) e.text = t.slice(0, 80);
-    const lab = labelOf(el); if (lab && lab !== e.text) e.label = lab.slice(0, 60);
+    const l = labelOf(el); if (l && l !== e.text) e.label = l.slice(0, 60);
     if (el.tagName === "A") e.href = el.getAttribute("href");
     if (el.tagName === "INPUT" && !isChoice && el.value) e.value = String(el.value).slice(0, 40);
     if (isChoice) { e.value = el.value; if (el.checked) e.checked = true; }
     if (el.tagName === "SELECT") e.options = [...el.options].slice(0, 80).map((o) => ({ value: o.value, text: txt(o.text), selected: o.selected }));
-    elements.push(e);
-    if (elements.length >= 500) break;
+    if (el.disabled) e.disabled = true;
+    if (el.closest(NAV)) { e.nav = true; nav.push(e); } else main.push(e);
   }
-  return { url: location.href, title: document.title, text: txt(document.body?.innerText || "").slice(0, 20000), elements };
+  // 本文（ヘッダー・メニュー・フッターを除いた部分）
+  const clone = document.body.cloneNode(true);
+  clone.querySelectorAll(NAV + ", script, style, noscript, svg").forEach((x) => x.remove());
+  const bodyText = txt(clone.innerText || clone.textContent || "");
+  // 表（価格表など）: 行ごとに「セル | セル | …」
+  const tables = [];
+  for (const tb of document.querySelectorAll("table")) {
+    if (!visible(tb) || tb.closest(NAV)) continue;
+    const rows = [...tb.rows].slice(0, 40).map((r) => [...r.cells].slice(0, 14).map((c) => txt(c.innerText)).join(" | ")).filter((r) => r.replace(/[|\s]/g, ""));
+    if (rows.length < 2) continue;
+    let title = txt(tb.caption?.innerText || "");
+    if (!title) { let p = tb.previousElementSibling; for (let k = 0; k < 3 && p && !title; k++, p = p.previousElementSibling) title = txt(p.innerText).slice(0, 60); }
+    tables.push({ title, rows });
+    if (tables.length >= 8) break;
+  }
+  return { url: location.href, title: document.title, text: bodyText.slice(0, 24000), tables, elements: [...main, ...nav].slice(0, 600) };
 }
 
 function actOnPage(action, id, value) {
@@ -127,9 +156,7 @@ const handlers = {
     const target = url && isGraphicUrl(url) ? url : "https://www.graphic.jp/";
     const win = await chrome.windows.create({ url: target, focused: false, width: 1280, height: 900, type: "normal" });
     const tabId = win.tabs[0].id;
-    const all = await sessions();
-    all[String(tabId)] = { windowId: win.id, tabId, at: Date.now(), lastAction: Date.now() };
-    await saveSessions(all);
+    await withSessions((all) => { all[String(tabId)] = { windowId: win.id, tabId, at: Date.now(), lastAction: Date.now() }; });
     await settle(tabId);
     return { session_id: tabId };
   },
@@ -173,9 +200,8 @@ const handlers = {
     }
   },
   async close({ session_id }) {
-    const all = await sessions();
-    const s = all[String(session_id)];
-    if (s) { try { await chrome.windows.remove(s.windowId); } catch { /* もう無い */ } delete all[String(session_id)]; await saveSessions(all); }
+    const s = await withSessions((all) => { const x = all[String(session_id)]; delete all[String(session_id)]; return x; });
+    if (s) { try { await chrome.windows.remove(s.windowId); } catch { /* もう無い */ } }
     return {};
   },
 };
@@ -190,8 +216,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // 拡張機能が止まっても調べ用のウィンドウを残さない
-chrome.windows.onRemoved.addListener(async (windowId) => {
-  const all = await sessions();
-  for (const [id, s] of Object.entries(all)) if (s.windowId === windowId) delete all[id];
-  await saveSessions(all);
+chrome.windows.onRemoved.addListener((windowId) => {
+  withSessions((all) => { for (const [id, s] of Object.entries(all)) if (s.windowId === windowId) delete all[id]; });
 });

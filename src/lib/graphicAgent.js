@@ -9,7 +9,7 @@
 
 export const GRAPHIC_ORIGIN = "https://www.graphic.jp";
 export const GRAPHIC_START_URL = "https://www.graphic.jp/";
-export const MAX_STEPS = 24;
+export const MAX_STEPS = 30;
 
 /** 押してはいけないもの（言葉で止める） */
 export const FORBIDDEN_RE = /カート|注文|購入|ログイン|ログアウト|会員登録|新規登録|入稿|お支払|決済|申し?込|送信する|確定する|お問い?合わせ|退会|パスワード/;
@@ -55,6 +55,12 @@ export function agentSystemPrompt() {
 - 数量が価格表に無いときは、表にある一番近い数量の価格を出し、differences に書きます。
 - 何度か試しても合う商品が見つからない、ページが読めないときは action=fail にして理由を書きます。
 
+【ページの見方】
+- 【価格表（表）】に、ページの表が「セル | セル | …」の行で入っています。ネット印刷の価格表は、行が部数（数量）、列が納期（営業日）のことが多いです。見出しの行と、依頼の数量の行が交わるところの金額を読みます。
+- 選択肢を選んでも【価格表】や本文の金額が変わらないときは、「価格を表示」「料金を見る」「再計算」のようなボタンが無いか、ページの下の方（scroll）に表が無いかを確かめます。
+- [メニュー] と付いた要素は、ヘッダー・フッターのメニューです。商品ページに着いたら、メニューではなく本文の要素を使います。
+- 同じページに 3 回以上来ている、または同じ選択を 2 回以上しているときは、やり方を変えます（別の商品ページ・別の選択肢・表の中の近い条件の金額を読む）。近い条件の金額が読めているなら、それで done にして違いを differences に書くほうが、何も分からないよりよいです。
+
 【してはいけないこと】
 - ログイン・会員登録・カートに入れる・注文・入稿・データ送信・お問い合わせなど、サイトに何かを申し込む操作は絶対にしません（価格を見るだけです）。
 - グラフィック（www.graphic.jp）以外のサイトへは移動しません。
@@ -64,9 +70,9 @@ export function agentSystemPrompt() {
 const clip = (s, n) => (String(s || "").length > n ? `${String(s).slice(0, n)}…` : String(s || ""));
 
 /** スナップショットを AI に渡す文字にする（長いページは本文と要素の数をしぼる） */
-export function snapshotText(snap, { maxElements = 260, maxText = 9000 } = {}) {
+export function snapshotText(snap, { maxElements = 360, maxText = 10000 } = {}) {
   const els = (snap?.elements || []).slice(0, maxElements).map((e) => {
-    const parts = [`[${e.id}] ${e.tag}${e.type ? `(${e.type})` : ""}`];
+    const parts = [`[${e.id}]${e.nav ? "[メニュー]" : ""} ${e.tag}${e.type ? `(${e.type})` : ""}${e.disabled ? "(選べない)" : ""}`];
     if (e.label) parts.push(`label="${clip(e.label, 40)}"`);
     if (e.text) parts.push(`"${clip(e.text, 60)}"`);
     if (e.href) parts.push(`→ ${clip(e.href, 80)}`);
@@ -75,13 +81,17 @@ export function snapshotText(snap, { maxElements = 260, maxText = 9000 } = {}) {
     if (e.options?.length) parts.push(`選択肢: ${e.options.slice(0, 40).map((o) => `${o.selected ? "★" : ""}${clip(o.text, 24)}(${clip(o.value, 20)})`).join(" / ")}`);
     return parts.join(" ");
   });
+  const tables = (snap?.tables || []).slice(0, 6).map((t, i) => `表${i + 1}${t.title ? `「${clip(t.title, 40)}」` : ""}\n${t.rows.slice(0, 30).map((r) => clip(r, 260)).join("\n")}`).join("\n\n");
   return `URL: ${snap?.url || ""}
 タイトル: ${snap?.title || ""}
 
-【操作できる要素】（番号で指定）
+【操作できる要素】（番号で指定。本文の要素が先、[メニュー] は後ろ）
 ${els.join("\n")}
 
-【ページの本文】
+【価格表（表）】
+${tables || "（表はありません）"}
+
+【ページの本文】（ヘッダー・メニューを除く）
 ${clip(snap?.text, maxText)}`;
 }
 
@@ -97,12 +107,17 @@ export function agentStepPrompt({ item, snapshot, history, step }) {
     `納期: ${item.due || "（指定なし）"}`,
     item.notes ? `補足: ${item.notes}` : "",
   ].filter(Boolean).join("\n");
-  const hist = (history || []).slice(-12).map((h, i) => `${i + 1}. ${h.action}${h.target ? ` 「${clip(h.target, 30)}」` : ""}${h.value ? ` = ${clip(h.value, 30)}` : ""}${h.url ? ` ${h.url}` : ""} → ${h.outcome || "ok"}`).join("\n");
+  // 同じページ・同じ操作の繰り返しを数えて知らせる
+  const visits = new Map();
+  for (const h of history || []) if (h.page) visits.set(h.page, (visits.get(h.page) || 0) + 1);
+  const here = (() => { try { const u = new URL(snapshot?.url || ""); return u.pathname + u.search; } catch { return ""; } })();
+  const loopNote = (visits.get(here) || 0) >= 3 ? `\n※ このページでの操作は ${visits.get(here)} 回目です。同じことを繰り返さず、やり方を変えてください。` : "";
+  const hist = (history || []).slice(-15).map((h, i) => `${i + 1}. ${h.action}${h.target ? ` 「${clip(h.target, 30)}」` : ""}${h.value ? ` = ${clip(h.value, 30)}` : ""}${h.url ? ` ${h.url}` : ""} → ${h.outcome || "ok"}`).join("\n");
   return `【調べる印刷物】
 ${spec}
 
 【これまでの操作】（${step} 手目 / 上限 ${MAX_STEPS} 手）
-${hist || "（まだ何もしていません）"}
+${hist || "（まだ何もしていません）"}${loopNote}
 
 【いまのページ】
 ${snapshotText(snapshot)}
