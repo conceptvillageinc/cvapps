@@ -55,7 +55,7 @@ export function latestBalances(bankTxs) {
  * 日ごとの資金繰りを作る。
  * @returns { anchor: { total, date, accounts, missing }, days: [...], events: [...], min, minAll, status, safety, overdue, runway }
  */
-export function buildCashPlan({ today, horizonDays = 90, bankTxs, invoices, projects, payables, cardCharges, items, safetyLine = null, cardPayDay = 27 }) {
+export function buildCashPlan({ today, horizonDays = 90, bankTxs, invoices, projects, payables, cardCharges, items, safetyLine = null, cardPayDay = 27, receivableFrom = "" }) {
   const accounts = latestBalances(bankTxs);
   const anchorDate = accounts.length ? accounts.map((a) => a.date).sort().slice(-1)[0] : null;
   const total = accounts.reduce((s, a) => s + a.balance, 0);
@@ -73,6 +73,8 @@ export function buildCashPlan({ today, horizonDays = 90, bankTxs, invoices, proj
     if (inv.project_id) invoicedByProject.set(inv.project_id, (invoicedByProject.get(inv.project_id) || 0) + n(inv.total));
     if (inv.status === "paid") continue;
     const due = inv.due_date || nextMonthEnd(inv.invoice_date);
+    // 資金繰り表で管理し始める前の入金予定（区切りの日より前）は数えない
+    if (receivableFrom && due && due < receivableFrom) continue;
     const label = `${inv.client_name || ""} ${inv.title || ""}`.trim();
     if (!due || due < today) { overdue.push({ ...inv, due }); push({ date: today, amount: n(inv.total), sure: false, group: "期日超過の未入金", label: `${label}（期日 ${due || "—"}）`, link: `/invoices/${inv.id}` }); }
     else push({ date: due, amount: n(inv.total), sure: true, group: "入金予定（請求済）", label, link: `/invoices/${inv.id}` });

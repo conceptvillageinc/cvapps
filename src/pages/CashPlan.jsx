@@ -18,7 +18,9 @@ import { useAuth } from "@/lib/AuthContext";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { useCashAccess } from "@/lib/useCashAccess";
 import { todayString } from "@/lib/fiscal";
-import { buildCashPlan, autoSafetyLine, CATEGORIES, directionOf } from "@/lib/cashPlan";
+import { buildCashPlan, autoSafetyLine, CATEGORIES, directionOf, addDays } from "@/lib/cashPlan";
+
+const RECEIVABLE_FROM_DEFAULT = "2026-10-01"; // 入金確認の区切りが未設定のとき
 
 const yen = (v) => `¥${Math.round(Number(v) || 0).toLocaleString()}`;
 const man = (v) => `${Math.round(Number(v) / 10000).toLocaleString()}万`;
@@ -53,7 +55,10 @@ export default function CashPlan() {
   const [tab, setTab] = useState("plan"); // plan | items | settings
   const [horizon, setHorizon] = useState(90);
   const today = todayString();
-  const { cashSafetyLine, cardPayDay } = useSystemSettings();
+  const { cashSafetyLine, cardPayDay, settings } = useSystemSettings();
+  // 入金予定はこの日から数える（入金確認の区切りの翌日。CV アプリでの資金繰り表の本格稼働は 2026/10 から）
+  const cutover = settings.find((x) => x.setting_key === "payments_cutover_date")?.setting_value || "";
+  const receivableFrom = cutover ? addDays(cutover, 1) : RECEIVABLE_FROM_DEFAULT;
 
   const { data: bankTxs = [], isLoading: l1 } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), enabled: allowed });
   const { data: invoices = [], isLoading: l2 } = useQuery({ queryKey: ["invoices", "all"], queryFn: () => db.entities.Invoice.list("-invoice_date"), enabled: allowed });
@@ -65,8 +70,8 @@ export default function CashPlan() {
   const auto = useMemo(() => autoSafetyLine({ items, payables, today }), [items, payables, today]);
   const safetyLine = cashSafetyLine ?? auto;
   const plan = useMemo(
-    () => buildCashPlan({ today, horizonDays: horizon, bankTxs, invoices, projects, payables, cardCharges, items, safetyLine, cardPayDay }),
-    [today, horizon, bankTxs, invoices, projects, payables, cardCharges, items, safetyLine, cardPayDay],
+    () => buildCashPlan({ today, horizonDays: horizon, bankTxs, invoices, projects, payables, cardCharges, items, safetyLine, cardPayDay, receivableFrom }),
+    [today, horizon, bankTxs, invoices, projects, payables, cardCharges, items, safetyLine, cardPayDay, receivableFrom],
   );
 
   if (accessLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -100,7 +105,7 @@ export default function CashPlan() {
       {tab === "plan" && (loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
       ) : (
-        <PlanView plan={plan} today={today} horizon={horizon} setHorizon={setHorizon} safetyLine={safetyLine} autoLine={cashSafetyLine === null} itemsCount={items.length} />
+        <PlanView receivableFrom={receivableFrom} plan={plan} today={today} horizon={horizon} setHorizon={setHorizon} safetyLine={safetyLine} autoLine={cashSafetyLine === null} itemsCount={items.length} />
       ))}
     </div>
   );
@@ -113,7 +118,7 @@ function StatusBadge({ status }) {
   return <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-400 text-white px-3 py-1 text-sm font-bold">残高なし</span>;
 }
 
-function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, itemsCount }) {
+function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, itemsCount, receivableFrom = "" }) {
   const [open, setOpen] = useState(() => new Set());
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -273,7 +278,7 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
       </Card>
 
       <p className="text-[10px] text-muted-foreground">
-        残高の起点は、入金確認で取り込んだ銀行明細の最後の残高です。その日付より前の予定は残高に含まれているものとして飛ばし、今日より前で未処理のものは今日に置きます。入金予定は請求書の入金期日（未設定なら請求日の翌月末）、支払い先まとめは支払月の月末、カードは利用月の翌月の引落日（設定）、未請求の案件は入金予定日・仕入先支払予定日（未設定なら完了予定日の翌月末）です。cv digital・Cool Agri の分は含めていません。
+        残高の起点は、入金確認で取り込んだ銀行明細の最後の残高です。その日付より前の予定は残高に含まれているものとして飛ばし、今日より前で未処理のものは今日に置きます。入金予定は請求書の入金期日（未設定なら請求日の翌月末）で、{receivableFrom.replace(/-/g, "/")} 以降が入金予定のものから数えます（それより前は CV アプリ導入前のため入れていません）。支払い先まとめは支払月の月末、カードは利用月の翌月の引落日（設定）、未請求の案件は入金予定日・仕入先支払予定日（未設定なら完了予定日の翌月末）です。cv digital・Cool Agri の分は含めていません。
       </p>
     </>
   );
