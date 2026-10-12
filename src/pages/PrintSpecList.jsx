@@ -19,6 +19,7 @@ import {
   SPEC_EXTRACT_SCHEMA, specExtractPrompt, specsFromResult, PRICE_SHOT_SCHEMA, priceShotPrompt, familyName,
 } from "@/lib/printSpecList";
 import CostSheetWriteDialog from "@/components/printSpecs/CostSheetWriteDialog";
+import { usePrintSpecAccess } from "@/lib/usePrintSpecAccess";
 import AssistantGuideDialog from "@/components/printSpecs/AssistantGuideDialog";
 import { detectAssistant, lookupItem } from "@/lib/graphicLookup";
 
@@ -34,6 +35,12 @@ const unitYen = (n) => (Number(n) ? `¥${Number(n).toLocaleString(undefined, { m
  *   ③ 社内見積（原価計算表）の形で確かめて、スプレッドシート・新しい見積・原価計算表に出力する
  */
 export default function PrintSpecList() {
+  const { allowed } = usePrintSpecAccess();
+  if (!allowed) return <div className="max-w-xl mx-auto py-16 text-center text-sm text-muted-foreground">印刷仕様の一覧は試験運用中のため、まだお使いいただけません。</div>;
+  return <PrintSpecListPage />;
+}
+
+function PrintSpecListPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();

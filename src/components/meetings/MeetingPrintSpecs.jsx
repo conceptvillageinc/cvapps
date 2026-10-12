@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
+import { usePrintSpecAccess } from "@/lib/usePrintSpecAccess";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -13,6 +14,13 @@ import { Loader2, TableProperties, Sparkles, ChevronRight } from "lucide-react";
  *   議事録から印刷物を書き出して一覧にし、仕入を入れて社内見積の形で出力する画面（/print-specs/:id）へ。
  */
 export default function MeetingPrintSpecs({ meeting }) {
+  const { allowed } = usePrintSpecAccess();
+  if (!allowed) return null;
+  return <MeetingPrintSpecsCard meeting={meeting} />;
+}
+
+function MeetingPrintSpecsCard({ meeting }) {
+  const { trial } = usePrintSpecAccess();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [creating, setCreating] = useState(false);
@@ -36,7 +44,7 @@ export default function MeetingPrintSpecs({ meeting }) {
   return (
     <Card className="border-primary/30" data-testid="meeting-print-specs">
       <CardContent className="pt-4 space-y-2">
-        <p className="text-sm font-bold flex items-center gap-1.5"><TableProperties className="w-4 h-4 text-primary" /> 印刷仕様の一覧（価格調べ）</p>
+        <p className="text-sm font-bold flex items-center gap-1.5"><TableProperties className="w-4 h-4 text-primary" /> 印刷仕様の一覧（価格調べ）{trial && <span className="rounded bg-amber-100 px-1.5 text-[10px] font-normal text-amber-800">試験運用</span>}</p>
         <p className="text-[11px] text-muted-foreground">議事録から印刷物の仕様を一覧に書き出し、過不足を確かめてから、仕入を入れて社内見積の形で出力します（スプレッドシート・新しい見積・原価計算表）</p>
         {lists.map((l) => {
           const n = (l.items || []).length;
