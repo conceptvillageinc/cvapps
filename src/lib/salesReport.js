@@ -2,7 +2,7 @@
 // 売上粗利管理表（スプレッドシート「目標管理」の再現）
 //
 // 4段 × 12ヶ月（期首の月から）＋年計:
-//   目標     売上 / 仕入 / 目標粗利（ジャンプ） / 目標粗利 / 必達粗利 / 粗利率
+//   目標     売上 / 仕入 / 目標粗利（入力。空なら 売上−仕入） / 必達粗利 / 粗利率
 //   着地見込 売上（案件見込 A） / 売上（要注意A） / 発注見込A / 発注見込（要注意）/ 粗利 / 粗利率 / 必要売上 / 必要粗利×3
 //   実績     売上（請求） / 調達（仕入） / その他原価 / 粗利 / 粗利率 / 必要売上 / 必要粗利×3
 //   計       売上 / 仕入 / 粗利 / 粗利率 / 必要売上 / 必要粗利×3
@@ -155,10 +155,14 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     fc.projectsByMonth[i].push({ id: p.id, project_number: p.project_number, name: p.name, client_name: p.client_name, remaining, cost, prob });
   }
 
+  // 目標粗利: 「目標粗利」（gross_jump の欄。以前は「目標粗利（ジャンプ）」と呼んでいた）を入れていればその値、
+  // 空（12 か月とも 0）なら 売上目標 − 仕入目標
+  const grossEntered = T.gross_jump.some((v) => n(v) !== 0);
   const rows = months.map((m, i) => {
     const target = {
       sales: T.sales[i], purchase: T.purchase[i], gross_jump: T.gross_jump[i],
-      gross: T.sales[i] - T.purchase[i], gross_must: T.gross_must[i],
+      gross: grossEntered ? n(T.gross_jump[i]) : T.sales[i] - T.purchase[i], gross_must: T.gross_must[i],
+      gross_entered: grossEntered,
     };
     target.margin = target.sales > 0 ? target.gross / target.sales : null;
 

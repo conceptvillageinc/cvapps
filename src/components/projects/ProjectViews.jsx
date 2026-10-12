@@ -285,7 +285,7 @@ function DailyTargetCard({ dt }) {
           !auto.hasTarget ? (
             <div className="mt-1 space-y-1">
               <span className="text-base text-muted-foreground">計算できません</span>
-              <p className="text-[10.5px] text-amber-800">売上粗利管理表で今期の目標（売上・仕入）を入れると、自動で計算します。<Link to="/sales-report" className="text-primary hover:underline">売上粗利管理表を開く</Link></p>
+              <p className="text-[10.5px] text-amber-800">売上粗利管理表で今期の目標粗利を入れると、自動で計算します。<Link to="/sales-report" className="text-primary hover:underline">売上粗利管理表を開く</Link></p>
             </div>
           ) : (
             <>
