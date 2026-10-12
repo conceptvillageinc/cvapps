@@ -168,7 +168,7 @@ function PlanView({ plan, today, horizon, setHorizon, safetyLine, autoLine, item
               </div>
             </div>
             <div className="flex gap-1 md:ml-auto">
-              {[30, 90, 180].map((n) => <Button key={n} size="sm" variant={horizon === n ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(n)}>{n}日</Button>)}
+              {[30, 90, 180, 365].map((n) => <Button key={n} size="sm" variant={horizon === n ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(n)}>{n === 365 ? "1年" : `${n}日`}</Button>)}
               {fyEnd && <Button size="sm" variant={horizon === fyEnd.days ? "default" : "outline"} className="text-xs" onClick={() => setHorizon(fyEnd.days)} data-testid="horizon-fy">期末まで（{Number(fyEnd.date.slice(5, 7))}/{Number(fyEnd.date.slice(8, 10))}）</Button>}
             </div>
           </div>
