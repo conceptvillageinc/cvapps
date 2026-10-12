@@ -123,22 +123,3 @@ export function searchItems(query, data, { mode = "all", limit = 8, min = 0.5, k
 
 /** 価格マスタのセルの原価（税別・1 単位あたり） */
 export const cellUnitCost = (entry, cell) => toTaxExcluded(cell.price, entry.price_tax_mode) / (cell.quantity || 1);
-
-/**
- * 新規見積の件名に似た過去の見積（件名と明細の品名で比べる）。同じクライアントの見積を先に。
- * @returns {Array<{ estimate, score, sameClient }>}
- */
-export function similarEstimates(title, estimates, { clientName = "", limit = 4, min = 0.5 } = {}) {
-  if (String(title || "").trim().length < 2) return [];
-  const client = normSearch(clientName).replace(/\s+/g, "");
-  return (estimates || [])
-    .filter((e) => (e.line_items || []).some(isUsableLine))
-    .map((e) => {
-      const byTitle = similarity(title, e.estimate_title || "");
-      const byLines = similarity(title, (e.line_items || []).filter(isUsableLine).map((li) => li.name).join(" ")) * 0.9;
-      return { estimate: e, score: Math.max(byTitle, byLines), sameClient: !!client && normSearch(e.client_name).replace(/\s+/g, "") === client };
-    })
-    .filter((x) => x.score >= min)
-    .sort((a, b) => (Number(b.sameClient) - Number(a.sameClient)) || (b.score - a.score) || String(b.estimate.created_date || "").localeCompare(String(a.estimate.created_date || "")))
-    .slice(0, limit);
-}
