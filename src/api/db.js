@@ -141,7 +141,7 @@ const WRITABLE_COLUMNS = {
   meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
   payees: ['name', 'bank_info', 'notes', 'sort_order', 'is_active'],
   payables: ['pay_month', 'payee_id', 'payee_name', 'bank_info', 'amount_coolagri', 'amount_cvdigital', 'amount_cv', 'paid', 'memo', 'sort_order', 'due_date', 'file_paths', 'invoices'],
-  card_charges: ['charged_at', 'charge_month', 'merchant', 'amount', 'holder', 'card_label', 'memo', 'entity', 'source', 'fingerprint'],
+  card_charges: ['charged_at', 'charge_month', 'merchant', 'amount', 'holder', 'card_label', 'memo', 'entity', 'source', 'fingerprint', 'card_brand'],
   cash_plan_items: ['kind', 'name', 'category', 'direction', 'amount', 'day_of_month', 'start_month', 'end_month', 'on_date', 'memo', 'is_active', 'sort_order'],
   meeting_checklists: ['meeting_type', 'key', 'label', 'sort_order', 'is_active'],
   design_fee_masters: [
@@ -581,4 +581,11 @@ const documents = {
   },
 };
 
-export const db = { entities, auth, integrations, functions, users, storage, documents };
+/** Postgres の関数（RPC）を呼ぶ。明細を見せずに集計だけ返す関数などに使う */
+async function rpc(name, args = {}) {
+  const { data, error } = await supabase.rpc(name, args);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export const db = { entities, auth, integrations, functions, users, storage, documents, rpc };

@@ -7,9 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CreditCard, FileUp, Download, Trash2, Loader2, Upload, AlertTriangle } from "lucide-react";
+import { CreditCard, FileUp, Download, Trash2, Loader2, Upload, AlertTriangle, Camera, Tags } from "lucide-react";
 import { BILL_TO } from "@/lib/payables";
-import { CARD_FIELDS, cardCsvToGrid, guessCardMapping, rowsFromGrid, sumCharges, downloadChargesCsv } from "@/lib/cardCharges";
+import { CARD_FIELDS, cardCsvToGrid, guessCardMapping, rowsFromGrid, sumCharges, downloadChargesCsv, existingFingerprints } from "@/lib/cardCharges";
+import { usePayablesAccess, brandOf } from "@/lib/usePayablesAccess";
+import CardOcrDialog from "@/components/payables/CardOcrDialog";
+import CardBrandClassifyDialog from "@/components/payables/CardBrandClassifyDialog";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const entityLabel = (code) => BILL_TO.find((b) => b.code === code)?.label || code;
@@ -18,13 +21,32 @@ const entityLabel = (code) => BILL_TO.find((b) => b.code === code)?.label || cod
  * カード利用明細まとめ（月ごと）
  *   マネーフォワード ビジネスカードなどの利用明細 CSV を取り込む。列は見出しから自動で当て、
  *   合わなければ手で選べる。同じ明細（利用日・利用先・金額・利用者が同じ）は二重に入らない。
+ *   カードの種類（MF / JCB / VISA）ごとに見られる人が違う（JCB・VISA・未設定は daichi だけ。データベースの RLS で決まる）。
+ *   VISA は紙の明細なので、写真から読み取って取り込む。
  */
+export function BrandBadge({ brand }) {
+  const b = brandOf(brand);
+  if (!b) return <span className="inline-block whitespace-nowrap rounded border border-amber-300 bg-amber-50 px-1.5 text-[10px] text-amber-800" title="カードの種類がまだ決まっていません（daichi だけが見られます）">種類未設定</span>;
+  return <span className={`inline-block rounded border px-1.5 text-[10px] font-medium ${b.cls}`}>{b.short}</span>;
+}
+
 export default function CardChargesTab({ month }) {
   const queryClient = useQueryClient();
   const [importOpen, setImportOpen] = useState(false);
+  const [ocrOpen, setOcrOpen] = useState(false);
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [brand, setBrand] = useState(null); // 種類で絞り込み（null = すべて）
+  const { canViewPrivateCards, brands } = usePayablesAccess();
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["cardCharges", month],
     queryFn: () => db.entities.CardCharge.filter({ charge_month: month }, "charged_at"),
+    retry: false,
+  });
+  // 種類がまだ決まっていない明細（取り込んだ全期間。daichi だけ）
+  const { data: unclassified = [] } = useQuery({
+    queryKey: ["cardCharges", "unclassified"],
+    queryFn: async () => (await db.entities.CardCharge.listAll("created_at")).filter((r) => !r.card_brand),
+    enabled: canViewPrivateCards,
     retry: false,
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["cardCharges"] });
@@ -34,21 +56,44 @@ export default function CardChargesTab({ month }) {
     onError: (e) => toast.error("削除できませんでした: " + e.message),
   });
   const removeMonth = useMutation({
-    mutationFn: async () => { for (const r of rows) await db.entities.CardCharge.delete(r.id); },
+    mutationFn: async () => { for (const r of shownRows) await db.entities.CardCharge.delete(r.id); },
     onSuccess: () => { invalidate(); toast.success("この月の明細を消しました"); },
     onError: (e) => { invalidate(); toast.error("削除できませんでした: " + e.message); },
   });
-  const sorted = useMemo(() => [...rows].sort((a, b) => String(a.charged_at).localeCompare(String(b.charged_at)) || String(a.merchant).localeCompare(String(b.merchant), "ja")), [rows]);
+  const shownRows = useMemo(() => (brand ? rows.filter((r) => (r.card_brand || "none") === brand) : rows), [rows, brand]);
+  const brandCount = (k) => rows.filter((r) => (r.card_brand || "none") === k).length;
+  const sorted = useMemo(() => [...shownRows].sort((a, b) => String(a.charged_at).localeCompare(String(b.charged_at)) || String(a.merchant).localeCompare(String(b.merchant), "ja")), [shownRows]);
   const totals = useMemo(() => sumCharges(sorted), [sorted]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground">利用日がこの月の明細。CV のカード分だけが売上粗利管理表の「実績 その他原価」（税抜）に入ります</span>
+        <span className="text-xs text-muted-foreground">利用日がこの月の明細。CV のカード分だけが売上粗利管理表の「実績 その他原価」（税抜。月の合計だけが全員の管理表に入り、明細は見えません）に入ります</span>
         <div className="flex-1" />
         <Button size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}><FileUp className="w-4 h-4" /> 利用明細 CSV を取り込む</Button>
+        {canViewPrivateCards && <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOcrOpen(true)} data-testid="card-ocr-open"><Camera className="w-4 h-4" /> VISA の紙明細を写真から読み取る</Button>}
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadChargesCsv(sorted, month)} disabled={sorted.length === 0}><Download className="w-4 h-4" /> CSV出力</Button>
       </div>
+
+      {canViewPrivateCards && unclassified.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="card-unclassified-banner">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>カードの種類がまだ決まっていない明細が <b className="tabular-nums">{unclassified.length}</b> 件あります。決まるまでは daichi だけが見られます（hinako には MF と決めた明細だけが見えます）</span>
+          <div className="flex-1" />
+          <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => setClassifyOpen(true)}><Tags className="w-3.5 h-3.5" /> 取り込みごとに種類を決める</Button>
+        </div>
+      )}
+
+      {brands.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="card-brand-filter">
+          <span className="text-muted-foreground mr-1">カード</span>
+          <button type="button" onClick={() => setBrand(null)} className={`rounded-full border px-2.5 py-1 ${!brand ? "bg-slate-800 text-white border-slate-800" : "bg-white hover:bg-muted/50"}`}>すべて {rows.length}</button>
+          {brands.map((b) => (
+            <button key={b.key} type="button" onClick={() => setBrand(brand === b.key ? null : b.key)} className={`rounded-full border px-2.5 py-1 ${b.cls} ${brand === b.key ? "ring-2 ring-primary/40" : ""}`}>{b.short} <b className="tabular-nums">{brandCount(b.key)}</b></button>
+          ))}
+          {brandCount("none") > 0 && <button type="button" onClick={() => setBrand(brand === "none" ? null : "none")} className={`rounded-full border px-2.5 py-1 border-amber-300 bg-amber-50 text-amber-800 ${brand === "none" ? "ring-2 ring-primary/40" : ""}`}>種類未設定 <b className="tabular-nums">{brandCount("none")}</b></button>}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {BILL_TO.map((b) => (
@@ -75,6 +120,7 @@ export default function CardChargesTab({ month }) {
                   <th className="text-left px-3 py-2 w-28">利用日</th>
                   <th className="text-left px-3 py-2">利用先</th>
                   <th className="text-right px-3 py-2 w-32">金額（税込）</th>
+                  <th className="text-left px-3 py-2 w-16">種類</th>
                   <th className="text-left px-3 py-2 w-40">利用者・カード</th>
                   <th className="text-left px-3 py-2 w-24">会社</th>
                   <th className="text-left px-3 py-2">メモ</th>
@@ -87,6 +133,7 @@ export default function CardChargesTab({ month }) {
                     <td className="px-3 py-1.5 tabular-nums text-xs">{String(r.charged_at).replace(/-/g, "/")}</td>
                     <td className="px-3 py-1.5">{r.merchant}</td>
                     <td className={`px-3 py-1.5 text-right tabular-nums ${Number(r.amount) < 0 ? "text-emerald-700" : ""}`}>{yen(r.amount)}</td>
+                    <td className="px-3 py-1.5"><BrandBadge brand={r.card_brand} /></td>
                     <td className="px-3 py-1.5 text-xs">{r.holder || ""}{r.card_label ? <span className="block text-[10px] text-muted-foreground">{r.card_label}</span> : null}</td>
                     <td className="px-3 py-1.5 text-xs">{entityLabel(r.entity)}</td>
                     <td className="px-3 py-1.5 text-xs text-muted-foreground">{r.memo || ""}</td>
@@ -96,8 +143,8 @@ export default function CardChargesTab({ month }) {
                 <tr className="bg-blue-50/60 font-medium">
                   <td className="px-3 py-2" colSpan={2}>合計（{totals.count} 件）</td>
                   <td className="px-3 py-2 text-right tabular-nums">{yen(totals.total)}<span className="block text-[10px] text-muted-foreground font-normal">税抜 {yen(totals.total_ex_tax)}</span></td>
-                  <td colSpan={4} className="px-3 py-2 text-right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => { if (window.confirm(`${month} のカード利用明細 ${rows.length} 件をすべて削除します。よろしいですか？`)) removeMonth.mutate(); }} disabled={removeMonth.isPending}>この月の明細をすべて消す</Button>
+                  <td colSpan={5} className="px-3 py-2 text-right">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => { if (window.confirm(`${month} のカード利用明細${brand ? `（${brandOf(brand)?.short || "種類未設定"}）` : ""} ${shownRows.length} 件をすべて削除します。よろしいですか？`)) removeMonth.mutate(); }} disabled={removeMonth.isPending}>この月の明細をすべて消す</Button>
                   </td>
                 </tr>
               </tbody>
@@ -106,19 +153,23 @@ export default function CardChargesTab({ month }) {
         </CardContent>
       </Card>
 
-      <CardImportDialog open={importOpen} onOpenChange={setImportOpen} month={month} onDone={invalidate} />
+      <CardImportDialog open={importOpen} onOpenChange={setImportOpen} month={month} onDone={invalidate} brands={brands} />
+      {canViewPrivateCards && <CardOcrDialog open={ocrOpen} onOpenChange={setOcrOpen} month={month} onDone={invalidate} />}
+      {canViewPrivateCards && <CardBrandClassifyDialog open={classifyOpen} onOpenChange={setClassifyOpen} rows={unclassified} onDone={invalidate} />}
     </div>
   );
 }
 
 /** 利用明細 CSV の取り込み（列の対応を確認して取り込む） */
-function CardImportDialog({ open, onOpenChange, month, onDone }) {
+function CardImportDialog({ open, onOpenChange, month, onDone, brands }) {
   const [grid, setGrid] = useState(null);
   const [fileName, setFileName] = useState("");
   const [headerIndex, setHeaderIndex] = useState(-1);
   const [mapping, setMapping] = useState({});
   const [entity, setEntity] = useState("cv");
   const [cardLabel, setCardLabel] = useState("");
+  // カードの種類（MF だけ使える人は MF に決め打ち）
+  const [cardBrand, setCardBrand] = useState(brands.length === 1 ? brands[0].key : "");
   const [onlyMonth, setOnlyMonth] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
@@ -136,20 +187,18 @@ function CardImportDialog({ open, onOpenChange, month, onDone }) {
   };
   const header = useMemo(() => (grid && headerIndex >= 0 ? grid[headerIndex].map((c) => String(c ?? "").trim()) : (grid?.[0] || []).map((_, i) => `${i + 1} 列目`)), [grid, headerIndex]);
   const hIdx = headerIndex >= 0 ? headerIndex : -1;
-  const parsed = useMemo(() => (grid ? rowsFromGrid(grid, hIdx, mapping, entity, cardLabel) : { rows: [], skipped: [] }), [grid, hIdx, mapping, entity, cardLabel]);
+  const parsed = useMemo(() => (grid ? rowsFromGrid(grid, hIdx, mapping, entity, cardLabel, cardBrand) : { rows: [], skipped: [] }), [grid, hIdx, mapping, entity, cardLabel, cardBrand]);
   const rows = useMemo(() => (onlyMonth ? parsed.rows.filter((r) => r.charge_month === month) : parsed.rows), [parsed, onlyMonth, month]);
   const months = useMemo(() => [...new Set(rows.map((r) => r.charge_month))].sort(), [rows]);
-  const ok = mapping.charged_at !== undefined && mapping.amount !== undefined;
+  const ok = mapping.charged_at !== undefined && mapping.amount !== undefined && !!cardBrand;
   const total = rows.reduce((s, r) => s + r.amount, 0);
 
   const doImport = async () => {
     if (!ok || rows.length === 0) return;
     setSaving(true);
     try {
-      // 既に入っている明細（同じ月）を調べて、同じものは飛ばす
-      const existing = [];
-      for (const m of months) existing.push(...await db.entities.CardCharge.filter({ charge_month: m }));
-      const have = new Set(existing.map((r) => r.fingerprint));
+      // 既に入っている明細を調べて、同じものは飛ばす（見えない明細とも比べる）
+      const have = await existingFingerprints(db, rows);
       let added = 0; let dup = 0;
       for (const r of rows) {
         if (have.has(r.fingerprint)) { dup++; continue; }
@@ -173,6 +222,11 @@ function CardImportDialog({ open, onOpenChange, month, onDone }) {
             <Button size="sm" variant="outline" className="h-9 gap-1" onClick={() => fileRef.current?.click()}><FileUp className="w-3.5 h-3.5" /> CSV ファイルを選ぶ</Button>
             {fileName && <span className="text-xs">{fileName}（{grid?.length || 0} 行）</span>}
             <div className="flex-1" />
+            <Label className="text-xs">カードの種類<span className="text-destructive"> *</span></Label>
+            <select value={cardBrand} onChange={(e) => setCardBrand(e.target.value)} className={`h-9 rounded-md border bg-background px-2 text-sm ${cardBrand ? "" : "border-amber-400"}`} aria-label="カードの種類" disabled={brands.length === 1}>
+              {brands.length > 1 && <option value="">選んでください</option>}
+              {brands.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+            </select>
             <Label className="text-xs">どの会社のカード</Label>
             <select value={entity} onChange={(e) => setEntity(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm" aria-label="会社">
               {BILL_TO.map((b) => <option key={b.code} value={b.code}>{b.label}</option>)}
@@ -202,7 +256,7 @@ function CardImportDialog({ open, onOpenChange, month, onDone }) {
                     </div>
                   ))}
                 </div>
-                {!ok && <p className="text-xs text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> 利用日と金額の列を選んでください</p>}
+                {!ok && <p className="text-xs text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> {cardBrand ? "利用日と金額の列を選んでください" : "カードの種類（MF・JCB・VISA）を選んでください"}</p>}
               </div>
 
               <div className="rounded-lg border">

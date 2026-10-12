@@ -7,6 +7,7 @@ import {
 import { useRef, useState } from "react";
 import { db } from "@/api/db";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { usePayablesAccess } from "@/lib/usePayablesAccess";
 import { useSalesCategories } from "@/lib/salesCategory";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
 import RecordingBar from "@/components/meetings/RecordingBar";
@@ -33,7 +34,8 @@ const navItems = [
   { path: "/partner-orders", label: "発注書", icon: ClipboardList },
   { path: "/sales-report", label: "売上粗利管理表", icon: BarChart3 },
   { path: "/payments", label: "入金確認", icon: Landmark },
-  { path: "/payables", label: "支払い先まとめ", icon: HandCoins },
+  // 支払い先まとめは決まったアドレスだけ（usePayablesAccess。データベースの RLS も同じ）
+  { path: "/payables", label: "支払い先まとめ", icon: HandCoins, restricted: "payables" },
   { path: "/cashflow", label: "入出金予定表", icon: CalendarClock },
   // 資金繰り表は許可したアドレスだけ（システム設定 cashflow_allowed_emails）
   { path: "/cash-plan", label: "資金繰り表", icon: Wallet, restricted: "cashflow" },
@@ -67,7 +69,8 @@ export default function Layout() {
   useScrollHoverPause(mainRef, shieldRef);
   useSalesCategories(); // 売上カテゴリーマスタを読み込んでおく（見積から請求書へ写すときの自動の振り分けに使う）
   const canSeeCashflow = cashflowAllowedEmails.includes(String(user?.email || "").toLowerCase());
-  const visibleNav = navItems.filter((item) => !item.restricted || (item.restricted === "cashflow" && canSeeCashflow));
+  const { canViewPayables } = usePayablesAccess();
+  const visibleNav = navItems.filter((item) => !item.restricted || (item.restricted === "cashflow" && canSeeCashflow) || (item.restricted === "payables" && canViewPayables));
 
   const handleLogout = () => {
     db.auth.logout("/login");

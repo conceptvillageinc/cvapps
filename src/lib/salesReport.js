@@ -115,7 +115,7 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     const cv = n(r.amount_cv);
     if (!cv) continue;
     payablesOut[idx.get(k)] += cv / 1.1;
-    payablesCount[idx.get(k)]++;
+    payablesCount[idx.get(k)] += r.row_count ?? 1; // 月の合計（row_count 付き）でも、明細 1 行でも数えられる
   }
   // カード利用明細まとめの CV 分（税込 → 税抜）。利用月に数える
   const cardOut = Array(12).fill(0);
@@ -125,7 +125,7 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     const k = c.charge_month || monthKey(c.charged_at);
     if (!idx.has(k)) continue;
     cardOut[idx.get(k)] += n(c.amount) / 1.1;
-    cardCount[idx.get(k)]++;
+    cardCount[idx.get(k)] += c.row_count ?? 1;
   }
 
   // 見込（案件）

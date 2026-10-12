@@ -25,6 +25,7 @@ import DealPipeline from "@/components/sales/DealPipeline";
 import SalesCategoryReport from "@/components/sales/SalesCategoryReport";
 import { SALES_CATEGORY_FROM } from "@/lib/salesCategory";
 import { useAuth } from "@/lib/AuthContext";
+import { useCostTotals } from "@/lib/usePayablesAccess";
 
 // 検証済みの配色（dataviz の基準パレット: 青 / オレンジ / アクア / 黄）
 const C = { actual: "#2a78d6", forecast: "#eb6834", target: "#1baf7a", must: "#eda100", grid: "#e5e7eb", text: "#52514e" };
@@ -230,8 +231,7 @@ export default function SalesReport() {
   const { data: projects = [] } = useQuery({ queryKey: ["projects", "all"], queryFn: () => db.entities.Project.list("-registered_at") });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "all"], queryFn: () => db.entities.Invoice.list("-invoice_date") });
   const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), select: forPayments });
-  const { data: payables = [] } = useQuery({ queryKey: ["payables", "all"], queryFn: () => db.entities.Payable.listAll("pay_month"), retry: false });
-  const { data: cardCharges = [] } = useQuery({ queryKey: ["cardCharges", "all"], queryFn: () => db.entities.CardCharge.listAll("charged_at"), retry: false });
+  const { payables, cardCharges } = useCostTotals(); // 支払い先まとめ・カード明細は月ごとの合計だけ（明細は見せない）
   // 売上カテゴリーの振り分けに使う見積（今期以降に作ったもの）
   const { data: categoryEstimates = [] } = useQuery({ queryKey: ["estimates", "salesCategory"], queryFn: () => db.entities.Estimate.between("created_at", SALES_CATEGORY_FROM, null), retry: false });
   const { data: targetRows = [], isLoading } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list() });

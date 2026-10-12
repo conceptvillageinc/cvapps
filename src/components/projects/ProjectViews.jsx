@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
 import InlineBadgeSelect from "@/components/projects/InlineBadgeSelect";
+import { useCostTotals } from "@/lib/usePayablesAccess";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -222,8 +223,7 @@ function useDailyTarget(today) {
   const { data: projects = [] } = useQuery({ queryKey: ["projects", "all"], queryFn: () => db.entities.Project.list("-registered_at") });
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "all"], queryFn: () => db.entities.Invoice.list("-invoice_date") });
   const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), select: forPayments, retry: false });
-  const { data: payables = [] } = useQuery({ queryKey: ["payables", "all"], queryFn: () => db.entities.Payable.listAll("pay_month"), retry: false });
-  const { data: cardCharges = [] } = useQuery({ queryKey: ["cardCharges", "all"], queryFn: () => db.entities.CardCharge.listAll("charged_at"), retry: false });
+  const { payables, cardCharges } = useCostTotals(); // 支払い先まとめ・カード明細は月ごとの合計だけ（明細は見せない）
   const { data: targetRows = [] } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list(), retry: false });
   const targets = targetRows.find((t) => Number(t.fiscal_year) === fy) || null;
   const auto = useMemo(

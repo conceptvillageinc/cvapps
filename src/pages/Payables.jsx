@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { HandCoins, Upload, Download, Plus, Trash2, Loader2, Link2, ClipboardPaste, FileUp, Users, ListChecks, ArrowUp, ArrowDown, FileText, Paperclip, CreditCard } from "lucide-react";
+import { HandCoins, Upload, Download, Plus, Trash2, Loader2, Link2, ClipboardPaste, FileUp, Users, ListChecks, ArrowUp, ArrowDown, FileText, Paperclip, CreditCard, ShieldX } from "lucide-react";
 import InvoiceImportDialog from "@/components/payables/InvoiceImportDialog";
 import CardChargesTab from "@/components/payables/CardChargesTab";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { usePayablesAccess } from "@/lib/usePayablesAccess";
 import {
   PAY_ENTITIES, parsePayableSheet, rowTotal, sumPayables, downloadPayablesCsv, thisMonth, monthLabel, textToGrid, toAmount, rowsToInvoices, downloadInvoicesCsv,
 } from "@/lib/payables";
@@ -25,6 +26,20 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
  *   既存のスプレッドシートから入れ直すための取り込みも残してある。
  */
 export default function Payables() {
+  const { canViewPayables } = usePayablesAccess();
+  if (!canViewPayables) {
+    return (
+      <div className="max-w-xl mx-auto py-16 text-center space-y-2" data-testid="payables-denied">
+        <ShieldX className="w-8 h-8 mx-auto text-muted-foreground" />
+        <p className="font-medium">この画面は閲覧できません</p>
+        <p className="text-sm text-muted-foreground">支払い先まとめは、許可されたアカウントだけが見られます。</p>
+      </div>
+    );
+  }
+  return <PayablesPage />;
+}
+
+function PayablesPage() {
   const queryClient = useQueryClient();
   const [month, setMonth] = useState(thisMonth());
   const [tab, setTab] = useState("list"); // list | card | payees
