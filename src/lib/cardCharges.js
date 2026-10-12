@@ -31,6 +31,22 @@ export function toIsoDate(v) {
   return "";
 }
 
+// 列を当てるときの優先順（上から順に探す）。「カード利用明細ID」のような ID の列は、利用先などに当てない
+const FIELD_PRIORITY = {
+  charged_at: [/^(ご)?利用日/, /取引日/, /決済日/, /日付|^日$/, /確定日/],
+  merchant: [/^(ご)?利用先|ご利用店|利用店|加盟店|店名/, /取引内容|利用内容|^内容$|摘要/, /取引先|支払先/, /内容|明細/],
+  amount: [/^(ご)?利用金額/, /確定金額|請求額|支払額|出金額/, /金額/],
+  holder: [/利用者|名義|社員|メンバー/, /カード名|^カード$/, /カード/],
+  memo: [/備考|メモ|コメント/, /科目|部門|プロジェクト|タグ/],
+};
+const ID_HEADER = /ID|ＩＤ|番号|No\.?$|^#/i;
+/** 中身が ID のような英数字の羅列か（利用先に当てない） */
+function looksLikeIds(rows, col) {
+  const vals = rows.map((r) => String(r?.[col] ?? "").trim()).filter(Boolean).slice(0, 20);
+  if (vals.length === 0) return false;
+  return vals.filter((v) => /^[A-Za-z0-9_-]{10,}$/.test(v)).length / vals.length >= 0.8;
+}
+
 /** 見出し行を探し、列の役割を当てる。返り値 { headerIndex, header, mapping: { charged_at: colIdx, ... } } */
 export function guessCardMapping(grid) {
   const rows = grid || [];
@@ -41,18 +57,19 @@ export function guessCardMapping(grid) {
     if (hits > best && hits >= 2) { best = hits; headerIndex = i; }
   }
   const header = headerIndex >= 0 ? rows[headerIndex].map((c) => String(c ?? "").trim()) : [];
+  const body = headerIndex >= 0 ? rows.slice(headerIndex + 1) : [];
   const mapping = {};
   const used = new Set();
   for (const f of CARD_FIELDS) {
-    const idx = header.findIndex((h, i) => !used.has(i) && f.match.test(h));
-    if (idx >= 0) { mapping[f.key] = idx; used.add(idx); }
+    let found = -1;
+    for (const re of FIELD_PRIORITY[f.key]) {
+      found = header.findIndex((h, i) => !used.has(i) && re.test(h)
+        && (f.key === "holder" || !ID_HEADER.test(h))
+        && (f.key !== "merchant" || !looksLikeIds(body, i)));
+      if (found >= 0) break;
+    }
+    if (found >= 0) { mapping[f.key] = found; used.add(found); }
   }
-  // 金額の列が複数ある CSV（利用金額／請求額）は「利用金額」を優先
-  const amountIdx = header.findIndex((h) => /利用金額|ご利用金額/.test(h));
-  if (amountIdx >= 0) mapping.amount = amountIdx;
-  // メモは「備考／メモ」があればそれを優先（経費科目などより）
-  const memoIdx = header.findIndex((h, i) => i !== mapping.charged_at && i !== mapping.merchant && i !== mapping.amount && i !== mapping.holder && /備考|メモ|コメント/.test(h));
-  if (memoIdx >= 0) mapping.memo = memoIdx;
   return { headerIndex, header, mapping };
 }
 
