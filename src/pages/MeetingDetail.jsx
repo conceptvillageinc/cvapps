@@ -18,12 +18,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save, Link2 } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save, Link2, Building2 } from "lucide-react";
 import { shareText, copyShareText } from "@/lib/shareText";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
 import MeetingAttachments from "@/components/meetings/MeetingAttachments";
 import MeetingChat from "@/components/meetings/MeetingChat";
+import MeetingLinkDialog from "@/components/meetings/MeetingLinkDialog";
 import { useAuth } from "@/lib/AuthContext";
 import { useRecording } from "@/lib/recording";
 
@@ -140,6 +141,7 @@ export default function MeetingDetail() {
   const [audioUrl, setAudioUrl] = useState(null);
   const [segmentUrls, setSegmentUrls] = useState([]);
   const [resumeRecording, setResumeRecording] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   // 録音はアプリ全体で続いているので、別の画面から戻ってきたときも録音欄を出す
   const recordingThis = useRecording().session?.meetingId === id;
 
@@ -301,7 +303,12 @@ export default function MeetingDetail() {
             <span>{meeting.held_at ? String(meeting.held_at).replace(/-/g, "/") : ""}</span>
             <span>{typeLabel(meeting.meeting_type)}</span>
             {meeting.client_name && (meeting.client_id ? <Link to={`/clients/${meeting.client_id}`} className="text-primary hover:underline">{meeting.client_name}</Link> : <span>{meeting.client_name}</span>)}
-            {meeting.project_id && <Link to={`/projects/${meeting.project_id}`} className="text-primary hover:underline">案件</Link>}
+            {meeting.project_id && <Link to={`/projects/${meeting.project_id}`} className="text-primary hover:underline">{linkedProject ? `${linkedProject.project_number || ""} ${linkedProject.name || ""}`.trim() : "案件"}</Link>}
+            {/* クライアント・案件はあとからでも設定・変更できる */}
+            <button type="button" onClick={() => setLinkOpen(true)} data-testid="meeting-link-open"
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-px text-[11px] ${meeting.client_name ? "text-muted-foreground hover:bg-muted/60" : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"}`}>
+              <Building2 className="w-3 h-3" /> {meeting.client_name ? "クライアント・案件を変更" : "クライアント未設定 — 設定する"}
+            </button>
             {(meeting.participants || []).length > 0 && <span>出席: {meeting.participants.join("、")}</span>}
             {meeting.audio_duration_sec > 0 && <span>{fmtClock(meeting.audio_duration_sec)}</span>}
             {meeting.created_by && <span>作成 {meeting.created_by}</span>}
@@ -534,6 +541,7 @@ export default function MeetingDetail() {
           </div>
         </div>
       )}
+      <MeetingLinkDialog open={linkOpen} onOpenChange={setLinkOpen} meeting={meeting} />
     </div>
   );
 }
