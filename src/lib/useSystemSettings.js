@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { DEFAULT_FISCAL_YEAR_START_MONTH } from "@/lib/constants";
+import { expandCompanyHolidays } from "@/lib/jpHolidays";
 
 const DEFAULT_DEAL_PROBABILITY = ["A", "C", "A（定期売上）", "要注意（A）"];
 const DEFAULT_PHASE = ["未着手", "着手中", "受注済"];
@@ -43,9 +44,14 @@ export function useSystemSettings() {
     const cardPayDay = cd && Number(cd.setting_value) >= 1 && Number(cd.setting_value) <= 31 ? Number(cd.setting_value) : 27;
     const pm = settings.find((x) => x.setting_key === "payables_cost_month");
     const payablesMonthMode = pm && pm.setting_value === "same" ? "same" : "prev";
+    // 会社の休業日（営業日の計算から除く。1 行ずつ「2026-08-13〜2026-08-16 夏季休暇」の形）
+    const companyHolidayLines = parseList(settings, "company_holidays", []);
+    const companyHolidays = expandCompanyHolidays(companyHolidayLines);
     return {
       settings,
       isLoading,
+      companyHolidayLines,
+      companyHolidays,
       grossMarginTarget,
       payablesMonthMode,
       cashflowAllowedEmails,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
@@ -12,7 +12,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
 import { todayString, fiscalYearOf, fiscalYearLabel } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
-import { isOffDay } from "@/lib/jpHolidays";
+import { autoDailyTarget, countBusinessDays } from "@/lib/dailyTarget";
+import { forPayments } from "@/lib/bankImportActions";
 import { toast } from "sonner";
 import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target, Pencil, Check } from "lucide-react";
 import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
@@ -41,14 +42,6 @@ function weekStart(today) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** from〜to（YYYY-MM-DD、両端を含む）の営業日数（土日・祝日・年末年始を除く） */
-function businessDays(from, to) {
-  const d = new Date(`${from}T00:00:00`);
-  const end = new Date(`${to}T00:00:00`);
-  let n = 0;
-  for (; d <= end; d.setDate(d.getDate() + 1)) if (!isOffDay(d)) n += 1;
-  return n;
-}
 const addDaysYmd = (ymd, days) => {
   const d = new Date(`${ymd}T00:00:00`);
   d.setDate(d.getDate() + days);
@@ -212,47 +205,107 @@ function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter
 /* ------------------------------------------------------------------------ */
 
 const targetKey = (fy) => `daily_gross_target_fy${fy}`;
+const modeKey = (fy) => `daily_gross_target_mode_fy${fy}`;
 
+/**
+ * 1 日あたりの粗利目標。普段は自動計算（（今期の粗利目標 − 着地見込み）÷ 残りの営業日）、手入力の値も選べる。
+ * @returns {{ fy, fiscalYearStartMonth, target, manual, row, mode, modeRow, auto, holidays }}
+ */
 function useDailyTarget(today) {
-  const { settings, fiscalYearStartMonth } = useSystemSettings();
+  const { settings, fiscalYearStartMonth, companyHolidays, grossMarginTarget, payablesMonthMode } = useSystemSettings();
   const fy = fiscalYearOf(today, fiscalYearStartMonth);
   const row = settings.find((x) => x.setting_key === targetKey(fy));
-  const target = row ? Number(row.setting_value) || 0 : 0;
-  return { fy, fiscalYearStartMonth, target, row };
+  const manual = row ? Number(row.setting_value) || 0 : 0;
+  const modeRow = settings.find((x) => x.setting_key === modeKey(fy));
+  const mode = modeRow?.setting_value === "manual" ? "manual" : "auto";
+  // 売上粗利管理表と同じデータ（キャッシュを共有）
+  const { data: projects = [] } = useQuery({ queryKey: ["projects", "all"], queryFn: () => db.entities.Project.list("-registered_at") });
+  const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "all"], queryFn: () => db.entities.Invoice.list("-invoice_date") });
+  const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), select: forPayments, retry: false });
+  const { data: payables = [] } = useQuery({ queryKey: ["payables", "all"], queryFn: () => db.entities.Payable.listAll("pay_month"), retry: false });
+  const { data: cardCharges = [] } = useQuery({ queryKey: ["cardCharges", "all"], queryFn: () => db.entities.CardCharge.listAll("charged_at"), retry: false });
+  const { data: targetRows = [] } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list(), retry: false });
+  const targets = targetRows.find((t) => Number(t.fiscal_year) === fy) || null;
+  const auto = useMemo(
+    () => autoDailyTarget({ today, fiscalYear: fy, startMonth: fiscalYearStartMonth, holidays: companyHolidays, marginTarget: grossMarginTarget, data: { projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets } }),
+    [today, fy, fiscalYearStartMonth, companyHolidays, grossMarginTarget, projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets],
+  );
+  const target = mode === "manual" ? manual : auto.daily;
+  return { fy, fiscalYearStartMonth, target, manual, row, mode, modeRow, auto, holidays: companyHolidays };
 }
 
-function DailyTargetCard({ today }) {
-  const { fy, fiscalYearStartMonth, target, row } = useDailyTarget(today);
+const ymdSlash = (s) => String(s || "").replace(/-/g, "/");
+
+function DailyTargetCard({ dt }) {
+  const { fy, fiscalYearStartMonth, manual, row, mode, modeRow, auto } = dt;
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const upsert = async (key, value, description, existing) => {
+    const data = { setting_key: key, setting_value: value, description };
+    if (existing) await db.entities.SystemSettings.update(existing.id, data);
+    else await db.entities.SystemSettings.create(data);
+  };
   const save = useMutation({
     mutationFn: async () => {
       const value = String(Math.max(0, Math.round(Number(String(draft).replace(/[,¥￥円\s]/g, "")) || 0)));
-      const data = { setting_key: targetKey(fy), setting_value: value, description: `${fy}年度 1日あたりの粗利目標（税抜）` };
-      if (row) await db.entities.SystemSettings.update(row.id, data);
-      else await db.entities.SystemSettings.create(data);
+      await upsert(targetKey(fy), value, `${fy}年度 1日あたりの粗利目標（税抜・手入力）`, row);
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["settings"] }); setEditing(false); toast.success("粗利目標を保存しました"); },
     onError: (e) => toast.error("保存できませんでした: " + e.message),
   });
+  const setMode = useMutation({
+    mutationFn: (m) => upsert(modeKey(fy), m, `${fy}年度 1日あたりの粗利目標の出し方（auto: 自動計算 / manual: 手入力）`, modeRow),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
+    onError: (e) => toast.error("保存できませんでした: " + e.message),
+  });
+  const tab = (m, label) => (
+    <button type="button" onClick={() => mode !== m && setMode.mutate(m)} className={`px-2 py-0.5 text-[10px] rounded ${mode === m ? "bg-white shadow-sm font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"}`} aria-pressed={mode === m} data-testid={`daily-target-${m}`}>{label}</button>
+  );
   return (
-    <Card className="border-amber-200 bg-amber-50/40">
+    <Card className="border-amber-200 bg-amber-50/40 sm:col-span-2 lg:col-span-1" data-testid="daily-target-card">
       <CardContent className="p-4">
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1"><Target className="w-3 h-3" /> 1日あたりの粗利目標（{fiscalYearLabel(fy, fiscalYearStartMonth)}）</p>
-        {editing ? (
+        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1 min-w-0"><Target className="w-3 h-3 shrink-0" /> 1日あたりの粗利目標</p>
+          <div className="inline-flex shrink-0 whitespace-nowrap rounded bg-amber-100/70 p-0.5">{tab("auto", "自動計算")}{tab("manual", "手入力")}</div>
+        </div>
+        <p className="text-[10px] text-muted-foreground -mt-0.5">{fiscalYearLabel(fy, fiscalYearStartMonth)}</p>
+        {mode === "auto" ? (
+          !auto.hasTarget ? (
+            <div className="mt-1 space-y-1">
+              <span className="text-base text-muted-foreground">計算できません</span>
+              <p className="text-[10.5px] text-amber-800">売上粗利管理表で今期の目標（売上・仕入）を入れると、自動で計算します。<Link to="/sales-report" className="text-primary hover:underline">売上粗利管理表を開く</Link></p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-2 mt-1">
+                {auto.gap > 0
+                  ? <span className="text-2xl font-bold tabular-nums" data-testid="daily-target-value">{yen(auto.daily)}</span>
+                  : <span className="text-lg font-bold text-emerald-700" data-testid="daily-target-value">目標到達済み（+{yen(-auto.gap)}）</span>}
+              </div>
+              <p className="text-[10.5px] text-muted-foreground mt-1 tabular-nums leading-relaxed" data-testid="daily-target-formula">
+                今期の粗利目標 {yen(auto.target)} − 着地見込 {yen(auto.landing)} ＝ 残り <b className="text-foreground">{yen(Math.max(0, auto.gap))}</b><br />
+                ÷ 残り営業日 <b className="text-foreground">{auto.days}日</b>（今日〜{ymdSlash(auto.fyEnd)}）
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">今日の目標は朝の時点で固定（今日登録した案件は明日の目標に反映）。着地見込は<Link to="/sales-report" className="text-primary hover:underline">売上粗利管理表</Link>と同じ計算です</p>
+            </>
+          )
+        ) : editing ? (
           <form className="flex items-center gap-2 mt-1" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
             <Input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="例: 150000" className="h-8 w-36 text-sm" inputMode="numeric" />
             <Button type="submit" size="sm" className="h-8 text-xs gap-1" disabled={save.isPending}>{save.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} 保存</Button>
             <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setEditing(false)}>やめる</Button>
           </form>
         ) : (
-          <div className="flex items-baseline gap-3 mt-1">
-            <span className="text-2xl font-bold tabular-nums">{target > 0 ? yen(target) : <span className="text-base text-muted-foreground">未設定</span>}</span>
-            <button type="button" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={() => { setDraft(target ? String(target) : ""); setEditing(true); }}><Pencil className="w-3 h-3" /> {target > 0 ? "変更" : "設定する"}</button>
-          </div>
+          <>
+            <div className="flex items-baseline gap-3 mt-1">
+              <span className="text-2xl font-bold tabular-nums" data-testid="daily-target-value">{manual > 0 ? yen(manual) : <span className="text-base text-muted-foreground">未設定</span>}</span>
+              <button type="button" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={() => { setDraft(manual ? String(manual) : ""); setEditing(true); }}><Pencil className="w-3 h-3" /> {manual > 0 ? "変更" : "設定する"}</button>
+            </div>
+            {auto.hasTarget && <p className="text-[10.5px] text-muted-foreground mt-1">自動計算なら {auto.gap > 0 ? yen(auto.daily) : "目標到達済み"}（残り {yen(Math.max(0, auto.gap))} ÷ {auto.days}営業日）</p>}
+          </>
         )}
-        <p className="text-[10px] text-muted-foreground mt-1">計上するのは、受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）です。期が変わったら、その期の目標をここで入れ直します</p>
+        <p className="text-[10px] text-muted-foreground mt-1">実績に計上するのは、受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）です</p>
       </CardContent>
     </Card>
   );
@@ -301,7 +354,8 @@ export function DailyView({ projects, isLoading }) {
   const [sort, toggleSort] = useColumnSort();
   const [filters, setFilter] = useColumnFilters();
   const filtered = useMemo(() => applyFilters(projects, filters), [projects, filters]);
-  const { target } = useDailyTarget(today);
+  const dt = useDailyTarget(today);
+  const { target, holidays } = dt;
   const summary = useMemo(() => {
     const ws = weekStart(today);
     const ms = today.slice(0, 8) + "01";
@@ -345,9 +399,9 @@ export function DailyView({ projects, isLoading }) {
   useScrollToRowOnce(!isLoading && groups.length > 0, `[data-day="${today}"]`);
 
   const monthLabel = `${Number(today.slice(5, 7))}月`;
-  // 週・月の目標 = 1 日あたりの粗利目標 × その週・月の営業日数（土日・祝日・年末年始を除く）。1 日あたりの目標を変えると自動で変わる
-  const weekDays = businessDays(summary.week.from, addDaysYmd(summary.week.from, 6));
-  const monthDays = businessDays(today.slice(0, 8) + "01", monthEndYmd(today));
+  // 週・月の目標 = 1 日あたりの粗利目標 × その週・月の営業日数（土日・祝日・年末年始・会社の休業日を除く）。1 日あたりの目標を変えると自動で変わる
+  const weekDays = countBusinessDays(summary.week.from, addDaysYmd(summary.week.from, 6), holidays);
+  const monthDays = countBusinessDays(today.slice(0, 8) + "01", monthEndYmd(today), holidays);
   const cards = [
     { label: `今日（${shortDate(today).replace("-", "/")}）の新規案件`, v: summary.today, target, isToday: true },
     { label: `今週（${shortDate(summary.week.from).replace("-", "/")}〜）の新規案件`, v: summary.week, target: target * weekDays, days: weekDays },
@@ -357,7 +411,7 @@ export function DailyView({ projects, isLoading }) {
   return (
     <div className="flex flex-col h-full min-h-0 gap-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
-        <DailyTargetCard today={today} />
+        <DailyTargetCard dt={dt} />
         {cards.map((c) => (
           <Card key={c.label}>
             <CardContent className="p-4">

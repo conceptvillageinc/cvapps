@@ -14,6 +14,7 @@ import MeetingSettingsCard from "@/components/settings/MeetingSettingsCard";
 import BackupCard from "@/components/settings/BackupCard";
 import { ListColumnsSettings } from "@/components/table/ListColumnsEditor";
 import CostSheetImportCard from "@/components/settings/CostSheetImportCard";
+import CompanyHolidaysCard from "@/components/settings/CompanyHolidaysCard";
 import { useAuth } from "@/lib/AuthContext";
 
 // 設定1件をupsert（存在すれば更新、無ければ新規作成）
@@ -313,6 +314,8 @@ export default function SystemSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <CompanyHolidaysCard settings={settings} upsertSetting={upsertSetting} />
 
       <Card>
         <CardHeader>

@@ -64,11 +64,37 @@ export function isYearEndHoliday(date) {
   return (m === 12 && d >= 29) || (m === 1 && d <= 3);
 }
 
-/** 土日・祝日・年末年始（12/29〜1/3）か */
-export function isOffDay(date) {
+/**
+ * 土日・祝日・年末年始（12/29〜1/3）か。
+ * @param {Date} date
+ * @param {Set<string>} [extra]  会社独自の休み（'YYYY-MM-DD'。システム設定の「会社の休業日」）
+ */
+export function isOffDay(date, extra = null) {
   const w = date.getDay();
   if (w === 0 || w === 6 || isYearEndHoliday(date)) return true;
-  return jpHolidays(date.getFullYear()).has(ymd(date.getFullYear(), date.getMonth() + 1, date.getDate()));
+  const key = ymd(date.getFullYear(), date.getMonth() + 1, date.getDate());
+  if (extra && extra.has(key)) return true;
+  return jpHolidays(date.getFullYear()).has(key);
+}
+
+/**
+ * 会社の休業日の設定（1 行ずつ。「2026-08-13」または「2026-08-13〜2026-08-16」、後ろにメモを書いてもよい）を日付の集合にする。
+ * @param {string[]} lines
+ * @returns {Set<string>}
+ */
+export function expandCompanyHolidays(lines) {
+  const out = new Set();
+  const norm = (s) => String(s).normalize("NFKC").replace(/\//g, "-");
+  for (const raw of lines || []) {
+    const m = /^\s*(\d{4}-\d{1,2}-\d{1,2})(?:\s*[~〜～\-]\s*(\d{4}-\d{1,2}-\d{1,2}))?/.exec(norm(raw));
+    if (!m) continue;
+    const toDate = (t) => { const [y, mo, d] = t.split("-").map(Number); return new Date(y, mo - 1, d); };
+    const a = toDate(m[1]);
+    const b = m[2] ? toDate(m[2]) : a;
+    if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a || (b - a) / 86400000 > 366) continue;
+    for (const d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) out.add(ymd(d.getFullYear(), d.getMonth() + 1, d.getDate()));
+  }
+  return out;
 }
 
 /** 土日・祝日・年末年始なら、次の平日まで進めた日 */
