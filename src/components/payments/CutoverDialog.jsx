@@ -41,7 +41,7 @@ export default function CutoverDialog({ open, onOpenChange, invoices, txs }) {
   const run = async () => {
     const jobs = [
       ...targets.map((i) => () => db.entities.Invoice.update(i.id, { status: "paid", paid_at: dueOf(i), paid_amount: Number(i.total) || 0 })),
-      ...(ignoreTxs ? txTargets.map((t) => () => db.entities.BankTransaction.update(t.id, { match_status: "ignored", matched_by: "cutover" })) : []),
+      ...(ignoreTxs ? txTargets.map((t) => () => db.entities.BankTransaction.update(t.id, { match_status: "ignored", matched_by: null })) : []),
     ];
     setRunning({ done: 0, total: jobs.length });
     try {
