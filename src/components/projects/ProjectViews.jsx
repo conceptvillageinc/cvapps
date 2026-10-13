@@ -507,7 +507,7 @@ function GroupRows({ group: g, target, isToday }) {
           <TableCell className="text-right text-sm tabular-nums">{yen(p.confirmed_revenue)}</TableCell>
           <TableCell className="text-sm max-w-[220px] truncate" title={p.client_name}>{p.client_name}</TableCell>
           <TableCell className="text-sm max-w-[360px]">
-            <Link to={`/projects/${p.id}`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>
+            <Link to={`/projects/${p.id}?from=daily`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>
             <span className="block text-[10px] font-mono text-muted-foreground">{p.project_number}</span>
           </TableCell>
           <TableCell>{p.deal_probability && <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>}</TableCell>
@@ -703,7 +703,7 @@ function NextGroupRows({ group: g }) {
           <TableCell className="text-sm max-w-[320px]">
             {/* クライアント名（小さく）を上、案件名を下に */}
             <span className="block text-[10px] text-muted-foreground truncate">{p.client_name}</span>
-            <Link to={`/projects/${p.id}`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>
+            <Link to={`/projects/${p.id}?from=next`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>
           </TableCell>
           {/* 受注確度・フェーズ・状態は札をクリックしてその場で変えられる */}
           <TableCell><InlineBadgeSelect project={p} field="deal_probability" /></TableCell>

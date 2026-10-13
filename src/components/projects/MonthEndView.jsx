@@ -114,7 +114,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
                   <div key={p.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm ${d.state === "none" && String(p.due_date) <= monthEnd ? "bg-red-50/40" : ""}`} data-testid="monthend-row">
                     <span className={`w-14 shrink-0 tabular-nums text-xs ${overdue ? "text-red-700 font-semibold" : "text-muted-foreground"}`} title="完了予定">{md(p.due_date)}</span>
                     <span className="w-28 shrink-0"><DeliveryBadge info={d} due={p.status === "open" && String(p.due_date) <= monthEnd} /></span>
-                    <Link to={`/projects/${p.id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 hover:underline">
+                    <Link to={`/projects/${p.id}?from=monthend`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 hover:underline">
                       <span className="text-[11px] text-muted-foreground mr-2">{p.client_name}</span>
                       <span className="font-medium">{p.name}</span>
                     </Link>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,10 @@ function Field({ label, children, className = "" }) {
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  // どの一覧から開いたか（?from=daily|next|monthend）。削除・戻るのときはその一覧に戻す
+  const [searchParams] = useSearchParams();
+  const from = ["daily", "next", "monthend"].includes(searchParams.get("from")) ? searchParams.get("from") : null;
+  const listUrl = from ? `/projects?view=${from}` : "/projects";
   const queryClient = useQueryClient();
   const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
   const [editOpen, setEditOpen] = useState(false);
@@ -104,7 +108,7 @@ export default function ProjectDetail() {
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       toast.success(deleteDocs ? "案件と紐づく書類を削除しました" : "案件を削除しました");
-      navigate("/projects");
+      navigate(listUrl);
     },
     onError: (err) => toast.error("削除できませんでした: " + (err?.message || "不明なエラー")),
   });
@@ -125,7 +129,7 @@ export default function ProjectDetail() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-3 justify-between">
         <div className="flex items-start gap-3 min-w-0">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/projects")} className="shrink-0">
+          <Button variant="ghost" size="icon" onClick={() => navigate(listUrl)} className="shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="min-w-0">
