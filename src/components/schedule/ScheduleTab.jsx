@@ -8,7 +8,7 @@ import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, Li
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
-import { addDays, toYmd, taskRange, partiesOf, keyDatesOf, shiftDependents, crossedKeyDates, memberShortName, scheduleTitle, jpDate } from "@/lib/schedule";
+import { nextWorkday, addDays, toYmd, taskRange, partiesOf, keyDatesOf, shiftDependents, crossedKeyDates, memberShortName, scheduleTitle, jpDate } from "@/lib/schedule";
 import ScheduleTimeline from "./ScheduleTimeline";
 import ScheduleList from "./ScheduleList";
 import ShareDialog from "./ShareDialog";
@@ -34,6 +34,7 @@ export default function ScheduleTab({ project }) {
   const [addTplOpen, setAddTplOpen] = useState(false);
   const [saveTplOpen, setSaveTplOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null); // 足したばかりの工程（名前をすぐ入れられるように）
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const today = toYmd(new Date());
@@ -75,12 +76,12 @@ export default function ScheduleTab({ project }) {
       const pos = after ? tasks.indexOf(after) + 1 : tasks.length;
       const prev = after || tasks[tasks.length - 1];
       const pr = prev && taskRange(prev);
-      const start = pr ? addDays(pr.end, 1) : today;
+      const start = nextWorkday(pr ? addDays(pr.end, 1) : today, companyHolidays);
       // 入れる場所より後ろの並び順を 1 つずつ下げる
       await Promise.all(tasks.slice(pos).map((t, i) => db.entities.ProjectTask.update(t.id, { sort_order: pos + i + 1 })));
-      return db.entities.ProjectTask.create({ project_id: project.id, name: "新しい工程", category, status: "todo", parties: ["cv"], start_date: start, end_date: start, sort_order: pos });
+      return db.entities.ProjectTask.create({ project_id: project.id, name: "新しい工程", category, status: "todo", parties: ["cv"], start_date: start, end_date: start, sort_order: pos, depends_on: after ? [after.id] : [] });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onSuccess: (row) => { if (row?.id) setEditingId(row.id); qc.invalidateQueries({ queryKey: key }); },
     onError: fail,
   });
 
@@ -176,7 +177,6 @@ export default function ScheduleTab({ project }) {
                 {project.schedule_sheet_url && <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" asChild><a href={project.schedule_sheet_url} target="_blank" rel="noreferrer"><ExternalLink className="w-3.5 h-3.5 mr-1.5" />出力済みのシートを開く</a></DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => create.mutate({ category: tasks[tasks.length - 1]?.category || null })} disabled={create.isPending}><Plus className="w-3.5 h-3.5" /> 工程を追加</Button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
@@ -191,11 +191,20 @@ export default function ScheduleTab({ project }) {
           <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         ) : tasks.length === 0 ? (
           <TemplatePanel project={project} parties={parties} holidays={companyHolidays} onImport={() => setImportOpen(true)} />
-        ) : pref.view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
+        ) : (
+          <div className="space-y-2">
+            {/* 工程を足す入口（テンプレートから／1 件ずつ） */}
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => setAddTplOpen(true)} data-testid="add-template"><Plus className="h-3.5 w-3.5" />テンプレートを足す</Button>
+              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
+            </div>
+            {pref.view === "timeline" ? (
+          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
           <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onMove={move} memberName={memberName}
             onAddInCategory={(category, after) => create.mutate({ category: category || null, after })} />
+            )}
+          </div>
         )}
       </CardContent>
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} project={project} />

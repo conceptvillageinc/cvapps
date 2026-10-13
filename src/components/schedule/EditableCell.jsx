@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
  * 表の中の文字の欄。ふだんは全文を折り返して見せ（途中で切らない）、クリックすると入力欄になる。
  * Enter か欄の外をクリックで確定、Esc で取り消し。datalist の候補（list）も使える。
  */
-export default function EditableCell({ value, onCommit, list, placeholder = "", className = "", textClassName = "", required = false, testId }) {
-  const [editing, setEditing] = useState(false);
+export default function EditableCell({ value, onCommit, list, placeholder = "", className = "", textClassName = "", required = false, testId, autoEdit = false }) {
+  const [editing, setEditing] = useState(autoEdit);
   const [draft, setDraft] = useState(value || "");
   const ref = useRef(null);
   useEffect(() => { if (!editing) setDraft(value || ""); }, [value, editing]);

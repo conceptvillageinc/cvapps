@@ -8,8 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sparkles, Loader2, Plus, X, AlertTriangle, CalendarCheck, CalendarArrowDown, Settings2, ScanText } from "lucide-react";
 import { toast } from "sonner";
-import { toYmd, addDays, keyDatesOf, jpDate } from "@/lib/schedule";
-import { draftFromTemplates, pickTemplates } from "@/lib/scheduleTemplates";
+import { toYmd, addDays, keyDatesOf, jpDate, nextWorkday, shiftDependents } from "@/lib/schedule";
+import { draftFromTemplates, pickTemplates, COMMON_CATEGORY } from "@/lib/scheduleTemplates";
 import ScheduleTimeline from "./ScheduleTimeline";
 
 /** 工程表テンプレートの一覧（マスタ） */
@@ -50,35 +50,69 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
   const chosen = (selected || []).map((id) => templates.find((t) => t.id === id)).filter(Boolean);
   const draft = useMemo(
     () => (chosen.length ? draftFromTemplates(chosen, { mode, date: mode === "deadline" ? deadline : start, holidays, parties, today }) : null),
-    [selected, templates, mode, deadline, start, holidays, parties, today],
+    // 担当の区分・休業日は中身が変わったときだけ作り直す（手で直した下書きが消えないように）
+    [selected, templates, mode, deadline, start, JSON.stringify(parties), holidays?.size, today],
   );
-  const range = draft?.tasks.length ? {
-    from: draft.tasks.map((t) => t.start_date).sort()[0],
-    to: draft.tasks.map((t) => t.end_date).sort().pop(),
+  // 下書きの工程（ここで足す・外す・名前を直す・日付を動かす。テンプレートや日付の決め方を変えると作り直す）
+  const [rows, setRows] = useState([]);
+  const [edited, setEdited] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  useEffect(() => { setRows(draft ? draft.tasks : []); setEdited(false); }, [draft]);
+  const allParties = draft?.parties || parties;
+  const range = rows.length ? {
+    from: rows.map((t) => t.start_date).filter(Boolean).sort()[0],
+    to: rows.map((t) => t.end_date).filter(Boolean).sort().pop(),
   } : null;
+  const rename = (id, name) => { setRows((rs) => rs.map((t) => (t.id === id ? { ...t, name } : t))); setEdited(true); setEditingId(null); };
+  const remove = (id) => {
+    setRows((rs) => {
+      const gone = rs.find((t) => t.id === id);
+      return rs.filter((t) => t.id !== id).map((t) => (t.depends_on.includes(id) ? { ...t, depends_on: [...new Set([...t.depends_on.filter((d) => d !== id), ...(gone?.depends_on || [])])] } : t));
+    });
+    setEdited(true);
+  };
+  const move = (id, patch) => {
+    setRows((rs) => {
+      const next = rs.map((t) => (t.id === id ? { ...t, ...patch } : t));
+      const shifts = new Map(shiftDependents(next, [id], { holidays }).map((x) => [x.id, x]));
+      return next.map((t) => (shifts.has(t.id) ? { ...t, ...shifts.get(t.id) } : t));
+    });
+    setEdited(true);
+  };
+  const addRow = () => {
+    const body = rows.filter((t) => !(t.category === COMMON_CATEGORY && t.is_milestone));
+    const last = body[body.length - 1];
+    const cat = last?.category || "その他";
+    const idx = rows.lastIndexOf(last);
+    const begin = last?.end_date ? nextWorkday(addDays(last.end_date, 1), holidays) : nextWorkday(mode === "deadline" ? today : start, holidays);
+    const row = { id: `new_${Date.now()}`, category: cat, name: "新しい工程", phase: null, parties: ["cv"], start_date: begin, end_date: begin, is_milestone: false, on_schedule: true, depends_on: last ? [last.id] : [], completed: false, member_ids: [] };
+    setRows((rs) => [...rs.slice(0, idx + 1), row, ...rs.slice(idx + 1)]);
+    setEditingId(row.id);
+    setEdited(true);
+  };
   const toggle = (id) => setSelected((s) => ((s || []).includes(id) ? s.filter((x) => x !== id) : [...(s || []), id]));
 
   const create = async () => {
-    if (!draft) return;
+    if (!rows.length) return;
     setSaving(true);
     try {
       // 担当の区分（印刷会社など）と、納期（大事な日）を案件の工程表の設定に入れる
       const settings = { ...(project.schedule_settings || {}) };
       let changed = false;
-      if (draft.addedParties.length) { settings.parties = draft.parties; changed = true; }
+      if (draft?.addedParties.length) { settings.parties = draft.parties; changed = true; }
       if (mode === "deadline" && !keyDatesOf(project).some((k) => /納品|納期/.test(k.label))) {
         settings.key_dates = [...keyDatesOf(project), { label: "納品期限", date: deadline }].sort((a, b) => a.date.localeCompare(b.date));
         changed = true;
       }
       if (changed) await db.entities.Project.update(project.id, { schedule_settings: settings });
 
-      const created = await db.entities.ProjectTask.createMany(draft.tasks.map((t, i) => ({
+      const created = await db.entities.ProjectTask.createMany(rows.map((t, i) => ({
         project_id: project.id, name: t.name, category: t.category, phase: t.phase, parties: t.parties,
         start_date: t.start_date, end_date: t.end_date, is_milestone: t.is_milestone, on_schedule: t.on_schedule,
         status: "todo", sort_order: existingCount + i, depends_on: [],
       })));
-      const idOf = new Map(draft.tasks.map((t, i) => [t.id, created[i]?.id]));
-      await Promise.all(draft.tasks.map((t, i) => {
+      const idOf = new Map(rows.map((t, i) => [t.id, created[i]?.id]));
+      await Promise.all(rows.map((t, i) => {
         const deps = t.depends_on.map((d) => idOf.get(d)).filter(Boolean);
         return deps.length && created[i] ? db.entities.ProjectTask.update(created[i].id, { depends_on: deps }) : null;
       }));
@@ -141,6 +175,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
               <Link to="/schedule-templates" className="mt-1 flex items-center gap-1 border-t px-2 pt-2 text-primary hover:underline"><Settings2 className="h-3 w-3" />テンプレートを編集する</Link>
             </PopoverContent>
           </Popover>
+          <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={addRow} data-testid="draft-add"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -157,20 +192,23 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
         {draft?.warnings.map((w) => <p key={w} className="flex items-center gap-1.5 text-xs font-medium text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{w}</p>)}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-600">{draft ? `${draft.tasks.length}件の工程　${jpDate(range.from)} 〜 ${jpDate(range.to)}（土日・祝日・休業日をとばした営業日で計算）` : "テンプレートを選ぶと、ここに下書きが出ます"}</p>
+          <p className="text-xs text-slate-600">
+            {rows.length && range ? `${rows.length}件の工程　${jpDate(range.from)} 〜 ${jpDate(range.to)}（土日・祝日・休業日をとばした営業日で計算）` : "テンプレートを選ぶか「＋工程を追加」で、ここに下書きが出ます"}
+            {rows.length > 0 && <span className="ml-2 text-slate-400">工程名はクリックで直せます。行の × で外せます。{edited ? "テンプレートや納期を変えると、手で直したところは元に戻ります" : ""}</span>}
+          </p>
           <div className="flex gap-2">
             {onCancel && <Button size="sm" variant="ghost" onClick={onCancel}>やめる</Button>}
-            <Button size="sm" className="gap-1.5" disabled={!draft || saving} onClick={create} data-testid="template-create">
+            <Button size="sm" className="gap-1.5" disabled={!rows.length || saving} onClick={create} data-testid="template-create">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} この内容で作る
             </Button>
           </div>
         </div>
       </div>
 
-      {draft && (
+      {rows.length > 0 && range && (
         <div className="relative">
           <span className="absolute right-3 top-2 z-30 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">下書き（まだ保存していません）</span>
-          <ScheduleTimeline tasks={draft.tasks} parties={draft.parties} keyDates={mode === "deadline" ? [...keyDatesOf(project).filter((k) => !/納品|納期/.test(k.label)), { label: "納期", date: deadline }] : keyDatesOf(project)} holidays={holidays} scale={(new Date(range.to) - new Date(range.from)) / 86400000 > 24 ? "week" : "day"} columns="standard" today={today} />
+          <ScheduleTimeline tasks={rows} parties={allParties} editable onChange={move} onRename={rename} onDelete={remove} editingId={editingId} keyDates={mode === "deadline" ? [...keyDatesOf(project).filter((k) => !/納品|納期/.test(k.label)), { label: "納期", date: deadline }] : keyDatesOf(project)} holidays={holidays} scale={(new Date(range.to) - new Date(range.from)) / 86400000 > 24 ? "week" : "day"} columns="standard" today={today} />
         </div>
       )}
     </div>

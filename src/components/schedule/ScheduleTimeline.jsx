@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Check, X } from "lucide-react";
+import EditableCell from "./EditableCell";
 import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
 
 const mdw = (s) => `${md(s)}（${WEEKDAYS[parseYmd(s).getDay()]}）`;
@@ -62,7 +63,7 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {(id) => string} [p.memberName]
  * @param {"soft"|"solid"|"progress"|"status"|"line"|"cells"} [p.barStyle]  棒の見せ方
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line" }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId }) {
   const colW = scale === "week" ? 16 : 34;
   const bounds = useMemo(() => {
     const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : 3 });
@@ -215,7 +216,10 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                         {t.is_milestone
                           ? <span className={`h-3 w-3 shrink-0 rotate-45 rounded-[2px] ${t.completed ? "bg-emerald-500" : "bg-fuchsia-500"}`} />
                           : <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}><Check className="h-3 w-3" strokeWidth={3} /></span>}
-                        <span className={`break-words ${columns === "mini" ? "line-clamp-3 text-[11px] leading-[1.15]" : "line-clamp-2 leading-tight"} ${t.completed ? "text-slate-400 line-through" : "text-slate-800"}`} title={t.name}>{t.name}</span>
+                        {onRename
+                          ? <span className="min-w-0 flex-1"><EditableCell value={t.name} required autoEdit={t.id === editingId} onCommit={(v) => onRename(t.id, v)} className="text-[12px]" /></span>
+                          : <span className={`break-words ${columns === "mini" ? "line-clamp-3 text-[11px] leading-[1.15]" : "line-clamp-2 leading-tight"} ${t.completed ? "text-slate-400 line-through" : "text-slate-800"}`} title={t.name}>{t.name}</span>}
+                        {onDelete && <button onClick={() => onDelete(t.id)} title="この工程を外す" className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" data-testid="draft-delete"><X className="h-3.5 w-3.5" /></button>}
                       </span>
                     );
                   }
@@ -248,20 +252,63 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
             {/* 前の工程の矢印（なめらかな線） */}
             <svg className="pointer-events-none absolute inset-0 z-[6]" width={gridW} height={rows.height}>
               <defs><marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#94a3b8" /></marker></defs>
-              {tasks.flatMap((t) => (t.depends_on || []).map((pid) => {
-                const pRow = rowOf.get(pid); const tRow = rowOf.get(t.id);
-                if (!pRow || !tRow) return null;
-                const pr = rangeOf(pRow.t); const tr = rangeOf(t);
-                if (!pr || !tr) return null;
-                const x1 = (idx(pr.end) + 1) * colW - (pRow.t.is_milestone ? colW / 2 - 6 : 2); const y1 = pRow.y + ROW_H / 2;
-                const x2 = idx(tr.start) * colW + (t.is_milestone ? colW / 2 - 8 : 1); const y2 = tRow.y + ROW_H / 2;
-                const bend = Math.max(14, Math.min(40, Math.abs(x2 - x1) / 2));
-                const d = x2 >= x1 + 12
-                  ? `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 3},${y2}`
-                  : `M${x1},${y1} h8 v${(y2 - y1) / 2} H${x2 - 10} V${y2} H${x2 - 3}`;
-                const far = Math.abs(y2 - y1) > ROW_H * 4;
-                return <path key={`${pid}-${t.id}`} d={d} fill="none" stroke="#94a3b8" strokeOpacity={far ? 0.45 : 1} strokeDasharray={far ? "3 3" : undefined} strokeWidth="1.4" markerEnd="url(#arr)" />;
-              }))}
+              {(() => {
+                // 矢印の座標
+                const edges = [];
+                for (const t of tasks) for (const pid of t.depends_on || []) {
+                  const pRow = rowOf.get(pid); const tRow = rowOf.get(t.id);
+                  if (!pRow || !tRow) continue;
+                  const pr = rangeOf(pRow.t); const tr = rangeOf(t);
+                  if (!pr || !tr) continue;
+                  edges.push({
+                    pid, tid: t.id,
+                    x1: (idx(pr.end) + 1) * colW - (pRow.t.is_milestone ? colW / 2 - 6 : 2), y1: pRow.y + ROW_H / 2,
+                    x2: idx(tr.start) * colW + (t.is_milestone ? colW / 2 - 8 : 1), y2: tRow.y + ROW_H / 2,
+                  });
+                }
+                const out = [];
+                const used = new Set();
+                const line = (key, d, arrow = false) => out.push(<path key={key} d={d} fill="none" stroke="#94a3b8" strokeWidth="1.4" markerEnd={arrow ? "url(#arr)" : undefined} />);
+                // 1 つの工程から複数へ: 幹を 1 本にして枝分かれ
+                const byFrom = new Map();
+                for (const e of edges) byFrom.set(e.pid, [...(byFrom.get(e.pid) || []), e]);
+                for (const [pid, es] of byFrom) {
+                  if (es.length < 2 || !es.every((e) => e.x2 >= e.x1 - 4)) continue;
+                  const { x1, y1 } = es[0];
+                  const minX2 = Math.min(...es.map((e) => e.x2));
+                  const xm = minX2 - 10 >= x1 + 6 ? minX2 - 10 : x1 + 8;
+                  // 枝: 幹より右で始まる工程はまっすぐ、すぐ隣の日に始まる工程は行の上のすき間を通って入る
+                  const branch = (e) => (e.x2 - 3 > xm + 2
+                    ? { y: e.y2, d: `M${xm},${e.y2} H${e.x2 - 3}` }
+                    : { y: e.y2 - ROW_H / 2 + 3, d: `M${xm},${e.y2 - ROW_H / 2 + 3} H${e.x2 - 10} V${e.y2} H${e.x2 - 3}` });
+                  const bs = es.map(branch);
+                  const ys = [y1, ...bs.map((b) => b.y)];
+                  line(`f${pid}`, `M${x1},${y1} H${xm} M${xm},${Math.min(...ys)} V${Math.max(...ys)}`);
+                  es.forEach((e, i) => { line(`f${pid}-${e.tid}`, bs[i].d, true); used.add(e); });
+                }
+                // 複数から 1 つへ（納品など）: 合流してから 1 本で入る
+                const byTo = new Map();
+                for (const e of edges) if (!used.has(e)) byTo.set(e.tid, [...(byTo.get(e.tid) || []), e]);
+                for (const [tid, es] of byTo) {
+                  if (es.length < 3 || !es.every((e) => e.x2 >= e.x1 + 16)) continue;
+                  const { x2, y2 } = es[0];
+                  const xm = Math.min(x2 - 10, Math.max(...es.map((e) => e.x1)) + 8);
+                  const ys = [y2, ...es.map((e) => e.y1)];
+                  for (const e of es) { line(`t${tid}-${e.pid}`, `M${e.x1},${e.y1} H${xm}`); used.add(e); }
+                  line(`t${tid}`, `M${xm},${Math.min(...ys)} V${Math.max(...ys)} M${xm},${y2} H${x2 - 3}`, true);
+                }
+                // 残りは 1 本ずつ（なめらかな線）
+                for (const e of edges) {
+                  if (used.has(e)) continue;
+                  const { x1, y1, x2, y2 } = e;
+                  const bend = Math.max(14, Math.min(40, Math.abs(x2 - x1) / 2));
+                  const d = x2 >= x1 + 12
+                    ? `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 3},${y2}`
+                    : `M${x1},${y1} h8 v${(y2 - y1) / 2} H${x2 - 10} V${y2} H${x2 - 3}`;
+                  line(`${e.pid}-${e.tid}`, d, true);
+                }
+                return out;
+              })()}
             </svg>
 
             {/* 棒 */}
