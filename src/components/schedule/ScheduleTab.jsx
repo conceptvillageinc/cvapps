@@ -4,7 +4,8 @@ import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart } from "lucide-react";
+import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { addDays, toYmd, taskRange, partiesOf, keyDatesOf, shiftDependents, crossedKeyDates, memberShortName, scheduleTitle, jpDate } from "@/lib/schedule";
@@ -12,6 +13,8 @@ import ScheduleTimeline from "./ScheduleTimeline";
 import ScheduleList from "./ScheduleList";
 import ShareDialog from "./ShareDialog";
 import ScheduleSettingsDialog from "./ScheduleSettingsDialog";
+import TemplatePanel from "./TemplatePanel";
+import SaveTemplateDialog from "./SaveTemplateDialog";
 
 const VIEW_KEY = "cv.schedule.view";
 const readPref = () => { try { return JSON.parse(localStorage.getItem(VIEW_KEY) || "{}"); } catch { return {}; } };
@@ -27,6 +30,8 @@ export default function ScheduleTab({ project }) {
   const [pref, setPref] = useState(() => ({ view: "timeline", scale: "day", ...readPref() }));
   const setView = (patch) => setPref((p) => { const n = { ...p, ...patch }; writePref(n); return n; });
   const [shareOpen, setShareOpen] = useState(false);
+  const [addTplOpen, setAddTplOpen] = useState(false);
+  const [saveTplOpen, setSaveTplOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const today = toYmd(new Date());
@@ -148,6 +153,16 @@ export default function ScheduleTab({ project }) {
             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" data-testid="template-menu"><LayoutTemplate className="w-3.5 h-3.5" /> テンプレート</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setAddTplOpen(true)}><Sparkles className="w-3.5 h-3.5 mr-1.5" />テンプレートから工程を追加</DropdownMenuItem>
+                <DropdownMenuItem disabled={tasks.length === 0} onClick={() => setSaveTplOpen(true)}><BookmarkPlus className="w-3.5 h-3.5 mr-1.5" />この工程表をテンプレートに保存</DropdownMenuItem>
+                <DropdownMenuItem asChild><a href="/schedule-templates" target="_blank" rel="noopener noreferrer"><Settings2 className="w-3.5 h-3.5 mr-1.5" />テンプレートを編集する</a></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={exporting || tasks.length === 0}>
                   {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sheet className="w-3.5 h-3.5" />} スプレッドシート
                 </Button>
@@ -172,7 +187,7 @@ export default function ScheduleTab({ project }) {
         {isLoading ? (
           <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         ) : tasks.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">工程がありません。「工程を追加」から入れてください</p>
+          <TemplatePanel project={project} parties={parties} holidays={companyHolidays} />
         ) : pref.view === "timeline" ? (
           <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
@@ -181,6 +196,13 @@ export default function ScheduleTab({ project }) {
         )}
       </CardContent>
       <ShareDialog open={shareOpen} onOpenChange={setShareOpen} project={project} />
+      <Dialog open={addTplOpen} onOpenChange={setAddTplOpen}>
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>テンプレートから工程を追加</DialogTitle></DialogHeader>
+          {addTplOpen && <TemplatePanel project={project} parties={parties} holidays={companyHolidays} existingCount={tasks.length} onDone={() => setAddTplOpen(false)} onCancel={() => setAddTplOpen(false)} />}
+        </DialogContent>
+      </Dialog>
+      <SaveTemplateDialog open={saveTplOpen} onOpenChange={setSaveTplOpen} tasks={tasks} parties={parties} holidays={companyHolidays} defaultName={tasks[0]?.category && tasks[0].category !== "全制作物" ? tasks[0].category : ""} />
       <ScheduleSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} project={project} onSave={(s) => saveSettings.mutate(s)} saving={saveSettings.isPending} />
     </Card>
   );

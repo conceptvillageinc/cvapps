@@ -259,7 +259,8 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                 const d = x2 >= x1 + 12
                   ? `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 3},${y2}`
                   : `M${x1},${y1} h8 v${(y2 - y1) / 2} H${x2 - 10} V${y2} H${x2 - 3}`;
-                return <path key={`${pid}-${t.id}`} d={d} fill="none" stroke="#94a3b8" strokeWidth="1.4" markerEnd="url(#arr)" />;
+                const far = Math.abs(y2 - y1) > ROW_H * 4;
+                return <path key={`${pid}-${t.id}`} d={d} fill="none" stroke="#94a3b8" strokeOpacity={far ? 0.45 : 1} strokeDasharray={far ? "3 3" : undefined} strokeWidth="1.4" markerEnd="url(#arr)" />;
               }))}
             </svg>
 

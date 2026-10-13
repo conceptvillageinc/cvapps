@@ -45,6 +45,7 @@ const TABLES = {
   PrintSpecList: 'print_spec_lists',
   PrintOrder: 'print_orders',
   ProjectTask: 'project_tasks',
+  ScheduleTemplate: 'schedule_templates',
 };
 
 // 書き込みを許可するカラム。
@@ -53,6 +54,7 @@ const TABLES = {
 const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
+  schedule_templates: ['name', 'keywords', 'steps', 'notes', 'sort_order', 'created_by'],
   project_tasks: ['project_id', 'name', 'owner', 'start_date', 'end_date', 'status', 'notes', 'sort_order', 'category', 'phase', 'parties', 'member_ids', 'show_members', 'completed', 'completed_at', 'is_milestone', 'on_schedule', 'estimated_hours', 'actual_hours', 'depends_on'],
   fiscal_targets: [
     'fiscal_year', 'sales', 'purchase', 'gross_jump', 'gross_must',

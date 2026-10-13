@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
-  LayoutDashboard, FileText, Plus, History, Settings, Users, Layers,
+  LayoutDashboard, FileText, Plus, History, Settings, Users, Layers, LayoutTemplate,
   LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -48,6 +48,7 @@ const adminItems = [
   { path: "/price-master", label: "価格マスタ", icon: Tag },
   { path: "/design-fee-master", label: "デザイン費マスタ", icon: Palette },
   { path: "/sales-category-master", label: "売上カテゴリーマスタ", icon: Layers },
+  { path: "/schedule-templates", label: "工程表テンプレート", icon: LayoutTemplate },
   { path: "/settings", label: "システム設定", icon: Settings },
   { path: "/users", label: "ユーザー管理", icon: Users },
 ];

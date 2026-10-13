@@ -29,6 +29,7 @@ import MeetingList from '@/pages/MeetingList';
 import MeetingNew from '@/pages/MeetingNew';
 import MeetingDetail from '@/pages/MeetingDetail';
 import PrintSpecList from '@/pages/PrintSpecList';
+import ScheduleTemplateMaster from '@/pages/ScheduleTemplateMaster';
 import SystemSettingsPage from '@/pages/SystemSettings';
 import UserManagement from '@/pages/UserManagement';
 import ClientManagement from '@/pages/ClientManagement';
@@ -109,6 +110,7 @@ const AuthenticatedApp = () => {
           <Route path="/sales-category-master" element={<SalesCategoryMaster />} />
           <Route path="/print-types" element={<PrintTypeMaster />} />
           <Route path="/profile" element={<MyProfile />} />
+          <Route path="/schedule-templates" element={<ScheduleTemplateMaster />} />
           <Route path="/meetings" element={<MeetingList />} />
           <Route path="/meetings/new" element={<MeetingNew />} />
           <Route path="/meetings/:id" element={<MeetingDetail />} />
