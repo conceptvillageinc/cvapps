@@ -2,15 +2,54 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, Printer, AlertTriangle, ArrowUp, ArrowDown, Trash2, Copy, Quote } from "lucide-react";
+import { ChevronDown, ChevronRight, Printer, AlertTriangle, ArrowUp, ArrowDown, Trash2, Copy, Quote, Plus, X } from "lucide-react";
 import SizeInput from "@/components/estimates/SizeInput";
-import { SPEC_FIELDS, missingFields, markupForType, isPackageType } from "@/lib/printSpecList";
+import { SPEC_FIELDS, missingFields, markupForType, isPackageType, quantitiesOf } from "@/lib/printSpecList";
 
 const LABEL = Object.fromEntries(SPEC_FIELDS.map((f) => [f.key, f.label]));
 
 /** 1 行の短いまとめ（たたんだときに出す） */
 function summaryOf(it) {
-  return [it.size, it.paper, it.colors, it.finishing, it.quantity ? `${Number(it.quantity).toLocaleString()}${it.unit || ""}` : "", it.due].filter(Boolean).join("・");
+  const qs = quantitiesOf(it);
+  return [it.size, it.paper, it.colors, it.finishing, qs.length ? qs.map((q) => `${q.toLocaleString()}${it.unit || ""}`).join("／") : "", it.due].filter(Boolean).join("・");
+}
+
+/** 印刷枚数（複数パターン可）。入れて「追加」で 1 つずつ足す。先頭が基本の枚数 */
+function QuantityInput({ item: it, readOnly, missing, onChange, index }) {
+  const [draft, setDraft] = useState("");
+  const qs = quantitiesOf(it);
+  const setQs = (next) => onChange({ quantities: next.length > 1 ? next : [], quantity: next[0] ?? "" });
+  const add = () => {
+    const n = Number(String(draft).replace(/[,，\s枚部個]/g, ""));
+    if (!(n > 0)) return;
+    if (!qs.includes(n)) setQs([...qs, n]);
+    setDraft("");
+  };
+  const unit = it.unit || "枚";
+  if (readOnly) return <p className="min-h-9 rounded-md bg-slate-50 px-3 py-2 text-sm">{qs.length ? qs.map((q) => `${q.toLocaleString()}${unit}`).join("／") : "—"}</p>;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); add(); } }}
+          onBlur={() => { if (draft && !qs.length) add(); }}
+          inputMode="numeric" placeholder="枚数" className={`w-28 text-right tabular-nums ${missing ? "border-red-200 bg-red-50/40" : ""}`} aria-label={`${index + 1}件目の印刷枚数`} data-testid="qty-input" />
+        <Button type="button" variant="outline" size="sm" className="h-9 gap-1 hover:bg-blue-50 hover:text-blue-800" onClick={add} data-testid="qty-add"><Plus className="h-3.5 w-3.5" />追加</Button>
+        <Input value={it.unit ?? ""} onChange={(e) => onChange({ unit: e.target.value })} placeholder="単位" className="w-16" aria-label={`${index + 1}件目の単位`} />
+      </div>
+      {qs.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {qs.map((q, i) => (
+            <span key={q} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-200" data-testid="qty-chip">
+              {qs.length > 1 && <span className="text-[10px] font-normal text-blue-500">パターン{i + 1}</span>}
+              {q.toLocaleString()}{unit}
+              <button type="button" onClick={() => setQs(qs.filter((x) => x !== q))} className="text-blue-400 hover:text-blue-700" aria-label={`${q}${unit}を外す`}><X className="h-3 w-3" /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      {qs.length > 1 && <p className="text-[11px] text-muted-foreground">枚数ごとに仕入を入れ、社内見積・見積書には枚数ごとの行で出します</p>}
+    </div>
+  );
 }
 
 /**
@@ -74,12 +113,7 @@ export default function PrintSpecCard({ item: it, index, count, printTypes, rule
             : <div className={miss.has("size") ? "rounded-md ring-1 ring-red-200" : ""}><SizeInput value={it.size || ""} onChange={(v) => set({ size: v })} /></div>, { required: true, wide: true })}
           {field("paper", "紙質・素材", text("paper", "例: コート紙135kg、PETフィルム"), { required: true })}
           {field("colors", "印刷色数", text("colors", "例: 4色(CMYK)、両面4色"), { required: true })}
-          {field("quantity", "印刷枚数", (
-            <div className="flex gap-2">
-              <div className="flex-1">{text("quantity", "枚数", { numeric: true })}</div>
-              <div className="w-20">{text("unit", "単位")}</div>
-            </div>
-          ), { required: true })}
+          {field("quantity", <>印刷枚数 <span className="font-normal text-muted-foreground">（複数パターン可）</span></>, <QuantityInput item={it} readOnly={readOnly} missing={miss.has("quantity")} onChange={set} index={index} />, { required: true })}
           {field("due", "希望納期", text("due", "例: 11/30、10/13〜10/16"))}
           {field("finishing", "加工・オプション", text("finishing", "例: PP加工、折り加工（二つ折り）、角丸"))}
           {field("notes", "備考（印刷会社への伝達事項）", readOnly

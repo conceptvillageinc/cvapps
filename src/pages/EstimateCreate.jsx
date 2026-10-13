@@ -22,7 +22,7 @@ import { format } from "date-fns";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { conditionsToEstimate } from "@/lib/meetingConditions";
 import { draftToLineItems, draftAmount, draftCost } from "@/lib/meetingChat";
-import { specsToLineItems } from "@/lib/printSpecList";
+import { specsToLineItems, expandPatterns } from "@/lib/printSpecList";
 import { usePricingRules } from "@/lib/pricing";
 import { linesFromOrder } from "@/lib/printOrders";
 import { estimateQuery } from "@/lib/estimateQuery";
@@ -173,12 +173,13 @@ export default function EstimateCreate() {
 
   // 印刷仕様の一覧（価格調べ）の行。左の「引き継ぐ明細」で選び直せる
   const { rules: pricingRules } = usePricingRules();
-  const { data: specList } = useQuery({ queryKey: ["printSpecList", specsId], queryFn: () => db.entities.PrintSpecList.get(specsId), enabled: !!specsId });
+  // 印刷枚数のパターンは 1 行ずつに広げて取り込む（最初は 1 つ目のパターンだけ選ぶ）
+  const { data: specList } = useQuery({ queryKey: ["printSpecList", specsId, "expanded"], queryFn: async () => { const l = await db.entities.PrintSpecList.get(specsId); return l ? { ...l, items: expandPatterns(l.items) } : l; }, enabled: !!specsId });
   const specItems = useMemo(() => (specList?.items?.length ? specsToLineItems(specList.items, pricingRules, `印刷仕様の一覧「${specList.title || ""}」`) : null), [specList, pricingRules]);
   const [specKeys, setSpecKeys] = useState(null); // Set<一覧の行 id>
   useEffect(() => {
     if (!specList?.items?.length || specKeys) return;
-    setSpecKeys(new Set(specList.items.map((it) => it.id)));
+    setSpecKeys(new Set(specList.items.filter((it) => !(it.pattern > 1)).map((it) => it.id)));
     setFormData((prev) => ({ ...prev, client_name: prev.client_name || specList.client_name || "", estimate_title: prev.estimate_title || specList.title || "" }));
   }, [specList]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -290,7 +291,7 @@ export default function EstimateCreate() {
       return {
         title: `印刷仕様の一覧「${specList.title || ""}」`, subtitle: [specList.client_name, specList.created_by].filter(Boolean).join("・"),
         linkTo: `/print-specs/${specList.id}`, linkLabel: "一覧を開く",
-        rows, selected: specKeys, onToggle: toggleIn(setSpecKeys), onSetAll: (keys) => setSpecKeys(new Set(keys)), defaultKeys: specList.items.map((it) => it.id), taxInclusive: false,
+        rows, selected: specKeys, onToggle: toggleIn(setSpecKeys), onSetAll: (keys) => setSpecKeys(new Set(keys)), defaultKeys: specList.items.filter((it) => !(it.pattern > 1)).map((it) => it.id), taxInclusive: false,
       };
     }
     if (copyFrom && copyIds) {

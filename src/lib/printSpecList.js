@@ -170,6 +170,7 @@ export const SPEC_EXTRACT_SCHEMA = {
           colors: { type: "string", description: "色数（例「4/0色」「両面フルカラー」）。決まっていなければ空" },
           finishing: { type: "string", description: "加工（折り・PP・型抜き・のり付けなど）。無ければ空" },
           quantity: { type: "number", description: "数量。決まっていなければ 0" },
+          quantities: { type: "array", items: { type: "number" }, description: "数量のパターンが複数話に出ていれば全部（例: 1000 と 3000 で見積を取る）。1 つなら空" },
           unit: { type: "string", description: "単位（枚・部・冊・個 など）" },
           due: { type: "string", description: "納期（例「10/13〜10/16 納品」）。決まっていなければ空" },
           notes: { type: "string", description: "補足（昨年と同じ仕様・未決の点など）。無ければ空" },
@@ -227,6 +228,7 @@ export function specsFromResult(res, printTypes = []) {
     print_type: printTypes.includes(str(v.print_type)) ? str(v.print_type) : "",
     size: str(v.size), paper: str(v.paper), colors: str(v.colors), finishing: str(v.finishing),
     quantity: num(v.quantity) > 0 ? num(v.quantity) : "",
+    quantities: (() => { const qs = [...new Set([num(v.quantity), ...(Array.isArray(v.quantities) ? v.quantities.map(num) : [])].filter((n) => n > 0))]; return qs.length > 1 ? qs : []; })(),
     unit: str(v.unit) || "枚",
     due: str(v.due), notes: str(v.notes), basis: str(v.basis),
   }));
@@ -252,4 +254,55 @@ export function priceShotPrompt(it) {
 納期: ${it.due || "（未定）"}
 - 指定の数量の価格を読みます。表に複数の納期があれば、納期に間に合う中で一番安いものを選びます。
 - 税抜で返します（税込しか無ければ ÷1.1 して円未満を切り捨て、note にその旨を書きます）。`;
+}
+
+// ---------------------------------------------------------------------------
+// 印刷枚数の複数パターン（同じ仕様で 1,000 枚・3,000 枚・5,000 枚 のように見積を取る）
+//   item.quantities = [1000, 3000, 5000]（先頭が item.quantity）
+//   仕入はパターンごとに item.prices["3000"] = { cost_total, price_url, ... } に持つ
+//   ②仕入・③社内見積・出力では、パターンを 1 行ずつに広げて扱う（expandPatterns）
+// ---------------------------------------------------------------------------
+export const PRICE_KEYS = ["cost_total", "price_url", "price_note", "screenshot_path", "needs_check", "checked_at", "vendor", "lookup_log"];
+const pick = (it, keys) => Object.fromEntries(keys.filter((k) => it[k] !== undefined).map((k) => [k, it[k]]));
+
+/** 印刷枚数のパターン（重なりなし・0 より大きいものだけ。並びは入れた順） */
+export function quantitiesOf(it) {
+  const qs = Array.isArray(it?.quantities) && it.quantities.length ? it.quantities : [it?.quantity];
+  return [...new Set(qs.map(num).filter((n) => n > 0))];
+}
+
+/** パターンを 1 行ずつに広げる（パターンが 1 つなら、そのまま） */
+export function expandPatterns(items) {
+  return (items || []).flatMap((it) => {
+    const qs = quantitiesOf(it);
+    if (qs.length <= 1) return [it];
+    return qs.map((q, i) => {
+      const price = it.prices?.[String(q)] ?? (q === num(it.quantity) ? pick(it, PRICE_KEYS) : {});
+      return {
+        ...it, cost_total: "", price_url: "", price_note: "", screenshot_path: "", needs_check: false, checked_at: null, lookup_log: null,
+        ...price,
+        id: i === 0 ? it.id : `${it.id}::${q}`,
+        parent_id: it.id,
+        quantity: q,
+        pattern: i + 1,
+        patterns: qs.length,
+        name: `${str(it.name)}（${q.toLocaleString()}${it.unit || ""}）`,
+        base_name: it.name,
+      };
+    });
+  });
+}
+
+/**
+ * 広げた行の仕入を、元の印刷物に書き戻す（パターンが 1 つなら、その印刷物の値をそのまま直す）
+ * @returns {object[]} 新しい items
+ */
+export function applyPricePatch(items, row, patch) {
+  if (!row?.parent_id) return items.map((it) => (it.id === row?.id ? { ...it, ...patch } : it));
+  return items.map((it) => {
+    if (it.id !== row.parent_id) return it;
+    const key = String(row.quantity);
+    const cur = it.prices?.[key] ?? (row.quantity === num(it.quantity) ? pick(it, PRICE_KEYS) : {});
+    return { ...it, prices: { ...(it.prices || {}), [key]: { ...cur, ...patch } } };
+  });
 }

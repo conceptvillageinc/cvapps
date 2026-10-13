@@ -14,7 +14,7 @@ import {
   ArrowLeft, Loader2, Sparkles, Plus, CheckCircle2, Pencil, Camera, ExternalLink,
   FileSpreadsheet, FilePlus2, TableProperties, Search, AlertTriangle, Image as ImageIcon,
 } from "lucide-react";
-import { blankSpec, missingFields, isPackageType, specAmounts, specMemo, specTotals,
+import { blankSpec, missingFields, isPackageType, specAmounts, specMemo, specTotals, expandPatterns, applyPricePatch,
   SPEC_EXTRACT_SCHEMA, specExtractPrompt, specsFromResult, PRICE_SHOT_SCHEMA, priceShotPrompt, familyName,
 } from "@/lib/printSpecList";
 import PrintSpecCard from "@/components/printSpecs/PrintSpecCard";
@@ -127,8 +127,13 @@ function PrintSpecListPage() {
   }, [list, meeting, items]);
 
   const missingCount = useMemo(() => (items || []).reduce((s, it) => s + missingFields(it).length, 0), [items]);
-  const priced = useMemo(() => (items || []).filter((it) => Number(it.cost_total) > 0).length, [items]);
-  const totals = useMemo(() => specTotals(items || [], rules), [items, rules]);
+  // 印刷枚数のパターンを 1 行ずつに広げた行（②仕入・③社内見積・出力はこの行で扱う）
+  const rows = useMemo(() => expandPatterns(items || []), [items]);
+  const setPriceRow = (row, patch) => { setItems((cur) => applyPricePatch(cur, row, patch)); setDirty(true); };
+  const priced = useMemo(() => rows.filter((it) => Number(it.cost_total) > 0).length, [rows]);
+  // 合計は 1 つ目のパターンだけ（ほかのパターンは見積の選択肢なので足さない）
+  const hasPatterns = rows.some((r) => r.patterns > 1);
+  const totals = useMemo(() => specTotals(rows.filter((r) => !(r.pattern > 1)), rules), [rows, rules]);
 
   const readShot = async (it, file) => {
     setReading(it.id);
@@ -136,7 +141,7 @@ function PrintSpecListPage() {
       const { file_url: path } = await db.integrations.Core.UploadFile({ file });
       const res = await db.integrations.Core.InvokeLLM({ prompt: priceShotPrompt(it), file_urls: [path], response_json_schema: PRICE_SHOT_SCHEMA });
       const total = Math.round(Number(res?.total_ex_tax) || (Number(res?.total_inc_tax) ? Math.floor(Number(res.total_inc_tax) / 1.1) : 0));
-      setRow(it.id, { screenshot_path: path, ...(total ? { cost_total: total } : {}), price_note: [res?.condition, res?.note].filter(Boolean).join("　") || it.price_note });
+      setPriceRow(it, { screenshot_path: path, ...(total ? { cost_total: total } : {}), price_note: [res?.condition, res?.note].filter(Boolean).join("　") || it.price_note });
       if (total) toast.success(`仕入 ${yen(total)}（税抜）を読み取りました`);
       else toast.message("価格を読み取れませんでした。手で入れてください");
     } catch (e) { toast.error("読み取れませんでした: " + e.message); }
@@ -161,7 +166,7 @@ function PrintSpecListPage() {
         onStep: ({ step, reason }) => { status[it.id] = { state: "run", text: `${step} 手目: ${reason || ""}` }; setLookup({ running: true, current: it.id, status: { ...status } }); },
       });
       const log = { at: new Date().toISOString(), ok: r.ok, reason: r.reason || "", steps: r.steps, trace: r.trace || [], debug: r.debug || null };
-      setRow(it.id, { ...(r.ok ? r.patch : {}), lookup_log: log });
+      setPriceRow(it, { ...(r.ok ? r.patch : {}), lookup_log: log });
       if (r.ok) { okCount++; status[it.id] = { state: "ok", text: `${r.steps} 手で見つかりました${r.patch.needs_check ? "（仕様の違いあり・要確認）" : ""}` }; }
       else status[it.id] = { state: "fail", text: r.reason || "見つかりませんでした" };
       if (r.fatal) { toast.error(r.reason, { duration: 15000 }); setLookup({ running: false, current: null, status: { ...status } }); return; }
@@ -182,7 +187,7 @@ function PrintSpecListPage() {
     setExporting(true);
     try {
       if (dirty) await save({}, { silent: true });
-      const r = await db.functions.invoke("printSpecs", { action: "export", list: { ...list, items, title }, rules, author: user?.full_name || "" });
+      const r = await db.functions.invoke("printSpecs", { action: "export", list: { ...list, items: rows, title }, rules, author: user?.full_name || "" });
       await recordOutput({ kind: "sheet", url: r.data.url, label: "スプレッドシート" });
       window.open(r.data.url, "_blank", "noopener");
     } catch (e) { toast.error("書き出せませんでした: " + e.message); }
@@ -201,8 +206,8 @@ function PrintSpecListPage() {
   if (isLoading || !list || !items) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   const groups = [
-    { key: "package", label: "【パッケージ1.3掛】印刷費", rows: items.filter((it) => isPackageType(it.print_type)) },
-    { key: "other", label: "【パッケージ以外の制作物】", rows: items.filter((it) => !isPackageType(it.print_type)) },
+    { key: "package", label: "【パッケージ1.3掛】印刷費", rows: rows.filter((it) => isPackageType(it.print_type)) },
+    { key: "other", label: "【パッケージ以外の制作物】", rows: rows.filter((it) => !isPackageType(it.print_type)) },
   ].filter((g) => g.rows.length);
 
   return (
@@ -228,7 +233,7 @@ function PrintSpecListPage() {
       <ol className="grid grid-cols-3 gap-2 text-xs" data-testid="print-spec-steps">
         {[
           { n: 1, label: "仕様を確かめて確定", done: confirmed, sub: confirmed ? `${items.length} 件で確定` : missingCount ? `未確認 ${missingCount} 項目` : `${items.length} 件` },
-          { n: 2, label: "仕入を入れる", done: items.length > 0 && priced === items.length, sub: `${priced}/${items.length} 件入力済み` },
+          { n: 2, label: "仕入を入れる", done: rows.length > 0 && priced === rows.length, sub: `${priced}/${rows.length} 件入力済み` },
           { n: 3, label: "社内見積の形で出力", done: (list.outputs || []).length > 0, sub: (list.outputs || []).length ? `${list.outputs.length} 回出力` : "スプレッドシート・見積・原価計算表" },
         ].map((s) => (
           <li key={s.n} className={`rounded-lg border px-3 py-2 ${s.done ? "border-emerald-300 bg-emerald-50" : "bg-white"}`}>
@@ -268,7 +273,7 @@ function PrintSpecListPage() {
                 item={it} index={i} count={items.length} printTypes={printTypes} rules={rules} readOnly={confirmed} defaultOpen={!confirmed}
                 onChange={(patch) => setRow(it.id, patch)}
                 onMove={(d) => move(i, d)}
-                onDuplicate={() => { const next = [...items]; next.splice(i + 1, 0, { ...it, id: blankSpec().id, cost_total: "", price_url: "", price_note: "", screenshot_path: "" }); edit(next); }}
+                onDuplicate={() => { const next = [...items]; next.splice(i + 1, 0, { ...it, id: blankSpec().id, cost_total: "", price_url: "", price_note: "", screenshot_path: "", prices: {}, lookup_log: null }); edit(next); }}
                 onRemove={() => { if (window.confirm(`「${it.name || `印刷物 ${i + 1}`}」を消しますか？`)) edit(items.filter((x) => x.id !== it.id)); }}
               />
             ))}
@@ -285,9 +290,9 @@ function PrintSpecListPage() {
             <div className="flex-1" />
             {lookup?.running
               ? <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { cancelRef.current = true; }}><Loader2 className="w-4 h-4 animate-spin" /> 調べています… 止める</Button>
-              : <Button size="sm" className="gap-1.5" disabled={!confirmed || items.length === 0} onClick={() => runLookup(items.filter((it) => !(Number(it.cost_total) > 0)).length ? items.filter((it) => !(Number(it.cost_total) > 0)) : items)} data-testid="graphic-lookup-run"
+              : <Button size="sm" className="gap-1.5" disabled={!confirmed || rows.length === 0} onClick={() => runLookup(rows.filter((it) => !(Number(it.cost_total) > 0)).length ? rows.filter((it) => !(Number(it.cost_total) > 0)) : rows)} data-testid="graphic-lookup-run"
                   title="Chrome 拡張機能「CV AX KIT アシスタント」がグラフィックを開いて、価格・URL・スクショを入れます">
-                  <Search className="w-4 h-4" /> グラフィックで調べる（{items.filter((it) => !(Number(it.cost_total) > 0)).length || items.length} 件）
+                  <Search className="w-4 h-4" /> グラフィックで調べる（{rows.filter((it) => !(Number(it.cost_total) > 0)).length || rows.length} 件）
                 </Button>}
             <span className={`text-[10px] ${assistant ? "text-emerald-700" : "text-muted-foreground"}`}>{assistant ? `拡張機能 v${assistant}` : "拡張機能なし"}</span>
           </div>
@@ -304,7 +309,7 @@ function PrintSpecListPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => {
+                {rows.map((it) => {
                   const a = specAmounts(it, rules);
                   return (
                     <tr key={it.id} className="border-t align-top" data-testid="print-spec-price-row">
@@ -318,10 +323,10 @@ function PrintSpecListPage() {
                         {it.lookup_log && !lookup?.running && <LookupLog log={it.lookup_log} item={it} />}
                         {lookup?.status?.[it.id] && <p data-testid="graphic-lookup-status" className={`mt-0.5 text-[11px] flex items-center gap-1 ${lookup.status[it.id].state === "fail" ? "text-red-600" : lookup.status[it.id].state === "ok" ? "text-emerald-700" : "text-primary"}`}>{lookup.status[it.id].state === "run" && <Loader2 className="w-3 h-3 animate-spin" />}{lookup.status[it.id].text}</p>}
                       </td>
-                      <td className="px-1 py-1"><Input type="number" value={it.cost_total ?? ""} disabled={!confirmed} onChange={(e) => setRow(it.id, { cost_total: e.target.value === "" ? "" : Number(e.target.value) })} className={`h-7 text-xs text-right tabular-nums ${confirmed && !(Number(it.cost_total) > 0) ? "border-amber-300" : ""}`} aria-label={`${it.name}の仕入`} /></td>
+                      <td className="px-1 py-1"><Input type="number" value={it.cost_total ?? ""} disabled={!confirmed} onChange={(e) => setPriceRow(it, { cost_total: e.target.value === "" ? "" : Number(e.target.value) })} className={`h-7 text-xs text-right tabular-nums ${confirmed && !(Number(it.cost_total) > 0) ? "border-amber-300" : ""}`} aria-label={`${it.name}の仕入`} /></td>
                       <td className="px-1 py-1.5 text-right tabular-nums">{unitYen(a.costUnit)}</td>
-                      <td className="px-1 py-1"><div className="flex gap-1"><Input value={it.price_url || ""} disabled={!confirmed} onChange={(e) => setRow(it.id, { price_url: e.target.value })} placeholder="https://www.graphic.jp/…" className="h-7 text-xs" />{it.price_url && <a href={it.price_url} target="_blank" rel="noreferrer" className="shrink-0 grid place-items-center w-7 text-primary" aria-label="価格ページを開く"><ExternalLink className="w-3.5 h-3.5" /></a>}</div></td>
-                      <td className="px-1 py-1"><Input value={it.price_note || ""} disabled={!confirmed} onChange={(e) => setRow(it.id, { price_note: e.target.value })} placeholder="例: ラベル印刷 A4 300枚 6営業日" className="h-7 text-xs" /></td>
+                      <td className="px-1 py-1"><div className="flex gap-1"><Input value={it.price_url || ""} disabled={!confirmed} onChange={(e) => setPriceRow(it, { price_url: e.target.value })} placeholder="https://www.graphic.jp/…" className="h-7 text-xs" />{it.price_url && <a href={it.price_url} target="_blank" rel="noreferrer" className="shrink-0 grid place-items-center w-7 text-primary" aria-label="価格ページを開く"><ExternalLink className="w-3.5 h-3.5" /></a>}</div></td>
+                      <td className="px-1 py-1"><Input value={it.price_note || ""} disabled={!confirmed} onChange={(e) => setPriceRow(it, { price_note: e.target.value })} placeholder="例: ラベル印刷 A4 300枚 6営業日" className="h-7 text-xs" /></td>
                       <td className="px-1 py-1 whitespace-nowrap">
                         <ShotPicker disabled={!confirmed || reading === it.id} busy={reading === it.id} onPick={(f) => readShot(it, f)} />
                         {it.screenshot_path && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openShot(it.screenshot_path)} aria-label="スクショを見る"><ImageIcon className="w-3.5 h-3.5" /></Button>}
@@ -382,7 +387,7 @@ function PrintSpecListPage() {
                   </Fragment>
                 ))}
                 <tr className="border-t bg-blue-50/60 font-semibold">
-                  <td className="px-2 py-2" colSpan={5}>合計（税別）{priced < items.length && <span className="ml-2 text-[11px] font-normal text-amber-700">仕入が未入力の行が {items.length - priced} 件あります</span>}</td>
+                  <td className="px-2 py-2" colSpan={5}>合計（税別）{hasPatterns && <span className="ml-2 text-[11px] font-normal text-slate-500">枚数のパターンは 1 つ目だけで合計</span>}{priced < rows.length && <span className="ml-2 text-[11px] font-normal text-amber-700">仕入が未入力の行が {rows.length - priced} 件あります</span>}</td>
                   <td className="px-2 py-2 text-right tabular-nums">{totals.cost.toLocaleString()}</td>
                   <td></td><td></td>
                   <td className="px-2 py-2 text-right tabular-nums">{totals.sell.toLocaleString()}</td>
@@ -412,7 +417,7 @@ function PrintSpecListPage() {
       <AssistantGuideDialog open={guideOpen} onOpenChange={setGuideOpen} onRetry={async () => { const v = await detectAssistant(); setAssistant(v); if (v) { setGuideOpen(false); toast.success("拡張機能が見つかりました"); } else toast.error("まだ見つかりません。拡張機能を入れたあと、このページを読み込み直してください"); }} />
       <CostSheetWriteDialog
         open={writeOpen} onOpenChange={setWriteOpen}
-        list={{ ...list, items, title }} rules={rules}
+        list={{ ...list, items: rows, title }} rules={rules}
         defaultAuthor={familyName(user?.full_name || "")}
         onDone={(out) => recordOutput({ kind: "cost_sheet", url: out.url, label: `原価計算表「${out.tab}」に ${out.written.length} 行` })}
       />

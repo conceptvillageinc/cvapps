@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Loader2, TableProperties, Sparkles, ChevronRight } from "lucide-react";
+import { expandPatterns } from "@/lib/printSpecList";
 
 /**
  * 議事録の「印刷仕様の一覧（価格調べ）」の入口。
@@ -47,8 +48,8 @@ function MeetingPrintSpecsCard({ meeting }) {
         <p className="text-sm font-bold flex items-center gap-1.5"><TableProperties className="w-4 h-4 text-primary" /> 印刷仕様の一覧（価格調べ）{trial && <span className="rounded bg-amber-100 px-1.5 text-[10px] font-normal text-amber-800">試験運用</span>}</p>
         <p className="text-[11px] text-muted-foreground">議事録から印刷物の仕様を一覧に書き出し、過不足を確かめてから、仕入を入れて社内見積の形で出力します（スプレッドシート・新しい見積・原価計算表）</p>
         {lists.map((l) => {
-          const n = (l.items || []).length;
-          const priced = (l.items || []).filter((it) => Number(it.cost_total) > 0).length;
+          const n = expandPatterns(l.items).length;
+          const priced = expandPatterns(l.items).filter((it) => Number(it.cost_total) > 0).length;
           return (
             <Link key={l.id} to={`/print-specs/${l.id}`} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted/50">
               <span className="min-w-0 flex-1">
