@@ -243,3 +243,24 @@ export function categoryColors(tasks) {
   for (const t of tasks) { const c = t.category || ""; if (!order.includes(c)) order.push(c); }
   return new Map(order.map((c, i) => [c, CATEGORY_COLORS[i % CATEGORY_COLORS.length]]));
 }
+
+/** 会社名の前後につく法人格（株式会社・有限会社・(株) など） */
+const CORP_FORMS = [
+  "株式会社", "有限会社", "合同会社", "合資会社", "合名会社", "相互会社",
+  "一般社団法人", "公益社団法人", "一般財団法人", "公益財団法人", "社会福祉法人", "社会医療法人", "医療法人社団", "医療法人財団", "医療法人",
+  "学校法人", "宗教法人", "特定非営利活動法人", "NPO法人", "農事組合法人", "農業協同組合", "生活協同組合", "協同組合", "事業協同組合",
+  "独立行政法人", "地方独立行政法人", "国立大学法人", "公立大学法人", "税理士法人", "弁護士法人", "司法書士法人", "行政書士法人", "監査法人",
+];
+const CORP_RE = new RegExp(`^(?:${CORP_FORMS.join("|")})|(?:${CORP_FORMS.join("|")})$`, "g");
+const CORP_ABBR_RE = /[（(](?:株|有|合|資|名|社|財|医|学|宗|特非|NPO)[）)]|[㈱㈲㈳㈴㈶㈵㈻㈼]/g;
+
+/**
+ * 担当の丸いアイコンに出す 1 文字（法人格・「様」・空白を除いた最初の文字）
+ * 例: 「有限会社吾妻食品様」→「吾」、「(株)ABC」→「A」
+ */
+export function partyInitial(label) {
+  let s = String(label || "").normalize("NFKC").trim().replace(/[様殿]$/, "");
+  for (let i = 0; i < 3; i++) s = s.replace(CORP_ABBR_RE, "").replace(CORP_RE, "").replace(/^[\s・、,.]+|[\s・、,.]+$/g, "");
+  const ch = Array.from(s)[0];
+  return ch ? ch.toUpperCase() : Array.from(String(label || "?"))[0];
+}

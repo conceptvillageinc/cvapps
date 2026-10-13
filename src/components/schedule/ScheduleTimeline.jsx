@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Check } from "lucide-react";
-import { addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
+import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
 
 const mdw = (s) => `${md(s)}（${WEEKDAYS[parseYmd(s).getDay()]}）`;
 
@@ -31,7 +31,7 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
     if (k === "cv" && members.length) {
       for (const m of members) items.push({ key: `m${m.name}`, text: m.name.slice(0, 1), avatar: m.avatar, color: p.color, title: `CV（${m.name}）` });
     } else {
-      items.push({ key: k, text: k === "cv" ? "CV" : p.label.replace(/様$/, "").slice(0, 1), color: p.color, title: p.label });
+      items.push({ key: k, text: k === "cv" ? "CV" : partyInitial(p.label), color: p.color, title: p.label });
     }
   }
   if (!items.length) return null;

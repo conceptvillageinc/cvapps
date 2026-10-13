@@ -318,9 +318,6 @@ export default function ProjectDetail() {
         </Card>
       )}
 
-      {/* 工程表 */}
-      <ScheduleTab project={project} />
-
       {/* 議事録 */}
       <Card>
         <CardHeader className="pb-3">
@@ -382,6 +379,9 @@ export default function ProjectDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* 工程表 */}
+      <ScheduleTab project={project} />
 
       {/* 入稿履歴（この案件の見積で「入稿した」明細） */}
       <Card>
