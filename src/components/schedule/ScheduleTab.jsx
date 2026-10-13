@@ -24,7 +24,7 @@ const writePref = (v) => { try { localStorage.setItem(VIEW_KEY, JSON.stringify(v
 const sortTasks = (rows) => [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.created_date || "").localeCompare(String(b.created_date || "")));
 
 /** 案件の工程表（リスト／タイムライン、日・週、前の工程、担当の区分、共有リンク、スプレッドシート出力） */
-export default function ScheduleTab({ project }) {
+export default function ScheduleTab({ project, fullPage = false }) {
   const qc = useQueryClient();
   const key = ["projectTasks", project.id];
   const { companyHolidays } = useSystemSettings();
@@ -176,6 +176,7 @@ export default function ScheduleTab({ project }) {
             )}
             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen(true)}><Settings2 className="w-3.5 h-3.5" /> 設定</Button>
             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
+            {!fullPage && <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800" asChild title="工程表だけを新しいタブで大きく開く"><a href={`/projects/${project.id}/schedule`} target="_blank" rel="noopener noreferrer" data-testid="open-schedule-tab"><ExternalLink className="w-3.5 h-3.5" /> 新しいタブで開く</a></Button>}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="template-menu"><LayoutTemplate className="w-3.5 h-3.5" /> テンプレート</Button>
@@ -221,7 +222,7 @@ export default function ScheduleTab({ project }) {
               <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
             </div>
             {pref.view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
+          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
           <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onMove={move} memberName={memberName}
             onAddInCategory={(category, after) => create.mutate({ category: category || null, after })} />

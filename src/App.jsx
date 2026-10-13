@@ -30,6 +30,7 @@ import MeetingNew from '@/pages/MeetingNew';
 import MeetingDetail from '@/pages/MeetingDetail';
 import PrintSpecList from '@/pages/PrintSpecList';
 import ScheduleTemplateMaster from '@/pages/ScheduleTemplateMaster';
+import ProjectSchedulePage from '@/pages/ProjectSchedulePage';
 import SystemSettingsPage from '@/pages/SystemSettings';
 import UserManagement from '@/pages/UserManagement';
 import ClientManagement from '@/pages/ClientManagement';
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/recurring" element={<RecurringProjects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/schedule" element={<ProjectSchedulePage />} />
           <Route path="/sales-report" element={<SalesReport />} />
           <Route path="/cashflow" element={<Cashflow />} />
           <Route path="/cash-plan" element={<CashPlan />} />
