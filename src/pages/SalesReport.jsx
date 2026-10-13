@@ -39,7 +39,7 @@ function Cell({ v, kind = "yen", warn, ok, muted }) {
   const text = kind === "pct" ? pct(v) : yen(v);
   const neg = kind === "yen" && Number(v) < 0;
   const cls = warn ? "text-red-700 font-medium" : ok ? "text-emerald-700 font-medium" : neg ? "text-red-700" : muted ? "text-muted-foreground" : "";
-  return <td className={`px-2 py-1 text-right tabular-nums whitespace-nowrap ${cls}`}>{text}</td>;
+  return <td className={`px-1 py-1 text-right tabular-nums whitespace-nowrap ${cls}`}>{text}</td>;
 }
 
 /** 保存されているシミュレーションを { scenarios, active_id } の形にそろえる（初期版の「値だけ」の形も読む） */
@@ -87,7 +87,7 @@ function SimCell({ value, original, edited, onCommit }) {
         inputMode="numeric"
         title={edited ? `実データ: ¥${yen(original)}（空にすると実データに戻ります）` : "数字を入れると試算に使います"}
         aria-label="シミュレーションの値"
-        className={`w-[92px] h-6 px-1.5 text-right text-xs tabular-nums rounded border outline-none focus:border-primary ${edited ? "bg-amber-50 border-amber-300 font-medium text-amber-900" : "bg-background border-input hover:border-slate-400"}`}
+        className={`w-full min-w-0 h-6 px-1 text-right tabular-nums rounded border outline-none focus:border-primary ${edited ? "bg-amber-50 border-amber-300 font-medium text-amber-900" : "bg-background border-input hover:border-slate-400"}`}
       />
     </td>
   );
@@ -481,7 +481,10 @@ export default function SalesReport() {
       {/* 表 */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">管理表（税別・円）</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-sm">管理表（税別・円）</CardTitle>
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">「計」の表示<TotalModeSwitch /></span>
+          </div>
           <CardDescription className="text-xs">粗利率は目標（{pct(grossMarginTarget)}）以上を緑、未満を赤で表示。必要売上・必要粗利はマイナスが不足</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -489,13 +492,20 @@ export default function SalesReport() {
             <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="text-xs w-full">
+              {/* 12 か月と年計を横スクロールなしで出す（列の幅をそろえ、画面の幅に合わせて数字を少し小さくする） */}
+              <table className="w-full table-fixed min-w-[1040px] text-[clamp(9px,0.66vw,11.5px)]">
+                <colgroup>
+                  <col className="w-[52px]" />
+                  <col className="w-[118px]" />
+                  {months.map((m) => <col key={m.key} />)}
+                  <col className="w-[8.5%]" />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-800 text-white">
-                    <th className="px-2 py-1.5 text-left font-medium w-16"></th>
-                    <th className="px-2 py-1.5 text-left font-medium whitespace-nowrap w-44"></th>
-                    {months.map((m) => <th key={m.key} className="px-2 py-1.5 text-right font-medium whitespace-nowrap">{m.label}</th>)}
-                    <th className="px-2 py-1.5 text-right font-medium whitespace-nowrap bg-slate-700">年計</th>
+                    <th className="px-1.5 py-1.5 text-left font-medium"></th>
+                    <th className="px-1.5 py-1.5 text-left font-medium whitespace-nowrap"></th>
+                    {months.map((m) => <th key={m.key} className="px-1 py-1.5 text-right font-medium whitespace-nowrap">{m.label}</th>)}
+                    <th className="px-1 py-1.5 text-right font-medium whitespace-nowrap bg-slate-700">年計</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -522,11 +532,8 @@ export default function SalesReport() {
                     ]],
                   ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false], i) => (
                     <tr key={`${block}-${key}`} className={`border-t ${i === 0 ? "border-t-2 border-t-slate-300" : ""} ${block === "計" ? "bg-muted/30" : ""}`}>
-                      <td className="px-2 py-1 font-medium text-muted-foreground whitespace-nowrap align-top">{i === 0 ? block : ""}</td>
-                      <td className="px-2 py-1 whitespace-nowrap">
-                        {label}
-                        {block === "計" && i === 0 && <TotalModeSwitch className="ml-2 align-middle" />}
-                      </td>
+                      <td className="px-1.5 py-1 font-medium text-muted-foreground whitespace-nowrap align-top">{i === 0 ? block : ""}</td>
+                      <td className="px-1.5 py-1 leading-tight">{label}</td>
                       {rows.map((r, mi) => {
                         const v = b === "total" ? totalOf(r)[key] : r[b][key];
                         const isMargin = kind === "pct";
