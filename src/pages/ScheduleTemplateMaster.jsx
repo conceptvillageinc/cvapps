@@ -110,11 +110,11 @@ export default function ScheduleTemplateMaster() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><LayoutTemplate className="h-6 w-6" /> 工程表テンプレート</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">案件の工程表が空のとき、案件名からテンプレートを選んで下書きを出します。日数は営業日（土日・祝日・会社の休業日をとばす）です</p>
       </div>
-      <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+      <div className="grid gap-5 2xl:grid-cols-[260px_1fr]">
         <Card className="h-fit">
           <CardHeader className="pb-2"><CardTitle className="flex items-center justify-between text-sm">テンプレート（{templates.length}）<Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => createNew()}><Plus className="h-3.5 w-3.5" />新規</Button></CardTitle></CardHeader>
-          <CardContent className="p-1.5">
-            {isLoading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : templates.map((t) => (
+          <CardContent className="grid grid-cols-2 gap-x-2 p-1.5 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-1">
+            {isLoading ? <div className="col-span-full flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : templates.map((t) => (
               <button key={t.id} onClick={() => choose(t.id)} className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm ${t.id === selectedId ? "bg-primary/10 font-semibold text-primary" : "hover:bg-muted"}`} data-testid="template-item">
                 <span className="break-words leading-snug">{t.name}</span><span className="shrink-0 text-[11px] text-muted-foreground">{(t.steps || []).length}件</span>
               </button>
@@ -128,7 +128,7 @@ export default function ScheduleTemplateMaster() {
               <CardContent className="space-y-3 pt-5">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1"><span className="text-xs font-medium">名前</span><Input value={form.name} onChange={(e) => set({ name: e.target.value })} /></label>
-                  <label className="space-y-1"><span className="text-xs font-medium">案件名にこの言葉があれば候補に出す（、で区切る）</span><Input value={form.keywords} onChange={(e) => set({ keywords: e.target.value })} placeholder="チラシ、フライヤー" /></label>
+                  <label className="space-y-1"><span className="text-xs font-medium">案件名や見積にこの言葉があれば候補に出す（、で区切る）</span><Input value={form.keywords} onChange={(e) => set({ keywords: e.target.value })} placeholder="チラシ、フライヤー" /></label>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">{form.steps.length}件の工程{totalDays ? `　今日から始めると ${totalDays.slice(5).replace("-", "/")} に終わります` : ""}</p>

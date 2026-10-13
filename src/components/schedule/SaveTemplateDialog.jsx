@@ -56,7 +56,7 @@ export default function SaveTemplateDialog({ open, onOpenChange, tasks, parties,
             <datalist id="tpl-names">{templates.map((t) => <option key={t.id} value={t.name} />)}</datalist>
             {same && <span className="text-[11px] text-amber-700">同じ名前のテンプレートを上書きします</span>}
           </label>
-          <label className="block space-y-1"><span className="text-xs font-medium">案件名にこの言葉があれば候補に出す（、で区切る）</span>
+          <label className="block space-y-1"><span className="text-xs font-medium">案件名や見積にこの言葉があれば候補に出す（、で区切る）</span>
             <Input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="チラシ、フライヤー" />
           </label>
           <p className="text-[11px] text-muted-foreground">{tasks.length}件の工程を保存します</p>
