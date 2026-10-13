@@ -45,7 +45,7 @@ export default function ScheduleSettingsDialog({ open, onOpenChange, project, on
                 <Button variant="ghost" size="icon" onClick={() => setKeyDates((ks) => ks.filter((_, j) => j !== i))}><Trash2 className="w-4 h-4" /></Button>
               </div>
             ))}
-            <Button variant="outline" size="sm" className="gap-1" onClick={() => setKeyDates((ks) => [...ks, { label: "", date: "" }])}><Plus className="w-3.5 h-3.5" /> 大事な日を追加</Button>
+            <Button variant="outline" size="sm" className="gap-1 hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setKeyDates((ks) => [...ks, { label: "", date: "" }])}><Plus className="w-3.5 h-3.5" /> 大事な日を追加</Button>
           </div>
 
           <div className="space-y-1.5">
@@ -59,11 +59,11 @@ export default function ScheduleSettingsDialog({ open, onOpenChange, project, on
                   : <Button variant="ghost" size="icon" onClick={() => setParties((ps) => ps.filter((_, j) => j !== i))}><Trash2 className="w-4 h-4" /></Button>}
               </div>
             ))}
-            <Button variant="outline" size="sm" className="gap-1" onClick={addParty}><Plus className="w-3.5 h-3.5" /> その他の担当を追加</Button>
+            <Button variant="outline" size="sm" className="gap-1 hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={addParty}><Plus className="w-3.5 h-3.5" /> その他の担当を追加</Button>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>キャンセル</Button>
+          <Button variant="outline" className="hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => onOpenChange(false)}>キャンセル</Button>
           <Button onClick={save} disabled={saving}>保存</Button>
         </DialogFooter>
       </DialogContent>

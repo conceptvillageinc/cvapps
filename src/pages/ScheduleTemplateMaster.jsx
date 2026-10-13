@@ -114,7 +114,7 @@ export default function ScheduleTemplateMaster() {
       </div>
       <div className="grid gap-5 2xl:grid-cols-[260px_1fr]">
         <Card className="h-fit">
-          <CardHeader className="pb-2"><CardTitle className="flex items-center justify-between text-sm">テンプレート（{templates.length}）<span className="flex gap-1"><Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setImportOpen(true)} data-testid="import-open" title="今ある工程表（スプレッドシート・Excel・画像・PDF）から作る"><ScanText className="h-3.5 w-3.5" />読み取って作る</Button><Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => createNew()}><Plus className="h-3.5 w-3.5" />新規</Button></span></CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="flex items-center justify-between text-sm">テンプレート（{templates.length}）<span className="flex gap-1"><Button size="sm" variant="outline" className="h-7 gap-1 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setImportOpen(true)} data-testid="import-open" title="今ある工程表（スプレッドシート・Excel・画像・PDF）から作る"><ScanText className="h-3.5 w-3.5" />読み取って作る</Button><Button size="sm" variant="outline" className="h-7 gap-1 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => createNew()}><Plus className="h-3.5 w-3.5" />新規</Button></span></CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-x-2 p-1.5 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-1">
             {isLoading ? <div className="col-span-full flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : templates.map((t) => (
               <button key={t.id} onClick={() => choose(t.id)} className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm ${t.id === selectedId ? "bg-primary/10 font-semibold text-primary" : "hover:bg-muted"}`} data-testid="template-item">
@@ -170,7 +170,7 @@ export default function ScheduleTemplateMaster() {
                   ))}
                 </tbody>
               </table>
-              <div className="p-2"><Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={addStep}><Plus className="h-3.5 w-3.5" />工程を追加</Button></div>
+              <div className="p-2"><Button size="sm" variant="outline" className="h-7 gap-1 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={addStep}><Plus className="h-3.5 w-3.5" />工程を追加</Button></div>
               <datalist id="tpl-phases">{PHASES.map((p) => <option key={p} value={p} />)}</datalist>
               <datalist id="tpl-categories">{[...categories, COMMON_CATEGORY].map((c) => <option key={c} value={c} />)}</datalist>
             </div>

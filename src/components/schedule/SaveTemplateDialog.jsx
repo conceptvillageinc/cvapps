@@ -62,7 +62,7 @@ export default function SaveTemplateDialog({ open, onOpenChange, tasks, parties,
           <p className="text-[11px] text-muted-foreground">{tasks.length}件の工程を保存します</p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>キャンセル</Button>
+          <Button variant="outline" className="hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => onOpenChange(false)}>キャンセル</Button>
           <Button onClick={save} disabled={saving || !name.trim()}>{saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存</Button>
         </DialogFooter>
       </DialogContent>

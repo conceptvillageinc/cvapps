@@ -124,7 +124,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
           {onImport && <Button size="sm" variant="outline" className="ml-auto h-7 gap-1 border-blue-300 bg-white text-xs text-blue-700 shadow-sm hover:bg-blue-50 hover:text-blue-800" onClick={onImport} data-testid="import-open"><ScanText className="h-3.5 w-3.5" />今ある工程表（スプレッドシート・画像）から入れる</Button>}
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" data-testid="template-picker"><Plus className="h-3.5 w-3.5" />{chosen.length ? "テンプレートを足す" : "テンプレートを選ぶ"}</Button>
+              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="template-picker"><Plus className="h-3.5 w-3.5" />{chosen.length ? "テンプレートを足す" : "テンプレートを選ぶ"}</Button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-2 text-xs" align="start">
               <p className="px-2 pb-1 text-[11px] text-muted-foreground">複数選ぶと組み合わせます（納品は 1 つにまとめます）</p>

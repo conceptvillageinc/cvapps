@@ -160,7 +160,7 @@ export default function ImportScheduleDialog({ open, onOpenChange, mode, project
             <p className="flex items-center gap-1.5 text-xs font-semibold"><FileUp className="h-3.5 w-3.5" />ファイル（Excel・CSV・画像・PDF）</p>
             <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setUrl(""); pick(f); } }} data-testid="import-file" />
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => fileRef.current?.click()}>ファイルを選ぶ</Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => fileRef.current?.click()}>ファイルを選ぶ</Button>
               {file && <span className="text-xs">{file.name}</span>}
               {sheetChoices?.length > 1 && (
                 <select value={sheetIdx} onChange={(e) => setSheetIdx(Number(e.target.value))} className="h-8 rounded border px-1 text-xs">

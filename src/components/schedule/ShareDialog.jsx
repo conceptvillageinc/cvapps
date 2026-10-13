@@ -68,8 +68,8 @@ export default function ShareDialog({ open, onOpenChange, project }) {
             <div className="space-y-1.5">
               <div className="flex gap-2">
                 <Input readOnly value={url} className="text-xs font-mono" onFocus={(e) => e.target.select()} data-testid="share-url" />
-                <Button variant="outline" size="icon" onClick={copy} title="コピー"><Copy className="w-4 h-4" /></Button>
-                <Button variant="outline" size="icon" asChild title="開く"><a href={url} target="_blank" rel="noreferrer"><ExternalLink className="w-4 h-4" /></a></Button>
+                <Button variant="outline" className="hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" size="icon" onClick={copy} title="コピー"><Copy className="w-4 h-4" /></Button>
+                <Button variant="outline" className="hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" size="icon" asChild title="開く"><a href={url} target="_blank" rel="noreferrer"><ExternalLink className="w-4 h-4" /></a></Button>
               </div>
             </div>
 
@@ -78,7 +78,7 @@ export default function ShareDialog({ open, onOpenChange, project }) {
               {share.has_password ? (
                 <div className="flex items-center justify-between">
                   <p className="text-xs">パスワードを付けています（開くときに入力）</p>
-                  <Button size="sm" variant="outline" disabled={busy} onClick={() => call({ action: "configure", clear_password: true }, "パスワードを外しました")}>外す</Button>
+                  <Button size="sm" variant="outline" className="hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" disabled={busy} onClick={() => call({ action: "configure", clear_password: true }, "パスワードを外しました")}>外す</Button>
                 </div>
               ) : <p className="text-xs text-muted-foreground">付けていません（URL だけで開けます）</p>}
               <div className="flex gap-2">
@@ -99,7 +99,7 @@ export default function ShareDialog({ open, onOpenChange, project }) {
 
             <div className="flex items-center justify-between border-t pt-3">
               <p className="text-[11px] text-muted-foreground">URL を作り直すと、前の URL は開けなくなります</p>
-              <Button size="sm" variant="outline" className="gap-1.5" disabled={busy} onClick={() => window.confirm("URL を作り直しますか？前の URL は開けなくなります") && call({ action: "regenerate" }, "URL を作り直しました")}><RefreshCw className="w-3.5 h-3.5" /> 作り直す</Button>
+              <Button size="sm" variant="outline" className="gap-1.5 hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" disabled={busy} onClick={() => window.confirm("URL を作り直しますか？前の URL は開けなくなります") && call({ action: "regenerate" }, "URL を作り直しました")}><RefreshCw className="w-3.5 h-3.5" /> 作り直す</Button>
             </div>
           </div>
         )}
