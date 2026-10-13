@@ -173,7 +173,7 @@ export default function ScheduleTab({ project }) {
         ) : tasks.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6">工程がありません。「工程を追加」から入れてください</p>
         ) : pref.view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" editable onChange={save} memberName={memberName} today={today} />
+          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "soft"} editable onChange={save} memberName={memberName} today={today} />
         ) : (
           <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onMove={move} memberName={memberName}
             onAddInCategory={(category, after) => create.mutate({ category: category || null, after })} />

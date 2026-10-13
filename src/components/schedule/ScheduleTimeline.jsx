@@ -48,8 +48,9 @@ export function PartyAvatars({ task, parties, memberName = () => "", size = 20 }
  * @param {"mini"|"standard"|"full"} [p.columns]  左の列（mini: タスク名だけ（スマホ） / standard: タスク名・担当 / full: ＋工程・期間）
  * @param {(id, patch) => void} [p.onChange]
  * @param {(id) => string} [p.memberName]
+ * @param {"soft"|"solid"|"progress"|"status"|"line"|"cells"} [p.barStyle]  棒の見せ方
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", today, fitHeight = false }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", today, fitHeight = false, barStyle = "soft" }) {
   const colW = scale === "week" ? 16 : 34;
   const bounds = useMemo(() => {
     const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : 3 });
@@ -268,25 +269,70 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                   </div>
                 );
               }
-              const bg = colors.length > 1
-                ? `linear-gradient(90deg, ${colors.map((c, i) => `${tint(c, 0.72)} ${(i / colors.length) * 100}% ${((i + 1) / colors.length) * 100}%`).join(", ")})`
-                : tint(c0, 0.72);
               const textInside = scale === "day" && width >= Math.min(220, t.name.length * 12 + 44);
-              return (
-                <div key={t.id} className="absolute z-[8] flex items-center" style={{ left: left + 2, top: row.y + 7, height: ROW_H - 14 }}>
-                  <div onPointerDown={(e) => startDrag(e, t, "move")}
-                    className={`relative flex h-full items-center gap-1.5 overflow-hidden rounded-full border pl-1 pr-2 text-[11px] font-medium whitespace-nowrap select-none transition-shadow hover:shadow-md ${editable ? "cursor-grab active:cursor-grabbing" : ""} ${t.completed ? "opacity-50" : ""}`}
-                    style={{ width: width - 4, background: bg, borderColor: tint(c0, 0.35), color: tint(c0, -0.45) }}
-                    title={tip} data-testid="timeline-bar">
-                    {editable && <span onPointerDown={(e) => startDrag(e, t, "start")} className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize" />}
+              const outside = !textInside && scale === "day" && <span className="relative z-[9] ml-1 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] text-slate-600">{t.name}</span>;
+              const handles = editable && <>
+                <span onPointerDown={(e) => startDrag(e, t, "start")} className="absolute left-0 top-0 bottom-0 z-[2] w-2 cursor-ew-resize" />
+                <span onPointerDown={(e) => startDrag(e, t, "end")} className="absolute right-0 top-0 bottom-0 z-[2] w-2 cursor-ew-resize" />
+              </>;
+              const grab = editable ? "cursor-grab active:cursor-grabbing" : "";
+              const wrap = (h, children) => <div key={t.id} className="absolute z-[8] flex items-center" style={{ left: left + 2, top: row.y + (ROW_H - h) / 2, height: h }}>{children}</div>;
+              const status = t.completed ? "done" : r.end < today ? "late" : r.start <= today ? "doing" : "todo";
+              const STATUS_COLOR = { done: "#10b981", late: "#ef4444", doing: "#3b82f6", todo: "#94a3b8" };
+
+              // 細い線（ミニマル）
+              if (barStyle === "line") {
+                return wrap(ROW_H - 10, <>
+                  <div onPointerDown={(e) => startDrag(e, t, "move")} className={`relative flex h-full items-center select-none ${grab} ${t.completed ? "opacity-50" : ""}`} style={{ width: width - 4 }} title={tip} data-testid="timeline-bar">
+                    <span className="absolute left-2 right-2 h-[5px] rounded-full" style={{ background: colors.length > 1 ? `linear-gradient(90deg, ${colors.join(", ")})` : c0 }} />
+                    <span className="absolute left-1 h-2.5 w-2.5 rounded-full border-2 bg-white" style={{ borderColor: c0 }} />
+                    <span className="absolute right-1 h-2.5 w-2.5 rounded-full border-2 bg-white" style={{ borderColor: colors[colors.length - 1] || c0 }} />
+                    {handles}
+                  </div>
+                  <span className="ml-1 flex items-center gap-1"><PartyAvatars task={t} parties={parties} memberName={memberName} size={16} />{scale === "day" && <span className="whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.completed ? "✓ " : ""}{t.name}</span>}</span>
+                </>);
+              }
+              // 日ごとのマス（営業日だけ塗る。土日・祝日はすき間）
+              if (barStyle === "cells") {
+                const ds = daysBetween(r.start, r.end);
+                return wrap(ROW_H - 16, <>
+                  <div onPointerDown={(e) => startDrag(e, t, "move")} className={`relative flex h-full select-none ${grab} ${t.completed ? "opacity-45" : ""}`} style={{ width: width - 4 }} title={tip} data-testid="timeline-bar">
+                    {ds.map((d, i) => {
+                      const off = days[idx(d)]?.off;
+                      const c = colors[i % Math.max(1, colors.length)] || c0;
+                      return <span key={d} className="h-full rounded-[3px]" style={{ width: colW - 3, marginRight: 3, background: off ? "transparent" : c, border: off ? `1px dashed ${tint(c, 0.4)}` : "none" }} />;
+                    })}
+                    {handles}
+                  </div>
+                  <span className="ml-1 flex items-center gap-1"><PartyAvatars task={t} parties={parties} memberName={memberName} size={16} />{scale === "day" && <span className="whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.name}</span>}</span>
+                </>);
+              }
+              // 色の決め方: 担当の色（soft / solid / progress）か、状況の色（status）
+              const base = barStyle === "status" ? [STATUS_COLOR[status]] : colors.length ? colors : [c0];
+              const k0 = base[0];
+              const solid = barStyle === "solid";
+              const fill = (k) => (solid ? k : tint(k, 0.72));
+              const bg = base.length > 1
+                ? `linear-gradient(90deg, ${base.map((c, i) => `${fill(c)} ${(i / base.length) * 100}% ${((i + 1) / base.length) * 100}%`).join(", ")})`
+                : fill(k0);
+              // 進み具合（今日までに過ぎた日の割合。完了なら全部）
+              const elapsed = t.completed ? 1 : today < r.start ? 0 : today > r.end ? 1 : (diffDays(r.start, today) + 1) / (diffDays(r.start, r.end) + 1);
+              return wrap(ROW_H - 14, <>
+                <div onPointerDown={(e) => startDrag(e, t, "move")}
+                  className={`relative flex h-full items-center gap-1.5 overflow-hidden border pl-1 pr-2 text-[11px] font-medium whitespace-nowrap select-none transition-shadow hover:shadow-md ${solid ? "rounded-md" : "rounded-full"} ${grab} ${t.completed && barStyle !== "status" && barStyle !== "progress" ? "opacity-50" : ""} ${barStyle === "progress" && status === "late" ? "ring-2 ring-red-400" : ""}`}
+                  style={{ width: width - 4, background: bg, borderColor: solid ? "transparent" : tint(k0, 0.35), color: solid ? "#ffffff" : tint(k0, -0.45) }}
+                  title={barStyle === "status" ? `${tip}　${{ done: "完了", late: "遅れ", doing: "進行中", todo: "これから" }[status]}` : tip} data-testid="timeline-bar">
+                  {barStyle === "progress" && elapsed > 0 && <span className="absolute inset-y-0 left-0" style={{ width: `${elapsed * 100}%`, background: t.completed ? tint("#10b981", 0.35) : tint(k0, 0.3) }} />}
+                  {handles}
+                  <span className="relative flex items-center gap-1.5">
                     {width >= 40 && <PartyAvatars task={t} parties={parties} memberName={memberName} size={18} />}
                     {t.completed && <Check className="h-3 w-3 shrink-0" strokeWidth={3} />}
                     {textInside && <span className="truncate">{t.name}</span>}
-                    {editable && <span onPointerDown={(e) => startDrag(e, t, "end")} className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize" />}
-                  </div>
-                  {!textInside && scale === "day" && <span className="relative z-[9] ml-1 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] text-slate-600">{t.name}</span>}
+                    {barStyle === "progress" && textInside && !t.completed && elapsed > 0 && elapsed < 1 && <span className="opacity-70">{Math.round(elapsed * 100)}%</span>}
+                  </span>
                 </div>
-              );
+                {outside}
+              </>);
             })}
           </div>
         </div>
