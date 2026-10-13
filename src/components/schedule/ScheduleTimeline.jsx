@@ -102,9 +102,12 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
     e.preventDefault(); e.stopPropagation();
     const d = { id: t.id, mode, x0: e.clientX, delta: 0 };
     dragRef.current = d; setDrag(d);
+    // つかんでいる間はカーソルを保つ（棒の外に出ても）: 動かす＝十字の矢印、伸ばす・縮める＝縦線つきの左右矢印
+    document.body.style.cursor = mode === "move" ? "move" : "col-resize";
     const move = (ev) => { const nd = { ...dragRef.current, delta: Math.round((ev.clientX - dragRef.current.x0) / colW) }; dragRef.current = nd; setDrag(nd); };
     const up = () => {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
       const fin = dragRef.current; dragRef.current = null; setDrag(null);
       if (!fin || fin.delta === 0) return;
       const r = taskRange(t);
@@ -325,7 +328,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
               const tip = `${t.name}　${label}　${r.start === r.end ? jpDate(r.start) : `${jpDate(r.start)}〜${jpDate(r.end)}`}`;
               if (t.is_milestone) {
                 return (
-                  <div key={t.id} onPointerDown={(e) => startDrag(e, t, "move")} className={`absolute z-[8] flex items-center ${editable ? "cursor-grab" : ""}`} style={{ left: left + colW / 2 - 8, top: row.y + ROW_H / 2 - 8 }} title={tip} data-testid="timeline-milestone">
+                  <div key={t.id} onPointerDown={(e) => startDrag(e, t, "move")} className={`absolute z-[8] flex items-center ${editable ? "cursor-move" : ""}`} style={{ left: left + colW / 2 - 8, top: row.y + ROW_H / 2 - 8 }} title={tip} data-testid="timeline-milestone">
                     <div className={`h-4 w-4 rotate-45 rounded-[3px] shadow ${t.completed ? "bg-emerald-500" : "bg-fuchsia-500"}`} />
                     <span className="ml-2 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] font-semibold text-slate-700">{t.name}<span className="ml-1 font-normal text-slate-400">{md(r.start)}</span></span>
                   </div>
@@ -334,10 +337,10 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
               const textInside = scale === "day" && width >= Math.min(220, t.name.length * 12 + 44);
               const outside = !textInside && scale === "day" && <span className="relative z-[9] ml-1 whitespace-nowrap rounded bg-white/90 px-1 text-[11px] text-slate-600">{t.name}</span>;
               const handles = editable && <>
-                <span onPointerDown={(e) => startDrag(e, t, "start")} className="absolute left-0 top-0 bottom-0 z-[2] w-2 cursor-ew-resize" />
-                <span onPointerDown={(e) => startDrag(e, t, "end")} className="absolute right-0 top-0 bottom-0 z-[2] w-2 cursor-ew-resize" />
+                <span onPointerDown={(e) => startDrag(e, t, "start")} className="absolute left-0 top-0 bottom-0 z-[2] w-2 cursor-col-resize" />
+                <span onPointerDown={(e) => startDrag(e, t, "end")} className="absolute right-0 top-0 bottom-0 z-[2] w-2 cursor-col-resize" />
               </>;
-              const grab = editable ? "cursor-grab active:cursor-grabbing" : "";
+              const grab = editable ? "cursor-move" : "";
               const wrap = (h, children) => <div key={t.id} className="absolute z-[8] flex items-center" style={{ left: left + 2, top: row.y + (ROW_H - h) / 2, height: h }}>{children}</div>;
               const status = t.completed ? "done" : r.end < today ? "late" : r.start <= today ? "doing" : "todo";
               const STATUS_COLOR = { done: "#10b981", late: "#ef4444", doing: "#3b82f6", todo: "#94a3b8" };
