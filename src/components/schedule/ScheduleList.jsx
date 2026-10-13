@@ -4,7 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Trash2, ArrowUp, ArrowDown, Link2, Diamond, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { PHASES, taskRange, diffDays, wouldCycle, categoryColors, md } from "@/lib/schedule";
-import { PartyChips } from "./ScheduleTimeline";
+import { PartyChips, tint } from "./ScheduleTimeline";
 
 /**
  * 工程表のリスト（カテゴリーごとにまとめた表）。その場で編集する。
@@ -70,7 +70,7 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
                 return (
                   <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80" data-testid="schedule-row">
                     <td className="relative text-center">
-                      <span className="absolute inset-y-0 left-0 w-[4px]" style={{ background: secColors.get(t.category || "") }} />
+                      <span className="absolute inset-y-[3px] left-[2px] w-[3px] rounded-full" style={{ background: tint(secColors.get(t.category || ""), 0.35) }} />
                       <button role="checkbox" aria-checked={!!t.completed} title={t.completed ? "未完了に戻す" : "完了にする"} onClick={() => onChange(t.id, { completed: !t.completed, completed_at: t.completed ? null : new Date().toISOString() })}
                         className={`mx-auto flex h-[18px] w-[18px] items-center justify-center rounded-full border transition-colors ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500"}`}><Check className="h-3 w-3" strokeWidth={3} /></button>
                     </td>

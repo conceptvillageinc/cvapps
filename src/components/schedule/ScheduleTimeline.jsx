@@ -29,7 +29,7 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
   for (const k of keys) {
     const p = partyOf(parties, k);
     if (k === "cv" && members.length) {
-      for (const m of members) items.push({ key: `m${m.name}`, text: m.name.slice(0, 2), avatar: m.avatar, color: p.color, title: `CV（${m.name}）` });
+      for (const m of members) items.push({ key: `m${m.name}`, text: m.name.slice(0, 1), avatar: m.avatar, color: p.color, title: `CV（${m.name}）` });
     } else {
       items.push({ key: k, text: k === "cv" ? "CV" : p.label.replace(/様$/, "").slice(0, 1), color: p.color, title: p.label });
     }
@@ -204,8 +204,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
               </button>
             ) : (
               <div key={row.key} className="group relative flex items-center border-b border-slate-100 text-[12px] hover:bg-slate-50" style={{ height: ROW_H }} data-testid="timeline-row">
-                <span className="absolute inset-y-0 left-0 w-[4px]" style={{ background: secColors.get(row.t.category || "") }} />
-                <span className="absolute inset-y-0 left-[14px] w-[3px]" style={{ background: tint(secColors.get(row.t.category || ""), 0.45) }} />
+                <span className="absolute inset-y-[3px] left-[14px] w-[3px] rounded-full" style={{ background: tint(secColors.get(row.t.category || ""), 0.35) }} />
                 {leftCols.map((c) => {
                   const t = row.t;
                   const r = taskRange(t);
