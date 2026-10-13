@@ -430,10 +430,10 @@ export default function ProjectList() {
                 <TableBody>
                   {sorted.map((p) => {
                     return (
-                      <TableRow key={p.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/projects/${p.id}`)}>
+                      <TableRow key={p.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => window.open(`/projects/${p.id}`, "_blank", "noopener")}>
                         {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} delivery={key === "delivery" ? projectDelivery(p, deliveryIndex.byProject) : null} today={today} />)}
                         <TableCell>
-                          <Link to={`/projects/${p.id}`} onClick={(e) => e.stopPropagation()}>
+                          <Link to={`/projects/${p.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                             <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                           </Link>
                         </TableCell>
