@@ -289,7 +289,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                     <span className="absolute right-1 h-2.5 w-2.5 rounded-full border-2 bg-white" style={{ borderColor: colors[colors.length - 1] || c0 }} />
                     {handles}
                   </div>
-                  <span className="ml-1 flex items-center gap-1"><PartyAvatars task={t} parties={parties} memberName={memberName} size={16} />{scale === "day" && <span className="whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.completed ? "✓ " : ""}{t.name}</span>}</span>
+                  {scale === "day" && <span className="relative z-[9] ml-1 whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.completed ? "✓ " : ""}{t.name}</span>}
                 </>);
               }
               // 日ごとのマス（営業日だけ塗る。土日・祝日はすき間）
