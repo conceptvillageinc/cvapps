@@ -108,7 +108,7 @@ export default function SharedSchedule() {
                 return (
                   <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-sm">
                     <PartyAvatars task={t} parties={d.parties} memberName={memberName} />
-                    <span className="min-w-0 flex-1 truncate">{t.category ? <span className="text-slate-400">{t.category}／</span> : null}{t.name}</span>
+                    <span className="min-w-0 flex-1 break-words">{t.category ? <span className="text-slate-400">{t.category}／</span> : null}{t.name}</span>
                     <span className="w-full pl-8 text-xs text-slate-500 sm:w-auto sm:pl-0 sm:shrink-0">{r.start === r.end ? jpDate(r.start) : `${md(r.start)} – ${jpDate(r.end)}`}</span>
                   </li>
                 );

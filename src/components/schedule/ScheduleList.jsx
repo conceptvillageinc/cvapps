@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Trash2, ArrowUp, ArrowDown, Link2, Diamond, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { PHASES, taskRange, diffDays, wouldCycle, categoryColors, md } from "@/lib/schedule";
 import { PartyChips, tint } from "./ScheduleTimeline";
+import EditableCell from "./EditableCell";
 
 /**
  * 工程表のリスト（カテゴリーごとにまとめた表）。その場で編集する。
@@ -79,10 +80,10 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
                       <button className="text-muted-foreground hover:text-foreground disabled:opacity-20 ml-0.5" disabled={i === tasks.length - 1} onClick={() => onMove(i, 1)}><ArrowDown className="w-3 h-3" /></button>
                     </td>
                     <td className="px-1 py-1">
-                      <Input key={`c${t.id}${t.category}`} list="schedule-categories" defaultValue={t.category || ""} onBlur={(e) => commit(t, "category", e.target.value.trim())} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white" />
+                      <EditableCell value={t.category || ""} list="schedule-categories" onCommit={(v) => commit(t, "category", v)} />
                     </td>
-                    <td className="px-1 py-1"><Input key={`n${t.id}${t.name}`} defaultValue={t.name} onBlur={(e) => e.target.value.trim() && commit(t, "name", e.target.value.trim())} className={`h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white ${t.completed ? "line-through text-muted-foreground" : ""}`} /></td>
-                    <td className="px-1 py-1"><Input key={`p${t.id}${t.phase}`} list="schedule-phases" defaultValue={t.phase || ""} onBlur={(e) => commit(t, "phase", e.target.value.trim())} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white" /></td>
+                    <td className="px-1 py-1"><EditableCell value={t.name} required onCommit={(v) => commit(t, "name", v)} textClassName={t.completed ? "line-through text-muted-foreground" : ""} /></td>
+                    <td className="px-1 py-1"><EditableCell value={t.phase || ""} list="schedule-phases" onCommit={(v) => commit(t, "phase", v)} /></td>
                     <td className="px-1 py-1"><PartyPicker task={t} parties={parties} users={users} memberName={memberName} onChange={(patch) => onChange(t.id, patch)} /></td>
                     <td className="px-1 py-1"><Input key={`s${t.id}${t.start_date}`} type="date" defaultValue={t.start_date || ""} onBlur={(e) => commit(t, "start_date", e.target.value)} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white px-1.5" /></td>
                     <td className="px-1 py-1"><Input key={`e${t.id}${t.end_date}`} type="date" defaultValue={t.end_date || ""} disabled={t.is_milestone} onBlur={(e) => commit(t, "end_date", e.target.value)} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white px-1.5" /></td>
@@ -94,7 +95,7 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
                     <td className="text-center">
                       <button title="節目（◆）にする" onClick={() => onChange(t.id, { is_milestone: !t.is_milestone, ...(t.is_milestone ? {} : { end_date: t.start_date || t.end_date || null }) })} className={t.is_milestone ? "text-fuchsia-600" : "text-muted-foreground/40 hover:text-muted-foreground"}><Diamond className="w-3.5 h-3.5" fill={t.is_milestone ? "currentColor" : "none"} /></button>
                     </td>
-                    <td className="px-1 py-1"><Input key={`m${t.id}${t.notes}`} defaultValue={t.notes || ""} onBlur={(e) => commit(t, "notes", e.target.value)} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white" placeholder="クライアントには出ません" /></td>
+                    <td className="px-1 py-1"><EditableCell value={t.notes || ""} placeholder="クライアントには出ません" onCommit={(v) => commit(t, "notes", v)} /></td>
                     <td className="px-1"><button onClick={() => onDelete(t)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button></td>
                   </tr>
                 );
@@ -152,8 +153,8 @@ function DependsPicker({ task, tasks, onChange }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="w-full h-7 rounded border border-transparent px-1.5 hover:border-slate-200 text-left truncate hover:bg-muted/40 inline-flex items-center gap-1" data-testid="depends-picker">
-          {names.length ? <><Link2 className="w-3 h-3 shrink-0 text-muted-foreground" /><span className="truncate">{names.map((t) => t.name).join("・")}</span></> : <span className="text-muted-foreground">—</span>}
+        <button className="w-full min-h-7 rounded border border-transparent px-1.5 py-1 hover:border-slate-200 text-left hover:bg-muted/40 inline-flex items-center gap-1" data-testid="depends-picker">
+          {names.length ? <><Link2 className="w-3 h-3 shrink-0 text-muted-foreground" /><span className="break-words leading-snug">{names.map((t) => t.name).join("・")}</span></> : <span className="text-muted-foreground">—</span>}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-3 text-xs" align="start">
@@ -167,7 +168,7 @@ function DependsPicker({ task, tasks, onChange }) {
             return (
               <label key={t.id} className={`flex items-center gap-2 ${cyc ? "opacity-40" : "cursor-pointer"}`} title={cyc ? "この工程のあとに続く工程なので選べません" : ""}>
                 <Checkbox checked={on} disabled={cyc} onCheckedChange={() => onChange(on ? ids.filter((x) => x !== t.id) : [...ids, t.id])} />
-                <span className="truncate">{t.category ? `${t.category}／` : ""}{t.name}</span>
+                <span className="break-words leading-snug">{t.category ? `${t.category}／` : ""}{t.name}</span>
                 {r && <span className="ml-auto text-muted-foreground shrink-0">{md(r.end)}まで</span>}
               </label>
             );

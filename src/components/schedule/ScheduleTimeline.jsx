@@ -138,7 +138,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
   const leftCols = columns === "full"
     ? [{ key: "name", label: "タスク名", w: 230 }, { key: "phase", label: "工程", w: 88 }, { key: "party", label: "担当", w: 64 }, { key: "range", label: "期間", w: 112 }]
     : columns === "mini"
-      ? [{ key: "name", label: "タスク名", w: 132 }]
+      ? [{ key: "name", label: "タスク名", w: 150 }]
       : [{ key: "name", label: "タスク名", w: 230 }, { key: "party", label: "担当", w: 64 }];
   const leftW = leftCols.reduce((s, c) => s + c.w, 0);
   const todayIn = today && today >= bounds.from && today <= bounds.to;
@@ -199,7 +199,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                 <span className="absolute inset-y-0 left-0 w-[4px]" style={{ background: secColors.get(row.category) }} />
                 {collapsed.has(row.category) ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ background: secColors.get(row.category) }} />
-                <span className="truncate text-[13px] font-bold text-slate-800">{row.category || "（カテゴリーなし）"}</span>
+                <span className="line-clamp-2 break-words text-[13px] font-bold leading-tight text-slate-800" title={row.category}>{row.category || "（カテゴリーなし）"}</span>
                 <span className="ml-auto shrink-0 rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500">{row.items.filter((t) => t.completed).length}/{row.items.length}</span>
               </button>
             ) : (
@@ -215,11 +215,11 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                         {t.is_milestone
                           ? <span className={`h-3 w-3 shrink-0 rotate-45 rounded-[2px] ${t.completed ? "bg-emerald-500" : "bg-fuchsia-500"}`} />
                           : <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}><Check className="h-3 w-3" strokeWidth={3} /></span>}
-                        <span className={`truncate ${t.completed ? "text-slate-400 line-through" : "text-slate-800"}`}>{t.name}</span>
+                        <span className={`break-words ${columns === "mini" ? "line-clamp-3 text-[11px] leading-[1.15]" : "line-clamp-2 leading-tight"} ${t.completed ? "text-slate-400 line-through" : "text-slate-800"}`} title={t.name}>{t.name}</span>
                       </span>
                     );
                   }
-                  if (c.key === "phase") v = t.phase ? <span className="truncate rounded bg-slate-100 px-1 py-0.5 text-[10px] text-slate-600" title={t.phase}>{t.phase}</span> : "";
+                  if (c.key === "phase") v = t.phase ? <span className="rounded bg-slate-100 px-1 py-0.5 text-center text-[10px] leading-tight text-slate-600" title={t.phase}>{t.phase}</span> : "";
                   if (c.key === "party") v = <PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} />;
                   if (c.key === "range") v = r ? <span className="text-[11px] text-slate-500 whitespace-nowrap">{r.start === r.end ? mdw(r.start) : `${md(r.start)} – ${md(r.end)}`}</span> : "";
                   return <div key={c.key} className={`flex min-w-0 items-center px-3 ${c.key === "name" ? "" : "justify-center"}`} style={{ width: c.w }}>{v}</div>;

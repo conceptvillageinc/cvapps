@@ -14,6 +14,7 @@ import { PHASES, toYmd, partiesOf } from "@/lib/schedule";
 import { normalizeSteps, draftFromTemplates, COMMON_CATEGORY } from "@/lib/scheduleTemplates";
 import { useScheduleTemplates } from "@/components/schedule/TemplatePanel";
 import ScheduleTimeline from "@/components/schedule/ScheduleTimeline";
+import EditableCell from "@/components/schedule/EditableCell";
 
 const newKey = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 const blankStep = (category = "") => ({ key: newKey(), category, name: "", phase: "", parties: ["cv"], days: 1, after: null, is_milestone: false, on_schedule: true });
@@ -115,7 +116,7 @@ export default function ScheduleTemplateMaster() {
           <CardContent className="p-1.5">
             {isLoading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : templates.map((t) => (
               <button key={t.id} onClick={() => choose(t.id)} className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm ${t.id === selectedId ? "bg-primary/10 font-semibold text-primary" : "hover:bg-muted"}`} data-testid="template-item">
-                <span className="truncate">{t.name}</span><span className="shrink-0 text-[11px] text-muted-foreground">{(t.steps || []).length}件</span>
+                <span className="break-words leading-snug">{t.name}</span><span className="shrink-0 text-[11px] text-muted-foreground">{(t.steps || []).length}件</span>
               </button>
             ))}
           </CardContent>
@@ -154,9 +155,9 @@ export default function ScheduleTemplateMaster() {
                         <button className="ml-0.5 text-muted-foreground disabled:opacity-20" disabled={i === form.steps.length - 1} onClick={() => moveStep(i, 1)}><ArrowDown className="h-3 w-3" /></button>
                       </td>
                       <td className="text-center tabular-nums text-muted-foreground">{i + 1}</td>
-                      <td className="px-1 py-1"><Input value={s.category} list="tpl-categories" onChange={(e) => setStep(i, { category: e.target.value })} className="h-7 text-xs" /></td>
-                      <td className="px-1 py-1"><Input value={s.name} onChange={(e) => setStep(i, { name: e.target.value })} className="h-7 text-xs" /></td>
-                      <td className="px-1 py-1"><Input value={s.phase} list="tpl-phases" onChange={(e) => setStep(i, { phase: e.target.value })} className="h-7 text-xs" /></td>
+                      <td className="px-1 py-1"><EditableCell value={s.category} list="tpl-categories" onCommit={(v) => setStep(i, { category: v })} /></td>
+                      <td className="px-1 py-1"><EditableCell value={s.name} placeholder="タスク名" onCommit={(v) => setStep(i, { name: v })} /></td>
+                      <td className="px-1 py-1"><EditableCell value={s.phase} list="tpl-phases" onCommit={(v) => setStep(i, { phase: v })} /></td>
                       <td className="px-1 py-1"><PartiesCell step={s} onChange={(parties) => setStep(i, { parties })} /></td>
                       <td className="px-1 py-1"><Input type="number" min="0" value={s.is_milestone ? 0 : s.days} disabled={s.is_milestone} onChange={(e) => setStep(i, { days: Math.max(1, Number(e.target.value) || 1) })} className="h-7 px-1 text-right text-xs" /></td>
                       <td className="px-1 py-1"><AfterCell step={s} steps={form.steps} onChange={(after) => setStep(i, { after })} /></td>
@@ -195,8 +196,8 @@ function PartiesCell({ step, onChange }) {
     <div className="flex items-center gap-1.5">
       <label className="flex items-center gap-1"><Checkbox checked={has("cv")} onCheckedChange={() => toggle("cv")} />CV</label>
       <label className="flex items-center gap-1 whitespace-nowrap"><Checkbox checked={has("client")} onCheckedChange={() => toggle("client")} /><span className="text-[11px]">クライアント</span></label>
-      <Input value={others.join("、")} placeholder="その他" className="h-7 min-w-0 flex-1 text-xs"
-        onChange={(e) => onChange([...step.parties.filter((k) => !k.startsWith("other:")), ...e.target.value.split(/[、,]/).map((x) => x.trim()).filter(Boolean).map((x) => `other:${x}`)])} />
+      <div className="min-w-[64px] flex-1"><EditableCell value={others.join("、")} placeholder="その他"
+        onCommit={(v) => onChange([...step.parties.filter((k) => !k.startsWith("other:")), ...v.split(/[、,]/).map((x) => x.trim()).filter(Boolean).map((x) => `other:${x}`)])} /></div>
     </div>
   );
 }
@@ -208,7 +209,7 @@ function AfterCell({ step, steps, onChange }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="inline-flex h-7 w-full items-center gap-1 truncate rounded border px-1.5 text-left hover:bg-muted/40"><Link2 className="h-3 w-3 shrink-0 text-muted-foreground" /><span className="truncate">{label}</span></button>
+        <button className="inline-flex min-h-7 w-full items-center gap-1 rounded border px-1.5 py-1 text-left hover:bg-muted/40"><Link2 className="h-3 w-3 shrink-0 text-muted-foreground" /><span className="break-words leading-snug">{label}</span></button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-2 text-xs" align="start">
         <p className="px-1 pb-1 font-semibold">前の工程（これが終わってから始める）</p>
@@ -216,7 +217,7 @@ function AfterCell({ step, steps, onChange }) {
           {steps.filter((s) => s.key !== step.key).map((s) => (
             <label key={s.key} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted">
               <Checkbox checked={step.after.includes(s.key)} onCheckedChange={() => onChange(step.after.includes(s.key) ? step.after.filter((k) => k !== s.key) : [...step.after, s.key])} />
-              <span className="w-8 text-muted-foreground">No.{no.get(s.key)}</span><span className="truncate">{s.category ? `${s.category}／` : ""}{s.name}</span>
+              <span className="w-8 text-muted-foreground">No.{no.get(s.key)}</span><span className="break-words leading-snug">{s.category ? `${s.category}／` : ""}{s.name}</span>
             </label>
           ))}
         </div>
