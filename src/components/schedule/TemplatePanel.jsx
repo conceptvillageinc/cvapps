@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sparkles, Loader2, Plus, X, AlertTriangle, CalendarCheck, CalendarArrowDown, Settings2, ScanText } from "lucide-react";
 import { toast } from "sonner";
 import { toYmd, addDays, keyDatesOf, jpDate } from "@/lib/schedule";
-import { draftFromTemplates, suggestTemplates } from "@/lib/scheduleTemplates";
+import { draftFromTemplates, pickTemplates } from "@/lib/scheduleTemplates";
 import ScheduleTimeline from "./ScheduleTimeline";
 
 /** 工程表テンプレートの一覧（マスタ） */
@@ -37,10 +37,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
     queryKey: ["estimates", "byProject", project.id],
     queryFn: () => db.entities.Estimate.filter({ project_id: project.id }, "-created_date"),
   });
-  const suggested = useMemo(
-    () => suggestTemplates(templates, [project.name, ...estimates.map((e) => e.estimate_title)]),
-    [templates, estimates, project.name],
-  );
+  const suggested = useMemo(() => pickTemplates(templates, { project, estimates }), [templates, estimates, project]);
   const deadlineDefault = keyDatesOf(project).find((k) => /納品|納期/.test(k.label))?.date || project.due_date || addDays(today, 30);
 
   const [selected, setSelected] = useState(null); // テンプレートの id の配列（null のあいだは候補を使う）
@@ -48,7 +45,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
   const [deadline, setDeadline] = useState(deadlineDefault);
   const [start, setStart] = useState(today);
   const [saving, setSaving] = useState(false);
-  useEffect(() => { if (selected === null && suggested.length) setSelected([suggested[0].id]); }, [suggested, selected]);
+  useEffect(() => { if (selected === null && suggested.length) setSelected(suggested.map((t) => t.id)); }, [suggested, selected]);
 
   const chosen = (selected || []).map((id) => templates.find((t) => t.id === id)).filter(Boolean);
   const draft = useMemo(
@@ -109,22 +106,22 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
   const seg = (on) => `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors ${on ? "bg-white font-semibold text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`;
   return (
     <div className="space-y-3" data-testid="template-panel">
-      <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
+      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Sparkles className="h-4 w-4 text-violet-600" />
+          <Sparkles className="h-4 w-4 text-blue-600" />
           <p className="text-sm font-bold text-slate-800">{existingCount ? "テンプレートから工程を追加" : "テンプレートから工程表を作る"}</p>
-          <span className="text-xs text-slate-500">{suggested.length ? `案件名から「${suggested[0].name}」を選んでいます。` : "案件名から合うテンプレートが見つかりませんでした。選んでください。"}下書きを確かめて「この内容で作る」で保存します</span>
+          <span className="text-xs text-slate-500">{suggested.length ? `案件名と見積書から${suggested.map((t) => `「${t.name}」`).join("")}を選んでいます。` : "案件名と見積書から合うテンプレートが見つかりませんでした。選んでください。"}下書きを確かめて「この内容で作る」で保存します</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           {chosen.map((t) => (
-            <span key={t.id} className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-violet-800 ring-1 ring-violet-200">
-              {suggested.some((s) => s.id === t.id) && <span className="text-[10px] text-violet-500">おすすめ</span>}
+            <span key={t.id} className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-200">
+              {suggested.some((s) => s.id === t.id) && <span className="text-[10px] font-semibold text-blue-500">Pick up</span>}
               {t.name}
-              <button onClick={() => toggle(t.id)} className="text-violet-400 hover:text-violet-700" title="外す"><X className="h-3 w-3" /></button>
+              <button onClick={() => toggle(t.id)} className="text-blue-400 hover:text-blue-700" title="外す"><X className="h-3 w-3" /></button>
             </span>
           ))}
-          {onImport && <Button size="sm" variant="ghost" className="ml-auto h-7 gap-1 text-xs text-violet-700" onClick={onImport} data-testid="import-open"><ScanText className="h-3.5 w-3.5" />いまある工程表（スプレッドシート・画像）から入れる</Button>}
+          {onImport && <Button size="sm" variant="outline" className="ml-auto h-7 gap-1 border-blue-300 bg-white text-xs text-blue-700 shadow-sm hover:bg-blue-50 hover:text-blue-800" onClick={onImport} data-testid="import-open"><ScanText className="h-3.5 w-3.5" />今ある工程表（スプレッドシート・画像）から入れる</Button>}
           <Popover>
             <PopoverTrigger asChild>
               <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" data-testid="template-picker"><Plus className="h-3.5 w-3.5" />{chosen.length ? "テンプレートを足す" : "テンプレートを選ぶ"}</Button>
@@ -136,7 +133,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
                   <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted">
                     <Checkbox checked={(selected || []).includes(t.id)} onCheckedChange={() => toggle(t.id)} />
                     <span className="flex-1">{t.name}</span>
-                    {suggested.some((s) => s.id === t.id) && <span className="rounded bg-violet-100 px-1 text-[10px] text-violet-700">おすすめ</span>}
+                    {suggested.some((s) => s.id === t.id) && <span className="rounded bg-blue-100 px-1 text-[10px] font-semibold text-blue-700">Pick up</span>}
                     <span className="text-muted-foreground">{(t.steps || []).length}件</span>
                   </label>
                 ))}
@@ -172,7 +169,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
 
       {draft && (
         <div className="relative">
-          <span className="absolute right-3 top-2 z-30 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">下書き（まだ保存していません）</span>
+          <span className="absolute right-3 top-2 z-30 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">下書き（まだ保存していません）</span>
           <ScheduleTimeline tasks={draft.tasks} parties={draft.parties} keyDates={mode === "deadline" ? [...keyDatesOf(project).filter((k) => !/納品|納期/.test(k.label)), { label: "納期", date: deadline }] : keyDatesOf(project)} holidays={holidays} scale={(new Date(range.to) - new Date(range.from)) / 86400000 > 24 ? "week" : "day"} columns="standard" today={today} />
         </div>
       )}

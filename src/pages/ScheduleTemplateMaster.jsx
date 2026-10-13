@@ -110,11 +110,11 @@ export default function ScheduleTemplateMaster() {
     <div className="space-y-5">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><LayoutTemplate className="h-6 w-6" /> 工程表テンプレート</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">案件の工程表が空のとき、案件名からテンプレートを選んで下書きを出します。日数は営業日（土日・祝日・会社の休業日をとばす）です</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">案件の工程表が空のとき、案件名と見積書からテンプレートを選んで下書きを出します。日数は営業日（土日・祝日・会社の休業日をとばす）です</p>
       </div>
       <div className="grid gap-5 2xl:grid-cols-[260px_1fr]">
         <Card className="h-fit">
-          <CardHeader className="pb-2"><CardTitle className="flex items-center justify-between text-sm">テンプレート（{templates.length}）<span className="flex gap-1"><Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setImportOpen(true)} data-testid="import-open" title="いまある工程表（スプレッドシート・Excel・画像・PDF）から作る"><ScanText className="h-3.5 w-3.5" />読み取って作る</Button><Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => createNew()}><Plus className="h-3.5 w-3.5" />新規</Button></span></CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="flex items-center justify-between text-sm">テンプレート（{templates.length}）<span className="flex gap-1"><Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setImportOpen(true)} data-testid="import-open" title="今ある工程表（スプレッドシート・Excel・画像・PDF）から作る"><ScanText className="h-3.5 w-3.5" />読み取って作る</Button><Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => createNew()}><Plus className="h-3.5 w-3.5" />新規</Button></span></CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-x-2 p-1.5 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-1">
             {isLoading ? <div className="col-span-full flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : templates.map((t) => (
               <button key={t.id} onClick={() => choose(t.id)} className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm ${t.id === selectedId ? "bg-primary/10 font-semibold text-primary" : "hover:bg-muted"}`} data-testid="template-item">

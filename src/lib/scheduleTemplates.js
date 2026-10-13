@@ -423,3 +423,26 @@ export const DEFAULT_TEMPLATES = [
     ],
   },
 ];
+
+/**
+ * 案件に合うテンプレートを選ぶ（案件名・見積の件名を先に、見積の明細・印刷仕様も見る。複数可）。
+ * 組み合わせのテンプレート（展示会ツールなど）を選んだときは、その中にある制作物 1 つだけのテンプレート（パネルなど）は外す。
+ * @param {object[]} templates
+ * @param {{ project: object, estimates: object[] }} p
+ * @returns {object[]} 選ぶテンプレート（最大 4 つ）
+ */
+export function pickTemplates(templates, { project, estimates = [] }, max = 4) {
+  const strong = [project?.name, ...estimates.flatMap((e) => [e.estimate_title, e.print_type])];
+  const weak = estimates.flatMap((e) => [
+    ...(Array.isArray(e.line_items) ? e.line_items.map((li) => (li.row_type === "text" ? li.text : li.name)) : []),
+    ...(Array.isArray(e.print_specs) ? e.print_specs.flatMap((s) => [s.label, s.print_type, s.usage]) : []),
+  ]);
+  // 明細のうち、制作物そのものではない行（写真補正・素材使用料・送料など）は見ない
+  const NOT_ITEM = /補正|レタッチ|使用料|素材|切り抜き|切抜|送料|配送料|色校|手数料|値引/;
+  const first = suggestTemplates(templates, strong);
+  const second = suggestTemplates(templates, weak.filter((x) => x && !NOT_ITEM.test(String(x)))).filter((t) => !first.some((f) => f.id === t.id));
+  let picks = [...first, ...second];
+  const covers = (big, small) => big.id !== small.id && (big.steps || []).some((s) => s.category && s.category !== COMMON_CATEGORY && s.category === small.name);
+  picks = picks.filter((t) => !picks.some((o) => covers(o, t)));
+  return picks.slice(0, max);
+}

@@ -145,7 +145,7 @@ export default function ImportScheduleDialog({ open, onOpenChange, mode, project
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ScanText className="h-4 w-4" />{mode === "template" ? "スプレッドシート・画像からテンプレートを作る" : "スプレッドシート・画像から工程表に入れる"}</DialogTitle>
           <DialogDescription className="text-xs">
-            いまある工程表（Google スプレッドシート・Excel・CSV・画像・PDF）を AI が読み取り、工程にします。読み取った結果を確かめてから保存します。
+            今ある工程表（Google スプレッドシート・Excel・CSV・画像・PDF）を AI が読み取り、工程にします。読み取った結果を確かめてから保存します。
             {mode === "template" ? "テンプレートでは、日数を営業日（土日・祝日をとばす）に直します。" : "読み取った日付のまま入れます。"}
           </DialogDescription>
         </DialogHeader>
@@ -180,7 +180,7 @@ export default function ImportScheduleDialog({ open, onOpenChange, mode, project
         </div>
 
         {draft && (
-          <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3" data-testid="import-result">
+          <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-3" data-testid="import-result">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="font-semibold">{draft.tasks.length}件の工程を読み取りました</span>
               {draft.keyDates.map((k) => <span key={k.label + k.date} className="rounded bg-red-50 px-1.5 py-0.5 font-semibold text-red-700 ring-1 ring-red-200">{k.label} {jpDate(k.date)}</span>)}
