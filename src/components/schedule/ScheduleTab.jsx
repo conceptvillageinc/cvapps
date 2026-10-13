@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText } from "lucide-react";
+import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
@@ -53,6 +53,20 @@ export default function ScheduleTab({ project }) {
   const categories = useMemo(() => [...new Set(tasks.map((t) => t.category).filter(Boolean))], [tasks]);
 
   const setRows = (fn) => qc.setQueryData(key, (old) => fn(old || []));
+  // 自動で保存したことを小さく知らせる（保存中… → 保存しました）
+  const [pending, setPending] = useState(0);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const flashTimer = useRef(null);
+  const track = async (fn) => {
+    setPending((n) => n + 1);
+    try {
+      const r = await fn();
+      setSavedFlash(true);
+      clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setSavedFlash(false), 2500);
+      return r;
+    } finally { setPending((n) => n - 1); }
+  };
   const fail = (err) => { toast.error("保存できませんでした: " + (err?.message || "不明なエラー")); qc.invalidateQueries({ queryKey: key }); };
 
   /** 1 つの工程を変える。日付・前の工程が変わったら、後ろの工程もずらす */
@@ -64,15 +78,17 @@ export default function ScheduleTab({ project }) {
     const byId = new Map(shifts.map((s) => [s.id, s]));
     setRows((old) => old.map((t) => (t.id === id ? { ...t, ...patch } : byId.has(t.id) ? { ...t, ...byId.get(t.id) } : t)));
     try {
-      await db.entities.ProjectTask.update(id, patch);
-      await Promise.all(shifts.map((s) => db.entities.ProjectTask.update(s.id, { start_date: s.start_date, end_date: s.end_date })));
+      await track(async () => {
+        await db.entities.ProjectTask.update(id, patch);
+        await Promise.all(shifts.map((s) => db.entities.ProjectTask.update(s.id, { start_date: s.start_date, end_date: s.end_date })));
+      });
       if (crossed.length) toast.warning(`後ろの工程 ${shifts.length} 件をずらした結果、${crossed.map((c) => `「${c.name}」が${c.key.label} ${jpDate(c.key.date)}`).join("、")}を過ぎています`, { duration: 10000 });
       else if (shifts.length) toast.success(`前の工程に合わせて、後ろの工程 ${shifts.length} 件をずらしました（土日・祝日はとばしています）`);
     } catch (err) { fail(err); }
   };
 
   const create = useMutation({
-    mutationFn: async ({ category = null, after = null } = {}) => {
+    mutationFn: ({ category = null, after = null } = {}) => track(async () => {
       const pos = after ? tasks.indexOf(after) + 1 : tasks.length;
       const prev = after || tasks[tasks.length - 1];
       const pr = prev && taskRange(prev);
@@ -80,7 +96,7 @@ export default function ScheduleTab({ project }) {
       // 入れる場所より後ろの並び順を 1 つずつ下げる
       await Promise.all(tasks.slice(pos).map((t, i) => db.entities.ProjectTask.update(t.id, { sort_order: pos + i + 1 })));
       return db.entities.ProjectTask.create({ project_id: project.id, name: "新しい工程", category, status: "todo", parties: ["cv"], start_date: start, end_date: start, sort_order: pos, depends_on: after ? [after.id] : [] });
-    },
+    }),
     onSuccess: (row) => { if (row?.id) setEditingId(row.id); qc.invalidateQueries({ queryKey: key }); },
     onError: fail,
   });
@@ -90,8 +106,10 @@ export default function ScheduleTab({ project }) {
     const dependents = tasks.filter((x) => (x.depends_on || []).includes(t.id));
     setRows((old) => old.filter((x) => x.id !== t.id).map((x) => (dependents.some((d) => d.id === x.id) ? { ...x, depends_on: x.depends_on.filter((p) => p !== t.id) } : x)));
     try {
-      await Promise.all(dependents.map((d) => db.entities.ProjectTask.update(d.id, { depends_on: d.depends_on.filter((p) => p !== t.id) })));
-      await db.entities.ProjectTask.delete(t.id);
+      await track(async () => {
+        await Promise.all(dependents.map((d) => db.entities.ProjectTask.update(d.id, { depends_on: d.depends_on.filter((p) => p !== t.id) })));
+        await db.entities.ProjectTask.delete(t.id);
+      });
     } catch (err) { fail(err); }
   };
 
@@ -102,12 +120,12 @@ export default function ScheduleTab({ project }) {
     [order[i], order[j]] = [order[j], order[i]];
     setRows(() => order.map((t, k) => ({ ...t, sort_order: k })));
     try {
-      await Promise.all(order.map((t, k) => (t.sort_order === k ? null : db.entities.ProjectTask.update(t.id, { sort_order: k }))));
+      await track(() => Promise.all(order.map((t, k) => (t.sort_order === k ? null : db.entities.ProjectTask.update(t.id, { sort_order: k })))));
     } catch (err) { fail(err); }
   };
 
   const saveSettings = useMutation({
-    mutationFn: (settings) => db.entities.Project.update(project.id, { schedule_settings: settings }),
+    mutationFn: (settings) => track(() => db.entities.Project.update(project.id, { schedule_settings: settings })),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["project", project.id] }); setSettingsOpen(false); toast.success("工程表の設定を保存しました"); },
     onError: (err) => toast.error("保存できませんでした: " + err.message),
   });
@@ -135,7 +153,11 @@ export default function ScheduleTab({ project }) {
       <CardHeader className="pb-3 space-y-2">
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div className="min-w-0">
-            <CardTitle className="text-sm flex items-center gap-2"><CalendarRange className="w-4 h-4" /> 工程表（{tasks.length}件）</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><CalendarRange className="w-4 h-4" /> 工程表（{tasks.length}件）
+              {pending > 0
+                ? <span className="inline-flex items-center gap-1 text-[11px] font-normal text-slate-400" data-testid="save-status"><Loader2 className="h-3 w-3 animate-spin" />保存中…</span>
+                : <span className={`inline-flex items-center gap-1 text-[11px] font-normal text-emerald-600 transition-opacity duration-500 ${savedFlash ? "opacity-100" : "opacity-0"}`} data-testid="save-status" aria-live="polite"><Check className="h-3 w-3" strokeWidth={3} />保存しました</span>}
+            </CardTitle>
             <p className="text-xs mt-1 font-semibold">{scheduleTitle(project)}</p>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {keyDates.map((k) => <span key={k.date + k.label} className="rounded bg-red-50 border border-red-200 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">{k.label} {jpDate(k.date)}</span>)}
