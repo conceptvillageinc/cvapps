@@ -31,7 +31,7 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
       <table className="w-full text-xs table-fixed min-w-[1520px]">
         <thead>
           <tr className="border-b border-slate-200 bg-white text-[11px] text-slate-500">
-            <th className="w-10 px-1 py-2 font-normal"></th>
+            <th className="w-[52px] px-1 py-2 font-normal"></th>
             <th className="w-12"></th>
             <th className="text-left px-2 py-2 font-normal w-[140px]">カテゴリー</th>
             <th className="text-left px-2 py-2 font-normal w-[230px]">タスク名</th>
@@ -70,9 +70,9 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
                 return (
                   <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80" data-testid="schedule-row">
                     <td className="relative text-center">
-                      <span className="absolute inset-y-[3px] left-[2px] w-[3px] rounded-full" style={{ background: tint(secColors.get(t.category || ""), 0.35) }} />
+                      <span className="absolute inset-y-[3px] left-[14px] w-[3px] rounded-full" style={{ background: tint(secColors.get(t.category || ""), 0.35) }} />
                       <button role="checkbox" aria-checked={!!t.completed} title={t.completed ? "未完了に戻す" : "完了にする"} onClick={() => onChange(t.id, { completed: !t.completed, completed_at: t.completed ? null : new Date().toISOString() })}
-                        className={`mx-auto flex h-[18px] w-[18px] items-center justify-center rounded-full border transition-colors ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500"}`}><Check className="h-3 w-3" strokeWidth={3} /></button>
+                        className={`ml-[24px] flex h-[18px] w-[18px] items-center justify-center rounded-full border transition-colors ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500"}`}><Check className="h-3 w-3" strokeWidth={3} /></button>
                     </td>
                     <td className="px-1 whitespace-nowrap">
                       <button className="text-muted-foreground hover:text-foreground disabled:opacity-20" disabled={i === 0} onClick={() => onMove(i, -1)}><ArrowUp className="w-3 h-3" /></button>
