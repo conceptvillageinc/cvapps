@@ -53,7 +53,8 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
           {groups.map((g, gi) => (
             <Fragment key={`${g.category}-${gi}`}>
               <tr className="group/sec">
-                <td colSpan={16} className="px-2 pt-4 pb-1.5 border-b border-slate-200">
+                <td colSpan={16} className="relative pl-3 pr-2 pt-4 pb-1.5 border-b border-slate-200">
+                  <span className="absolute left-0 bottom-0 h-7 w-[4px]" style={{ background: secColors.get(g.category) }} />
                   <button className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-800" onClick={() => toggle(g.category)} data-testid="list-section">
                     {collapsed.has(g.category) ? <ChevronRight className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                     <span className="h-2.5 w-2.5 rounded-sm" style={{ background: secColors.get(g.category) }} />
@@ -68,7 +69,8 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
                 const r = taskRange(t);
                 return (
                   <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80" data-testid="schedule-row">
-                    <td className="text-center">
+                    <td className="relative text-center">
+                      <span className="absolute inset-y-0 left-0 w-[4px]" style={{ background: secColors.get(t.category || "") }} />
                       <button role="checkbox" aria-checked={!!t.completed} title={t.completed ? "未完了に戻す" : "完了にする"} onClick={() => onChange(t.id, { completed: !t.completed, completed_at: t.completed ? null : new Date().toISOString() })}
                         className={`mx-auto flex h-[18px] w-[18px] items-center justify-center rounded-full border transition-colors ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500"}`}><Check className="h-3 w-3" strokeWidth={3} /></button>
                     </td>
@@ -116,7 +118,7 @@ function PartyPicker({ task, parties, users, memberName, onChange }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="w-full min-h-7 rounded border border-transparent px-1 py-0.5 hover:border-slate-200 text-left hover:bg-muted/40" data-testid="party-picker"><PartyChips task={task} parties={parties} memberName={memberName} /></button>
+        <button className="w-full min-h-7 rounded border border-transparent px-1 py-0.5 hover:border-slate-200 text-left hover:bg-muted/40" data-testid="party-picker"><PartyChips task={task} parties={parties} memberName={memberName} alwaysMembers /></button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3 space-y-2 text-xs" align="start">
         <p className="font-semibold">担当（複数選べます）</p>

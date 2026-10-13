@@ -49,7 +49,7 @@ async function view(req, res, body) {
   const { data: project } = await admin.from('projects').select('id, name, client_name, schedule_settings').eq('id', share.project_id).maybeSingle();
   if (!project) { res.status(404).json({ error: 'not_found' }); return; }
   const { data: tasks } = await admin.from('project_tasks').select('*').eq('project_id', project.id).order('sort_order').order('created_at');
-  const { data: users } = await admin.from('users').select('id, full_name, short_name');
+  const { data: users } = await admin.from('users').select('id, full_name, short_name, avatar_url');
   const { data: holidayRow } = await admin.from('system_settings').select('setting_value').eq('setting_key', 'company_holidays').maybeSingle();
   let holidays = [];
   try { holidays = holidayRow ? JSON.parse(holidayRow.setting_value) : []; } catch { holidays = []; }
@@ -63,7 +63,7 @@ async function view(req, res, body) {
     client_name: project.client_name || '',
     key_dates: keyDatesOf(project),
     parties: partiesOf(project),
-    tasks: clientTasks(tasks || [], (id) => memberShortName(byId.get(id))),
+    tasks: clientTasks(tasks || [], (id) => memberShortName(byId.get(id)), (id) => byId.get(id)?.avatar_url || ''),
     company_holiday_lines: Array.isArray(holidays) ? holidays.map(String) : [],
     updated_at: updated || null,
   });

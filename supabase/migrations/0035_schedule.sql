@@ -6,6 +6,7 @@
 --     show_members（クライアント向けにメンバー名も出す）、completed（未完了／完了）、
 --     is_milestone（節目 ◆）、on_schedule（クライアント向け工程表に出す）、
 --     estimated_hours / actual_hours（見込み時間・実績時間）、depends_on（前の工程の id の配列）
+--   users.avatar_url: メンバーの顔写真（工程表のアイコン）
 --   projects.schedule_settings: 工程表のタイトル・担当の区分（色）・大事な日（納品期限・使用日など）
 --   schedule_shares: クライアント向け共有リンク（推測できない URL。パスワード・期限は任意）
 --     リンクの中身はサーバー（/api/schedule-share）が service_role で読み、工程表に出す工程だけを返す
@@ -35,6 +36,11 @@ update public.project_tasks set parties = case
     when owner ilike '%CV%' then '["cv"]'::jsonb
     else parties end
   where parties = '[]'::jsonb and owner is not null and owner <> '';
+
+-- メンバーの顔写真（工程表のアイコンに使う。小さく縮めた画像を data URL で持つ）
+alter table public.users add column if not exists avatar_url text;
+alter table public.users drop constraint if exists users_avatar_url_size;
+alter table public.users add constraint users_avatar_url_size check (avatar_url is null or (length(avatar_url) < 200000 and avatar_url like 'data:image/%'));
 
 alter table public.projects add column if not exists schedule_settings jsonb not null default '{}'::jsonb;
 

@@ -207,7 +207,7 @@ export function memberShortName(u) {
  * クライアントに見せる工程（工程表に出すものだけ。社内メモ・時間は外し、前の工程も見せる工程どうしに絞る）。
  * メンバー名は show_members のときだけ、名前（member_ids に名前を入れる）で返す。
  */
-export function clientTasks(tasks, memberName = () => "") {
+export function clientTasks(tasks, memberName = () => "", memberAvatar = () => "") {
   const shown = (tasks || []).filter((t) => t.on_schedule !== false);
   const ids = new Set(shown.map((t) => t.id));
   return shown.map((t) => ({
@@ -216,7 +216,10 @@ export function clientTasks(tasks, memberName = () => "") {
     name: t.name || "",
     phase: t.phase || "",
     parties: Array.isArray(t.parties) ? t.parties : [],
-    member_ids: t.show_members ? (t.member_ids || []).map(memberName).filter(Boolean) : [],
+    ...(() => {
+      const ms = t.show_members ? (t.member_ids || []).map((id) => ({ name: memberName(id), avatar: memberAvatar(id) || "" })).filter((m) => m.name) : [];
+      return { member_ids: ms.map((m) => m.name), member_avatars: ms.map((m) => m.avatar) };
+    })(),
     show_members: !!t.show_members,
     start_date: t.start_date || null,
     end_date: t.end_date || null,

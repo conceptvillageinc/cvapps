@@ -15,21 +15,33 @@ export function tint(hex, k) {
   return `#${ch.map((x) => x.toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** 担当のまるいアイコン（CV・クライアント名の頭文字・メンバーの名字） */
-export function PartyAvatars({ task, parties, memberName = () => "", size = 20 }) {
+/** 担当のメンバー（名前と写真）。社内の画面ではいつも、クライアント向けは「メンバー名を出す」のときだけ */
+export function membersOf(task, memberName = () => "", memberAvatar = () => "", always = false) {
+  if (!always && !task.show_members) return [];
+  return (task.member_ids || []).map((id, i) => ({ name: memberName(id), avatar: task.member_avatars?.[i] || memberAvatar(id) || "" })).filter((m) => m.name);
+}
+
+/** 担当のまるいアイコン（写真があれば写真。無ければ CV・クライアント名の頭文字・メンバーの名字） */
+export function PartyAvatars({ task, parties, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, size = 20, max = 3 }) {
   const keys = task.parties?.length ? task.parties : [];
-  const members = task.show_members ? (task.member_ids || []).map(memberName).filter(Boolean) : [];
-  const items = keys.map((k) => {
+  const members = membersOf(task, memberName, memberAvatar, alwaysMembers);
+  const items = [];
+  for (const k of keys) {
     const p = partyOf(parties, k);
-    const text = k === "cv" && members.length ? members[0].slice(0, 2) : k === "cv" ? "CV" : p.label.replace(/様$/, "").slice(0, 1);
-    return { key: k, text, color: p.color, title: k === "cv" && members.length ? `CV（${members.join("・")}）` : p.label };
-  });
+    if (k === "cv" && members.length) {
+      for (const m of members) items.push({ key: `m${m.name}`, text: m.name.slice(0, 2), avatar: m.avatar, color: p.color, title: `CV（${m.name}）` });
+    } else {
+      items.push({ key: k, text: k === "cv" ? "CV" : p.label.replace(/様$/, "").slice(0, 1), color: p.color, title: p.label });
+    }
+  }
   if (!items.length) return null;
+  const shown = items.slice(0, max);
   return (
     <span className="inline-flex -space-x-1.5 shrink-0">
-      {items.map((it) => (
-        <span key={it.key} title={it.title} className="inline-flex items-center justify-center rounded-full font-bold text-white ring-2 ring-white" style={{ width: size, height: size, background: it.color, fontSize: size * 0.42 }}>{it.text}</span>
-      ))}
+      {shown.map((it) => it.avatar
+        ? <img key={it.key} src={it.avatar} alt={it.title} title={it.title} className="rounded-full object-cover ring-2 ring-white" style={{ width: size, height: size, boxShadow: `0 0 0 ${size > 18 ? 3 : 2}px ${it.color}` }} />
+        : <span key={it.key} title={it.title} className="inline-flex items-center justify-center rounded-full font-bold text-white ring-2 ring-white" style={{ width: size, height: size, background: it.color, fontSize: size * 0.42 }}>{it.text}</span>)}
+      {items.length > max && <span className="inline-flex items-center justify-center rounded-full bg-slate-200 font-bold text-slate-600 ring-2 ring-white" style={{ width: size, height: size, fontSize: size * 0.4 }}>+{items.length - max}</span>}
     </span>
   );
 }
@@ -50,7 +62,7 @@ export function PartyAvatars({ task, parties, memberName = () => "", size = 20 }
  * @param {(id) => string} [p.memberName]
  * @param {"soft"|"solid"|"progress"|"status"|"line"|"cells"} [p.barStyle]  棒の見せ方
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", today, fitHeight = false, barStyle = "soft" }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line" }) {
   const colW = scale === "week" ? 16 : 34;
   const bounds = useMemo(() => {
     const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : 3 });
@@ -183,21 +195,24 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
         <div className="flex">
           <div className="sticky left-0 z-10 border-r border-slate-200 bg-white" style={{ width: leftW }}>
             {rows.list.map((row) => row.type === "section" ? (
-              <button key={row.key} onClick={() => toggle(row.category)} className="flex w-full items-center gap-1.5 border-b border-slate-100 px-2 text-left hover:bg-slate-50" style={{ height: SEC_H }} data-testid="timeline-section">
+              <button key={row.key} onClick={() => toggle(row.category)} className="relative flex w-full items-center gap-1.5 border-b border-slate-100 pl-3 pr-2 text-left hover:bg-slate-50" style={{ height: SEC_H }} data-testid="timeline-section">
+                <span className="absolute inset-y-0 left-0 w-[4px]" style={{ background: secColors.get(row.category) }} />
                 {collapsed.has(row.category) ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ background: secColors.get(row.category) }} />
                 <span className="truncate text-[13px] font-bold text-slate-800">{row.category || "（カテゴリーなし）"}</span>
                 <span className="ml-auto shrink-0 rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500">{row.items.filter((t) => t.completed).length}/{row.items.length}</span>
               </button>
             ) : (
-              <div key={row.key} className="group flex items-center border-b border-slate-100 text-[12px] hover:bg-slate-50" style={{ height: ROW_H }} data-testid="timeline-row">
+              <div key={row.key} className="group relative flex items-center border-b border-slate-100 text-[12px] hover:bg-slate-50" style={{ height: ROW_H }} data-testid="timeline-row">
+                <span className="absolute inset-y-0 left-0 w-[4px]" style={{ background: secColors.get(row.t.category || "") }} />
+                <span className="absolute inset-y-0 left-[14px] w-[3px]" style={{ background: tint(secColors.get(row.t.category || ""), 0.45) }} />
                 {leftCols.map((c) => {
                   const t = row.t;
                   const r = taskRange(t);
                   let v = null;
                   if (c.key === "name") {
                     v = (
-                      <span className="flex min-w-0 items-center gap-2 pl-5">
+                      <span className="flex min-w-0 items-center gap-2 pl-6">
                         {t.is_milestone
                           ? <span className={`h-3 w-3 shrink-0 rotate-45 rounded-[2px] ${t.completed ? "bg-emerald-500" : "bg-fuchsia-500"}`} />
                           : <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}><Check className="h-3 w-3" strokeWidth={3} /></span>}
@@ -206,7 +221,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                     );
                   }
                   if (c.key === "phase") v = t.phase ? <span className="truncate rounded bg-slate-100 px-1 py-0.5 text-[10px] text-slate-600" title={t.phase}>{t.phase}</span> : "";
-                  if (c.key === "party") v = <PartyAvatars task={t} parties={parties} memberName={memberName} />;
+                  if (c.key === "party") v = <PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} />;
                   if (c.key === "range") v = r ? <span className="text-[11px] text-slate-500 whitespace-nowrap">{r.start === r.end ? mdw(r.start) : `${md(r.start)} – ${md(r.end)}`}</span> : "";
                   return <div key={c.key} className={`flex min-w-0 items-center px-3 ${c.key === "name" ? "" : "justify-center"}`} style={{ width: c.w }}>{v}</div>;
                 })}
@@ -282,15 +297,18 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
 
               // 細い線（ミニマル）
               if (barStyle === "line") {
-                return wrap(ROW_H - 10, <>
-                  <div onPointerDown={(e) => startDrag(e, t, "move")} className={`relative flex h-full items-center select-none ${grab} ${t.completed ? "opacity-50" : ""}`} style={{ width: width - 4 }} title={tip} data-testid="timeline-bar">
-                    <span className="absolute left-2 right-2 h-[5px] rounded-full" style={{ background: colors.length > 1 ? `linear-gradient(90deg, ${colors.join(", ")})` : c0 }} />
-                    <span className="absolute left-1 h-2.5 w-2.5 rounded-full border-2 bg-white" style={{ borderColor: c0 }} />
-                    <span className="absolute right-1 h-2.5 w-2.5 rounded-full border-2 bg-white" style={{ borderColor: colors[colors.length - 1] || c0 }} />
-                    {handles}
+                const lineBg = colors.length > 1 ? `linear-gradient(90deg, ${colors.join(", ")})` : c0;
+                return (
+                  <div key={t.id} className="absolute z-[8] flex items-center" style={{ left: left + 2, top: row.y, height: ROW_H }}>
+                    <div onPointerDown={(e) => startDrag(e, t, "move")} className={`relative flex h-full items-center select-none ${grab} ${t.completed ? "opacity-50" : ""}`} style={{ width: Math.max(width - 4, 26) }} title={tip} data-testid="timeline-bar">
+                      <span className="absolute left-3 right-1.5 h-[5px] rounded-full" style={{ background: lineBg }} />
+                      <span className="absolute right-0.5 h-2.5 w-2.5 rounded-full border-2 bg-white" style={{ borderColor: colors[colors.length - 1] || c0 }} />
+                      <span className="relative z-[1] -ml-1"><PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} size={22} max={2} /></span>
+                      {handles}
+                    </div>
+                    {scale === "day" && <span className="relative z-[9] ml-1 whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.completed ? "✓ " : ""}{t.name}</span>}
                   </div>
-                  {scale === "day" && <span className="relative z-[9] ml-1 whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.completed ? "✓ " : ""}{t.name}</span>}
-                </>);
+                );
               }
               // 日ごとのマス（営業日だけ塗る。土日・祝日はすき間）
               if (barStyle === "cells") {
@@ -304,7 +322,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                     })}
                     {handles}
                   </div>
-                  <span className="ml-1 flex items-center gap-1"><PartyAvatars task={t} parties={parties} memberName={memberName} size={16} />{scale === "day" && <span className="whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.name}</span>}</span>
+                  <span className="ml-1 flex items-center gap-1"><PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} size={16} />{scale === "day" && <span className="whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.name}</span>}</span>
                 </>);
               }
               // 色の決め方: 担当の色（soft / solid / progress）か、状況の色（status）
@@ -325,7 +343,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                   {barStyle === "progress" && elapsed > 0 && <span className="absolute inset-y-0 left-0" style={{ width: `${elapsed * 100}%`, background: t.completed ? tint("#10b981", 0.35) : tint(k0, 0.3) }} />}
                   {handles}
                   <span className="relative flex items-center gap-1.5">
-                    {width >= 40 && <PartyAvatars task={t} parties={parties} memberName={memberName} size={18} />}
+                    {width >= 40 && <PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} size={18} />}
                     {t.completed && <Check className="h-3 w-3 shrink-0" strokeWidth={3} />}
                     {textInside && <span className="truncate">{t.name}</span>}
                     {barStyle === "progress" && textInside && !t.completed && elapsed > 0 && elapsed < 1 && <span className="opacity-70">{Math.round(elapsed * 100)}%</span>}
@@ -342,10 +360,10 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
 }
 
 /** 担当の区分の印（色付きの文字。リストで使う） */
-export function PartyChips({ task, parties, memberName = () => "" }) {
+export function PartyChips({ task, parties, memberName = () => "", alwaysMembers = false }) {
   const keys = task.parties?.length ? task.parties : [];
   if (!keys.length) return <span className="text-muted-foreground">—</span>;
-  const members = task.show_members ? (task.member_ids || []).map(memberName).filter(Boolean) : [];
+  const members = alwaysMembers || task.show_members ? (task.member_ids || []).map(memberName).filter(Boolean) : [];
   return (
     <span className="flex flex-wrap gap-0.5">
       {keys.map((k) => {

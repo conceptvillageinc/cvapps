@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { UserCircle, Save, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import AvatarCard from "@/components/profile/AvatarCard";
 
 /**
  * 自分の設定（ログインユーザーごと）
@@ -60,6 +61,8 @@ export default function MyProfile() {
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">{user?.email}　メールの名乗りと署名はユーザーごとに持ちます</p>
       </div>
+
+      <AvatarCard user={user} onSaved={() => checkUserAuth({ silent: true })} />
 
       <Card>
         <CardHeader>

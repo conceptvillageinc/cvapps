@@ -39,6 +39,7 @@ export default function ScheduleTab({ project }) {
   const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => db.entities.User.list("full_name") });
   const userMap = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const memberName = (id) => memberShortName(userMap.get(id));
+  const memberAvatar = (id) => userMap.get(id)?.avatar_url || "";
   const parties = partiesOf(project);
   const keyDates = keyDatesOf(project);
   const categories = useMemo(() => [...new Set(tasks.map((t) => t.category).filter(Boolean))], [tasks]);
@@ -173,7 +174,7 @@ export default function ScheduleTab({ project }) {
         ) : tasks.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6">工程がありません。「工程を追加」から入れてください</p>
         ) : pref.view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "soft"} editable onChange={save} memberName={memberName} today={today} />
+          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
           <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onMove={move} memberName={memberName}
             onAddInCategory={(category, after) => create.mutate({ category: category || null, after })} />
