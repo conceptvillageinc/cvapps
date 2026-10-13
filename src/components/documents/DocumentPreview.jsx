@@ -52,6 +52,8 @@ const qty = (q) => { const n = Number(q); if (!Number.isFinite(n)) return ""; re
 const dateOf = (d) => (d ? String(d).slice(0, 10) : "");
 
 // 黒帯の見出し。列の間に白い線（PDF と同じ）
+/** 明細の列の区切り線 */
+const SEP = "border-l border-neutral-400";
 const Head = ({ children, className = "" }) => <th className={`bg-black text-white font-normal px-1.5 py-1 border-l border-white first:border-l-0 ${className}`}>{children}</th>;
 
 /**
@@ -143,10 +145,10 @@ export default function DocumentPreview({ type, doc, totals, company }) {
             {items.map((li, i) => (
               <tr key={li.id || i} className={i % 2 ? "bg-neutral-100" : ""}>
                 {isInvoice && <td className="px-1.5 py-1 text-center tabular-nums">{dateOf(li.transaction_date)}</td>}
-                <td className="px-1.5 py-1 break-words">{li.name}{Number(li.tax_rate) === 8 ? "（軽減8%）" : ""}</td>
-                <td className="px-1.5 py-1 text-center tabular-nums whitespace-nowrap">{`${qty(li.quantity)} ${li.unit || ""}`.trim()}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums">{unitPrice(li.unit_price)}</td>
-                <td className="px-1.5 py-1 text-right tabular-nums">{signed(li.amount)}</td>
+                <td className={`px-1.5 py-1 break-words ${isInvoice ? SEP : ""}`}>{li.name}{Number(li.tax_rate) === 8 ? "（軽減8%）" : ""}</td>
+                <td className={`px-1.5 py-1 text-center tabular-nums whitespace-nowrap ${SEP}`}>{`${qty(li.quantity)} ${li.unit || ""}`.trim()}</td>
+                <td className={`px-1.5 py-1 text-right tabular-nums ${SEP}`}>{unitPrice(li.unit_price)}</td>
+                <td className={`px-1.5 py-1 text-right tabular-nums ${SEP}`}>{signed(li.amount)}</td>
               </tr>
             ))}
           </tbody>
