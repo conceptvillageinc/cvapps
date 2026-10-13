@@ -171,6 +171,8 @@ function draw(pdf, { estimate, client, company }) {
     const h = Math.max(15, pdf.heightOfString(name, { width: NAME_W - 8 }) + 7);
     ensure(h);
     pdf.rect(MARGIN, y, CONTENT_W, h).fillAndStroke('#ffffff', '#e2e8f0');
+    // 列の区切り線
+    { let sx = MARGIN; for (const [, w0] of COLS.slice(0, -1)) { sx += w0 || NAME_W; pdf.save().lineWidth(0.6).strokeColor('#e2e8f0').moveTo(sx, y).lineTo(sx, y + h).stroke().restore(); } }
     pdf.fillColor('#000').text(name, MARGIN + 4, y + 3, { width: NAME_W - 8 });
     const cells = [fmtQty(li.quantity), String(li.unit || ''), signedYen(li.unit_price), signedYen(li.amount)];
     let x = MARGIN + NAME_W;

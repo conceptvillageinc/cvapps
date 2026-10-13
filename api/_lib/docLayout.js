@@ -410,8 +410,17 @@ export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
   let ry = y + L.headH;
   let usedUnits = 0;
   let stripe = 0;
-  const drawRowBox = (h) => {
+  // 列の区切り線（摘要｜数量｜単価｜明細金額）。from 列目より右の境目だけ引く
+  const drawSeparators = (h, from = 1) => {
+    let x = MARGIN;
+    widths.forEach((w, i) => {
+      x += w;
+      if (i + 1 >= from && i < widths.length - 1) pdf.save().lineWidth(0.6).strokeColor(LINE).moveTo(x, ry).lineTo(x, ry + h).stroke().restore();
+    });
+  };
+  const drawRowBox = (h, separators = true) => {
     pdf.lineWidth(0.6).rect(MARGIN, ry, CONTENT_W, h).fillAndStroke(stripe % 2 === 0 ? GRAY : '#ffffff', LINE);
+    if (separators) drawSeparators(h);
     pdf.fillColor(BLACK);
     stripe += 1;
   };
@@ -419,7 +428,10 @@ export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
     const units = row.units || measureRow(pdf, row, columns);
     if (usedUnits + units > rowsPerPage) break; // 念のため（packRows で分けているので通常は起きない）
     const h = L.rowH * units;
-    drawRowBox(h);
+    // 見出し行（文字だけの行）は全幅、小計の行は明細金額の前だけ区切る
+    drawRowBox(h, row.kind === 'item');
+    if (row.kind === 'subtotal') drawSeparators(h, widths.length - 1);
+    pdf.fillColor(BLACK);
     if (row.kind === 'text') {
       if (units > 1) paragraphV(pdf, row.text, MARGIN + 6, ry + 2, CONTENT_W - 12, h - 4, { size: 8.5, bold: true });
       else textV(pdf, row.text, MARGIN + 6, ry, CONTENT_W - 12, h, { size: 8.5, bold: true });
