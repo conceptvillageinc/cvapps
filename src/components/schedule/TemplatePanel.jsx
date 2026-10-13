@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Sparkles, Loader2, Plus, X, AlertTriangle, CalendarCheck, CalendarArrowDown, Settings2 } from "lucide-react";
+import { Sparkles, Loader2, Plus, X, AlertTriangle, CalendarCheck, CalendarArrowDown, Settings2, ScanText } from "lucide-react";
 import { toast } from "sonner";
 import { toYmd, addDays, keyDatesOf, jpDate } from "@/lib/schedule";
 import { draftFromTemplates, suggestTemplates } from "@/lib/scheduleTemplates";
@@ -29,7 +29,7 @@ export function useScheduleTemplates() {
  * @param {() => void} [p.onDone]
  * @param {() => void} [p.onCancel]
  */
-export default function TemplatePanel({ project, parties, holidays, existingCount = 0, onDone, onCancel }) {
+export default function TemplatePanel({ project, parties, holidays, existingCount = 0, onDone, onCancel, onImport }) {
   const qc = useQueryClient();
   const today = toYmd(new Date());
   const { data: templates = [], isLoading } = useScheduleTemplates();
@@ -124,6 +124,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
               <button onClick={() => toggle(t.id)} className="text-violet-400 hover:text-violet-700" title="外す"><X className="h-3 w-3" /></button>
             </span>
           ))}
+          {onImport && <Button size="sm" variant="ghost" className="ml-auto h-7 gap-1 text-xs text-violet-700" onClick={onImport} data-testid="import-open"><ScanText className="h-3.5 w-3.5" />いまある工程表（スプレッドシート・画像）から入れる</Button>}
           <Popover>
             <PopoverTrigger asChild>
               <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs" data-testid="template-picker"><Plus className="h-3.5 w-3.5" />{chosen.length ? "テンプレートを足す" : "テンプレートを選ぶ"}</Button>

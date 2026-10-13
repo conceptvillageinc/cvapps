@@ -2,7 +2,7 @@ import { requireMember, requirePost } from './_lib/guard.js';
 import { getAccessToken } from './_lib/gmail.js';
 
 // ============================================================================
-// POST /api/read-sheet  { url }
+// POST /api/read-sheet  { url, with_fills? }
 //
 // Google スプレッドシートの URL から、シート1枚分の値（2次元配列）を読む。
 // 見積明細の「スプレッドシートから取込」で、コピペの代わりに URL を貼れるようにする。
@@ -58,7 +58,29 @@ export default async function handler(req, res) {
     const target = (parsed.gid != null && sheets.find((s) => s.properties.sheetId === parsed.gid)) || sheets[0];
     if (!target) { res.status(404).json({ error: 'シートが見つかりません' }); return; }
 
-    const range = `'${target.properties.title.replace(/'/g, "''")}'!A1:Z${MAX_ROWS}`;
+    const sheetName = `'${target.properties.title.replace(/'/g, "''")}'`;
+    // 工程表の読み取りでは、表示されている文字（日付は書式のまま）と、セルの塗りの色も返す
+    if (req.body?.with_fills) {
+      const wide = `${sheetName}!A1:GR${MAX_ROWS}`;
+      const grid = await gapi(token, `https://sheets.googleapis.com/v4/spreadsheets/${parsed.spreadsheetId}?ranges=${encodeURIComponent(wide)}&fields=${encodeURIComponent('sheets(data(rowData(values(formattedValue,effectiveFormat(backgroundColor)))))')}`);
+      const rowData = grid.sheets?.[0]?.data?.[0]?.rowData || [];
+      const hex = (c) => {
+        if (!c) return null;
+        const ch = [c.red || 0, c.green || 0, c.blue || 0];
+        if (ch.every((x) => x > 0.96)) return null; // 白・塗りなし
+        return `#${ch.map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('')}`;
+      };
+      res.status(200).json({
+        title: meta.properties?.title || '',
+        sheet_title: target.properties.title,
+        rows: rowData.map((r) => (r.values || []).map((v) => v.formattedValue ?? '')),
+        fills: rowData.map((r) => (r.values || []).map((v) => hex(v.effectiveFormat?.backgroundColor))),
+        sheets: sheets.map((s) => ({ gid: s.properties.sheetId, title: s.properties.title })),
+      });
+      return;
+    }
+
+    const range = `${sheetName}!A1:Z${MAX_ROWS}`;
     const values = await gapi(token, `https://sheets.googleapis.com/v4/spreadsheets/${parsed.spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`);
 
     res.status(200).json({
