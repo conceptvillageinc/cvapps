@@ -33,6 +33,9 @@
     "api/export-schedule-sheet.js": {
       "maxDuration": 30
     },
+    "api/schedule-share.js": {
+      "maxDuration": 15
+    },
     "api/read-sheet.js": {
       "maxDuration": 30
     },

@@ -19,7 +19,7 @@ import { format } from "date-fns";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP, STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
-import ProjectTasks from "@/components/projects/ProjectTasks";
+import ScheduleTab from "@/components/schedule/ScheduleTab";
 import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
@@ -314,8 +314,8 @@ export default function ProjectDetail() {
         </Card>
       )}
 
-      {/* 工程 */}
-      <ProjectTasks project={project} />
+      {/* 工程表 */}
+      <ScheduleTab project={project} />
 
       {/* 議事録 */}
       <Card>

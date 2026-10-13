@@ -9,6 +9,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import ScrollToTop from '@/components/ScrollToTop';
 
 import Login from '@/pages/Login';
+import SharedSchedule from '@/pages/SharedSchedule';
 
 import Layout from '@/components/Layout';
 import Dashboard from '@/pages/Dashboard';
@@ -69,6 +70,8 @@ const AuthenticatedApp = () => {
         path="/login"
         element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}
       />
+      {/* クライアント向けの工程表（ログイン不要・見るだけ） */}
+      <Route path="/s/:token" element={<SharedSchedule />} />
 
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
