@@ -11,13 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Loader2, Sparkles, Plus, Trash2, ArrowUp, ArrowDown, CheckCircle2, Pencil, Quote, Camera, ExternalLink,
+  ArrowLeft, Loader2, Sparkles, Plus, CheckCircle2, Pencil, Camera, ExternalLink,
   FileSpreadsheet, FilePlus2, TableProperties, Search, AlertTriangle, Image as ImageIcon,
 } from "lucide-react";
-import {
-  SPEC_FIELDS, blankSpec, missingFields, markupForType, isPackageType, specAmounts, specMemo, specTotals,
+import { blankSpec, missingFields, isPackageType, specAmounts, specMemo, specTotals,
   SPEC_EXTRACT_SCHEMA, specExtractPrompt, specsFromResult, PRICE_SHOT_SCHEMA, priceShotPrompt, familyName,
 } from "@/lib/printSpecList";
+import PrintSpecCard from "@/components/printSpecs/PrintSpecCard";
 import CostSheetWriteDialog from "@/components/printSpecs/CostSheetWriteDialog";
 import { usePrintSpecAccess } from "@/lib/usePrintSpecAccess";
 import AssistantGuideDialog from "@/components/printSpecs/AssistantGuideDialog";
@@ -92,7 +92,7 @@ function PrintSpecListPage() {
     if (!dirty) return;
     const t = setTimeout(() => save({}, { silent: true }), 1500);
     return () => clearTimeout(t);
-  }, [items, title, dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items, title, dirty]);
 
   const edit = (next) => { setItems(next); setDirty(true); };
   // 調べている間も行が書き換わるので、いまの値から直す
@@ -124,7 +124,7 @@ function PrintSpecListPage() {
     autoStarted.current = true;
     setParams({}, { replace: true });
     extract();
-  }, [list, meeting, items]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [list, meeting, items]);
 
   const missingCount = useMemo(() => (items || []).reduce((s, it) => s + missingFields(it).length, 0), [items]);
   const priced = useMemo(() => (items || []).filter((it) => Number(it.cost_total) > 0).length, [items]);
@@ -243,14 +243,14 @@ function PrintSpecListPage() {
         <CardContent className="pt-4 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-bold">① 印刷物の仕様</h2>
-            <span className="text-xs text-muted-foreground">赤い欄は議事録で決まっていない項目です。過不足を直してから確定してください</span>
+            <span className="text-xs text-muted-foreground">「未確認」は議事録で決まっていない項目です。過不足を直してから確定してください</span>
             <div className="flex-1" />
             {!confirmed && meeting && (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => extract({ replace: items.length > 0 })} disabled={extracting}>
                 {extracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} {items.length ? "議事録から書き出し直す" : "議事録から書き出す"}
               </Button>
             )}
-            {!confirmed && <Button variant="outline" size="sm" className="gap-1.5" onClick={() => edit([...items, blankSpec()])}><Plus className="w-4 h-4" /> 行を足す</Button>}
+            {!confirmed && <Button variant="outline" size="sm" className="gap-1.5" onClick={() => edit([...items, blankSpec()])}><Plus className="w-4 h-4" /> 印刷物を足す</Button>}
             {confirmed
               ? <Button variant="outline" size="sm" className="gap-1.5" onClick={() => save({ status: "draft" }, { silent: true })}><Pencil className="w-4 h-4" /> 仕様を直す</Button>
               : <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" disabled={items.length === 0 || saving} onClick={() => { if (missingCount && !window.confirm(`未確認の項目が ${missingCount} 個あります。このまま確定しますか？（確定後も「仕様を直す」で直せます）`)) return; save({ status: "confirmed" }); }} data-testid="print-spec-confirm"><CheckCircle2 className="w-4 h-4" /> この一覧で確定</Button>}
@@ -258,60 +258,20 @@ function PrintSpecListPage() {
           {extracting && <p className="text-xs text-primary flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> 議事録と文字起こしを読んで、印刷物を書き出しています（30 秒〜1 分ほど）</p>}
           {aiNotes && <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap"><b>一覧に入れなかった確認事項</b>{"\n"}{aiNotes}</div>}
 
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-xs" data-testid="print-spec-table">
-              <thead className="bg-slate-800 text-white">
-                <tr>
-                  <th className="px-2 py-1.5 w-8">#</th>
-                  <th className="px-1 py-1.5 text-left" style={{ minWidth: SPEC_FIELDS[0].minWidth }}>品目</th>
-                  <th className="px-1 py-1.5 text-left" style={{ minWidth: 150 }}>印刷物種別・掛け率</th>
-                  {SPEC_FIELDS.slice(1).map((f) => <th key={f.key} className="px-1 py-1.5 text-left" style={{ minWidth: f.minWidth }}>{f.label}</th>)}
-                  <th className="w-8" title="根拠（議事録の発言）"><Quote className="w-3.5 h-3.5 mx-auto" /></th>
-                  {!confirmed && <th className="w-20"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 && (
-                  <tr><td colSpan={14} className="py-10 text-center text-muted-foreground">{extracting ? "書き出しています…" : "まだ印刷物がありません。「議事録から書き出す」か「行を足す」で入れてください"}</td></tr>
-                )}
-                {items.map((it, i) => {
-                  const miss = new Set(missingFields(it));
-                  const cell = (f) => (
-                    <td key={f.key} className="px-1 py-1" style={{ minWidth: f.minWidth }}>
-                      {confirmed
-                        ? <span className={`block px-1 ${miss.has(f.key) ? "text-red-600" : ""}`}>{it[f.key] || (miss.has(f.key) ? "未確認" : "")}</span>
-                        : <Input value={it[f.key] ?? ""} type={f.numeric ? "number" : "text"} onChange={(e) => setRow(it.id, { [f.key]: f.numeric ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })}
-                            placeholder={miss.has(f.key) ? "未確認" : ""} aria-label={`${i + 1}行目の${f.label}`}
-                            className={`h-7 text-xs ${f.numeric ? "text-right tabular-nums" : ""} ${miss.has(f.key) ? "border-red-300 bg-red-50 placeholder:text-red-400" : ""}`} />}
-                    </td>
-                  );
-                  return (
-                    <tr key={it.id} className="border-t align-top" data-testid="print-spec-row">
-                      <td className="px-2 py-2 text-center text-muted-foreground tabular-nums">{i + 1}</td>
-                      {cell(SPEC_FIELDS[0])}
-                      <td className="px-1 py-1">
-                        {confirmed ? <span className="block px-1">{it.print_type || "—"}</span> : (
-                          <select value={it.print_type} onChange={(e) => setRow(it.id, { print_type: e.target.value })} className={`h-7 w-full rounded-md border bg-background px-1 text-xs ${it.print_type ? "" : "border-amber-300"}`} aria-label={`${i + 1}行目の印刷物種別`}>
-                            <option value="">（種別を選ぶ）</option>
-                            {printTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                        )}
-                        <span className={`mt-0.5 inline-block rounded px-1 text-[10px] ${isPackageType(it.print_type) ? "bg-violet-100 text-violet-800" : "bg-slate-100 text-slate-700"}`}>× {markupForType(rules, it.print_type)}（{isPackageType(it.print_type) ? "パッケージ" : "パッケージ以外"}）</span>
-                      </td>
-                      {SPEC_FIELDS.slice(1).map(cell)}
-                      <td className="px-1 py-2 text-center">{it.basis ? <span title={it.basis} className="cursor-help text-primary"><Quote className="w-3.5 h-3.5 inline" /></span> : null}</td>
-                      {!confirmed && (
-                        <td className="px-1 py-1 whitespace-nowrap">
-                          <Button variant="ghost" size="icon" className="h-7 w-6" disabled={i === 0} onClick={() => move(i, -1)} aria-label="上へ"><ArrowUp className="w-3.5 h-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-6" disabled={i === items.length - 1} onClick={() => move(i, 1)} aria-label="下へ"><ArrowDown className="w-3.5 h-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-6 text-muted-foreground hover:text-destructive" onClick={() => edit(items.filter((x) => x.id !== it.id))} aria-label="行を消す"><Trash2 className="w-3.5 h-3.5" /></Button>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-3" data-testid="print-spec-table">
+            {items.length === 0 && (
+              <p className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">{extracting ? "書き出しています…" : "まだ印刷物がありません。「議事録から書き出す」か「印刷物を足す」で入れてください"}</p>
+            )}
+            {items.map((it, i) => (
+              <PrintSpecCard
+                key={`${it.id}-${confirmed ? "c" : "e"}`}
+                item={it} index={i} count={items.length} printTypes={printTypes} rules={rules} readOnly={confirmed} defaultOpen={!confirmed}
+                onChange={(patch) => setRow(it.id, patch)}
+                onMove={(d) => move(i, d)}
+                onDuplicate={() => { const next = [...items]; next.splice(i + 1, 0, { ...it, id: blankSpec().id, cost_total: "", price_url: "", price_note: "", screenshot_path: "" }); edit(next); }}
+                onRemove={() => { if (window.confirm(`「${it.name || `印刷物 ${i + 1}`}」を消しますか？`)) edit(items.filter((x) => x.id !== it.id)); }}
+              />
+            ))}
           </div>
         </CardContent>
       </Card>
