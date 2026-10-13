@@ -1,9 +1,9 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Trash2, ArrowUp, ArrowDown, Link2, Diamond, Plus } from "lucide-react";
-import { PHASES, taskRange, diffDays, wouldCycle, categoryTints, md } from "@/lib/schedule";
+import { Trash2, ArrowUp, ArrowDown, Link2, Diamond, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { PHASES, taskRange, diffDays, wouldCycle, categoryColors, md } from "@/lib/schedule";
 import { PartyChips } from "./ScheduleTimeline";
 
 /**
@@ -11,7 +11,9 @@ import { PartyChips } from "./ScheduleTimeline";
  * 社内メモ・見込み時間・実績時間は社内だけ（共有リンク・スプレッドシートには出ない）。
  */
 export default function ScheduleList({ tasks, parties, users = [], categories = [], onChange, onDelete, onMove, onAddInCategory, memberName }) {
-  const tints = categoryTints(tasks);
+  const secColors = categoryColors(tasks);
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  const toggle = (c) => setCollapsed((x) => { const n = new Set(x); if (n.has(c)) n.delete(c); else n.add(c); return n; });
   const groups = [];
   for (const t of tasks) {
     const c = t.category || "";
@@ -25,65 +27,72 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
   };
 
   return (
-    <div className="overflow-x-auto rounded-md border" data-testid="schedule-list">
-      <table className="w-full text-xs table-fixed min-w-[1500px]">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="schedule-list">
+      <table className="w-full text-xs table-fixed min-w-[1520px]">
         <thead>
-          <tr className="bg-[#1e3a5f] text-white">
-            <th className="w-10 px-1 py-1.5 font-medium">完了</th>
+          <tr className="border-b border-slate-200 bg-white text-[11px] text-slate-500">
+            <th className="w-10 px-1 py-2 font-normal"></th>
             <th className="w-12"></th>
-            <th className="text-left px-2 py-1.5 font-medium w-[120px]">カテゴリー</th>
-            <th className="text-left px-2 py-1.5 font-medium w-[230px]">タスク名</th>
-            <th className="text-left px-2 py-1.5 font-medium w-[96px]">工程</th>
-            <th className="text-left px-2 py-1.5 font-medium w-[150px]">担当</th>
-            <th className="text-left px-2 py-1.5 font-medium w-[132px]">開始日</th>
-            <th className="text-left px-2 py-1.5 font-medium w-[132px]">終了日</th>
-            <th className="px-1 py-1.5 font-medium w-10">日数</th>
-            <th className="text-left px-2 py-1.5 font-medium w-[150px]">前の工程</th>
-            <th className="px-1 py-1.5 font-medium w-14" title="見込み時間（社内のみ）">見込h</th>
-            <th className="px-1 py-1.5 font-medium w-14" title="実績時間（社内のみ）">実績h</th>
-            <th className="px-1 py-1.5 font-medium w-14 leading-tight" title="クライアント向けの工程表に出す">表に<br />出す</th>
-            <th className="px-1 py-1.5 font-medium w-8" title="節目（◆。納品・校了など）">◆</th>
-            <th className="text-left px-2 py-1.5 font-medium w-[180px]">社内メモ</th>
+            <th className="text-left px-2 py-2 font-normal w-[140px]">カテゴリー</th>
+            <th className="text-left px-2 py-2 font-normal w-[230px]">タスク名</th>
+            <th className="text-left px-2 py-2 font-normal w-[96px]">工程</th>
+            <th className="text-left px-2 py-2 font-normal w-[150px]">担当</th>
+            <th className="text-left px-2 py-2 font-normal w-[132px]">開始日</th>
+            <th className="text-left px-2 py-2 font-normal w-[132px]">終了日</th>
+            <th className="px-1 py-2 font-normal w-10">日数</th>
+            <th className="text-left px-2 py-2 font-normal w-[150px]">前の工程</th>
+            <th className="px-1 py-2 font-normal w-14" title="見込み時間（社内のみ）">見込h</th>
+            <th className="px-1 py-2 font-normal w-14" title="実績時間（社内のみ）">実績h</th>
+            <th className="px-1 py-2 font-normal w-14 leading-tight" title="クライアント向けの工程表に出す">表に<br />出す</th>
+            <th className="px-1 py-2 font-normal w-8" title="節目（◆。納品・校了など）">◆</th>
+            <th className="text-left px-2 py-2 font-normal w-[180px]">社内メモ</th>
             <th className="w-8"></th>
           </tr>
         </thead>
         <tbody>
           {groups.map((g, gi) => (
             <Fragment key={`${g.category}-${gi}`}>
-              <tr style={{ background: tints.get(g.category) }}>
-                <td colSpan={16} className="px-2 py-1 font-semibold text-[11px]">
-                  <span>{g.category || "（カテゴリーなし）"}</span>
-                  <span className="ml-2 font-normal text-muted-foreground">{g.items.filter((t) => t.completed).length}/{g.items.length} 完了</span>
-                  <button className="ml-3 inline-flex items-center gap-0.5 text-primary hover:underline font-normal" onClick={() => onAddInCategory(g.category, g.items[g.items.length - 1])}><Plus className="w-3 h-3" />このカテゴリーに追加</button>
+              <tr className="group/sec">
+                <td colSpan={16} className="px-2 pt-4 pb-1.5 border-b border-slate-200">
+                  <button className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-800" onClick={() => toggle(g.category)} data-testid="list-section">
+                    {collapsed.has(g.category) ? <ChevronRight className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: secColors.get(g.category) }} />
+                    {g.category || "（カテゴリーなし）"}
+                  </button>
+                  <span className="ml-2 rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500">{g.items.filter((t) => t.completed).length}/{g.items.length}</span>
+                  <button className="ml-3 inline-flex items-center gap-0.5 text-[11px] text-slate-400 opacity-0 group-hover/sec:opacity-100 hover:text-primary" onClick={() => onAddInCategory(g.category, g.items[g.items.length - 1])}><Plus className="w-3 h-3" />工程を追加</button>
                 </td>
               </tr>
-              {g.items.map((t) => {
+              {!collapsed.has(g.category) && g.items.map((t) => {
                 const i = tasks.indexOf(t);
                 const r = taskRange(t);
                 return (
-                  <tr key={t.id} className={`border-t ${t.completed ? "bg-muted/30" : ""}`} data-testid="schedule-row">
-                    <td className="text-center"><Checkbox checked={!!t.completed} onCheckedChange={(v) => onChange(t.id, { completed: !!v, completed_at: v ? new Date().toISOString() : null })} /></td>
+                  <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80" data-testid="schedule-row">
+                    <td className="text-center">
+                      <button role="checkbox" aria-checked={!!t.completed} title={t.completed ? "未完了に戻す" : "完了にする"} onClick={() => onChange(t.id, { completed: !t.completed, completed_at: t.completed ? null : new Date().toISOString() })}
+                        className={`mx-auto flex h-[18px] w-[18px] items-center justify-center rounded-full border transition-colors ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500"}`}><Check className="h-3 w-3" strokeWidth={3} /></button>
+                    </td>
                     <td className="px-1 whitespace-nowrap">
                       <button className="text-muted-foreground hover:text-foreground disabled:opacity-20" disabled={i === 0} onClick={() => onMove(i, -1)}><ArrowUp className="w-3 h-3" /></button>
                       <button className="text-muted-foreground hover:text-foreground disabled:opacity-20 ml-0.5" disabled={i === tasks.length - 1} onClick={() => onMove(i, 1)}><ArrowDown className="w-3 h-3" /></button>
                     </td>
                     <td className="px-1 py-1">
-                      <Input key={`c${t.id}${t.category}`} list="schedule-categories" defaultValue={t.category || ""} onBlur={(e) => commit(t, "category", e.target.value.trim())} className="h-7 text-xs" />
+                      <Input key={`c${t.id}${t.category}`} list="schedule-categories" defaultValue={t.category || ""} onBlur={(e) => commit(t, "category", e.target.value.trim())} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white" />
                     </td>
-                    <td className="px-1 py-1"><Input key={`n${t.id}${t.name}`} defaultValue={t.name} onBlur={(e) => e.target.value.trim() && commit(t, "name", e.target.value.trim())} className={`h-7 text-xs ${t.completed ? "line-through text-muted-foreground" : ""}`} /></td>
-                    <td className="px-1 py-1"><Input key={`p${t.id}${t.phase}`} list="schedule-phases" defaultValue={t.phase || ""} onBlur={(e) => commit(t, "phase", e.target.value.trim())} className="h-7 text-xs" /></td>
+                    <td className="px-1 py-1"><Input key={`n${t.id}${t.name}`} defaultValue={t.name} onBlur={(e) => e.target.value.trim() && commit(t, "name", e.target.value.trim())} className={`h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white ${t.completed ? "line-through text-muted-foreground" : ""}`} /></td>
+                    <td className="px-1 py-1"><Input key={`p${t.id}${t.phase}`} list="schedule-phases" defaultValue={t.phase || ""} onBlur={(e) => commit(t, "phase", e.target.value.trim())} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white" /></td>
                     <td className="px-1 py-1"><PartyPicker task={t} parties={parties} users={users} memberName={memberName} onChange={(patch) => onChange(t.id, patch)} /></td>
-                    <td className="px-1 py-1"><Input key={`s${t.id}${t.start_date}`} type="date" defaultValue={t.start_date || ""} onBlur={(e) => commit(t, "start_date", e.target.value)} className="h-7 text-xs px-1.5" /></td>
-                    <td className="px-1 py-1"><Input key={`e${t.id}${t.end_date}`} type="date" defaultValue={t.end_date || ""} disabled={t.is_milestone} onBlur={(e) => commit(t, "end_date", e.target.value)} className="h-7 text-xs px-1.5" /></td>
+                    <td className="px-1 py-1"><Input key={`s${t.id}${t.start_date}`} type="date" defaultValue={t.start_date || ""} onBlur={(e) => commit(t, "start_date", e.target.value)} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white px-1.5" /></td>
+                    <td className="px-1 py-1"><Input key={`e${t.id}${t.end_date}`} type="date" defaultValue={t.end_date || ""} disabled={t.is_milestone} onBlur={(e) => commit(t, "end_date", e.target.value)} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white px-1.5" /></td>
                     <td className="text-center tabular-nums text-muted-foreground">{r ? diffDays(r.start, r.end) + 1 : ""}</td>
                     <td className="px-1 py-1"><DependsPicker task={t} tasks={tasks} onChange={(ids) => onChange(t.id, { depends_on: ids })} /></td>
-                    <td className="px-1 py-1"><Input key={`h${t.id}${t.estimated_hours}`} type="number" min="0" step="0.5" defaultValue={t.estimated_hours ?? ""} onBlur={(e) => commit(t, "estimated_hours", e.target.value === "" ? "" : Number(e.target.value))} className="h-7 text-xs px-1 text-right" /></td>
-                    <td className="px-1 py-1"><Input key={`a${t.id}${t.actual_hours}`} type="number" min="0" step="0.5" defaultValue={t.actual_hours ?? ""} onBlur={(e) => commit(t, "actual_hours", e.target.value === "" ? "" : Number(e.target.value))} className="h-7 text-xs px-1 text-right" /></td>
+                    <td className="px-1 py-1"><Input key={`h${t.id}${t.estimated_hours}`} type="number" min="0" step="0.5" defaultValue={t.estimated_hours ?? ""} onBlur={(e) => commit(t, "estimated_hours", e.target.value === "" ? "" : Number(e.target.value))} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white px-1 text-right" /></td>
+                    <td className="px-1 py-1"><Input key={`a${t.id}${t.actual_hours}`} type="number" min="0" step="0.5" defaultValue={t.actual_hours ?? ""} onBlur={(e) => commit(t, "actual_hours", e.target.value === "" ? "" : Number(e.target.value))} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white px-1 text-right" /></td>
                     <td className="text-center"><Checkbox checked={t.on_schedule !== false} onCheckedChange={(v) => onChange(t.id, { on_schedule: !!v })} /></td>
                     <td className="text-center">
                       <button title="節目（◆）にする" onClick={() => onChange(t.id, { is_milestone: !t.is_milestone, ...(t.is_milestone ? {} : { end_date: t.start_date || t.end_date || null }) })} className={t.is_milestone ? "text-fuchsia-600" : "text-muted-foreground/40 hover:text-muted-foreground"}><Diamond className="w-3.5 h-3.5" fill={t.is_milestone ? "currentColor" : "none"} /></button>
                     </td>
-                    <td className="px-1 py-1"><Input key={`m${t.id}${t.notes}`} defaultValue={t.notes || ""} onBlur={(e) => commit(t, "notes", e.target.value)} className="h-7 text-xs" placeholder="クライアントには出ません" /></td>
+                    <td className="px-1 py-1"><Input key={`m${t.id}${t.notes}`} defaultValue={t.notes || ""} onBlur={(e) => commit(t, "notes", e.target.value)} className="h-7 text-xs border-transparent bg-transparent shadow-none hover:border-slate-200 focus:border-slate-300 focus:bg-white" placeholder="クライアントには出ません" /></td>
                     <td className="px-1"><button onClick={() => onDelete(t)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button></td>
                   </tr>
                 );
@@ -107,7 +116,7 @@ function PartyPicker({ task, parties, users, memberName, onChange }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="w-full min-h-7 rounded border px-1 py-0.5 text-left hover:bg-muted/40" data-testid="party-picker"><PartyChips task={task} parties={parties} memberName={memberName} /></button>
+        <button className="w-full min-h-7 rounded border border-transparent px-1 py-0.5 hover:border-slate-200 text-left hover:bg-muted/40" data-testid="party-picker"><PartyChips task={task} parties={parties} memberName={memberName} /></button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3 space-y-2 text-xs" align="start">
         <p className="font-semibold">担当（複数選べます）</p>
@@ -141,7 +150,7 @@ function DependsPicker({ task, tasks, onChange }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="w-full h-7 rounded border px-1.5 text-left truncate hover:bg-muted/40 inline-flex items-center gap-1" data-testid="depends-picker">
+        <button className="w-full h-7 rounded border border-transparent px-1.5 hover:border-slate-200 text-left truncate hover:bg-muted/40 inline-flex items-center gap-1" data-testid="depends-picker">
           {names.length ? <><Link2 className="w-3 h-3 shrink-0 text-muted-foreground" /><span className="truncate">{names.map((t) => t.name).join("・")}</span></> : <span className="text-muted-foreground">—</span>}
         </button>
       </PopoverTrigger>

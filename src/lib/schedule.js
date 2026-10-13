@@ -232,3 +232,11 @@ export function scheduleTitle(project) {
   if (t) return String(t);
   return `${project?.client_name ? `${project.client_name}様　` : ""}${project?.name || ""} スケジュール`.trim();
 }
+
+/** セクション（カテゴリー）の印の色（最初に出てきた順） */
+export const CATEGORY_COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ec4899", "#8b5cf6", "#f97316", "#06b6d4", "#64748b"];
+export function categoryColors(tasks) {
+  const order = [];
+  for (const t of tasks) { const c = t.category || ""; if (!order.includes(c)) order.push(c); }
+  return new Map(order.map((c, i) => [c, CATEGORY_COLORS[i % CATEGORY_COLORS.length]]));
+}

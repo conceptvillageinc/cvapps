@@ -134,13 +134,13 @@ export default function ScheduleTab({ project }) {
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <div className="inline-flex rounded-md border p-0.5">
-              <button onClick={() => setView({ view: "timeline" })} className={`px-2 py-1 text-xs rounded inline-flex items-center gap-1 ${pref.view === "timeline" ? "bg-primary text-primary-foreground" : ""}`}><GanttChart className="w-3.5 h-3.5" />タイムライン</button>
-              <button onClick={() => setView({ view: "list" })} className={`px-2 py-1 text-xs rounded inline-flex items-center gap-1 ${pref.view === "list" ? "bg-primary text-primary-foreground" : ""}`}><List className="w-3.5 h-3.5" />リスト</button>
+            <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+              <button onClick={() => setView({ view: "timeline" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "timeline" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><GanttChart className="w-3.5 h-3.5" />タイムライン</button>
+              <button onClick={() => setView({ view: "list" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "list" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><List className="w-3.5 h-3.5" />リスト</button>
             </div>
             {pref.view === "timeline" && (
-              <div className="inline-flex rounded-md border p-0.5">
-                {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2 py-1 text-xs rounded ${pref.scale === v ? "bg-slate-700 text-white" : ""}`}>{l}</button>)}
+              <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
               </div>
             )}
             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setSettingsOpen(true)}><Settings2 className="w-3.5 h-3.5" /> 設定</Button>
@@ -161,7 +161,7 @@ export default function ScheduleTab({ project }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-          <span>完了 {done}/{tasks.length}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></span>完了 {done}/{tasks.length}</span>
           {late > 0 && <span className="text-red-600 font-semibold">終了日を過ぎた未完了 {late}件</span>}
           <span className="flex items-center gap-2">担当の色:{parties.map((p) => <span key={p.key} className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />{p.label}</span>)}</span>
           {pref.view === "timeline" && <span>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）</span>}

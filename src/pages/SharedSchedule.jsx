@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Loader2, Lock, CalendarRange } from "lucide-react";
-import ScheduleTimeline, { PartyChips } from "@/components/schedule/ScheduleTimeline";
+import { Loader2, Lock, CalendarRange, CircleCheck } from "lucide-react";
+import ScheduleTimeline, { PartyChips, PartyAvatars } from "@/components/schedule/ScheduleTimeline";
 import { expandCompanyHolidays } from "@/lib/jpHolidays";
-import { toYmd, taskRange, jpDate, md, categoryTints } from "@/lib/schedule";
+import { toYmd, taskRange, jpDate, md, addDays, diffDays } from "@/lib/schedule";
 
 /**
  * クライアント向けの工程表（/s/:token。ログイン不要・見るだけ）。
@@ -61,56 +61,98 @@ export default function SharedSchedule() {
   }
 
   const tasks = d.tasks || [];
-  const tints = categoryTints(tasks);
+  const done = tasks.filter((t) => t.completed).length;
+  // クライアント様にお願いしたいこと（これから 2 週間・未完了・クライアントの担当）
+  const soon = addDays(today, 14);
+  const clientTodo = tasks.filter((t) => !t.completed && (t.parties || []).includes("client") && taskRange(t) && taskRange(t).start <= soon && taskRange(t).end >= today).sort((a, b) => taskRange(a).start.localeCompare(taskRange(b).start));
+  const nextKey = (d.key_dates || []).filter((k) => k.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const seg = (active) => `px-3 py-1 text-xs rounded-md transition-colors ${active ? "bg-white text-slate-900 shadow-sm font-semibold" : "text-slate-500 hover:text-slate-800"}`;
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-[1400px] px-4 py-5 space-y-3">
-        <header className="space-y-1.5">
-          <h1 className="text-lg font-bold flex items-center gap-2"><CalendarRange className="w-5 h-5 text-slate-500" />{d.title}</h1>
-          <div className="flex flex-wrap gap-2">
-            {(d.key_dates || []).map((k) => <span key={k.date + k.label} className="rounded bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">{k.label}　{jpDate(k.date)}</span>)}
+    <div className="min-h-screen bg-[#f6f7f9] text-slate-900">
+      <div className="mx-auto max-w-[1400px] px-4 py-6 space-y-4">
+        <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-2">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-400"><CalendarRange className="h-3.5 w-3.5" />SCHEDULE</p>
+              <h1 className="text-xl font-bold leading-snug">{d.title}</h1>
+              <div className="flex flex-wrap gap-2">
+                {(d.key_dates || []).map((k) => <span key={k.date + k.label} className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{k.label}　{jpDate(k.date)}</span>)}
+              </div>
+            </div>
+            <div className="flex gap-6">
+              <div>
+                <p className="text-[11px] text-slate-400">進み具合</p>
+                <p className="text-lg font-bold">{tasks.length ? Math.round((done / tasks.length) * 100) : 0}<span className="text-xs font-normal text-slate-400">%</span></p>
+                <div className="mt-1 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></div>
+              </div>
+              {nextKey && (
+                <div>
+                  <p className="text-[11px] text-slate-400">{nextKey.label}まで</p>
+                  <p className="text-lg font-bold">あと {diffDays(today, nextKey.date)}<span className="text-xs font-normal text-slate-400"> 日</span></p>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-            <span className="flex items-center gap-2">担当:{(d.parties || []).map((p) => <span key={p.key} className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />{p.label}</span>)}</span>
-            {d.updated_at && <span>更新: {jpDate(String(d.updated_at).slice(0, 10))}</span>}
+          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
+            {(d.parties || []).map((p) => <span key={p.key} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />{p.label}</span>)}
+            {d.updated_at && <span className="ml-auto">最終更新 {jpDate(String(d.updated_at).slice(0, 10))}</span>}
           </div>
         </header>
+
+        {clientTodo.length > 0 && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="mb-2 text-sm font-bold">{d.client_name ? `${d.client_name}様` : "ご担当者様"}にお願いしたいこと（2週間以内）</p>
+            <ul className="divide-y divide-slate-100">
+              {clientTodo.map((t) => {
+                const r = taskRange(t);
+                return (
+                  <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-sm">
+                    <PartyAvatars task={t} parties={d.parties} memberName={memberName} />
+                    <span className="min-w-0 flex-1 truncate">{t.category ? <span className="text-slate-400">{t.category}／</span> : null}{t.name}</span>
+                    <span className="w-full pl-8 text-xs text-slate-500 sm:w-auto sm:pl-0 sm:shrink-0">{r.start === r.end ? jpDate(r.start) : `${md(r.start)} – ${jpDate(r.end)}`}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         <div className="flex gap-2">
-          <div className="inline-flex rounded-md border bg-white p-0.5">
-            {[["timeline", "タイムライン"], ["list", "一覧"]].map(([v, l]) => <button key={v} onClick={() => setView(v)} className={`px-3 py-1 text-xs rounded ${view === v ? "bg-slate-800 text-white" : ""}`}>{l}</button>)}
+          <div className="inline-flex rounded-lg bg-slate-200/70 p-0.5">
+            {[["timeline", "タイムライン"], ["list", "一覧"]].map(([v, l]) => <button key={v} onClick={() => setView(v)} className={seg(view === v)}>{l}</button>)}
           </div>
           {view === "timeline" && (
-            <div className="inline-flex rounded-md border bg-white p-0.5">
-              {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setScale(v)} className={`px-3 py-1 text-xs rounded ${scale === v ? "bg-slate-800 text-white" : ""}`}>{l}</button>)}
+            <div className="inline-flex rounded-lg bg-slate-200/70 p-0.5">
+              {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setScale(v)} className={seg(scale === v)}>{l}</button>)}
             </div>
           )}
         </div>
         {tasks.length === 0 ? <p className="text-sm text-slate-500 py-10 text-center">まだ工程がありません。</p> : view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={d.parties} keyDates={d.key_dates} holidays={holidays} scale={scale} columns={narrow ? "mini" : "full"} memberName={memberName} today={today} />
+          <ScheduleTimeline tasks={tasks} parties={d.parties} keyDates={d.key_dates} holidays={holidays} scale={scale} columns={narrow ? "mini" : "full"} memberName={memberName} today={today} fitHeight />
         ) : (
-          <div className="overflow-x-auto rounded-md border bg-white">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="w-full text-xs min-w-[640px]">
-              <thead><tr className="bg-[#1e3a5f] text-white"><th className="px-2 py-1.5 text-left">カテゴリー</th><th className="px-2 py-1.5 text-left">タスク名</th><th className="px-2 py-1.5">工程</th><th className="px-2 py-1.5">担当</th><th className="px-2 py-1.5">期間</th><th className="px-2 py-1.5">状況</th></tr></thead>
+              <thead><tr className="border-b border-slate-200 text-[11px] text-slate-500"><th className="px-3 py-2 text-left font-normal">タスク名</th><th className="px-2 py-2 font-normal">工程</th><th className="px-2 py-2 text-left font-normal">担当</th><th className="px-2 py-2 font-normal">期間</th><th className="px-2 py-2 font-normal">状況</th></tr></thead>
               <tbody>
                 {tasks.map((t, i) => {
                   const r = taskRange(t);
                   const first = i === 0 || (tasks[i - 1].category || "") !== (t.category || "");
-                  return (
-                    <tr key={t.id} className="border-t" style={{ background: tints.get(t.category || "") }}>
-                      <td className="px-2 py-1.5 font-semibold">{first ? t.category : ""}</td>
-                      <td className="px-2 py-1.5">{t.is_milestone ? "◆ " : ""}{t.name}</td>
-                      <td className="px-2 py-1.5 text-center">{t.phase}</td>
-                      <td className="px-2 py-1.5"><PartyChips task={t} parties={d.parties} memberName={memberName} /></td>
-                      <td className="px-2 py-1.5 text-center whitespace-nowrap">{r ? (r.start === r.end ? md(r.start) : `${md(r.start)}〜${md(r.end)}`) : ""}</td>
-                      <td className="px-2 py-1.5 text-center">{t.completed ? <span className="text-emerald-700 font-semibold">完了</span> : r && r.end < today ? <span className="text-slate-500">予定日を過ぎています</span> : ""}</td>
-                    </tr>
-                  );
+                  return [
+                    first && <tr key={`s${t.id}`}><td colSpan={5} className="border-b border-slate-200 px-3 pt-4 pb-1.5 text-[13px] font-bold">{t.category || "（カテゴリーなし）"}</td></tr>,
+                    <tr key={t.id} className="border-b border-slate-100">
+                      <td className="px-3 py-2"><span className="flex items-center gap-2">{t.is_milestone ? <span className="h-2.5 w-2.5 rotate-45 rounded-[2px] bg-fuchsia-500" /> : <CircleCheck className={`h-4 w-4 ${t.completed ? "text-emerald-500" : "text-slate-300"}`} />}<span className={t.completed ? "text-slate-400 line-through" : ""}>{t.name}</span></span></td>
+                      <td className="px-2 py-2 text-center text-slate-500">{t.phase}</td>
+                      <td className="px-2 py-2"><PartyChips task={t} parties={d.parties} memberName={memberName} /></td>
+                      <td className="px-2 py-2 text-center whitespace-nowrap text-slate-600">{r ? (r.start === r.end ? md(r.start) : `${md(r.start)} – ${md(r.end)}`) : ""}</td>
+                      <td className="px-2 py-2 text-center">{t.completed ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">完了</span> : r && r.start <= today && r.end >= today ? <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-700">進行中</span> : ""}</td>
+                    </tr>,
+                  ];
                 })}
               </tbody>
             </table>
           </div>
         )}
-        <p className="text-[10px] text-slate-400 text-right">株式会社コンセプト・ヴィレッジ</p>
+        <p className="pt-2 text-right text-[11px] tracking-wide text-slate-400">concept-village inc.</p>
       </div>
     </div>
   );
