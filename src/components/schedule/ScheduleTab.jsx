@@ -216,7 +216,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></span>完了 {done}/{tasks.length}</span>
           {late > 0 && <span className="text-red-600 font-semibold">終了日を過ぎた未完了 {late}件</span>}
           <span className="flex items-center gap-2">担当の色:{parties.map((p) => <span key={p.key} className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />{p.label}</span>)}</span>
-          {pref.view === "timeline" && <span>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）・行の左端 ⋮⋮ をつかんで上下に並べ替え・空いているところを横にドラッグで工程を足す</span>}
+          {pref.view === "timeline" && <span>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）・行の左端 ⋮⋮ をつかんで上下に並べ替え・空いているところを横にドラッグで工程を足す・担当のアイコンを押すと担当を変えられます</span>}
           {pref.view === "list" && <span>行の左端 ⋮⋮ をつかんで上下に並べ替え（別のカテゴリーに入れるとカテゴリーも移ります）</span>}
         </div>
       </CardHeader>
@@ -233,7 +233,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
               <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
             </div>
             {pref.view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} onReorder={reorder} onCreate={createAt} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
+          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} onReorder={reorder} onCreate={createAt} users={users} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
           <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onReorder={reorder} memberName={memberName}
             onAddInCategory={(category, after) => create.mutate({ category: category || null, after })} />

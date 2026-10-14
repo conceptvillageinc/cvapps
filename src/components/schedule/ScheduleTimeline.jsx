@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Check, X, GripVertical } from "lucide-react";
 import { useRowReorder } from "./useRowReorder";
+import PartyPicker from "./PartyPicker";
 import EditableCell from "./EditableCell";
 import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
 
@@ -65,10 +66,11 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {(id, patch) => void} [p.onChange]
  * @param {(id) => string} [p.memberName]
  * @param {"soft"|"solid"|"progress"|"status"|"line"|"cells"} [p.barStyle]  棒の見せ方
+ * @param {object[]} [p.users]  渡すと（editable のとき）担当の欄を押して担当を変えられる
  * @param {(id, toIndex, category) => void} [p.onReorder]
  * @param {({ category, afterId, start, end }) => void} [p.onCreate]
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null }) {
   const colW = scale === "week" ? 16 : 34;
   const bounds = useMemo(() => {
     const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : 3 });
@@ -273,7 +275,16 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                     );
                   }
                   if (c.key === "phase") v = t.phase ? <span className="rounded bg-slate-100 px-1 py-0.5 text-center text-[10px] leading-tight text-slate-600" title={t.phase}>{t.phase}</span> : "";
-                  if (c.key === "party") v = <PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} />;
+                  if (c.key === "party") {
+                    v = <PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} />;
+                    if (editable && users && onChange) {
+                      v = (
+                        <PartyPicker task={t} parties={parties} users={users} memberName={memberName} onChange={(patch) => onChange(t.id, patch)} align="end">
+                          <button type="button" title="担当を変える" className="flex min-h-[30px] min-w-[36px] items-center justify-center rounded-md px-1 hover:bg-blue-50 hover:ring-1 hover:ring-blue-200 data-[state=open]:bg-blue-50 data-[state=open]:ring-1 data-[state=open]:ring-blue-300" data-testid="timeline-party">{v}</button>
+                        </PartyPicker>
+                      );
+                    }
+                  }
                   if (c.key === "range") v = r ? <span className="text-[11px] text-slate-500 whitespace-nowrap">{r.start === r.end ? mdw(r.start) : `${md(r.start)} – ${md(r.end)}`}</span> : "";
                   return <div key={c.key} className={`flex min-w-0 items-center px-3 ${c.key === "name" ? "" : "justify-center"}`} style={{ width: c.w }}>{v}</div>;
                 })}

@@ -5,8 +5,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Trash2, GripVertical, Link2, Diamond, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { useRowReorder } from "./useRowReorder";
 import { PHASES, taskRange, diffDays, wouldCycle, categoryColors, md } from "@/lib/schedule";
-import { PartyChips, tint } from "./ScheduleTimeline";
+import { tint } from "./ScheduleTimeline";
 import EditableCell from "./EditableCell";
+import PartyPicker from "./PartyPicker";
 
 /**
  * 工程表のリスト（カテゴリーごとにまとめた表）。その場で編集する。
@@ -111,42 +112,6 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
       <datalist id="schedule-phases">{PHASES.map((p) => <option key={p} value={p} />)}</datalist>
       <datalist id="schedule-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
     </div>
-  );
-}
-
-/** 担当の区分（複数可）と、CV のメンバー */
-function PartyPicker({ task, parties, users, memberName, onChange }) {
-  const keys = task.parties || [];
-  const members = task.member_ids || [];
-  const toggle = (k) => onChange({ parties: keys.includes(k) ? keys.filter((x) => x !== k) : [...keys, k] });
-  const toggleMember = (id) => onChange({ member_ids: members.includes(id) ? members.filter((x) => x !== id) : [...members, id] });
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button className="w-full min-h-7 rounded border border-transparent px-1 py-0.5 hover:border-slate-200 text-left hover:bg-muted/40" data-testid="party-picker"><PartyChips task={task} parties={parties} memberName={memberName} alwaysMembers /></button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-3 space-y-2 text-xs" align="start">
-        <p className="font-semibold">担当（複数選べます）</p>
-        {parties.map((p) => (
-          <label key={p.key} className="flex items-center gap-2 cursor-pointer">
-            <Checkbox checked={keys.includes(p.key)} onCheckedChange={() => toggle(p.key)} />
-            <span className="w-3 h-3 rounded-full" style={{ background: p.color }} />{p.label}
-          </label>
-        ))}
-        {keys.filter((k) => !parties.some((p) => p.key === k)).map((k) => (
-          <label key={k} className="flex items-center gap-2 cursor-pointer text-muted-foreground"><Checkbox checked onCheckedChange={() => toggle(k)} />{k.replace(/^other:/, "")}（以前の値）</label>
-        ))}
-        <div className="border-t pt-2 space-y-1.5">
-          <p className="font-semibold">CV の担当メンバー</p>
-          <div className="max-h-36 overflow-y-auto space-y-1">
-            {users.map((u) => (
-              <label key={u.id} className="flex items-center gap-2 cursor-pointer"><Checkbox checked={members.includes(u.id)} onCheckedChange={() => toggleMember(u.id)} />{u.full_name || u.email}</label>
-            ))}
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer pt-1 border-t"><Checkbox checked={!!task.show_members} onCheckedChange={(v) => onChange({ show_members: !!v })} />クライアント向けにもメンバー名を出す</label>
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }
 
