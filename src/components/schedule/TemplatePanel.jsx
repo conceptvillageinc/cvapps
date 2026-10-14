@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sparkles, Loader2, Plus, X, AlertTriangle, CalendarCheck, CalendarArrowDown, Settings2, ScanText } from "lucide-react";
 import { toast } from "sonner";
-import { toYmd, addDays, keyDatesOf, jpDate, nextWorkday, shiftDependents, reorderTasks } from "@/lib/schedule";
+import { toYmd, addDays, keyDatesOf, jpDate, shiftDependents, reorderTasks } from "@/lib/schedule";
 import { draftFromTemplates, pickTemplates, COMMON_CATEGORY } from "@/lib/scheduleTemplates";
 import ScheduleTimeline from "./ScheduleTimeline";
 
@@ -84,8 +84,8 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
     const last = body[body.length - 1];
     const cat = last?.category || "その他";
     const idx = rows.lastIndexOf(last);
-    const begin = last?.end_date ? nextWorkday(addDays(last.end_date, 1), holidays) : nextWorkday(mode === "deadline" ? today : start, holidays);
-    const row = { id: `new_${Date.now()}`, category: cat, name: "新しい工程", phase: null, parties: ["cv"], start_date: begin, end_date: begin, is_milestone: false, on_schedule: true, depends_on: last ? [last.id] : [], completed: false, member_ids: [] };
+    // 日付はまだ入れない（下書きの行を横にドラッグして期間を引く）
+    const row = { id: `new_${Date.now()}`, category: cat, name: "新しい工程", phase: null, parties: ["cv"], start_date: null, end_date: null, is_milestone: false, on_schedule: true, depends_on: last ? [last.id] : [], completed: false, member_ids: [] };
     setRows((rs) => [...rs.slice(0, idx + 1), row, ...rs.slice(idx + 1)]);
     setEditingId(row.id);
     setEdited(true);

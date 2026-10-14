@@ -56,6 +56,7 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  *   editable なら棒をドラッグして日付を動かせる（端をつかむと開始日・終了日だけ）。前の工程は矢印で結ぶ。
  *   onReorder があれば、行の左端（⋮⋮）をつかんで上下にドラッグすると並びが変わる（別のカテゴリーに入れるとカテゴリーも移る）。
  *   onCreate があれば、空いているところを横にドラッグすると、その期間の工程をその行のあとに足す。
+ *   日付がまだ無い工程（「工程を追加」で足した直後）の行では、ドラッグ（またはクリック）でその工程の期間を引く。
  * @param {object} p
  * @param {object[]} p.tasks
  * @param {object[]} p.parties     担当の区分 [{ key, label, color }]
@@ -148,15 +149,17 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
   const gridRef = useRef(null);
   const [draw, setDraw] = useState(null); // { y, i0, i1, moved }
   const startDraw = (e) => {
-    if (!editable || !onCreate || e.button > 0 || !gridRef.current) return;
+    if (!editable || e.button > 0 || !gridRef.current) return;
     const box = gridRef.current.getBoundingClientRect();
     const y = e.clientY - box.top;
     const row = rows.list.find((r) => y >= r.y && y < r.y + r.h);
     if (!row) return;
+    const fillIn = row.type === "task" && !taskRange(row.t); // 日付の無い工程の期間を引く
+    if (!fillIn && !onCreate) return;
     e.preventDefault();
     const dayAt = (cx) => Math.max(0, Math.min(days.length - 1, Math.floor((cx - gridRef.current.getBoundingClientRect().left) / colW)));
     const x0 = e.clientX;
-    let d = { y: row.y + (row.h - 22) / 2, i0: dayAt(e.clientX), i1: dayAt(e.clientX), moved: false };
+    let d = { y: row.y + (row.h - 22) / 2, i0: dayAt(e.clientX), i1: dayAt(e.clientX), moved: fillIn, fillIn };
     setDraw(d);
     document.body.style.cursor = "crosshair";
     const move = (ev) => { d = { ...d, i1: dayAt(ev.clientX), moved: d.moved || Math.abs(ev.clientX - x0) > 6 }; setDraw(d); };
@@ -165,6 +168,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
       document.body.style.cursor = ""; setDraw(null);
       if (!d.moved) return;
       const a = Math.min(d.i0, d.i1); const b = Math.max(d.i0, d.i1);
+      if (fillIn) { onChange?.(row.t.id, { start_date: days[a].date, end_date: row.t.is_milestone ? days[a].date : days[b].date }); return; }
       const category = row.type === "task" ? row.t.category ?? null : row.category || null;
       const afterId = row.type === "task" ? row.t.id : row.items[row.items.length - 1]?.id;
       onCreate({ category, afterId, start: days[a].date, end: days[b].date });
@@ -375,7 +379,20 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
             {rows.list.filter((row) => row.type === "task").map((row) => {
               const t = row.t;
               const r = rangeOf(t);
-              if (!r) return null;
+              if (!r) {
+                if (!editable) return null;
+                // 日付がまだ無い工程: 前の工程のあと（無ければ今日）あたりに「ドラッグで期間を引く」を出す
+                const i = tasks.indexOf(t);
+                const prevEnd = tasks.slice(0, i).map(taskRange).filter(Boolean).map((x) => x.end).sort().pop();
+                const hintFrom = prevEnd ? addDays(prevEnd, 1) : today || bounds.from;
+                const hx = Math.max(0, Math.min(days.length - 4, idx(hintFrom))) * colW;
+                if (draw?.fillIn && Math.abs(draw.y - (row.y + (ROW_H - 22) / 2)) < 1) return null;
+                return (
+                  <div key={t.id} className="pointer-events-none absolute z-[7] flex h-[24px] items-center gap-1 rounded-full border border-dashed border-blue-400 bg-blue-50/70 px-2.5 text-[11px] text-blue-700 whitespace-nowrap" style={{ left: hx + 2, top: row.y + (ROW_H - 24) / 2 }} data-testid="draw-hint">
+                    ↔ この行を横にドラッグして期間を引く
+                  </div>
+                );
+              }
               const keys = t.parties?.length ? t.parties : [];
               const colors = keys.map((k) => partyOf(parties, k).color);
               const c0 = colors[0] || "#94a3b8";
@@ -464,7 +481,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
               const a = Math.min(draw.i0, draw.i1); const b = Math.max(draw.i0, draw.i1);
               return (
                 <div className="pointer-events-none absolute z-[12] flex h-[22px] items-center rounded-full border-2 border-dashed border-blue-500 bg-blue-50/90 px-2 text-[11px] font-semibold text-blue-800 shadow-sm whitespace-nowrap" style={{ left: a * colW + 1, top: draw.y, minWidth: (b - a + 1) * colW - 2 }} data-testid="draw-ghost">
-                  ＋ 新しい工程　{a === b ? md(days[a].date) : `${md(days[a].date)}〜${md(days[b].date)}`}（{b - a + 1}日）
+                  {draw.fillIn ? "" : "＋ 新しい工程　"}{a === b ? md(days[a].date) : `${md(days[a].date)}〜${md(days[b].date)}`}（{b - a + 1}日）
                 </div>
               );
             })()}

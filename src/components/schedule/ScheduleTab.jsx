@@ -88,12 +88,13 @@ export default function ScheduleTab({ project, fullPage = false }) {
   };
 
   const create = useMutation({
-    // start / end を渡したとき（タイムラインの空いているところをドラッグしたとき）はその期間で、前の工程はつながない
-    mutationFn: ({ category = null, after = null, start: s0 = null, end: e0 = null } = {}) => track(async () => {
+    // start / end を渡したとき（タイムラインの空いているところをドラッグしたとき）はその期間で、前の工程はつながない。
+    // dateless のとき（タイムラインで「工程を追加」）は日付を入れず、行を横にドラッグして期間を引いてもらう
+    mutationFn: ({ category = null, after = null, start: s0 = null, end: e0 = null, dateless = false } = {}) => track(async () => {
       const pos = after ? tasks.indexOf(after) + 1 : tasks.length;
       const prev = after || tasks[tasks.length - 1];
       const pr = prev && taskRange(prev);
-      const start = s0 || nextWorkday(pr ? addDays(pr.end, 1) : today, companyHolidays);
+      const start = s0 || (dateless ? null : nextWorkday(pr ? addDays(pr.end, 1) : today, companyHolidays));
       const end = e0 || start;
       // 入れる場所より後ろの並び順を 1 つずつ下げる
       await Promise.all(tasks.slice(pos).map((t, i) => db.entities.ProjectTask.update(t.id, { sort_order: pos + i + 1 })));
@@ -230,7 +231,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
             {/* 工程を足す入口（テンプレートから／1 件ずつ） */}
             <div className="flex justify-end gap-2">
               <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => setAddTplOpen(true)} data-testid="add-template"><Plus className="h-3.5 w-3.5" />テンプレートを足す</Button>
-              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
+              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null, dateless: pref.view === "timeline" }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
             </div>
             {pref.view === "timeline" ? (
           <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} onReorder={reorder} onCreate={createAt} users={users} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />

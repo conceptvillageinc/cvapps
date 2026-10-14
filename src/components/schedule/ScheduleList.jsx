@@ -7,7 +7,7 @@ import { useRowReorder } from "./useRowReorder";
 import { PHASES, taskRange, diffDays, wouldCycle, categoryColors, md } from "@/lib/schedule";
 import { tint } from "./ScheduleTimeline";
 import EditableCell from "./EditableCell";
-import PartyPicker from "./PartyPicker";
+import PartyPicker, { CheckRow } from "./PartyPicker";
 
 /**
  * 工程表のリスト（カテゴリーごとにまとめた表）。その場で編集する。
@@ -129,17 +129,16 @@ function DependsPicker({ task, tasks, onChange }) {
       <PopoverContent className="w-72 p-3 text-xs" align="start">
         <p className="font-semibold mb-1">前の工程（これが終わってから始める）</p>
         <p className="text-muted-foreground mb-2 text-[11px]">前の工程が延びると、この工程も同じ日数のまま後ろへずれます。</p>
-        <div className="max-h-60 overflow-y-auto space-y-1">
+        <div className="max-h-60 overflow-y-auto">
           {tasks.filter((t) => t.id !== task.id).map((t) => {
             const on = ids.includes(t.id);
             const cyc = !on && wouldCycle(tasks, task.id, t.id);
             const r = taskRange(t);
             return (
-              <label key={t.id} className={`flex items-center gap-2 ${cyc ? "opacity-40" : "cursor-pointer"}`} title={cyc ? "この工程のあとに続く工程なので選べません" : ""}>
-                <Checkbox checked={on} disabled={cyc} onCheckedChange={() => onChange(on ? ids.filter((x) => x !== t.id) : [...ids, t.id])} />
+              <CheckRow key={t.id} checked={on} disabled={cyc} title={cyc ? "この工程のあとに続く工程なので選べません" : ""} onToggle={() => onChange(on ? ids.filter((x) => x !== t.id) : [...ids, t.id])}>
                 <span className="break-words leading-snug">{t.category ? `${t.category}／` : ""}{t.name}</span>
                 {r && <span className="ml-auto text-muted-foreground shrink-0">{md(r.end)}まで</span>}
-              </label>
+              </CheckRow>
             );
           })}
         </div>
