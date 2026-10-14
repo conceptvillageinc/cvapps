@@ -4,6 +4,7 @@
 //   追加印刷のときは、記録した内容を引き継いで新しい見積を作る。
 // ============================================================================
 import { todayString } from "@/lib/fiscal";
+import { lineAmount } from "@/lib/constants";
 
 /** 印刷の明細か（入稿の候補にする行）。区分が印刷費、または入稿先 URL・仕入先がある行 */
 export function isPrintLine(li) {
@@ -51,7 +52,7 @@ export function lineFromOrder(o) {
     quantity: qty,
     unit: o.unit || "式",
     unit_price: unitPrice,
-    amount: Math.round(unitPrice * qty),
+    amount: lineAmount(qty, unitPrice),
     tax_rate: 10,
     cost_price: o.cost_price != null ? Number(o.cost_price) : null,
     source_type: o.vendor ? "vendor_quote" : "manual",

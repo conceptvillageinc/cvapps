@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { toTaxExcluded, vendorTaxMode } from "@/lib/priceTax";
+import { lineAmount } from "@/lib/constants";
 
 const norm = (s) => String(s || "").normalize("NFKC").toLowerCase().replace(/\s+/g, "").replace(/株式会社|（株）|\(株\)|㈱/g, "");
 const urlKey = (u) => { try { const x = new URL(u); return `${x.hostname.replace(/^www\./, "")}${x.pathname.replace(/\/+$/, "")}`; } catch { return ""; } };
@@ -128,7 +129,7 @@ export function replaceWithCurrent(li) {
   const digits = Math.min(2, (String(li.unit_price ?? "").split(".")[1] || "").length);
   const f = 10 ** digits;
   const unitPrice = Math.ceil(Number((now * ratio * f).toFixed(6))) / f;
-  return { ...li, cost_price: now, unit_price: unitPrice, amount: Math.round(unitPrice * qty), price_check: { ...pc, status: "replaced", replaced_at: new Date().toISOString(), old_unit_price: li.unit_price } };
+  return { ...li, cost_price: now, unit_price: unitPrice, amount: lineAmount(qty, unitPrice), price_check: { ...pc, status: "replaced", replaced_at: new Date().toISOString(), old_unit_price: li.unit_price } };
 }
 
 // 色は 青緑（この帯の操作色）・グレー・赤（値上がりだけ）にしぼる

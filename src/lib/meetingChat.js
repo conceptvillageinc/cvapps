@@ -82,7 +82,8 @@ export function normalizeDraft(draft) {
   return { title: String(draft.title || "").trim(), notes: String(draft.notes || "").trim(), items };
 }
 
-export function draftAmount(it) { return Math.round(num(it.quantity) * num(it.unit_price)); }
+// 1 円未満は切り捨て（帳票の金額と同じ）
+export function draftAmount(it) { return Math.trunc(Number((num(it.quantity) * num(it.unit_price)).toFixed(6))); }
 export function draftCost(it) { return Math.round(num(it.quantity) * num(it.cost_price)); }
 
 export function draftTotals(items) {
