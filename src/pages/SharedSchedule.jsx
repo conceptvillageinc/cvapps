@@ -92,7 +92,7 @@ export default function SharedSchedule() {
                 const r = taskRange(t);
                 return (
                   <span key={t.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 text-xs ring-1 ring-sky-200">
-                    <span className="min-w-0 break-words">{t.category ? <span className="text-slate-400">{t.category}／</span> : null}{t.name}</span>
+                    <span className="min-w-0 break-words">{t.category ? <span className="text-slate-600">{t.category}／</span> : null}{t.name}</span>
                     <span className="shrink-0 font-semibold text-sky-800">{r.start === r.end ? jpDate(r.start) : `${md(r.start)}〜${md(r.end)}`}</span>
                   </span>
                 );
