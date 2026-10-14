@@ -205,7 +205,6 @@ export default function ScheduleTab({ project, fullPage = false }) {
               </Button>
             </ScheduleSettingsDialog>
           ))}
-          <Button size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="template-menu"><LayoutTemplate className="w-3.5 h-3.5" /> テンプレート</Button>
@@ -229,6 +228,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
               {project.schedule_sheet_url && <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" asChild><a href={project.schedule_sheet_url} target="_blank" rel="noreferrer"><ExternalLink className="w-3.5 h-3.5 mr-1.5" />出力済みのシートを開く</a></DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></span>完了 {done}/{tasks.length}</span>
