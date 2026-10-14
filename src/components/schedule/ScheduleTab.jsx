@@ -4,7 +4,8 @@ import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText, Check, Flag, Users, HelpCircle } from "lucide-react";
+import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText, Check, Flag, Users, HelpCircle, ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
@@ -26,7 +27,7 @@ const writePref = (v) => { try { localStorage.setItem(VIEW_KEY, JSON.stringify(v
 const sortTasks = (rows) => [...rows].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.created_date || "").localeCompare(String(b.created_date || "")));
 
 /** 案件の工程表（リスト／タイムライン、日・週、前の工程、担当の区分、共有リンク、スプレッドシート出力） */
-export default function ScheduleTab({ project, fullPage = false }) {
+export default function ScheduleTab({ project, fullPage = false, backTo = null }) {
   const qc = useQueryClient();
   const key = ["projectTasks", project.id];
   const { companyHolidays } = useSystemSettings();
@@ -174,7 +175,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
 
   return (
     <Card data-testid="schedule-tab">
-      <CardHeader className="pb-2 space-y-2">
+      <CardHeader className={`space-y-2 ${fullPage ? "px-4 pt-3 pb-2" : "pb-2"}`}>
         {/* 1 段目: 見出し・タイトル・大事な日 ／ 右に「新しいタブで開く」 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <CardTitle className="text-sm flex shrink-0 items-center gap-2"><CalendarRange className="w-4 h-4" /> 工程表（{tasks.length}件）</CardTitle>
@@ -185,6 +186,11 @@ export default function ScheduleTab({ project, fullPage = false }) {
             {keyDates.map((k) => <span key={k.date + k.label} className="rounded bg-red-50 border border-red-200 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">{k.label} {jpDate(k.date)}</span>)}
             {keyDates.length === 0 && <button className="text-[11px] text-primary hover:underline" onClick={() => setSettingsOpen("keyDates")}>納品期限などの大事な日を入れる</button>}
           </div>
+          {backTo && (
+            <Link to={backTo.href} className="ml-auto inline-flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-blue-50 hover:text-blue-800" title="案件に戻る" data-testid="back-to-project">
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{backTo.label}</span>
+            </Link>
+          )}
           {!fullPage && <Button size="sm" className="ml-auto h-8 gap-1.5 text-xs" asChild title="工程表だけを新しいタブで大きく開く"><a href={`/projects/${project.id}/schedule`} target="_blank" rel="noopener noreferrer" data-testid="open-schedule-tab"><ExternalLink className="w-3.5 h-3.5" /> 新しいタブで開く</a></Button>}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -262,7 +268,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
           )}
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className={fullPage ? "px-4 pb-3 pt-0" : "pt-0"}>
         {isLoading ? (
           <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         ) : tasks.length === 0 ? (
@@ -270,7 +276,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
         ) : (
           <div className="space-y-2">
             {pref.view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} onReorder={reorder} onCreate={createAt} users={users} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
+          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} onReorder={reorder} onCreate={createAt} users={users} fillViewport={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
           <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onReorder={reorder} memberName={memberName}
             onAddInCategory={(category, after) => create.mutate({ category: category || null, after })} />

@@ -67,11 +67,12 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {(id, patch) => void} [p.onChange]
  * @param {(id) => string} [p.memberName]
  * @param {"soft"|"solid"|"progress"|"status"|"line"|"cells"} [p.barStyle]  棒の見せ方
+ * @param {boolean} [p.fillViewport]  画面の下の端までの高さにして、中だけスクロールする（上のツールバー・日付の見出しは止まったまま）
  * @param {object[]} [p.users]  渡すと（editable のとき）担当の欄を押して担当を変えられる
  * @param {(id, toIndex, category) => void} [p.onReorder]
  * @param {({ category, afterId, start, end }) => void} [p.onCreate]
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null, fillViewport = false }) {
   const colW = scale === "week" ? 16 : scale === "dekad" ? 12 : 34;
   const bounds = useMemo(() => {
     const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : scale === "dekad" ? 10 : 3 });
@@ -213,10 +214,29 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
     el.scrollLeft = Math.max(0, (idx(today) - (scale === "week" ? 7 : scale === "dekad" ? 12 : 2)) * colW);
   }, [scale]);
 
+  // 画面の下の端までの高さ（fillViewport のとき）
+  const [fillH, setFillH] = useState(null);
+  useEffect(() => {
+    if (!fillViewport) return undefined;
+    const el = boxRef.current;
+    if (!el) return undefined;
+    const calc = () => {
+      const sc = el.closest("main");
+      const top = el.getBoundingClientRect().top - (sc ? sc.getBoundingClientRect().top - sc.scrollTop : 0);
+      const vh = sc ? sc.clientHeight : window.innerHeight;
+      setFillH(Math.max(320, Math.floor(vh - top - 40)));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    const ro = new ResizeObserver(calc);
+    if (el.parentElement) ro.observe(el.parentElement.parentElement || el.parentElement);
+    return () => { window.removeEventListener("resize", calc); ro.disconnect(); };
+  }, [fillViewport]);
+
   const toggle = (c) => setCollapsed((s) => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); return n; });
 
   return (
-    <div ref={boxRef} className={`overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm ${fitHeight ? "" : "max-h-[72vh]"}`} data-testid="schedule-timeline">
+    <div ref={boxRef} className={`overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm ${fitHeight || fillViewport ? "" : "max-h-[72vh]"}`} style={fillViewport && fillH ? { maxHeight: fillH } : undefined} data-testid="schedule-timeline">
       <div className="relative" style={{ width: leftW + gridW }}>
         {/* 見出し */}
         <div className="sticky top-0 z-20 flex border-b border-slate-200 bg-white" style={{ height: HEAD_H }}>
