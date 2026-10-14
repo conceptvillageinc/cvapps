@@ -4,7 +4,7 @@ import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText, Check } from "lucide-react";
+import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText, Check, Flag, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
@@ -13,6 +13,7 @@ import ScheduleTimeline from "./ScheduleTimeline";
 import ScheduleList from "./ScheduleList";
 import ShareDialog from "./ShareDialog";
 import ScheduleSettingsDialog from "./ScheduleSettingsDialog";
+import EditableCell from "./EditableCell";
 import TemplatePanel from "./TemplatePanel";
 import SaveTemplateDialog from "./SaveTemplateDialog";
 import ImportScheduleDialog from "./ImportScheduleDialog";
@@ -135,9 +136,20 @@ export default function ScheduleTab({ project, fullPage = false }) {
   };
   const createAt = ({ category, afterId, start, end }) => create.mutate({ category, after: tasks.find((t) => t.id === afterId) || null, start, end });
 
+  // タイトルはその場で直せる（空にすると「〇〇様　案件名 スケジュール」に戻る）
+  const saveTitle = async (v) => {
+    const settings = { ...(project.schedule_settings || {}) };
+    const fallback = scheduleTitle({ ...project, schedule_settings: { ...settings, title: "" } });
+    settings.title = v && v !== fallback ? v : "";
+    qc.setQueryData(["project", project.id], (old) => (old ? { ...old, schedule_settings: settings } : old));
+    try {
+      await track(() => db.entities.Project.update(project.id, { schedule_settings: settings }));
+      qc.invalidateQueries({ queryKey: ["project", project.id] });
+    } catch (err) { toast.error("保存できませんでした: " + (err?.message || "不明なエラー")); qc.invalidateQueries({ queryKey: ["project", project.id] }); }
+  };
   const saveSettings = useMutation({
     mutationFn: (settings) => track(() => db.entities.Project.update(project.id, { schedule_settings: settings })),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["project", project.id] }); setSettingsOpen(false); toast.success("工程表の設定を保存しました"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["project", project.id] }); setSettingsOpen(false); toast.success(settingsOpen === "parties" ? "担当の区分を保存しました" : "大事な日を保存しました"); },
     onError: (err) => toast.error("保存できませんでした: " + err.message),
   });
 
@@ -169,10 +181,12 @@ export default function ScheduleTab({ project, fullPage = false }) {
                 ? <span className="inline-flex items-center gap-1 text-[11px] font-normal text-slate-400" data-testid="save-status"><Loader2 className="h-3 w-3 animate-spin" />保存中…</span>
                 : <span className={`inline-flex items-center gap-1 text-[11px] font-normal text-emerald-600 transition-opacity duration-500 ${savedFlash ? "opacity-100" : "opacity-0"}`} data-testid="save-status" aria-live="polite"><Check className="h-3 w-3" strokeWidth={3} />保存しました</span>}
             </CardTitle>
-            <p className="text-xs mt-1 font-semibold">{scheduleTitle(project)}</p>
+            <div className="-ml-1.5 mt-0.5 w-[32rem] max-w-full" title="クリックしてタイトルを直す">
+              <EditableCell value={scheduleTitle(project)} onCommit={saveTitle} className="h-7 text-xs font-semibold" textClassName="font-semibold text-slate-900" testId="schedule-title" />
+            </div>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {keyDates.map((k) => <span key={k.date + k.label} className="rounded bg-red-50 border border-red-200 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">{k.label} {jpDate(k.date)}</span>)}
-              {keyDates.length === 0 && <button className="text-[11px] text-primary hover:underline" onClick={() => setSettingsOpen(true)}>納品期限などの大事な日を入れる</button>}
+              {keyDates.length === 0 && <button className="text-[11px] text-primary hover:underline" onClick={() => setSettingsOpen("keyDates")}>納品期限などの大事な日を入れる</button>}
             </div>
           </div>
           {!fullPage && <Button size="sm" className="h-8 gap-1.5 text-xs" asChild title="工程表だけを新しいタブで大きく開く"><a href={`/projects/${project.id}/schedule`} target="_blank" rel="noopener noreferrer" data-testid="open-schedule-tab"><ExternalLink className="w-3.5 h-3.5" /> 新しいタブで開く</a></Button>}
@@ -187,7 +201,8 @@ export default function ScheduleTab({ project, fullPage = false }) {
               {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
             </div>
           )}
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen(true)}><Settings2 className="w-3.5 h-3.5" /> 設定</Button>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen("keyDates")} data-testid="keydates-button"><Flag className="w-3.5 h-3.5" /> 大事な日</Button>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen("parties")} data-testid="parties-button"><Users className="w-3.5 h-3.5" /> 担当の区分</Button>
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -251,7 +266,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
       </Dialog>
       <ImportScheduleDialog open={importOpen} onOpenChange={setImportOpen} mode="project" project={project} parties={parties} holidays={companyHolidays} existingCount={tasks.length} />
       <SaveTemplateDialog open={saveTplOpen} onOpenChange={setSaveTplOpen} tasks={tasks} parties={parties} holidays={companyHolidays} defaultName={tasks[0]?.category && tasks[0].category !== "全制作物" ? tasks[0].category : ""} />
-      <ScheduleSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} project={project} onSave={(s) => saveSettings.mutate(s)} saving={saveSettings.isPending} />
+      <ScheduleSettingsDialog open={!!settingsOpen} section={settingsOpen || "keyDates"} onOpenChange={(v) => { if (!v) setSettingsOpen(false); }} project={project} onSave={(s) => saveSettings.mutate(s)} saving={saveSettings.isPending} />
     </Card>
   );
 }
