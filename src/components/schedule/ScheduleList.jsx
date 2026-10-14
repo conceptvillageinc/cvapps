@@ -1,8 +1,9 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Trash2, ArrowUp, ArrowDown, Link2, Diamond, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { Trash2, GripVertical, Link2, Diamond, Plus, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { useRowReorder } from "./useRowReorder";
 import { PHASES, taskRange, diffDays, wouldCycle, categoryColors, md } from "@/lib/schedule";
 import { PartyChips, tint } from "./ScheduleTimeline";
 import EditableCell from "./EditableCell";
@@ -10,8 +11,9 @@ import EditableCell from "./EditableCell";
 /**
  * 工程表のリスト（カテゴリーごとにまとめた表）。その場で編集する。
  * 社内メモ・見込み時間・実績時間は社内だけ（共有リンク・スプレッドシートには出ない）。
+ * 行の左の ⋮⋮ をつかんで上下にドラッグすると並びが変わる（別のカテゴリーに入れるとカテゴリーも移る）。
  */
-export default function ScheduleList({ tasks, parties, users = [], categories = [], onChange, onDelete, onMove, onAddInCategory, memberName }) {
+export default function ScheduleList({ tasks, parties, users = [], categories = [], onChange, onDelete, onReorder, onAddInCategory, memberName }) {
   const secColors = categoryColors(tasks);
   const [collapsed, setCollapsed] = useState(() => new Set());
   const toggle = (c) => setCollapsed((x) => { const n = new Set(x); if (n.has(c)) n.delete(c); else n.add(c); return n; });
@@ -21,6 +23,8 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
     if (!groups.length || groups[groups.length - 1].category !== c) groups.push({ category: c, items: [] });
     groups[groups.length - 1].items.push(t);
   }
+  const boxRef = useRef(null);
+  const reorder = useRowReorder((id, to, cat) => onReorder?.(id, to, cat));
   const commit = (t, key, value) => {
     const v = value === "" ? null : value;
     if ((t[key] ?? null) === v) return;
@@ -28,7 +32,7 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
   };
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="schedule-list">
+    <div ref={boxRef} className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="schedule-list">
       <table className="w-full text-xs table-fixed min-w-[1520px]">
         <thead>
           <tr className="border-b border-slate-200 bg-white text-[11px] text-slate-500">
@@ -53,7 +57,7 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
         <tbody>
           {groups.map((g, gi) => (
             <Fragment key={`${g.category}-${gi}`}>
-              <tr className="group/sec">
+              <tr className="group/sec" data-drop-index={collapsed.has(g.category) ? tasks.indexOf(g.items[g.items.length - 1]) + 1 : tasks.indexOf(g.items[0])} data-drop-category={g.category}>
                 <td colSpan={16} className="relative pl-3 pr-2 pt-4 pb-1.5 border-b border-slate-200">
                   <span className="absolute left-0 bottom-0 h-7 w-[4px]" style={{ background: secColors.get(g.category) }} />
                   <button className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-800" onClick={() => toggle(g.category)} data-testid="list-section">
@@ -69,15 +73,14 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
                 const i = tasks.indexOf(t);
                 const r = taskRange(t);
                 return (
-                  <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80" data-testid="schedule-row">
+                  <tr key={t.id} className={`group border-b border-slate-100 hover:bg-slate-50/80 ${reorder.draggingId === t.id ? "bg-blue-50/70 opacity-50" : ""}`} data-drop-index={i + 1} data-drop-category={t.category || ""} data-testid="schedule-row">
                     <td className="relative text-center">
                       <span className="absolute inset-y-[3px] left-[14px] w-[3px] rounded-full" style={{ background: tint(secColors.get(t.category || ""), 0.35) }} />
                       <button role="checkbox" aria-checked={!!t.completed} title={t.completed ? "未完了に戻す" : "完了にする"} onClick={() => onChange(t.id, { completed: !t.completed, completed_at: t.completed ? null : new Date().toISOString() })}
                         className={`ml-[24px] flex h-[18px] w-[18px] items-center justify-center rounded-full border transition-colors ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent hover:border-emerald-500 hover:text-emerald-500"}`}><Check className="h-3 w-3" strokeWidth={3} /></button>
                     </td>
                     <td className="px-1 whitespace-nowrap">
-                      <button className="text-muted-foreground hover:text-foreground disabled:opacity-20" disabled={i === 0} onClick={() => onMove(i, -1)}><ArrowUp className="w-3 h-3" /></button>
-                      <button className="text-muted-foreground hover:text-foreground disabled:opacity-20 ml-0.5" disabled={i === tasks.length - 1} onClick={() => onMove(i, 1)}><ArrowDown className="w-3 h-3" /></button>
+                      <span onPointerDown={(e) => reorder.start(e, t.id, boxRef.current)} title="つかんで上下に動かすと並びが変わります" className="inline-flex h-7 w-6 cursor-grab touch-none items-center justify-center rounded text-slate-300 hover:bg-slate-100 hover:text-slate-600 group-hover:text-slate-400 active:cursor-grabbing" data-testid="row-grip"><GripVertical className="h-4 w-4" /></span>
                     </td>
                     <td className="px-1 py-1">
                       <EditableCell value={t.category || ""} list="schedule-categories" onCommit={(v) => commit(t, "category", v)} />
@@ -104,6 +107,7 @@ export default function ScheduleList({ tasks, parties, users = [], categories = 
           ))}
         </tbody>
       </table>
+      {reorder.line}
       <datalist id="schedule-phases">{PHASES.map((p) => <option key={p} value={p} />)}</datalist>
       <datalist id="schedule-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
     </div>

@@ -8,7 +8,7 @@ import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, Li
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
-import { nextWorkday, addDays, toYmd, taskRange, partiesOf, keyDatesOf, shiftDependents, crossedKeyDates, memberShortName, scheduleTitle, jpDate } from "@/lib/schedule";
+import { nextWorkday, addDays, toYmd, taskRange, partiesOf, keyDatesOf, shiftDependents, crossedKeyDates, memberShortName, scheduleTitle, jpDate, reorderTasks } from "@/lib/schedule";
 import ScheduleTimeline from "./ScheduleTimeline";
 import ScheduleList from "./ScheduleList";
 import ShareDialog from "./ShareDialog";
@@ -88,14 +88,16 @@ export default function ScheduleTab({ project, fullPage = false }) {
   };
 
   const create = useMutation({
-    mutationFn: ({ category = null, after = null } = {}) => track(async () => {
+    // start / end を渡したとき（タイムラインの空いているところをドラッグしたとき）はその期間で、前の工程はつながない
+    mutationFn: ({ category = null, after = null, start: s0 = null, end: e0 = null } = {}) => track(async () => {
       const pos = after ? tasks.indexOf(after) + 1 : tasks.length;
       const prev = after || tasks[tasks.length - 1];
       const pr = prev && taskRange(prev);
-      const start = nextWorkday(pr ? addDays(pr.end, 1) : today, companyHolidays);
+      const start = s0 || nextWorkday(pr ? addDays(pr.end, 1) : today, companyHolidays);
+      const end = e0 || start;
       // 入れる場所より後ろの並び順を 1 つずつ下げる
       await Promise.all(tasks.slice(pos).map((t, i) => db.entities.ProjectTask.update(t.id, { sort_order: pos + i + 1 })));
-      return db.entities.ProjectTask.create({ project_id: project.id, name: "新しい工程", category, status: "todo", parties: ["cv"], start_date: start, end_date: start, sort_order: pos, depends_on: after ? [after.id] : [] });
+      return db.entities.ProjectTask.create({ project_id: project.id, name: "新しい工程", category, status: "todo", parties: ["cv"], start_date: start, end_date: end, sort_order: pos, depends_on: after && !s0 ? [after.id] : [] });
     }),
     onSuccess: (row) => { if (row?.id) setEditingId(row.id); qc.invalidateQueries({ queryKey: key }); },
     onError: fail,
@@ -113,16 +115,24 @@ export default function ScheduleTab({ project, fullPage = false }) {
     } catch (err) { fail(err); }
   };
 
-  const move = async (i, dir) => {
-    const j = i + dir;
-    if (j < 0 || j >= tasks.length) return;
-    const order = [...tasks];
-    [order[i], order[j]] = [order[j], order[i]];
+  // 行をドラッグして並びを変える（別のカテゴリーに入れたらカテゴリーも移す）
+  const reorder = async (id, toIndex, category) => {
+    const order = reorderTasks(tasks, id, toIndex, category);
+    const before = new Map(tasks.map((t) => [t.id, t]));
+    const patches = order.map((t, k) => {
+      const o = before.get(t.id);
+      const patch = {};
+      if (o.sort_order !== k) patch.sort_order = k;
+      if ((o.category ?? null) !== (t.category ?? null)) patch.category = t.category ?? null;
+      return [t.id, patch];
+    }).filter(([, p]) => Object.keys(p).length);
+    if (!patches.length) return;
     setRows(() => order.map((t, k) => ({ ...t, sort_order: k })));
     try {
-      await track(() => Promise.all(order.map((t, k) => (t.sort_order === k ? null : db.entities.ProjectTask.update(t.id, { sort_order: k })))));
+      await track(() => Promise.all(patches.map(([tid, p]) => db.entities.ProjectTask.update(tid, p))));
     } catch (err) { fail(err); }
   };
+  const createAt = ({ category, afterId, start, end }) => create.mutate({ category, after: tasks.find((t) => t.id === afterId) || null, start, end });
 
   const saveSettings = useMutation({
     mutationFn: (settings) => track(() => db.entities.Project.update(project.id, { schedule_settings: settings })),
@@ -206,7 +216,8 @@ export default function ScheduleTab({ project, fullPage = false }) {
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></span>完了 {done}/{tasks.length}</span>
           {late > 0 && <span className="text-red-600 font-semibold">終了日を過ぎた未完了 {late}件</span>}
           <span className="flex items-center gap-2">担当の色:{parties.map((p) => <span key={p.key} className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />{p.label}</span>)}</span>
-          {pref.view === "timeline" && <span>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）</span>}
+          {pref.view === "timeline" && <span>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）・行の左端 ⋮⋮ をつかんで上下に並べ替え・空いているところを横にドラッグで工程を足す</span>}
+          {pref.view === "list" && <span>行の左端 ⋮⋮ をつかんで上下に並べ替え（別のカテゴリーに入れるとカテゴリーも移ります）</span>}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
@@ -222,9 +233,9 @@ export default function ScheduleTab({ project, fullPage = false }) {
               <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
             </div>
             {pref.view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
+          <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} onReorder={reorder} onCreate={createAt} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
-          <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onMove={move} memberName={memberName}
+          <ScheduleList tasks={tasks} parties={parties} users={users} categories={categories} onChange={save} onDelete={remove} onReorder={reorder} memberName={memberName}
             onAddInCategory={(category, after) => create.mutate({ category: category || null, after })} />
             )}
           </div>

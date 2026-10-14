@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sparkles, Loader2, Plus, X, AlertTriangle, CalendarCheck, CalendarArrowDown, Settings2, ScanText } from "lucide-react";
 import { toast } from "sonner";
-import { toYmd, addDays, keyDatesOf, jpDate, nextWorkday, shiftDependents } from "@/lib/schedule";
+import { toYmd, addDays, keyDatesOf, jpDate, nextWorkday, shiftDependents, reorderTasks } from "@/lib/schedule";
 import { draftFromTemplates, pickTemplates, COMMON_CATEGORY } from "@/lib/scheduleTemplates";
 import ScheduleTimeline from "./ScheduleTimeline";
 
@@ -87,6 +87,14 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
     const begin = last?.end_date ? nextWorkday(addDays(last.end_date, 1), holidays) : nextWorkday(mode === "deadline" ? today : start, holidays);
     const row = { id: `new_${Date.now()}`, category: cat, name: "新しい工程", phase: null, parties: ["cv"], start_date: begin, end_date: begin, is_milestone: false, on_schedule: true, depends_on: last ? [last.id] : [], completed: false, member_ids: [] };
     setRows((rs) => [...rs.slice(0, idx + 1), row, ...rs.slice(idx + 1)]);
+    setEditingId(row.id);
+    setEdited(true);
+  };
+  // 行をドラッグして並びを変える／空いているところをドラッグして工程を足す
+  const reorderRow = (id, to, category) => { setRows((rs) => reorderTasks(rs, id, to, category)); setEdited(true); };
+  const drawRow = ({ category, afterId, start: s, end: e }) => {
+    const row = { id: `new_${Date.now()}`, category: category || "その他", name: "新しい工程", phase: null, parties: ["cv"], start_date: s, end_date: e, is_milestone: false, on_schedule: true, depends_on: [], completed: false, member_ids: [] };
+    setRows((rs) => { const i = rs.findIndex((t) => t.id === afterId); return i < 0 ? [...rs, row] : [...rs.slice(0, i + 1), row, ...rs.slice(i + 1)]; });
     setEditingId(row.id);
     setEdited(true);
   };
@@ -194,7 +202,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="min-w-0 flex-1 text-xs text-slate-600">
             {rows.length && range ? `${rows.length}件の工程　${jpDate(range.from)} 〜 ${jpDate(range.to)}（土日・祝日・休業日をとばした営業日で計算）` : "テンプレートを選ぶか「＋工程を追加」で、ここに下書きが出ます"}
-            {rows.length > 0 && <span className="ml-2 text-slate-400">工程名はクリックで直せます。行の × で外せます。{edited ? "テンプレートや納期を変えると、手で直したところは元に戻ります" : ""}</span>}
+            {rows.length > 0 && <span className="ml-2 text-slate-400">工程名はクリックで直せます。行の × で外せます。左端 ⋮⋮ をつかむと並べ替え、空いているところを横にドラッグすると工程を足せます。{edited ? "テンプレートや納期を変えると、手で直したところは元に戻ります" : ""}</span>}
           </p>
           <div className="ml-auto flex shrink-0 gap-2">
             {onCancel && <Button size="sm" variant="ghost" onClick={onCancel}>やめる</Button>}
@@ -208,7 +216,7 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
       {rows.length > 0 && range && (
         <div className="relative">
           <span className="absolute right-3 top-2 z-30 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">下書き（まだ保存していません）</span>
-          <ScheduleTimeline tasks={rows} parties={allParties} editable onChange={move} onRename={rename} onDelete={remove} editingId={editingId} keyDates={mode === "deadline" ? [...keyDatesOf(project).filter((k) => !/納品|納期/.test(k.label)), { label: "納期", date: deadline }] : keyDatesOf(project)} holidays={holidays} scale={(new Date(range.to) - new Date(range.from)) / 86400000 > 24 ? "week" : "day"} columns="standard" today={today} />
+          <ScheduleTimeline tasks={rows} parties={allParties} editable onChange={move} onRename={rename} onDelete={remove} onReorder={reorderRow} onCreate={drawRow} editingId={editingId} keyDates={mode === "deadline" ? [...keyDatesOf(project).filter((k) => !/納品|納期/.test(k.label)), { label: "納期", date: deadline }] : keyDatesOf(project)} holidays={holidays} scale={(new Date(range.to) - new Date(range.from)) / 86400000 > 24 ? "week" : "day"} columns="standard" today={today} />
         </div>
       )}
     </div>

@@ -264,3 +264,17 @@ export function partyInitial(label) {
   const ch = Array.from(s)[0];
   return ch ? ch.toUpperCase() : Array.from(String(label || "?"))[0];
 }
+
+/**
+ * 工程の並びを変える（ドラッグで動かしたとき）。toIndex は動かす前の並びでの「この位置の前に入れる」番号。
+ * category を渡すとそのカテゴリーに移す（null はカテゴリーなし、undefined はそのまま）。
+ */
+export function reorderTasks(tasks, id, toIndex, category) {
+  const from = tasks.findIndex((t) => t.id === id);
+  if (from < 0) return tasks;
+  const moved = category === undefined ? tasks[from] : { ...tasks[from], category };
+  const rest = tasks.filter((t) => t.id !== id);
+  const at = Math.max(0, Math.min(toIndex > from ? toIndex - 1 : toIndex, rest.length));
+  rest.splice(at, 0, moved);
+  return rest;
+}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Check, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Check, X, GripVertical } from "lucide-react";
+import { useRowReorder } from "./useRowReorder";
 import EditableCell from "./EditableCell";
 import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
 
@@ -52,6 +53,8 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  *   カテゴリーごとのセクション（たためる）。日単位・週単位を切り替えられる。
  *   土日・祝日・会社の休業日はうすい灰色、大事な日（納品期限など）は赤い線、今日は青い線。
  *   editable なら棒をドラッグして日付を動かせる（端をつかむと開始日・終了日だけ）。前の工程は矢印で結ぶ。
+ *   onReorder があれば、行の左端（⋮⋮）をつかんで上下にドラッグすると並びが変わる（別のカテゴリーに入れるとカテゴリーも移る）。
+ *   onCreate があれば、空いているところを横にドラッグすると、その期間の工程をその行のあとに足す。
  * @param {object} p
  * @param {object[]} p.tasks
  * @param {object[]} p.parties     担当の区分 [{ key, label, color }]
@@ -62,8 +65,10 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {(id, patch) => void} [p.onChange]
  * @param {(id) => string} [p.memberName]
  * @param {"soft"|"solid"|"progress"|"status"|"line"|"cells"} [p.barStyle]  棒の見せ方
+ * @param {(id, toIndex, category) => void} [p.onReorder]
+ * @param {({ category, afterId, start, end }) => void} [p.onCreate]
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate }) {
   const colW = scale === "week" ? 16 : 34;
   const bounds = useMemo(() => {
     const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : 3 });
@@ -127,6 +132,42 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
     if (drag.mode === "move") return { start: addDays(r.start, drag.delta), end: addDays(r.end, drag.delta) };
     if (drag.mode === "start") { const s = addDays(r.start, drag.delta); return { start: s > r.end ? r.end : s, end: r.end }; }
     const e = addDays(r.end, drag.delta); return { start: r.start, end: e < r.start ? r.start : e };
+  };
+
+  // 行の並び替え（左の列の行をつかむ）
+  const leftRef = useRef(null);
+  const reorder = useRowReorder((id, to, cat) => onReorder?.(id, to, cat));
+  const dropIndexOf = (row) => {
+    if (row.type === "task") return tasks.indexOf(row.t) + 1;
+    return collapsed.has(row.category) ? tasks.indexOf(row.items[row.items.length - 1]) + 1 : tasks.indexOf(row.items[0]);
+  };
+
+  // 空いているところを横にドラッグして工程を足す
+  const gridRef = useRef(null);
+  const [draw, setDraw] = useState(null); // { y, i0, i1, moved }
+  const startDraw = (e) => {
+    if (!editable || !onCreate || e.button > 0 || !gridRef.current) return;
+    const box = gridRef.current.getBoundingClientRect();
+    const y = e.clientY - box.top;
+    const row = rows.list.find((r) => y >= r.y && y < r.y + r.h);
+    if (!row) return;
+    e.preventDefault();
+    const dayAt = (cx) => Math.max(0, Math.min(days.length - 1, Math.floor((cx - gridRef.current.getBoundingClientRect().left) / colW)));
+    const x0 = e.clientX;
+    let d = { y: row.y + (row.h - 22) / 2, i0: dayAt(e.clientX), i1: dayAt(e.clientX), moved: false };
+    setDraw(d);
+    document.body.style.cursor = "crosshair";
+    const move = (ev) => { d = { ...d, i1: dayAt(ev.clientX), moved: d.moved || Math.abs(ev.clientX - x0) > 6 }; setDraw(d); };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      document.body.style.cursor = ""; setDraw(null);
+      if (!d.moved) return;
+      const a = Math.min(d.i0, d.i1); const b = Math.max(d.i0, d.i1);
+      const category = row.type === "task" ? row.t.category ?? null : row.category || null;
+      const afterId = row.type === "task" ? row.t.id : row.items[row.items.length - 1]?.id;
+      onCreate({ category, afterId, start: days[a].date, end: days[b].date });
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
 
   // 月の見出し／週の見出し
@@ -197,9 +238,9 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
 
         {/* 行 */}
         <div className="flex">
-          <div className="sticky left-0 z-10 border-r border-slate-200 bg-white" style={{ width: leftW }}>
+          <div ref={leftRef} className="sticky left-0 z-10 border-r border-slate-200 bg-white" style={{ width: leftW }}>
             {rows.list.map((row) => row.type === "section" ? (
-              <button key={row.key} onClick={() => toggle(row.category)} className="relative flex w-full items-center gap-1.5 border-b border-slate-100 pl-3 pr-2 text-left hover:bg-slate-50" style={{ height: SEC_H }} data-testid="timeline-section">
+              <button key={row.key} onClick={() => toggle(row.category)} {...(onReorder ? { "data-drop-index": dropIndexOf(row), "data-drop-category": row.category } : {})} className="relative flex w-full items-center gap-1.5 border-b border-slate-100 pl-3 pr-2 text-left hover:bg-slate-50" style={{ height: SEC_H }} data-testid="timeline-section">
                 <span className="absolute inset-y-0 left-0 w-[4px]" style={{ background: secColors.get(row.category) }} />
                 {collapsed.has(row.category) ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ background: secColors.get(row.category) }} />
@@ -207,8 +248,13 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                 <span className="ml-auto shrink-0 rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500">{row.items.filter((t) => t.completed).length}/{row.items.length}</span>
               </button>
             ) : (
-              <div key={row.key} className="group relative flex items-center border-b border-slate-100 text-[12px] hover:bg-slate-50" style={{ height: ROW_H }} data-testid="timeline-row">
+              <div key={row.key} {...(onReorder ? { "data-drop-index": dropIndexOf(row), "data-drop-category": row.t.category || "" } : {})} className={`group relative flex items-center border-b border-slate-100 text-[12px] hover:bg-slate-50 ${reorder.draggingId === row.t.id ? "bg-blue-50/70 opacity-50" : ""}`} style={{ height: ROW_H }} data-testid="timeline-row">
                 <span className="absolute inset-y-[3px] left-[14px] w-[3px] rounded-full" style={{ background: tint(secColors.get(row.t.category || ""), 0.35) }} />
+                {onReorder && (
+                  <span onPointerDown={(e) => reorder.start(e, row.t.id, leftRef.current, boxRef.current)} title="つかんで上下に動かすと並びが変わります" className="absolute inset-y-0 left-0 z-[1] flex w-[13px] cursor-grab touch-none items-center justify-center text-slate-300 opacity-0 hover:text-slate-600 group-hover:opacity-100 active:cursor-grabbing" data-testid="row-grip">
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </span>
+                )}
                 {leftCols.map((c) => {
                   const t = row.t;
                   const r = taskRange(t);
@@ -235,7 +281,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
             ))}
           </div>
 
-          <div className="relative" style={{ width: gridW, height: rows.height }}>
+          <div ref={gridRef} onPointerDown={startDraw} className={`relative ${editable && onCreate ? "cursor-cell" : ""}`} style={{ width: gridW, height: rows.height }} data-testid="timeline-grid">
             {/* 休みの日の網掛け・月の区切り */}
             {days.map((d, i) => d.off && <div key={d.date} className="absolute top-0 bottom-0 bg-slate-50" style={{ left: i * colW, width: colW }} />)}
             {scale === "day" && days.map((d, i) => d.day === 1 && i > 0 && <div key={`m${d.date}`} className="absolute top-0 bottom-0 border-l border-slate-200" style={{ left: i * colW }} />)}
@@ -402,9 +448,19 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                 {outside}
               </>);
             })}
+            {/* ドラッグで足す工程の下書き */}
+            {draw?.moved && (() => {
+              const a = Math.min(draw.i0, draw.i1); const b = Math.max(draw.i0, draw.i1);
+              return (
+                <div className="pointer-events-none absolute z-[12] flex h-[22px] items-center rounded-full border-2 border-dashed border-blue-500 bg-blue-50/90 px-2 text-[11px] font-semibold text-blue-800 shadow-sm whitespace-nowrap" style={{ left: a * colW + 1, top: draw.y, minWidth: (b - a + 1) * colW - 2 }} data-testid="draw-ghost">
+                  ＋ 新しい工程　{a === b ? md(days[a].date) : `${md(days[a].date)}〜${md(days[b].date)}`}（{b - a + 1}日）
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
+      {reorder.line}
     </div>
   );
 }
