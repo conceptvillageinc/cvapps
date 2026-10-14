@@ -97,7 +97,7 @@ function SpecCard({ spec, index, onChange, onDuplicate, onRemove, defaultOpen })
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium">サイズ <span className="text-muted-foreground font-normal">（数字だけ入れると 000mm×000mm の形になります）</span></Label>
+            <Label className="text-xs font-medium">サイズ <span className="text-muted-foreground font-normal">（タテ・ヨコの数字を入れると「タテ000×ヨコ000mm」の形になります）</span></Label>
             <SizeInput value={spec.size || ""} onChange={(v) => set("size", v)} />
           </div>
 
