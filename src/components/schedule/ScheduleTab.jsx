@@ -201,8 +201,13 @@ export default function ScheduleTab({ project, fullPage = false }) {
               {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
             </div>
           )}
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen("keyDates")} data-testid="keydates-button"><Flag className="w-3.5 h-3.5" /> 大事な日</Button>
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen("parties")} data-testid="parties-button"><Users className="w-3.5 h-3.5" /> 担当の区分</Button>
+          {["keyDates", "parties"].map((sec) => (
+            <ScheduleSettingsDialog key={sec} open={settingsOpen === sec} section={sec} onOpenChange={(v) => setSettingsOpen(v ? sec : false)} project={project} onSave={(st) => saveSettings.mutate(st)} saving={saveSettings.isPending}>
+              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid={sec === "keyDates" ? "keydates-button" : "parties-button"}>
+                {sec === "keyDates" ? <><Flag className="w-3.5 h-3.5" /> 大事な日</> : <><Users className="w-3.5 h-3.5" /> 担当の区分</>}
+              </Button>
+            </ScheduleSettingsDialog>
+          ))}
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -266,7 +271,6 @@ export default function ScheduleTab({ project, fullPage = false }) {
       </Dialog>
       <ImportScheduleDialog open={importOpen} onOpenChange={setImportOpen} mode="project" project={project} parties={parties} holidays={companyHolidays} existingCount={tasks.length} />
       <SaveTemplateDialog open={saveTplOpen} onOpenChange={setSaveTplOpen} tasks={tasks} parties={parties} holidays={companyHolidays} defaultName={tasks[0]?.category && tasks[0].category !== "全制作物" ? tasks[0].category : ""} />
-      <ScheduleSettingsDialog open={!!settingsOpen} section={settingsOpen || "keyDates"} onOpenChange={(v) => { if (!v) setSettingsOpen(false); }} project={project} onSave={(s) => saveSettings.mutate(s)} saving={saveSettings.isPending} />
     </Card>
   );
 }
