@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 
 /**
  * 印刷色数の入力。「片面／両面」と「4色フルカラー／2色／1色」を押して選ぶ。
- * 保存される値は文字列（例: 「両面4色フルカラー」「片面1色」「4色フルカラー」）。
+ * 保存される値は文字列（例: 「片面4色フルカラー」「両面1色」）。片面／両面は片面が最初から選ばれている。
  * 特色や「表4色・裏1色」のように選べないものは「その他」で自由に書ける。
  */
 export const SIDES = ["片面", "両面"];
@@ -12,14 +12,14 @@ export const COLOR_COUNTS = ["4色フルカラー", "2色", "1色"];
 /** 文字列を { side, count, text } に分解する。選べる形でなければ text だけ */
 export function parseColors(value) {
   const v = String(value || "").trim();
-  if (!v) return { side: "", count: "", text: "" };
-  const side = /両面/.test(v) ? "両面" : /片面/.test(v) ? "片面" : "";
+  if (!v) return { side: "片面", count: "", text: "" };
+  const side = /両面/.test(v) ? "両面" : "片面";
   const rest = v.replace(/片面|両面/g, "").replace(/[\s()（）]/g, "");
   const count = rest && /^(4色)?(フルカラー)?(CMYK)?$/i.test(rest) ? "4色フルカラー"
     : rest === "2色" ? "2色"
     : /^(1色|モノクロ|スミ1色)$/.test(rest) ? "1色"
     : "";
-  if (!count) return { side: "", count: "", text: v };
+  if (!count) return { side: "片面", count: "", text: v };
   return { side, count, text: "" };
 }
 
@@ -45,7 +45,7 @@ export default function ColorCountInput({ value, onChange, compact = false, inva
     <div className={`inline-flex gap-0.5 p-0.5 rounded-lg bg-muted ${invalid && !f[key] && !f.other ? "ring-1 ring-red-200" : ""}`} role="group">
       {items.map((x) => (
         <button key={x} type="button" aria-pressed={!f.other && f[key] === x}
-          onClick={() => emit({ ...f, other: false, [key]: f[key] === x && key === "side" ? "" : x })}
+          onClick={() => emit({ ...f, other: false, [key]: x })}
           className={pill(!f.other && f[key] === x)}>{x}</button>
       ))}
     </div>
