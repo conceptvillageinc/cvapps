@@ -190,7 +190,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
     ? [{ key: "name", label: "タスク名", w: 230 }, { key: "phase", label: "工程", w: 88 }, { key: "party", label: "担当", w: 64 }, { key: "range", label: "期間", w: 112 }]
     : columns === "mini"
       ? [{ key: "name", label: "タスク名", w: 150 }]
-      : [{ key: "name", label: "タスク名", w: 230 }, { key: "party", label: "担当", w: 64 }];
+      : [{ key: "name", label: "タスク名", w: 250 }, { key: "party", label: "担当", w: 64 }];
   const leftW = leftCols.reduce((s, c) => s + c.w, 0);
   const todayIn = today && today >= bounds.from && today <= bounds.to;
   const todayX = todayIn ? idx(today) * colW + colW / 2 : null;
@@ -267,14 +267,14 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                   let v = null;
                   if (c.key === "name") {
                     v = (
-                      <span className="flex min-w-0 items-center gap-2 pl-6">
+                      <span className="relative flex min-w-0 flex-1 items-center gap-2 pl-6">
                         {t.is_milestone
                           ? <span className={`h-3 w-3 shrink-0 rotate-45 rounded-[2px] ${t.completed ? "bg-emerald-500" : "bg-fuchsia-500"}`} />
                           : <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${t.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}><Check className="h-3 w-3" strokeWidth={3} /></span>}
                         {onRename
                           ? <span className="min-w-0 flex-1"><EditableCell value={t.name} required autoEdit={t.id === editingId} onCommit={(v) => onRename(t.id, v)} className="text-[12px]" /></span>
                           : <span className={`break-words ${columns === "mini" ? "line-clamp-3 text-[11px] leading-[1.15]" : "line-clamp-2 leading-tight"} ${t.completed ? "text-slate-400 line-through" : "text-slate-800"}`} title={t.name}>{t.name}</span>}
-                        {onDelete && <button onClick={() => onDelete(t.id)} title="この工程を外す" className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" data-testid="draft-delete"><X className="h-3.5 w-3.5" /></button>}
+                        {onDelete && <button onClick={() => onDelete(t.id)} title="この工程を外す" className="absolute right-0 top-1/2 -translate-y-1/2 rounded bg-white/90 p-0.5 text-slate-300 opacity-0 shadow-sm hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" data-testid="draft-delete"><X className="h-3.5 w-3.5" /></button>}
                       </span>
                     );
                   }
