@@ -26,28 +26,25 @@ function QuantityInput({ item: it, readOnly, missing, onChange, index }) {
     setDraft("");
   };
   const unit = it.unit || "枚";
-  if (readOnly) return <p className="min-h-9 rounded-md bg-slate-50 px-3 py-2 text-sm">{qs.length ? qs.map((q) => `${q.toLocaleString()}${unit}`).join("／") : "—"}</p>;
+  if (readOnly) return <p className="min-h-8 rounded-md bg-slate-50 px-2.5 py-1.5 text-sm">{qs.length ? qs.map((q) => `${q.toLocaleString()}${unit}`).join("／") : "—"}</p>;
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
         <Input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); add(); } }}
           onBlur={() => { if (draft && !qs.length) add(); }}
-          inputMode="numeric" placeholder="枚数" className={`w-28 text-right tabular-nums ${missing ? "border-red-200 bg-red-50/40" : ""}`} aria-label={`${index + 1}件目の印刷枚数`} data-testid="qty-input" />
-        <Button type="button" variant="outline" size="sm" className="h-9 gap-1 hover:bg-blue-50 hover:text-blue-800" onClick={add} data-testid="qty-add"><Plus className="h-3.5 w-3.5" />追加</Button>
-        <Input value={it.unit ?? ""} onChange={(e) => onChange({ unit: e.target.value })} placeholder="単位" className="w-16" aria-label={`${index + 1}件目の単位`} />
-      </div>
+          inputMode="numeric" placeholder="枚数" className={`h-8 w-20 text-right tabular-nums ${missing ? "border-red-200 bg-red-50/40" : ""}`} aria-label={`${index + 1}件目の印刷枚数`} data-testid="qty-input" />
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1 px-2.5 hover:bg-blue-50 hover:text-blue-800" onClick={add} title="入れた枚数をパターンに足す（Enter でも足せます）" data-testid="qty-add"><Plus className="h-3.5 w-3.5" />追加</Button>
+        <Input value={it.unit ?? ""} onChange={(e) => onChange({ unit: e.target.value })} placeholder="単位" className="h-8 w-12 px-2" aria-label={`${index + 1}件目の単位`} />
       {qs.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <>
           {qs.map((q, i) => (
-            <span key={q} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 ring-1 ring-blue-200" data-testid="qty-chip">
+            <span key={q} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800 ring-1 ring-blue-200" data-testid="qty-chip">
               {qs.length > 1 && <span className="text-[10px] font-normal text-blue-500">パターン{i + 1}</span>}
               {q.toLocaleString()}{unit}
               <button type="button" onClick={() => setQs(qs.filter((x) => x !== q))} className="text-blue-400 hover:text-blue-700" aria-label={`${q}${unit}を外す`}><X className="h-3 w-3" /></button>
             </span>
           ))}
-        </div>
+        </>
       )}
-      {qs.length > 1 && <p className="text-[11px] text-muted-foreground">枚数ごとに仕入を入れ、社内見積・見積書には枚数ごとの行で出します</p>}
     </div>
   );
 }
@@ -60,9 +57,9 @@ export default function PrintSpecCard({ item: it, index, count, printTypes, rule
   const [open, setOpen] = useState(defaultOpen);
   const miss = new Set(missingFields(it));
   const set = (patch) => onChange(patch);
-  const field = (key, label, node, { required = false, wide = false } = {}) => (
-    <div className={`space-y-1.5 ${wide ? "md:col-span-2" : ""}`}>
-      <p className="flex items-center gap-1.5 text-xs font-medium">
+  const field = (key, label, node, { required = false, span = "" } = {}) => (
+    <div className={`min-w-0 space-y-1 ${span}`}>
+      <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
         {label}{required && <span className="text-destructive">*</span>}
         {miss.has(key) && <span className="rounded bg-red-50 px-1.5 text-[10px] font-normal text-red-600 ring-1 ring-red-200">未確認</span>}
       </p>
@@ -70,14 +67,14 @@ export default function PrintSpecCard({ item: it, index, count, printTypes, rule
     </div>
   );
   const text = (key, placeholder, { numeric = false } = {}) => (readOnly
-    ? <p className={`min-h-9 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-3 py-2 text-sm ${it[key] ? "" : "text-muted-foreground"}`}>{it[key] || "—"}</p>
+    ? <p className={`min-h-8 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-2.5 py-1.5 text-sm ${it[key] ? "" : "text-muted-foreground"}`}>{it[key] || "—"}</p>
     : <Input value={it[key] ?? ""} type={numeric ? "number" : "text"} placeholder={placeholder}
         onChange={(e) => set({ [key]: numeric ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })}
-        className={`${numeric ? "text-right tabular-nums" : ""} ${miss.has(key) ? "border-red-200 bg-red-50/40" : ""}`} aria-label={`${index + 1}件目の${LABEL[key] || key}`} />);
+        className={`h-8 ${numeric ? "text-right tabular-nums" : ""} ${miss.has(key) ? "border-red-200 bg-red-50/40" : ""}`} aria-label={`${index + 1}件目の${LABEL[key] || key}`} />);
 
   return (
     <div className="rounded-xl border bg-white shadow-sm" data-testid="print-spec-row">
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <button onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={open}>
           {open ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />}
           <Printer className="h-4 w-4 shrink-0 text-slate-500" />
@@ -98,29 +95,29 @@ export default function PrintSpecCard({ item: it, index, count, printTypes, rule
       </div>
 
       {open && (
-        <div className="grid gap-4 border-t px-4 pb-4 pt-4 md:grid-cols-2">
-          {field("name", "品目", text("name", "例: 天然トラフグ贅沢セット 掛け紙"), { required: true })}
+        <div className="grid gap-x-3 gap-y-2.5 border-t px-3 py-3 sm:grid-cols-2 lg:grid-cols-12">
+          {field("name", "品目", text("name", "例: 天然トラフグ贅沢セット 掛け紙"), { required: true, span: "lg:col-span-5" })}
           {field("print_type", "印刷物種別", readOnly
-            ? <p className="min-h-9 rounded-md bg-slate-50 px-3 py-2 text-sm">{it.print_type || "—"}</p>
+            ? <p className="min-h-8 rounded-md bg-slate-50 px-2.5 py-1.5 text-sm">{it.print_type || "—"}</p>
             : (
-              <select value={it.print_type || ""} onChange={(e) => set({ print_type: e.target.value })} className={`h-9 w-full rounded-md border bg-background px-3 text-sm ${it.print_type ? "" : "border-amber-300"}`} aria-label={`${index + 1}件目の印刷物種別`}>
+              <select value={it.print_type || ""} onChange={(e) => set({ print_type: e.target.value })} className={`h-8 w-full rounded-md border bg-background px-2 text-sm ${it.print_type ? "" : "border-amber-300"}`} aria-label={`${index + 1}件目の印刷物種別`}>
                 <option value="">選択してください</option>
                 {printTypes.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
-            ), { required: true })}
-          {field("size", <>サイズ <span className="font-normal text-muted-foreground">（数字だけ入れると 000mm×000mm の形になります）</span></>, readOnly
-            ? <p className="min-h-9 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-3 py-2 text-sm">{it.size || "—"}</p>
-            : <div className={miss.has("size") ? "rounded-md ring-1 ring-red-200" : ""}><SizeInput value={it.size || ""} onChange={(v) => set({ size: v })} /></div>, { required: true, wide: true })}
-          {field("paper", "紙質・素材", text("paper", "例: コート紙135kg、PETフィルム"), { required: true })}
-          {field("colors", "印刷色数", text("colors", "例: 4色(CMYK)、両面4色"), { required: true })}
-          {field("quantity", <>印刷枚数 <span className="font-normal text-muted-foreground">（複数パターン可）</span></>, <QuantityInput item={it} readOnly={readOnly} missing={miss.has("quantity")} onChange={set} index={index} />, { required: true })}
-          {field("due", "希望納期", text("due", "例: 11/30、10/13〜10/16"))}
-          {field("finishing", "加工・オプション", text("finishing", "例: PP加工、折り加工（二つ折り）、角丸"))}
+            ), { required: true, span: "lg:col-span-4" })}
+          {field("due", "希望納期", text("due", "例: 11/30、10/13〜10/16"), { span: "sm:col-span-2 lg:col-span-3" })}
+          {field("size", "サイズ", readOnly
+            ? <p className="min-h-8 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-2.5 py-1.5 text-sm">{it.size || "—"}</p>
+            : <div className={miss.has("size") ? "rounded-md ring-1 ring-red-200" : ""}><SizeInput compact value={it.size || ""} onChange={(v) => set({ size: v })} /></div>, { required: true, span: "sm:col-span-2 lg:col-span-12" })}
+          {field("paper", "紙質・素材", text("paper", "例: コート紙135kg、PETフィルム"), { required: true, span: "lg:col-span-4" })}
+          {field("colors", "印刷色数", text("colors", "例: 4色(CMYK)、両面4色"), { required: true, span: "lg:col-span-4" })}
+          {field("finishing", "加工・オプション", text("finishing", "例: PP加工、折り加工（二つ折り）、角丸"), { span: "sm:col-span-2 lg:col-span-4" })}
+          {field("quantity", <>印刷枚数 <span className="font-normal text-muted-foreground">（複数パターン可・枚数ごとに見積）</span></>, <QuantityInput item={it} readOnly={readOnly} missing={miss.has("quantity")} onChange={set} index={index} />, { required: true, span: "sm:col-span-2 lg:col-span-6" })}
           {field("notes", "備考（印刷会社への伝達事項）", readOnly
-            ? <p className="min-h-9 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-3 py-2 text-sm">{it.notes || "—"}</p>
-            : <Textarea value={it.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="例: 入稿データは Illustrator。送料込みで見積ください" className="min-h-[60px]" />, { wide: false })}
+            ? <p className="min-h-8 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-2.5 py-1.5 text-sm">{it.notes || "—"}</p>
+            : <Textarea value={it.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} rows={1} placeholder="例: 入稿データは Illustrator。送料込みで見積ください" className="min-h-8 max-h-40 resize-y py-1.5 [field-sizing:content]" />, { span: "sm:col-span-2 lg:col-span-6" })}
           {it.basis && (
-            <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600 md:col-span-2"><Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="whitespace-pre-wrap break-words"><b className="mr-1 font-medium text-slate-500">議事録の根拠</b>{it.basis}</span></p>
+            <p className="flex items-start gap-1.5 rounded-md bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 sm:col-span-2 lg:col-span-12"><Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="whitespace-pre-wrap break-words"><b className="mr-1 font-medium text-slate-500">議事録の根拠</b>{it.basis}</span></p>
           )}
         </div>
       )}

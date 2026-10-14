@@ -70,7 +70,7 @@ export function formatSize({ w, h, d, preset, mode }) {
   return dims;
 }
 
-export default function SizeInput({ value, onChange, className = "" }) {
+export default function SizeInput({ value, onChange, className = "", compact = false }) {
   const [fields, setFields] = useState(() => parseSize(value));
   const [emitted, setEmitted] = useState(value || "");
 
@@ -106,7 +106,7 @@ export default function SizeInput({ value, onChange, className = "" }) {
   const orientation = orientationOf(fields.w, fields.h);
 
   const numBox = (key, label, id) => (
-    <label className="flex items-center h-9 rounded-md border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring" title={label}>
+    <label className={`flex items-center ${compact ? "h-8" : "h-9"} rounded-md border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring`} title={label}>
       <span className="pl-2 pr-1 text-[10px] text-muted-foreground whitespace-nowrap">{label}</span>
       <input
         id={id}
@@ -119,6 +119,75 @@ export default function SizeInput({ value, onChange, className = "" }) {
       <span className="pr-2 pl-0.5 text-[11px] text-muted-foreground">mm</span>
     </label>
   );
+
+  const modes = (
+    <div className="flex gap-0.5 p-0.5 rounded-full bg-muted">
+      {[["flat", "幅×高さ"], ["box", "箱・立体"], ["text", "文字で入力"]].map(([k, label]) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => setMode(k)}
+          className={`h-6 px-2.5 rounded-full text-[11px] ${fields.mode === k ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+  const orientationSwitch = (
+    <div className="flex gap-0.5 p-0.5 rounded-md bg-muted" role="group" aria-label="向き">
+      {[["タテ", RectangleVertical], ["ヨコ", RectangleHorizontal]].map(([o, Icon]) => (
+        <button
+          key={o}
+          type="button"
+          onClick={() => setOrientation(o)}
+          disabled={!fields.w || !fields.h || fields.w === fields.h}
+          aria-pressed={orientation === o}
+          title={o === "タテ" ? "タテ（幅 < 高さ）" : "ヨコ（幅 > 高さ）"}
+          className={`${compact ? "h-7" : "h-8"} px-2 rounded flex items-center gap-1 text-[11px] disabled:opacity-40 ${orientation === o ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <Icon className="w-3.5 h-3.5" /> {o}
+        </button>
+      ))}
+    </div>
+  );
+
+  // 詰めた形: 規格はプルダウンにして、規格・入れ方・寸法・向きを 1 行に並べる
+  if (compact) {
+    return (
+      <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+        <select
+          value={isText ? "" : fields.preset}
+          onChange={(e) => { const p = SIZE_PRESETS.find((x) => x.label === e.target.value); if (p) pickPreset(p); }}
+          className="h-8 w-auto shrink-0 rounded-md border bg-background px-2 text-xs"
+          aria-label="規格サイズ"
+        >
+          <option value="">規格</option>
+          {SIZE_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
+        </select>
+        {modes}
+        {isText ? (
+          <Input value={fields.text} onChange={(e) => emit({ ...fields, text: e.target.value })} placeholder="例: A4変形（210mm×200mm）、可変" className="h-8 min-w-[12rem] flex-1" />
+        ) : (
+          <>
+            {numBox("w", "幅", "size-w")}
+            <span className="text-muted-foreground">×</span>
+            {isBox && (
+              <>
+                {numBox("d", "奥行", "size-d")}
+                <span className="text-muted-foreground">×</span>
+              </>
+            )}
+            {numBox("h", "高さ", "size-h")}
+            {!isBox && orientationSwitch}
+            <span className={`h-8 flex items-center px-2.5 rounded-md text-xs font-medium tabular-nums whitespace-nowrap ${result ? "bg-indigo-50 text-slate-800" : "bg-muted text-muted-foreground"}`}>
+              {result || (isBox ? "000mm×000mm×000mm" : "000mm×000mm")}
+            </span>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-1.5 ${className}`}>
@@ -134,18 +203,7 @@ export default function SizeInput({ value, onChange, className = "" }) {
           </button>
         ))}
         <span className="mx-1 h-4 w-px bg-border" />
-        <div className="flex gap-0.5 p-0.5 rounded-full bg-muted">
-          {[["flat", "幅×高さ"], ["box", "箱・立体"], ["text", "文字で入力"]].map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setMode(k)}
-              className={`h-6 px-2.5 rounded-full text-[11px] ${fields.mode === k ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {modes}
       </div>
 
       {isText ? (
@@ -161,23 +219,7 @@ export default function SizeInput({ value, onChange, className = "" }) {
             </>
           )}
           {numBox("h", "高さ", "size-h")}
-          {!isBox && (
-            <div className="flex gap-0.5 p-0.5 rounded-md bg-muted" role="group" aria-label="向き">
-              {[["タテ", RectangleVertical], ["ヨコ", RectangleHorizontal]].map(([o, Icon]) => (
-                <button
-                  key={o}
-                  type="button"
-                  onClick={() => setOrientation(o)}
-                  disabled={!fields.w || !fields.h || fields.w === fields.h}
-                  aria-pressed={orientation === o}
-                  title={o === "タテ" ? "タテ（幅 < 高さ）" : "ヨコ（幅 > 高さ）"}
-                  className={`h-8 px-2 rounded flex items-center gap-1 text-[11px] disabled:opacity-40 ${orientation === o ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  <Icon className="w-3.5 h-3.5" /> {o}
-                </button>
-              ))}
-            </div>
-          )}
+          {!isBox && orientationSwitch}
           <span className={`ml-auto h-9 flex items-center px-3 rounded-md text-sm font-medium tabular-nums whitespace-nowrap ${result ? "bg-indigo-50 text-slate-800" : "bg-muted text-muted-foreground"}`}>
             {result || (isBox ? "000mm×000mm×000mm" : "000mm×000mm")}
           </span>
