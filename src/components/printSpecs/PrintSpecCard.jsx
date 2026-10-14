@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Printer, AlertTriangle, ArrowUp, ArrowDown, Trash2, Copy, Quote, Plus, X } from "lucide-react";
 import SizeInput from "@/components/estimates/SizeInput";
 import ColorCountInput from "@/components/estimates/ColorCountInput";
+import ConfirmPopover from "@/components/ConfirmPopover";
 import { SPEC_FIELDS, missingFields, markupForType, isPackageType, quantitiesOf } from "@/lib/printSpecList";
 
 const LABEL = Object.fromEntries(SPEC_FIELDS.map((f) => [f.key, f.label]));
@@ -87,10 +88,12 @@ export default function PrintSpecCard({ item: it, index, count, printTypes, rule
         {miss.size > 0 && <span className="flex items-center gap-1 text-[11px] text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{[...miss].map((k) => LABEL[k]).join("・")}が未確認</span>}
         {!readOnly && (
           <span className="flex items-center">
-            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => onMove(-1)} aria-label="上へ"><ArrowUp className="h-3.5 w-3.5" /></Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === count - 1} onClick={() => onMove(1)} aria-label="下へ"><ArrowDown className="h-3.5 w-3.5" /></Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onDuplicate} aria-label="複製" title="複製"><Copy className="h-3.5 w-3.5" /></Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={onRemove} aria-label="消す" title="消す"><Trash2 className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-blue-50 hover:text-blue-800" disabled={index === 0} onClick={() => onMove(-1)} aria-label="上へ"><ArrowUp className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-blue-50 hover:text-blue-800" disabled={index === count - 1} onClick={() => onMove(1)} aria-label="下へ"><ArrowDown className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-blue-50 hover:text-blue-800" onClick={onDuplicate} aria-label="複製" title="複製"><Copy className="h-3.5 w-3.5" /></Button>
+            <ConfirmPopover message={<>「<b>{it.name || `印刷物 ${index + 1}`}</b>」を消しますか？</>} onConfirm={onRemove}>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:bg-red-50 hover:text-destructive data-[state=open]:bg-red-50 data-[state=open]:text-destructive" aria-label="消す" title="消す"><Trash2 className="h-3.5 w-3.5" /></Button>
+            </ConfirmPopover>
           </span>
         )}
       </div>

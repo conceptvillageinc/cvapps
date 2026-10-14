@@ -274,7 +274,7 @@ function PrintSpecListPage() {
                 onChange={(patch) => setRow(it.id, patch)}
                 onMove={(d) => move(i, d)}
                 onDuplicate={() => { const next = [...items]; next.splice(i + 1, 0, { ...it, id: blankSpec().id, cost_total: "", price_url: "", price_note: "", screenshot_path: "", prices: {}, lookup_log: null }); edit(next); }}
-                onRemove={() => { if (window.confirm(`「${it.name || `印刷物 ${i + 1}`}」を消しますか？`)) edit(items.filter((x) => x.id !== it.id)); }}
+                onRemove={() => edit(items.filter((x) => x.id !== it.id))}
               />
             ))}
           </div>
