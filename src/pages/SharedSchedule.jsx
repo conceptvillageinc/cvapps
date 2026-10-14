@@ -128,7 +128,7 @@ export default function SharedSchedule() {
           )}
         </div>
         {tasks.length === 0 ? <p className="text-sm text-slate-500 py-10 text-center">まだ工程がありません。</p> : view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={d.parties} keyDates={d.key_dates} holidays={holidays} scale={scale} columns={narrow ? "mini" : "full"} memberName={memberName} today={today} fitHeight />
+          <ScheduleTimeline tasks={tasks} parties={d.parties} keyDates={d.key_dates} holidays={holidays} scale={scale} columns={narrow ? "mini" : "full"} memberName={memberName} today={today} boxMaxHeight="calc(100dvh - 24px)" />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="w-full text-xs min-w-[640px]">
