@@ -4,8 +4,9 @@ import { db } from "@/api/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText, Check, Flag, Users } from "lucide-react";
+import { Plus, CalendarRange, Sheet, ExternalLink, Loader2, Link2, Settings2, List, GanttChart, LayoutTemplate, Sparkles, BookmarkPlus, ScanText, Check, Flag, Users, HelpCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { nextWorkday, addDays, toYmd, taskRange, partiesOf, keyDatesOf, shiftDependents, crossedKeyDates, memberShortName, scheduleTitle, jpDate, reorderTasks } from "@/lib/schedule";
@@ -173,45 +174,41 @@ export default function ScheduleTab({ project, fullPage = false }) {
 
   return (
     <Card data-testid="schedule-tab">
-      <CardHeader className="pb-3 space-y-2">
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div className="min-w-0">
-            <CardTitle className="text-sm flex items-center gap-2"><CalendarRange className="w-4 h-4" /> 工程表（{tasks.length}件）
-              {pending > 0
-                ? <span className="inline-flex items-center gap-1 text-[11px] font-normal text-slate-400" data-testid="save-status"><Loader2 className="h-3 w-3 animate-spin" />保存中…</span>
-                : <span className={`inline-flex items-center gap-1 text-[11px] font-normal text-emerald-600 transition-opacity duration-500 ${savedFlash ? "opacity-100" : "opacity-0"}`} data-testid="save-status" aria-live="polite"><Check className="h-3 w-3" strokeWidth={3} />保存しました</span>}
-            </CardTitle>
-            <div className="-ml-1.5 mt-0.5 w-[32rem] max-w-full" title="クリックしてタイトルを直す">
-              <EditableCell value={scheduleTitle(project)} onCommit={saveTitle} className="h-7 text-xs font-semibold" textClassName="font-semibold text-slate-900" testId="schedule-title" />
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {keyDates.map((k) => <span key={k.date + k.label} className="rounded bg-red-50 border border-red-200 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">{k.label} {jpDate(k.date)}</span>)}
-              {keyDates.length === 0 && <button className="text-[11px] text-primary hover:underline" onClick={() => setSettingsOpen("keyDates")}>納品期限などの大事な日を入れる</button>}
-            </div>
+      <CardHeader className="pb-2 space-y-2">
+        {/* 1 段目: 見出し・タイトル・大事な日 ／ 右に「新しいタブで開く」 */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <CardTitle className="text-sm flex shrink-0 items-center gap-2"><CalendarRange className="w-4 h-4" /> 工程表（{tasks.length}件）</CardTitle>
+          <div className="min-w-[14rem] max-w-[30rem]" title="クリックしてタイトルを直す">
+            <EditableCell value={scheduleTitle(project)} onCommit={saveTitle} className="h-7 text-xs font-semibold" textClassName="font-semibold text-slate-900" testId="schedule-title" />
           </div>
-          {!fullPage && <Button size="sm" className="h-8 gap-1.5 text-xs" asChild title="工程表だけを新しいタブで大きく開く"><a href={`/projects/${project.id}/schedule`} target="_blank" rel="noopener noreferrer" data-testid="open-schedule-tab"><ExternalLink className="w-3.5 h-3.5" /> 新しいタブで開く</a></Button>}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {keyDates.map((k) => <span key={k.date + k.label} className="rounded bg-red-50 border border-red-200 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">{k.label} {jpDate(k.date)}</span>)}
+            {keyDates.length === 0 && <button className="text-[11px] text-primary hover:underline" onClick={() => setSettingsOpen("keyDates")}>納品期限などの大事な日を入れる</button>}
+          </div>
+          {!fullPage && <Button size="sm" className="ml-auto h-8 gap-1.5 text-xs" asChild title="工程表だけを新しいタブで大きく開く"><a href={`/projects/${project.id}/schedule`} target="_blank" rel="noopener noreferrer" data-testid="open-schedule-tab"><ExternalLink className="w-3.5 h-3.5" /> 新しいタブで開く</a></Button>}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
-            <button onClick={() => setView({ view: "timeline" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "timeline" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><GanttChart className="w-3.5 h-3.5" />タイムライン</button>
-            <button onClick={() => setView({ view: "list" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "list" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><List className="w-3.5 h-3.5" />リスト</button>
+            <button onClick={() => setView({ view: "timeline" })} className={`px-2 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "timeline" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><GanttChart className="w-3.5 h-3.5" />タイムライン</button>
+            <button onClick={() => setView({ view: "list" })} className={`px-2 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "list" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><List className="w-3.5 h-3.5" />リスト</button>
           </div>
           {pref.view === "timeline" && (
             <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
-              {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
+              {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
             </div>
           )}
+          <span className="mx-0.5 h-5 w-px bg-slate-200" />
           {["keyDates", "parties"].map((sec) => (
             <ScheduleSettingsDialog key={sec} open={settingsOpen === sec} section={sec} onOpenChange={(v) => setSettingsOpen(v ? sec : false)} project={project} onSave={(st) => saveSettings.mutate(st)} saving={saveSettings.isPending}>
-              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid={sec === "keyDates" ? "keydates-button" : "parties-button"}>
+              <Button size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid={sec === "keyDates" ? "keydates-button" : "parties-button"}>
                 {sec === "keyDates" ? <><Flag className="w-3.5 h-3.5" /> 大事な日</> : <><Users className="w-3.5 h-3.5" /> 担当の区分</>}
               </Button>
             </ScheduleSettingsDialog>
           ))}
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
+          <Button size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="template-menu"><LayoutTemplate className="w-3.5 h-3.5" /> テンプレート</Button>
+              <Button size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="template-menu"><LayoutTemplate className="w-3.5 h-3.5" /> テンプレート</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => setAddTplOpen(true)}><Sparkles className="w-3.5 h-3.5 mr-1.5" />テンプレートから工程を追加</DropdownMenuItem>
@@ -222,7 +219,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
           </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" disabled={exporting || tasks.length === 0}>
+              <Button size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" disabled={exporting || tasks.length === 0}>
                 {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sheet className="w-3.5 h-3.5" />} スプレッドシート
               </Button>
             </DropdownMenuTrigger>
@@ -237,8 +234,32 @@ export default function ScheduleTab({ project, fullPage = false }) {
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></span>完了 {done}/{tasks.length}</span>
           {late > 0 && <span className="text-red-600 font-semibold">終了日を過ぎた未完了 {late}件</span>}
           <span className="flex items-center gap-2">担当の色:{parties.map((p) => <span key={p.key} className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />{p.label}</span>)}</span>
-          {pref.view === "timeline" && <span>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）・行の左端 ⋮⋮ をつかんで上下に並べ替え・空いているところを横にドラッグで工程を足す・担当のアイコンを押すと担当を変えられます</span>}
-          {pref.view === "list" && <span>行の左端 ⋮⋮ をつかんで上下に並べ替え（別のカテゴリーに入れるとカテゴリーも移ります）</span>}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button type="button" className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-slate-500 hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="schedule-help"><HelpCircle className="h-3.5 w-3.5" />操作のしかた</button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 p-3 text-xs leading-relaxed">
+              <ul className="list-disc space-y-1 pl-4 text-slate-700">
+                {pref.view === "timeline" && <>
+                  <li>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）</li>
+                  <li>空いているところを横にドラッグで工程を足す</li>
+                  <li>担当のアイコンを押すと担当を変えられます</li>
+                </>}
+                <li>行の左端 ⋮⋮ をつかんで上下に並べ替え（別のカテゴリーに入れるとカテゴリーも移ります）</li>
+                <li>工程名・タイトルはクリックで直せます</li>
+              </ul>
+            </PopoverContent>
+          </Popover>
+          {pending > 0
+            ? <span className="inline-flex items-center gap-1 text-[11px] font-normal text-slate-400" data-testid="save-status"><Loader2 className="h-3 w-3 animate-spin" />保存中…</span>
+            : <span className={`inline-flex items-center gap-1 text-[11px] font-normal text-emerald-600 transition-opacity duration-500 ${savedFlash ? "opacity-100" : "opacity-0"}`} data-testid="save-status" aria-live="polite"><Check className="h-3 w-3" strokeWidth={3} />保存しました</span>}
+          {/* 工程を足す入口（テンプレートから／1 件ずつ） */}
+          {tasks.length > 0 && (
+            <span className="ml-auto flex gap-1.5">
+              <Button size="sm" variant="outline" className="h-8 gap-1 border-blue-200 bg-blue-50/60 text-xs text-blue-800 hover:bg-blue-100 hover:text-blue-900" onClick={() => setAddTplOpen(true)} data-testid="add-template"><Plus className="h-3.5 w-3.5" />テンプレートを足す</Button>
+              <Button size="sm" variant="outline" className="h-8 gap-1 border-blue-200 bg-blue-50/60 text-xs text-blue-800 hover:bg-blue-100 hover:text-blue-900" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null, dateless: pref.view === "timeline" }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
+            </span>
+          )}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
@@ -248,11 +269,6 @@ export default function ScheduleTab({ project, fullPage = false }) {
           <TemplatePanel project={project} parties={parties} holidays={companyHolidays} onImport={() => setImportOpen(true)} />
         ) : (
           <div className="space-y-2">
-            {/* 工程を足す入口（テンプレートから／1 件ずつ） */}
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => setAddTplOpen(true)} data-testid="add-template"><Plus className="h-3.5 w-3.5" />テンプレートを足す</Button>
-              <Button size="sm" variant="outline" className="h-7 gap-1 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { const body = tasks.filter((t) => !(t.category === "全制作物" && t.is_milestone)); const last = body[body.length - 1]; create.mutate({ category: last?.category || null, after: last || null, dateless: pref.view === "timeline" }); }} disabled={create.isPending} data-testid="add-task"><Plus className="h-3.5 w-3.5" />工程を追加</Button>
-            </div>
             {pref.view === "timeline" ? (
           <ScheduleTimeline tasks={tasks} parties={parties} keyDates={keyDates} holidays={companyHolidays} scale={pref.scale} columns="standard" barStyle={pref.bar || "line"} editable onChange={save} onRename={(id, name) => { setEditingId(null); save(id, { name }); }} onDelete={(id) => { const t = tasks.find((x) => x.id === id); if (t) remove(t); }} editingId={editingId} onReorder={reorder} onCreate={createAt} users={users} fitHeight={fullPage} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers today={today} />
         ) : (
