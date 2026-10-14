@@ -255,7 +255,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
               </div>
             ) : (
               <div className="flex h-[32px] text-[10px] text-slate-500">
-                {weeks.map((w) => <div key={w.date} className="flex items-center border-l border-slate-100 pl-1.5" style={{ width: 7 * colW }}>{md(w.date)}〜</div>)}
+                {weeks.map((w) => <div key={w.date} className="flex items-center whitespace-nowrap border-l border-slate-100 pl-1.5" style={{ width: 7 * colW }}>{md(w.date)}〜{md(addDays(w.date, 6))}</div>)}
               </div>
             )}
           </div>
