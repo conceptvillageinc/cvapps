@@ -278,3 +278,23 @@ export function reorderTasks(tasks, id, toIndex, category) {
   rest.splice(at, 0, moved);
   return rest;
 }
+
+/** 旬（上旬 1〜10 日・中旬 11〜20 日・下旬 21 日〜月末）の始まりと終わり */
+export function dekadOf(s) {
+  const d = parseYmd(s);
+  const day = d.getDate();
+  return day <= 10 ? 0 : day <= 20 ? 1 : 2;
+}
+export function dekadStart(s) {
+  const d = parseYmd(s);
+  d.setDate([1, 11, 21][dekadOf(s)]);
+  return toYmd(d);
+}
+export function dekadEnd(s) {
+  const d = parseYmd(s);
+  const part = dekadOf(s);
+  if (part < 2) d.setDate(part === 0 ? 10 : 20);
+  else { d.setMonth(d.getMonth() + 1, 0); }
+  return toYmd(d);
+}
+export const DEKAD_LABELS = ["上旬", "中旬", "下旬"];

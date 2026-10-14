@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Check, X, GripVertical } from "lucide-react"
 import { useRowReorder } from "./useRowReorder";
 import PartyPicker from "./PartyPicker";
 import EditableCell from "./EditableCell";
-import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
+import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, dekadStart, dekadEnd, dekadOf, DEKAD_LABELS, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
 
 const mdw = (s) => `${md(s)}（${WEEKDAYS[parseYmd(s).getDay()]}）`;
 
@@ -62,7 +62,7 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {object[]} p.parties     担当の区分 [{ key, label, color }]
  * @param {object[]} p.keyDates    大事な日 [{ label, date }]
  * @param {Set<string>} [p.holidays] 会社の休業日
- * @param {"day"|"week"} p.scale
+ * @param {"day"|"week"|"dekad"} p.scale  日／週／旬（上旬・中旬・下旬）
  * @param {"mini"|"standard"|"full"} [p.columns]  左の列（mini: タスク名だけ（スマホ） / standard: タスク名・担当 / full: ＋工程・期間）
  * @param {(id, patch) => void} [p.onChange]
  * @param {(id) => string} [p.memberName]
@@ -72,10 +72,12 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {({ category, afterId, start, end }) => void} [p.onCreate]
  */
 export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null }) {
-  const colW = scale === "week" ? 16 : 34;
+  const colW = scale === "week" ? 16 : scale === "dekad" ? 12 : 34;
   const bounds = useMemo(() => {
-    const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : 3 });
-    return scale === "week" ? { from: weekStart(b.from), to: addDays(weekStart(b.to), 6) } : b;
+    const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : scale === "dekad" ? 10 : 3 });
+    if (scale === "week") return { from: weekStart(b.from), to: addDays(weekStart(b.to), 6) };
+    if (scale === "dekad") return { from: dekadStart(b.from), to: dekadEnd(b.to) };
+    return b;
   }, [tasks, keyDates, scale, today]);
   const days = useMemo(() => daysBetween(bounds.from, bounds.to).map((d) => dayInfo(d, holidays)), [bounds, holidays]);
   const keyMap = useMemo(() => new Map(keyDates.map((k) => [k.date, k.label])), [keyDates]);
@@ -185,6 +187,14 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
   }
   const weeks = [];
   if (scale === "week") for (let i = 0; i < days.length; i += 7) weeks.push(days[i]);
+  // 旬の見出し（上旬・中旬・下旬）
+  const dekads = [];
+  if (scale === "dekad") days.forEach((d, i) => {
+    const part = dekadOf(d.date);
+    const key = `${d.year}-${d.month}-${part}`;
+    if (!dekads.length || dekads[dekads.length - 1].key !== key) dekads.push({ key, part, i, n: 0, from: d.day });
+    const last = dekads[dekads.length - 1]; last.n++; last.to = d.day;
+  });
 
   const leftCols = columns === "full"
     ? [{ key: "name", label: "タスク名", w: 230 }, { key: "phase", label: "工程", w: 88 }, { key: "party", label: "担当", w: 64 }, { key: "range", label: "期間", w: 112 }]
@@ -200,7 +210,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
   useEffect(() => {
     const el = boxRef.current;
     if (!el || !todayIn) return;
-    el.scrollLeft = Math.max(0, (idx(today) - (scale === "week" ? 7 : 2)) * colW);
+    el.scrollLeft = Math.max(0, (idx(today) - (scale === "week" ? 7 : scale === "dekad" ? 12 : 2)) * colW);
   }, [scale]);
 
   const toggle = (c) => setCollapsed((s) => { const n = new Set(s); if (n.has(c)) n.delete(c); else n.add(c); return n; });
@@ -233,6 +243,15 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                     </div>
                   );
                 })}
+              </div>
+            ) : scale === "dekad" ? (
+              <div className="flex h-[32px]">
+                {dekads.map((k) => (
+                  <div key={k.key} title={`${k.from}日〜${k.to}日`} className={`flex flex-col items-center justify-center border-l leading-none ${k.part === 0 ? "border-slate-200" : "border-slate-100"} ${today && dekadStart(today) === dekadStart(days[k.i].date) ? "bg-blue-50 text-blue-700" : "text-slate-600"}`} style={{ width: k.n * colW }}>
+                    <span className="text-[11px] font-semibold">{DEKAD_LABELS[k.part]}</span>
+                    <span className="mt-0.5 text-[9px] text-slate-400">{k.from}〜{k.to}日</span>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="flex h-[32px] text-[10px] text-slate-500">
@@ -301,6 +320,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
             {days.map((d, i) => d.off && <div key={d.date} className="absolute top-0 bottom-0 bg-slate-50" style={{ left: i * colW, width: colW }} />)}
             {scale === "day" && days.map((d, i) => d.day === 1 && i > 0 && <div key={`m${d.date}`} className="absolute top-0 bottom-0 border-l border-slate-200" style={{ left: i * colW }} />)}
             {scale === "week" && weeks.map((w, i) => <div key={`w${w.date}`} className="absolute top-0 bottom-0 border-l border-slate-100" style={{ left: i * 7 * colW }} />)}
+            {scale === "dekad" && dekads.map((k) => k.i > 0 && <div key={`d${k.key}`} className={`absolute top-0 bottom-0 border-l ${k.part === 0 ? "border-slate-200" : "border-slate-100"}`} style={{ left: k.i * colW }} />)}
             {/* セクションの帯・行の線 */}
             {rows.list.map((row) => row.type === "section"
               ? <div key={`b${row.key}`} className="absolute left-0 right-0 border-b border-slate-100 bg-slate-50/60" style={{ top: row.y, height: SEC_H }} />
@@ -427,7 +447,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                     <div onPointerDown={(e) => startDrag(e, t, "move")} className={`relative flex h-full items-center select-none ${grab} ${t.completed ? "opacity-50" : ""}`} style={{ width: Math.max(width - 4, 26) }} title={tip} data-testid="timeline-bar">
                       <span className="absolute left-3 right-1.5 h-[5px] rounded-full" style={{ background: lineBg }} />
                       <span className="absolute right-0.5 h-2.5 w-2.5 rounded-full border-2 bg-white" style={{ borderColor: colors[colors.length - 1] || c0 }} />
-                      <span className="relative z-[1] -ml-1"><PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} size={22} max={2} /></span>
+                      <span className="relative z-[1] -ml-1"><PartyAvatars task={t} parties={parties} memberName={memberName} memberAvatar={memberAvatar} alwaysMembers={alwaysMembers} size={scale === "day" ? 22 : 18} max={2} /></span>
                       {handles}
                     </div>
                     {scale === "day" && <span className="relative z-[9] ml-1 whitespace-nowrap rounded bg-white/90 px-0.5 text-[11px] text-slate-600">{t.completed ? "✓ " : ""}{t.name}</span>}

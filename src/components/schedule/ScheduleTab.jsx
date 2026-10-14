@@ -184,7 +184,7 @@ export default function ScheduleTab({ project, fullPage = false }) {
           </div>
           {pref.view === "timeline" && (
             <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
-              {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
+              {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
             </div>
           )}
           <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen(true)}><Settings2 className="w-3.5 h-3.5" /> 設定</Button>

@@ -123,7 +123,7 @@ export default function SharedSchedule() {
           </div>
           {view === "timeline" && (
             <div className="inline-flex rounded-lg bg-slate-200/70 p-0.5">
-              {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setScale(v)} className={seg(scale === v)}>{l}</button>)}
+              {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setScale(v)} className={seg(scale === v)}>{l}</button>)}
             </div>
           )}
         </div>
