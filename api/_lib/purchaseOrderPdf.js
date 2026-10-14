@@ -21,6 +21,7 @@ const BOTTOM = PAGE.height - MARGIN - 18;
 
 const yen = (n) => `${Math.round(Number(n) || 0).toLocaleString('ja-JP')}`;
 const signedYen = (n) => { const v = Math.round(Number(n) || 0); return `${v < 0 ? '-' : ''}${Math.abs(v).toLocaleString('ja-JP')}`; };
+const fmtUnitPrice = (p) => { const n = Number(p) || 0; return Number.isInteger(n) ? signedYen(n) : n.toLocaleString('ja-JP', { maximumFractionDigits: 2 }); };
 const fmtQty = (q) => { const n = Number(q); return Number.isFinite(n) ? (Number.isInteger(n) ? n.toLocaleString('ja-JP') : String(n)) : ''; };
 const fmtDate = (d) => (d ? String(d).slice(0, 10).replace(/-/g, '/') : '');
 const formatPostal = (v) => { const d = String(v || '').replace(/[^0-9]/g, ''); return d.length === 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : String(v || ''); };
@@ -174,7 +175,7 @@ function draw(pdf, { estimate, client, company }) {
     // 列の区切り線
     { let sx = MARGIN; for (const [, w0] of COLS.slice(0, -1)) { sx += w0 || NAME_W; pdf.save().lineWidth(0.6).strokeColor('#e2e8f0').moveTo(sx, y).lineTo(sx, y + h).stroke().restore(); } }
     pdf.fillColor('#000').text(name, MARGIN + 4, y + 3, { width: NAME_W - 8 });
-    const cells = [fmtQty(li.quantity), String(li.unit || ''), signedYen(li.unit_price), signedYen(li.amount)];
+    const cells = [fmtQty(li.quantity), String(li.unit || ''), fmtUnitPrice(li.unit_price), signedYen(li.amount)];
     let x = MARGIN + NAME_W;
     COLS.slice(1).forEach(([, w, align], ci) => { pdf.text(cells[ci], x + 4, y + 3, { width: w - 8, align, lineBreak: false, ellipsis: true }); x += w; });
     y += h;

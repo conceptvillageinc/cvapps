@@ -18,7 +18,7 @@ import {
 import { ArrowLeft, Save, FileDown, Printer, Trash2, Loader2, CheckCircle2, Mail, Stamp, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
-import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP } from "@/lib/constants";
+import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, fmtUnit } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import {
@@ -349,7 +349,7 @@ export default function ReceiptEdit() {
                     <td className="px-3 py-1.5 text-center">{source && <input type="checkbox" checked={!!on} onChange={() => toggle(li.id)} aria-label={`${li.name} を含める`} />}</td>
                     <td className="px-3 py-1.5">{li.name}{other && <span className="ml-2 text-[10px] text-amber-700">（{other} に含めた行）</span>}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{li.quantity} {li.unit || ""}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{yen(li.unit_price)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">¥{fmtUnit(li.unit_price)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums font-medium">{yen(li.amount)}</td>
                     <td className="px-2 py-1.5 text-xs">{li.tax_rate ?? 10}%</td>
                   </tr>

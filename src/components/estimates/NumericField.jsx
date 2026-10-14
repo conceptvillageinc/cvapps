@@ -12,7 +12,7 @@ export default function NumericField({ value, onCommit, className, placeholder, 
   }, [value]);
 
   const commit = () => {
-    const num = parseFloat(text);
+    const num = parseFloat(String(text).replace(/[,，]/g, ""));
     if (!isNaN(num)) {
       onCommit(num);
     } else {

@@ -19,7 +19,7 @@ import { ArrowLeft, Save, FileDown, FileOutput, Trash2, Loader2, CheckCircle2, M
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import ClientCombobox from "@/components/clients/ClientCombobox";
-import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP } from "@/lib/constants";
+import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, roundUnitPrice, lineAmount, fmtUnit } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { lineTaxRate, toTaxExclusiveUnitPrice } from "@/lib/estimateTotals";
@@ -44,7 +44,7 @@ function orderItemsFromEstimate(estimate) {
       const qty = Number(li.quantity) || 1;
       const cost = li.cost_price != null && li.cost_price !== "" ? Number(li.cost_price) : null;
       const sell = inclusive ? toTaxExclusiveUnitPrice(li.unit_price, rate) : (Number(li.unit_price) || 0);
-      return { id: uid(), source_line_id: li.id, name: li.name || "", quantity: qty, unit: li.unit || "式", unit_price: cost ?? "", amount: cost != null ? Math.round(cost * qty) : 0, tax_rate: rate, sell_price: sell, has_cost: cost != null };
+      return { id: uid(), source_line_id: li.id, name: li.name || "", quantity: qty, unit: li.unit || "式", unit_price: cost ?? "", amount: cost != null ? lineAmount(qty, cost) : 0, tax_rate: rate, sell_price: sell, has_cost: cost != null };
     });
 }
 
@@ -163,7 +163,7 @@ export default function PartnerOrderEdit() {
     line_items: f.line_items.map((li) => {
       if (li.id !== itemId) return li;
       const next = { ...li, ...patch };
-      if ("quantity" in patch || "unit_price" in patch) next.amount = Math.round((Number(next.quantity) || 0) * (Number(next.unit_price) || 0));
+      if ("quantity" in patch || "unit_price" in patch) next.amount = lineAmount(next.quantity, next.unit_price);
       return next;
     }),
   }));
@@ -178,7 +178,7 @@ export default function PartnerOrderEdit() {
       if (rows.length === 0) throw new Error("発注する明細を 1 行以上入れてください");
       const payload = {
         ...form, partner_name: (form.partner_name || "").trim(),
-        line_items: rows.map(({ sell_price, has_cost, ...li }) => ({ ...li, unit_price: Number(li.unit_price) || 0, amount: Math.round((Number(li.quantity) || 0) * (Number(li.unit_price) || 0)) })),
+        line_items: rows.map(({ sell_price, has_cost, ...li }) => ({ ...li, unit_price: roundUnitPrice(li.unit_price), amount: lineAmount(li.quantity, roundUnitPrice(li.unit_price)) })),
         created_by: form.created_by || user?.id || null,
       };
       Object.assign(payload, computeDocTotals(payload.line_items));
@@ -387,12 +387,12 @@ export default function PartnerOrderEdit() {
                       <td className="px-2 py-1">{on ? <Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" /> : <span className="text-xs px-1">{src.name}</span>}{other && <span className="ml-2 text-[10px] text-amber-700">（{other} で発注済み）</span>}</td>
                       <td className="px-2 py-1">{on ? <Input type="number" value={li.quantity} onChange={(e) => setItem(li.id, { quantity: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} aria-label="数量" /> : <span className="text-xs block text-right">{src.quantity}</span>}</td>
                       <td className="px-2 py-1">{on ? <Input value={li.unit || ""} onChange={(e) => setItem(li.id, { unit: e.target.value })} className="h-8 text-xs" /> : <span className="text-xs">{src.unit}</span>}</td>
-                      <td className="px-2 py-1">{on ? <Input type="number" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} placeholder="発注単価" className={`h-8 text-xs text-right ${noSpinner} ${li.unit_price === "" ? "border-amber-400" : ""}`} aria-label={`${src.name} の単価`} /> : ""}</td>
+                      <td className="px-2 py-1">{on ? <Input type="number" step="0.01" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} onBlur={(e) => { if (e.target.value !== "") setItem(li.id, { unit_price: roundUnitPrice(e.target.value) }); }} placeholder="発注単価" className={`h-8 text-xs text-right ${noSpinner} ${li.unit_price === "" ? "border-amber-400" : ""}`} aria-label={`${src.name} の単価`} /> : ""}</td>
                       <td className="px-2 py-1 text-right tabular-nums font-medium">{on ? yen(li.amount) : ""}</td>
                       <td className="px-2 py-1">{on ? (
                         <select value={li.tax_rate ?? 10} onChange={(e) => setItem(li.id, { tax_rate: Number(e.target.value) })} className="h-8 rounded-md border bg-background px-1.5 text-xs">{TAX_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}</select>
                       ) : null}</td>
-                      <td className="px-2 py-1 text-right tabular-nums text-xs text-muted-foreground" title="クライアントへの見積単価（発注書には出ません）">{yen(src.sell_price)}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-xs text-muted-foreground" title="クライアントへの見積単価（発注書には出ません）">¥{fmtUnit(src.sell_price)}</td>
                       <td></td>
                     </tr>
                   );
@@ -404,7 +404,7 @@ export default function PartnerOrderEdit() {
                     <td className="px-2 py-1"><Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" placeholder="名称" /></td>
                     <td className="px-2 py-1"><Input type="number" value={li.quantity} onChange={(e) => setItem(li.id, { quantity: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} /></td>
                     <td className="px-2 py-1"><Input value={li.unit || ""} onChange={(e) => setItem(li.id, { unit: e.target.value })} className="h-8 text-xs" /></td>
-                    <td className="px-2 py-1"><Input type="number" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} /></td>
+                    <td className="px-2 py-1"><Input type="number" step="0.01" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} onBlur={(e) => { if (e.target.value !== "") setItem(li.id, { unit_price: roundUnitPrice(e.target.value) }); }} className={`h-8 text-xs text-right ${noSpinner}`} /></td>
                     <td className="px-2 py-1 text-right tabular-nums font-medium">{yen(li.amount)}</td>
                     <td className="px-2 py-1"><select value={li.tax_rate ?? 10} onChange={(e) => setItem(li.id, { tax_rate: Number(e.target.value) })} className="h-8 rounded-md border bg-background px-1.5 text-xs">{TAX_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}</select></td>
                     <td></td>

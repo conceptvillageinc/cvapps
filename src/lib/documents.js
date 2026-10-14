@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { nextMonthEnd } from "@/lib/fiscal";
 import { toTaxExclusiveUnitPrice, lineTaxRate } from "@/lib/estimateTotals";
 import { salesCategoryOf } from "@/lib/salesCategory";
+import { lineAmount } from "@/lib/constants";
 
 export const TAX_RATES = [10, 8];
 export const DEFAULT_TAX_RATE = 10;
@@ -45,7 +46,7 @@ export function docItemsFromEstimate(estimate) {
       quantity: qty,
       unit: li.unit || "式",
       unit_price: unitPrice,
-      amount: inclusive ? unitPrice * qty : (Number(li.amount) || 0),
+      amount: inclusive ? lineAmount(qty, unitPrice) : (Number(li.amount) || 0),
       tax_rate: rate,
       ...(li.cost_price != null ? { cost_price: Number(li.cost_price) } : {}),
       source_line_id: li.id,

@@ -43,5 +43,7 @@ export function computeEstimateTotals(lineItems, { taxInclusive = false } = {}) 
 /** 税込単価を税抜に直す（納品書・請求書は税抜で持つため） */
 export function toTaxExclusiveUnitPrice(unitPrice, rate = 10) {
   const n = Number(unitPrice) || 0;
-  return Math.round((n * 100) / (100 + Number(rate || 10)));
+  const v = (n * 100) / (100 + Number(rate || 10));
+  // 整数の単価は今までどおり 1 円単位、小数の単価（印刷費など）は小数第二位まで
+  return Number.isInteger(n) ? Math.round(v) : Math.round(Number((v * 100).toFixed(6))) / 100;
 }

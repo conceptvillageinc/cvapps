@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { format, addMonths } from "date-fns";
 import {
-  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, applyMarkup,
+  LINE_ITEM_CATEGORIES, COMPANY_INFO, DEFAULT_VALIDITY_MONTHS, applyMarkup, roundUnitPrice, lineAmount,
 } from "@/lib/constants";
 import {
   usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS, recomputeSubtotals, withRuleRate, unlockRuleRow,
@@ -71,7 +71,7 @@ const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appeara
 // 金額表示。割引行はマイナスになるので「-¥7,000」の形にする
 function yen(n) {
   const v = Number(n) || 0;
-  return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString()}`;
+  return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`;
 }
 
 const PREVIEW_LEFT_KEY = "cv.quoteEditor.previewLeft";
@@ -299,8 +299,8 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
       name: manualForm.name,
       quantity: Number(manualForm.quantity) || 1,
       unit: manualForm.unit || "式",
-      unit_price: Number(manualForm.unit_price) || 0,
-      amount: (Number(manualForm.quantity) || 1) * (Number(manualForm.unit_price) || 0),
+      unit_price: roundUnitPrice(manualForm.unit_price),
+      amount: lineAmount(Number(manualForm.quantity) || 1, roundUnitPrice(manualForm.unit_price)),
       source_type: "manual",
       // 外注の仕入額から売価を出した場合は、原価として持ち粗利に反映する
       ...(manualForm.outsourcing && Number(manualForm.cost) > 0
@@ -984,7 +984,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">単価</Label>
-                  <Input type="number" value={manualForm.unit_price} onChange={e => setManualForm({ ...manualForm, unit_price: e.target.value })} />
+                  <Input type="number" step="0.01" value={manualForm.unit_price} onChange={e => setManualForm({ ...manualForm, unit_price: e.target.value })} placeholder="小数第二位まで可" />
                 </div>
               </div>
               <div className="space-y-1">
@@ -1204,7 +1204,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
           <td className="px-2 py-2 text-right align-top">
             <NumericField
               value={item.quantity}
-              onCommit={(q) => onChange({ quantity: q, amount: q * (item.unit_price || 0) })}
+              onCommit={(q) => onChange({ quantity: q, amount: lineAmount(q, item.unit_price) })}
               onEnter={(e) => focusNextCell(e.currentTarget)}
               data-cell="quantity"
               className={`${cellInputClass} text-right w-full`}
@@ -1216,7 +1216,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
           <td className="px-2 py-2 text-right align-top">
             <NumericField
               value={item.unit_price}
-              onCommit={(p) => onChange({ unit_price: p, amount: p * (item.quantity || 1) })}
+              onCommit={(p) => { const up = roundUnitPrice(p); onChange({ unit_price: up, amount: lineAmount(item.quantity || 1, up) }); }}
               onEnter={(e) => focusNextCell(e.currentTarget)}
               data-cell="unit_price"
               className={`${cellInputClass} text-right w-full`}
@@ -1319,7 +1319,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
                 value={item.markup_rate}
                 onCommit={(rate) => {
                   const unitPrice = applyMarkup(item.cost_price, rate);
-                  onChange({ markup_rate: rate, unit_price: unitPrice, amount: unitPrice * (item.quantity || 1) });
+                  onChange({ markup_rate: rate, unit_price: unitPrice, amount: lineAmount(item.quantity || 1, unitPrice) });
                 }}
                 className={`h-6 w-16 text-[10px] px-1.5 bg-white shrink-0 ${noSpinner}`}
               />

@@ -22,7 +22,7 @@ import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import DocumentPreview, { useDocPreviewPrefs, DocPreviewSwitches } from "@/components/documents/DocumentPreview";
 import ClientCombobox from "@/components/clients/ClientCombobox";
 import { Mail } from "lucide-react";
-import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP } from "@/lib/constants";
+import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, roundUnitPrice, lineAmount } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
 import { formatPostalCode } from "@/lib/postalCode";
 import { useSystemSettings } from "@/lib/useSystemSettings";
@@ -175,7 +175,7 @@ export default function DeliveryNoteEdit() {
     line_items: f.line_items.map((li) => {
       if (li.id !== itemId) return li;
       const next = { ...li, ...patch };
-      if ("quantity" in patch || "unit_price" in patch) next.amount = Math.round((Number(next.quantity) || 0) * (Number(next.unit_price) || 0));
+      if ("quantity" in patch || "unit_price" in patch) next.amount = lineAmount(next.quantity, next.unit_price);
       return next;
     }),
   }));
@@ -205,7 +205,7 @@ export default function DeliveryNoteEdit() {
       const payload = {
         ...form,
         client_name: (form.client_name || "").trim(),
-        line_items: form.line_items.filter((li) => li.name || li.amount),
+        line_items: form.line_items.filter((li) => li.name || li.amount).map((li) => ({ ...li, unit_price: roundUnitPrice(li.unit_price) })),
         ...totals,
         created_by: form.created_by || user?.id || null,
       };
@@ -465,7 +465,7 @@ export default function DeliveryNoteEdit() {
                     </td>
                     <td className="px-2 py-1"><Input type="number" value={li.quantity} onChange={(e) => setItem(li.id, { quantity: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
                     <td className="px-2 py-1"><Input value={li.unit || ""} onChange={(e) => setItem(li.id, { unit: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
-                    <td className="px-2 py-1"><Input type="number" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
+                    <td className="px-2 py-1"><Input type="number" step="0.01" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} onBlur={(e) => { if (e.target.value !== "") setItem(li.id, { unit_price: roundUnitPrice(e.target.value) }); }} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
                     <td className="px-2 py-1 text-right tabular-nums font-medium">{yen(li.amount)}</td>
                     <td className="px-2 py-1">
                       <select value={li.tax_rate ?? 10} onChange={(e) => setItem(li.id, { tax_rate: Number(e.target.value) })} className="h-8 rounded-md border bg-background px-1.5 text-xs" disabled={locked}>

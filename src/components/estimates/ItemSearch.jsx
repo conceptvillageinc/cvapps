@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Search, X, PackageCheck, History, Tag } from "lucide-react";
 import { searchItems } from "@/lib/itemSearch";
 
-const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
+const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`);
 const ymd = (s) => String(s || "").slice(0, 10).replace(/-/g, "/");
 
 /** 似たもの探しに使うデータ（価格マスタ・入稿記録・過去見積）。ほかの画面とキャッシュを共有する */

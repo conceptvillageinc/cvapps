@@ -79,6 +79,12 @@ export const applyMarkup = (cost, rate) => {
   return Math.ceil(Number(raw.toFixed(6)));
 };
 
+// 単価は小数第二位まで（印刷費の 3.25 円など）。金額（数量 × 単価）は 1 円単位に四捨五入する
+export const roundUnitPrice = (p) => Math.round(Number(((Number(p) || 0) * 100).toFixed(6))) / 100;
+export const lineAmount = (qty, unitPrice) => Math.round(Number(((Number(qty) || 0) * (Number(unitPrice) || 0)).toFixed(6)));
+/** 単価の表示（整数はそのまま、小数は第二位まで） */
+export const fmtUnit = (p) => (Number(p) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 });
+
 // 新方式の見積明細で使う大カテゴリ
 export const LINE_ITEM_CATEGORIES = [
   { key: "design", label: "デザイン費", source: "design_master" },

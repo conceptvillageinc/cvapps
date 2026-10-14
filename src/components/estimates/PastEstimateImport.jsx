@@ -15,7 +15,7 @@ import { specLabel } from "@/lib/printSpecs";
 import { openBlob } from "@/lib/documents";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 
-const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
+const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`;
 // 原価は1枚あたりで小数になることがある（例: 8.5円）
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
 const fmtDate = (d) => (d ? format(new Date(d), "yyyy/M/d") : "");
