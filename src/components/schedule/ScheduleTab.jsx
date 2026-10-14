@@ -164,43 +164,43 @@ export default function ScheduleTab({ project, fullPage = false }) {
               {keyDates.length === 0 && <button className="text-[11px] text-primary hover:underline" onClick={() => setSettingsOpen(true)}>納品期限などの大事な日を入れる</button>}
             </div>
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
-              <button onClick={() => setView({ view: "timeline" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "timeline" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><GanttChart className="w-3.5 h-3.5" />タイムライン</button>
-              <button onClick={() => setView({ view: "list" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "list" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><List className="w-3.5 h-3.5" />リスト</button>
-            </div>
-            {pref.view === "timeline" && (
-              <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
-                {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
-              </div>
-            )}
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen(true)}><Settings2 className="w-3.5 h-3.5" /> 設定</Button>
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
-            {!fullPage && <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800" asChild title="工程表だけを新しいタブで大きく開く"><a href={`/projects/${project.id}/schedule`} target="_blank" rel="noopener noreferrer" data-testid="open-schedule-tab"><ExternalLink className="w-3.5 h-3.5" /> 新しいタブで開く</a></Button>}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="template-menu"><LayoutTemplate className="w-3.5 h-3.5" /> テンプレート</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => setAddTplOpen(true)}><Sparkles className="w-3.5 h-3.5 mr-1.5" />テンプレートから工程を追加</DropdownMenuItem>
-                <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => setImportOpen(true)}><ScanText className="w-3.5 h-3.5 mr-1.5" />スプレッドシート・画像から入れる</DropdownMenuItem>
-                <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" disabled={tasks.length === 0} onClick={() => setSaveTplOpen(true)}><BookmarkPlus className="w-3.5 h-3.5 mr-1.5" />この工程表をテンプレートに保存</DropdownMenuItem>
-                <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" asChild><a href="/schedule-templates" target="_blank" rel="noopener noreferrer"><Settings2 className="w-3.5 h-3.5 mr-1.5" />テンプレートを編集する</a></DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" disabled={exporting || tasks.length === 0}>
-                  {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sheet className="w-3.5 h-3.5" />} スプレッドシート
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => exportSheet(false)}>スプレッドシートに出力</DropdownMenuItem>
-                <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => exportSheet(true)}>出力してクライアントに閲覧共有</DropdownMenuItem>
-                {project.schedule_sheet_url && <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" asChild><a href={project.schedule_sheet_url} target="_blank" rel="noreferrer"><ExternalLink className="w-3.5 h-3.5 mr-1.5" />出力済みのシートを開く</a></DropdownMenuItem>}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {!fullPage && <Button size="sm" className="h-8 gap-1.5 text-xs" asChild title="工程表だけを新しいタブで大きく開く"><a href={`/projects/${project.id}/schedule`} target="_blank" rel="noopener noreferrer" data-testid="open-schedule-tab"><ExternalLink className="w-3.5 h-3.5" /> 新しいタブで開く</a></Button>}
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+            <button onClick={() => setView({ view: "timeline" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "timeline" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><GanttChart className="w-3.5 h-3.5" />タイムライン</button>
+            <button onClick={() => setView({ view: "list" })} className={`px-2.5 py-1 text-xs rounded-md inline-flex items-center gap-1 ${pref.view === "list" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}><List className="w-3.5 h-3.5" />リスト</button>
           </div>
+          {pref.view === "timeline" && (
+            <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+              {[["day", "日"], ["week", "週"]].map(([v, l]) => <button key={v} onClick={() => setView({ scale: v })} className={`px-2.5 py-1 text-xs rounded-md ${pref.scale === v ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}>{l}</button>)}
+            </div>
+          )}
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setSettingsOpen(true)}><Settings2 className="w-3.5 h-3.5" /> 設定</Button>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" onClick={() => setShareOpen(true)}><Link2 className="w-3.5 h-3.5" /> 共有リンク</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" data-testid="template-menu"><LayoutTemplate className="w-3.5 h-3.5" /> テンプレート</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => setAddTplOpen(true)}><Sparkles className="w-3.5 h-3.5 mr-1.5" />テンプレートから工程を追加</DropdownMenuItem>
+              <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => setImportOpen(true)}><ScanText className="w-3.5 h-3.5 mr-1.5" />スプレッドシート・画像から入れる</DropdownMenuItem>
+              <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" disabled={tasks.length === 0} onClick={() => setSaveTplOpen(true)}><BookmarkPlus className="w-3.5 h-3.5 mr-1.5" />この工程表をテンプレートに保存</DropdownMenuItem>
+              <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" asChild><a href="/schedule-templates" target="_blank" rel="noopener noreferrer"><Settings2 className="w-3.5 h-3.5 mr-1.5" />テンプレートを編集する</a></DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs hover:bg-blue-50 hover:text-blue-800 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-800" disabled={exporting || tasks.length === 0}>
+                {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sheet className="w-3.5 h-3.5" />} スプレッドシート
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => exportSheet(false)}>スプレッドシートに出力</DropdownMenuItem>
+              <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" onClick={() => exportSheet(true)}>出力してクライアントに閲覧共有</DropdownMenuItem>
+              {project.schedule_sheet_url && <DropdownMenuItem className="focus:bg-blue-50 focus:text-blue-800" asChild><a href={project.schedule_sheet_url} target="_blank" rel="noreferrer"><ExternalLink className="w-3.5 h-3.5 mr-1.5" />出力済みのシートを開く</a></DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></span>完了 {done}/{tasks.length}</span>

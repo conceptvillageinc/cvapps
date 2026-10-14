@@ -192,11 +192,11 @@ export default function TemplatePanel({ project, parties, holidays, existingCoun
         {draft?.warnings.map((w) => <p key={w} className="flex items-center gap-1.5 text-xs font-medium text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{w}</p>)}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-600">
+          <p className="min-w-0 flex-1 text-xs text-slate-600">
             {rows.length && range ? `${rows.length}件の工程　${jpDate(range.from)} 〜 ${jpDate(range.to)}（土日・祝日・休業日をとばした営業日で計算）` : "テンプレートを選ぶか「＋工程を追加」で、ここに下書きが出ます"}
             {rows.length > 0 && <span className="ml-2 text-slate-400">工程名はクリックで直せます。行の × で外せます。{edited ? "テンプレートや納期を変えると、手で直したところは元に戻ります" : ""}</span>}
           </p>
-          <div className="flex gap-2">
+          <div className="ml-auto flex shrink-0 gap-2">
             {onCancel && <Button size="sm" variant="ghost" onClick={onCancel}>やめる</Button>}
             <Button size="sm" className="gap-1.5" disabled={!rows.length || saving} onClick={create} data-testid="template-create">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} この内容で作る
