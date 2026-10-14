@@ -10,6 +10,7 @@ import { Plus, X, Copy, Trash2, Printer, AlertTriangle, ChevronDown, ChevronRigh
 import { usePrintTypes } from "@/lib/printTypes";
 import { newPrintSpec, specLabel, specMissing } from "@/lib/printSpecs";
 import SizeInput from "@/components/estimates/SizeInput";
+import ColorCountInput from "@/components/estimates/ColorCountInput";
 
 function QuantityEditor({ values, onChange }) {
   const [input, setInput] = useState("");
@@ -108,7 +109,7 @@ function SpecCard({ spec, index, onChange, onDuplicate, onRemove, defaultOpen })
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">印刷色数</Label>
-              <Input value={spec.color_count || ""} onChange={(e) => set("color_count", e.target.value)} placeholder="例: 4色(CMYK)、両面4色" className="h-9" />
+              <ColorCountInput value={spec.color_count || ""} onChange={(v) => set("color_count", v)} />
             </div>
           </div>
 

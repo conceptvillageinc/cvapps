@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Printer, AlertTriangle, ArrowUp, ArrowDown, Trash2, Copy, Quote, Plus, X } from "lucide-react";
 import SizeInput from "@/components/estimates/SizeInput";
+import ColorCountInput from "@/components/estimates/ColorCountInput";
 import { SPEC_FIELDS, missingFields, markupForType, isPackageType, quantitiesOf } from "@/lib/printSpecList";
 
 const LABEL = Object.fromEntries(SPEC_FIELDS.map((f) => [f.key, f.label]));
@@ -109,9 +110,9 @@ export default function PrintSpecCard({ item: it, index, count, printTypes, rule
           {field("size", "サイズ", readOnly
             ? <p className="min-h-8 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-2.5 py-1.5 text-sm">{it.size || "—"}</p>
             : <div className={miss.has("size") ? "rounded-md ring-1 ring-red-200" : ""}><SizeInput compact value={it.size || ""} onChange={(v) => set({ size: v })} /></div>, { required: true, span: "sm:col-span-2 lg:col-span-12" })}
-          {field("paper", "紙質・素材", text("paper", "例: コート紙135kg、PETフィルム"), { required: true, span: "lg:col-span-4" })}
-          {field("colors", "印刷色数", text("colors", "例: 4色(CMYK)、両面4色"), { required: true, span: "lg:col-span-4" })}
-          {field("finishing", "加工・オプション", text("finishing", "例: PP加工、折り加工（二つ折り）、角丸"), { span: "sm:col-span-2 lg:col-span-4" })}
+          {field("colors", "印刷色数", readOnly ? text("colors") : <ColorCountInput compact value={it.colors || ""} onChange={(v) => set({ colors: v })} invalid={miss.has("colors")} ariaLabel={`${index + 1}件目の印刷色数`} />, { required: true, span: "sm:col-span-2 lg:col-span-12" })}
+          {field("paper", "紙質・素材", text("paper", "例: コート紙135kg、PETフィルム"), { required: true, span: "lg:col-span-6" })}
+          {field("finishing", "加工・オプション", text("finishing", "例: PP加工、折り加工（二つ折り）、角丸"), { span: "lg:col-span-6" })}
           {field("quantity", <>印刷枚数 <span className="font-normal text-muted-foreground">（複数パターン可・枚数ごとに見積）</span></>, <QuantityInput item={it} readOnly={readOnly} missing={miss.has("quantity")} onChange={set} index={index} />, { required: true, span: "sm:col-span-2 lg:col-span-6" })}
           {field("notes", "備考（印刷会社への伝達事項）", readOnly
             ? <p className="min-h-8 whitespace-pre-wrap break-words rounded-md bg-slate-50 px-2.5 py-1.5 text-sm">{it.notes || "—"}</p>

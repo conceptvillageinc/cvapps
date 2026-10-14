@@ -1,4 +1,5 @@
 import SizeInput from "@/components/estimates/SizeInput";
+import ColorCountInput from "@/components/estimates/ColorCountInput";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -127,11 +128,7 @@ export default function SpecForm({ data, onChange, showPersonInCharge = true }) 
         {/* Color count */}
         <div className="space-y-1.5">
           <Label className="text-xs font-medium">印刷色数</Label>
-          <Input
-            value={data.color_count || ""}
-            onChange={e => update("color_count", e.target.value)}
-            placeholder="例: 4色(CMYK), 2色"
-          />
+          <ColorCountInput value={data.color_count || ""} onChange={(v) => update("color_count", v)} />
         </div>
 
         {/* Delivery date - highlighted */}
