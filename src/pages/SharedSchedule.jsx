@@ -86,14 +86,14 @@ export default function SharedSchedule() {
           </div>
           {/* お願いしたいこと（2週間以内） */}
           {clientTodo.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl bg-amber-50/70 px-3 py-2 text-sm ring-1 ring-amber-100" data-testid="client-todo">
-              <span className="shrink-0 text-xs font-bold text-amber-800">{d.client_name ? `${d.client_name}様` : "ご担当者様"}にお願いしたいこと（2週間以内）</span>
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl bg-sky-50/70 px-3 py-2 text-sm ring-1 ring-sky-100" data-testid="client-todo">
+              <span className="shrink-0 text-xs font-bold text-sky-800">{d.client_name ? `${d.client_name}様` : "ご担当者様"}にお願いしたいこと（2週間以内）</span>
               {clientTodo.map((t) => {
                 const r = taskRange(t);
                 return (
-                  <span key={t.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 text-xs ring-1 ring-amber-200">
+                  <span key={t.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 text-xs ring-1 ring-sky-200">
                     <span className="min-w-0 break-words">{t.category ? <span className="text-slate-400">{t.category}／</span> : null}{t.name}</span>
-                    <span className="shrink-0 font-semibold text-amber-800">{r.start === r.end ? jpDate(r.start) : `${md(r.start)}〜${md(r.end)}`}</span>
+                    <span className="shrink-0 font-semibold text-sky-800">{r.start === r.end ? jpDate(r.start) : `${md(r.start)}〜${md(r.end)}`}</span>
                   </span>
                 );
               })}
