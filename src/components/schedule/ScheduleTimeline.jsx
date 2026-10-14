@@ -7,8 +7,8 @@ import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, party
 
 const mdw = (s) => `${md(s)}（${WEEKDAYS[parseYmd(s).getDay()]}）`;
 
-const ROW_H = 36;
-const SEC_H = 32;
+const ROW_H = 32;
+const SEC_H = 28;
 const HEAD_H = 56;
 
 /** #rrggbb を白と混ぜる／黒と混ぜる */
