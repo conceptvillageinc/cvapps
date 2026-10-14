@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Loader2, Lock, CalendarRange, CircleCheck } from "lucide-react";
-import ScheduleTimeline, { PartyChips, PartyAvatars } from "@/components/schedule/ScheduleTimeline";
+import ScheduleTimeline, { PartyChips } from "@/components/schedule/ScheduleTimeline";
 import { expandCompanyHolidays } from "@/lib/jpHolidays";
 import { toYmd, taskRange, jpDate, md, addDays, diffDays } from "@/lib/schedule";
 
@@ -69,66 +69,55 @@ export default function SharedSchedule() {
   const seg = (active) => `px-3 py-1 text-xs rounded-md transition-colors ${active ? "bg-white text-slate-900 shadow-sm font-semibold" : "text-slate-500 hover:text-slate-800"}`;
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-slate-900">
-      <div className="mx-auto max-w-[1400px] px-4 py-6 space-y-4">
-        <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 space-y-2">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-400"><CalendarRange className="h-3.5 w-3.5" />SCHEDULE</p>
-              <h1 className="text-xl font-bold leading-snug">{d.title}</h1>
-              <div className="flex flex-wrap gap-2">
-                {(d.key_dates || []).map((k) => <span key={k.date + k.label} className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{k.label}　{jpDate(k.date)}</span>)}
-              </div>
+      <div className="mx-auto max-w-[1400px] px-4 py-4 space-y-3">
+        <header className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-5">
+          {/* 1 段目: タイトル・大事な日 ／ 右に進み具合・残りの日数 */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 sm:w-auto sm:flex-1">
+              <h1 className="flex min-w-0 max-w-full items-start gap-2 text-lg font-bold leading-snug"><CalendarRange className="mt-1 h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 break-words">{d.title}</span></h1>
+              {(d.key_dates || []).map((k) => <span key={k.date + k.label} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-200"><span className="h-1.5 w-1.5 rounded-full bg-sky-500" />{k.label}　{jpDate(k.date)}</span>)}
             </div>
-            <div className="flex gap-6">
-              <div>
-                <p className="text-[11px] text-slate-400">進み具合</p>
-                <p className="text-lg font-bold">{tasks.length ? Math.round((done / tasks.length) * 100) : 0}<span className="text-xs font-normal text-slate-400">%</span></p>
-                <div className="mt-1 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+              <span className="flex items-center gap-2">進み具合 <b className="text-base text-slate-900">{tasks.length ? Math.round((done / tasks.length) * 100) : 0}<span className="text-[11px] font-normal text-slate-400">%</span></b>
+                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full bg-emerald-500" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></span>
+              </span>
+              {nextKey && <span>{nextKey.label}まで <b className="text-base text-slate-900">あと {diffDays(today, nextKey.date)}</b> 日</span>}
+            </div>
+          </div>
+          {/* お願いしたいこと（2週間以内） */}
+          {clientTodo.length > 0 && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl bg-amber-50/70 px-3 py-2 text-sm ring-1 ring-amber-100" data-testid="client-todo">
+              <span className="shrink-0 text-xs font-bold text-amber-800">{d.client_name ? `${d.client_name}様` : "ご担当者様"}にお願いしたいこと（2週間以内）</span>
+              {clientTodo.map((t) => {
+                const r = taskRange(t);
+                return (
+                  <span key={t.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 text-xs ring-1 ring-amber-200">
+                    <span className="min-w-0 break-words">{t.category ? <span className="text-slate-400">{t.category}／</span> : null}{t.name}</span>
+                    <span className="shrink-0 font-semibold text-amber-800">{r.start === r.end ? jpDate(r.start) : `${md(r.start)}〜${md(r.end)}`}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {/* 担当の色・最終更新 ／ 表示の切り替え */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500">
+            {(d.parties || []).map((p) => <span key={p.key} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />{p.label}</span>)}
+            {d.updated_at && <span className="text-slate-400">最終更新 {jpDate(String(d.updated_at).slice(0, 10))}</span>}
+            <div className="ml-auto flex gap-2">
+              <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                {[["timeline", "タイムライン"], ["list", "一覧"]].map(([v, l]) => <button key={v} onClick={() => setView(v)} className={seg(view === v)}>{l}</button>)}
               </div>
-              {nextKey && (
-                <div>
-                  <p className="text-[11px] text-slate-400">{nextKey.label}まで</p>
-                  <p className="text-lg font-bold">あと {diffDays(today, nextKey.date)}<span className="text-xs font-normal text-slate-400"> 日</span></p>
+              {view === "timeline" && (
+                <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                  {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setScale(v)} className={seg(scale === v)}>{l}</button>)}
                 </div>
               )}
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-            {(d.parties || []).map((p) => <span key={p.key} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />{p.label}</span>)}
-            {d.updated_at && <span className="ml-auto">最終更新 {jpDate(String(d.updated_at).slice(0, 10))}</span>}
-          </div>
         </header>
 
-        {clientTodo.length > 0 && (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="mb-2 text-sm font-bold">{d.client_name ? `${d.client_name}様` : "ご担当者様"}にお願いしたいこと（2週間以内）</p>
-            <ul className="divide-y divide-slate-100">
-              {clientTodo.map((t) => {
-                const r = taskRange(t);
-                return (
-                  <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-sm">
-                    <PartyAvatars task={t} parties={d.parties} memberName={memberName} />
-                    <span className="min-w-0 flex-1 break-words">{t.category ? <span className="text-slate-400">{t.category}／</span> : null}{t.name}</span>
-                    <span className="w-full pl-8 text-xs text-slate-500 sm:w-auto sm:pl-0 sm:shrink-0">{r.start === r.end ? jpDate(r.start) : `${md(r.start)} – ${jpDate(r.end)}`}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        <div className="flex gap-2">
-          <div className="inline-flex rounded-lg bg-slate-200/70 p-0.5">
-            {[["timeline", "タイムライン"], ["list", "一覧"]].map(([v, l]) => <button key={v} onClick={() => setView(v)} className={seg(view === v)}>{l}</button>)}
-          </div>
-          {view === "timeline" && (
-            <div className="inline-flex rounded-lg bg-slate-200/70 p-0.5">
-              {[["day", "日"], ["week", "週"], ["dekad", "上中下"]].map(([v, l]) => <button key={v} onClick={() => setScale(v)} className={seg(scale === v)}>{l}</button>)}
-            </div>
-          )}
-        </div>
         {tasks.length === 0 ? <p className="text-sm text-slate-500 py-10 text-center">まだ工程がありません。</p> : view === "timeline" ? (
-          <ScheduleTimeline tasks={tasks} parties={d.parties} keyDates={d.key_dates} holidays={holidays} scale={scale} columns={narrow ? "mini" : "full"} memberName={memberName} today={today} boxMaxHeight="calc(100dvh - 24px)" />
+          <ScheduleTimeline tasks={tasks} parties={d.parties} keyDates={d.key_dates} holidays={holidays} scale={scale} columns={narrow ? "mini" : "full"} memberName={memberName} today={today} boxMaxHeight="calc(100dvh - 24px)" keyTone="blue" />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="w-full text-xs min-w-[640px]">

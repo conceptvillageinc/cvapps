@@ -69,11 +69,14 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {"soft"|"solid"|"progress"|"status"|"line"|"cells"} [p.barStyle]  棒の見せ方
  * @param {boolean} [p.fillViewport]  画面の下の端までの高さにして、中だけスクロールする（上のツールバー・日付の見出しは止まったまま）
  * @param {string} [p.boxMaxHeight]  枠の高さの上限（CSS の値）。中だけスクロールして日付の見出しは止まったまま
+ * @param {"red"|"blue"} [p.keyTone]  大事な日（納品期限など）の色
  * @param {object[]} [p.users]  渡すと（editable のとき）担当の欄を押して担当を変えられる
  * @param {(id, toIndex, category) => void} [p.onReorder]
  * @param {({ category, afterId, start, end }) => void} [p.onCreate]
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null, fillViewport = false, boxMaxHeight = null }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null, fillViewport = false, boxMaxHeight = null, keyTone = "red" }) {
+  // 大事な日の色（社内は赤、クライアント向けは青系）
+  const KT = keyTone === "blue" ? { line: "border-sky-500", chip: "bg-sky-600", day: "bg-sky-600" } : { line: "border-red-400", chip: "bg-red-500", day: "bg-red-500" };
   const colW = scale === "week" ? 16 : scale === "dekad" ? 12 : 34;
   const bounds = useMemo(() => {
     const b = scheduleBounds(tasks, keyDates, { today, padDays: scale === "week" ? 7 : scale === "dekad" ? 10 : 3 });
@@ -260,7 +263,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                   return (
                     <div key={d.date} title={key ? `${key}（${jpDate(d.date)}）` : jpDate(d.date)} className={`flex flex-col items-center justify-center leading-none ${d.day === 1 ? "border-l border-slate-200" : ""}`} style={{ width: colW }}>
                       <span className={`text-[9px] ${d.off ? "text-slate-300" : "text-slate-400"}`}>{d.holiday ? "祝" : d.weekday}</span>
-                      <span className={`mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full text-[11px] ${isToday ? "bg-blue-600 font-bold text-white" : key ? "bg-red-500 font-bold text-white" : d.off ? "text-slate-300" : "text-slate-600"}`}>{d.day}</span>
+                      <span className={`mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full text-[11px] ${isToday ? "bg-blue-600 font-bold text-white" : key ? `${KT.day} font-bold text-white` : d.off ? "text-slate-300" : "text-slate-600"}`}>{d.day}</span>
                     </div>
                   );
                 })}
@@ -348,8 +351,8 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
               : <div key={`b${row.key}`} className="absolute left-0 right-0 border-b border-slate-100" style={{ top: row.y, height: ROW_H }} />)}
             {/* 大事な日（赤い点線）と今日（青い線） */}
             {keyDates.map((k) => k.date >= bounds.from && k.date <= bounds.to && (
-              <div key={`k${k.date}${k.label}`} className="absolute top-0 bottom-0 z-[5] border-l-2 border-dashed border-red-400" style={{ left: idx(k.date) * colW + colW / 2 - 1 }}>
-                <span className="absolute -top-0 left-1 whitespace-nowrap rounded-full bg-red-500 px-1.5 py-[1px] text-[9px] font-bold text-white shadow-sm">{k.label}</span>
+              <div key={`k${k.date}${k.label}`} className={`absolute top-0 bottom-0 z-[5] border-l-2 border-dashed ${KT.line}`} style={{ left: idx(k.date) * colW + colW / 2 - 1 }}>
+                <span className={`absolute -top-0 left-1 whitespace-nowrap rounded-full ${KT.chip} px-1.5 py-[1px] text-[9px] font-bold text-white shadow-sm`}>{k.label}</span>
               </div>
             ))}
             {todayX !== null && <div className="absolute top-0 bottom-0 z-[5] w-[2px] bg-blue-500" style={{ left: todayX - 1 }} title="今日"><span className="absolute -left-[3px] -top-[1px] h-2 w-2 rounded-full bg-blue-500" /></div>}
