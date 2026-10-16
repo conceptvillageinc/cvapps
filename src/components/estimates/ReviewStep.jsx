@@ -8,7 +8,7 @@ import { APPROVAL_CHECKLIST } from "@/lib/constants";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import ReviewPanel from "@/components/estimates/ReviewPanel";
 
-const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`;
+const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`;
 const fmt = (d) => (d ? new Date(d).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "");
 
 /** 見積の内容から自動で判定する社内チェック */

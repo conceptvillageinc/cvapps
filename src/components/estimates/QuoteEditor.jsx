@@ -71,7 +71,7 @@ const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appeara
 // 金額表示。割引行はマイナスになるので「-¥7,000」の形にする
 function yen(n) {
   const v = Number(n) || 0;
-  return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`;
+  return `${v < 0 ? "-" : ""}¥${Math.abs(v).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`;
 }
 
 const PREVIEW_LEFT_KEY = "cv.quoteEditor.previewLeft";
@@ -984,7 +984,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">単価</Label>
-                  <Input type="number" step="0.01" value={manualForm.unit_price} onChange={e => setManualForm({ ...manualForm, unit_price: e.target.value })} placeholder="小数第二位まで可" />
+                  <Input type="number" step="0.1" value={manualForm.unit_price} onChange={e => setManualForm({ ...manualForm, unit_price: e.target.value })} placeholder="小数第一位まで可" />
                 </div>
               </div>
               <div className="space-y-1">

@@ -62,7 +62,7 @@ export const fmtQty = (q) => {
 };
 export const fmtUnitPrice = (p) => {
   const n = Number(p) || 0;
-  return Number.isInteger(n) ? signedYen(n) : n.toLocaleString('ja-JP', { maximumFractionDigits: 2 });
+  return Number.isInteger(n) ? signedYen(n) : n.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
 };
 export const fmtDate = (d) => (d ? String(d).slice(0, 10) : '');
 export function formatPostal(v) {

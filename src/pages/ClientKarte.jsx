@@ -30,7 +30,7 @@ import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import { orderItems } from "@/lib/printOrders";
 import { lineShots } from "@/lib/lineShots";
 
-const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`;
+const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
 const fmtDate = (d) => (d ? String(d).slice(0, 10).replace(/-/g, "/") : "");
 

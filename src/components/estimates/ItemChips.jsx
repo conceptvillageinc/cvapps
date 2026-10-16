@@ -6,7 +6,7 @@ import { usePricingRules } from "@/lib/pricing";
 import { PRINT_ITEMS, clientItemHistory, candidatesForItem } from "@/lib/printItems";
 import { masterCellPrice, masterCellToItem, orderToItems, pastLineToItem } from "@/lib/lineSources";
 
-const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`);
+const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`);
 const ymd = (s) => String(s || "").replace(/-/g, "/");
 const qtyText = (q, u) => (q != null && q !== "" ? `${Number(q).toLocaleString()}${u || ""}` : "");
 const KIND = {

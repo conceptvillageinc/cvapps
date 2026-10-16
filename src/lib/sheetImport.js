@@ -178,7 +178,7 @@ export function parseSheetItems(text) {
     }
     const q = qty ?? 1;
     const up = price ?? (amount !== null && q ? Math.round(amount / q) : 0);
-    const amt = amount ?? Math.trunc(Number((q * up).toFixed(6)));
+    const amt = amount ?? Math.round(Number((q * up).toFixed(6)));
     // 原価は単価で持つ（仕入合計 ÷ 数量）
     const cost = costUnit ?? (costTotal !== null && q ? Math.round((costTotal / q) * 100) / 100 : null);
     const pctMatch = (nameOnly || label).match(/(\d+(?:\.\d+)?)\s*[%％]/);

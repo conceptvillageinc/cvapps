@@ -47,7 +47,7 @@ export function DocPreviewSwitches({ prefs }) {
 
 const num = (n) => Math.round(Number(n) || 0).toLocaleString("ja-JP");
 const signed = (n) => { const v = Math.round(Number(n) || 0); return `${v < 0 ? "-" : ""}${Math.abs(v).toLocaleString("ja-JP")}`; };
-const unitPrice = (p) => { const n = Number(p) || 0; return Number.isInteger(n) ? signed(n) : n.toLocaleString("ja-JP", { maximumFractionDigits: 2 }); };
+const unitPrice = (p) => { const n = Number(p) || 0; return Number.isInteger(n) ? signed(n) : n.toLocaleString("ja-JP", { maximumFractionDigits: 1 }); };
 const qty = (q) => { const n = Number(q); if (!Number.isFinite(n)) return ""; return Number.isInteger(n) ? n.toLocaleString("ja-JP") : String(n); };
 const dateOf = (d) => (d ? String(d).slice(0, 10) : "");
 

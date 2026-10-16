@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { LINE_ITEM_CATEGORIES } from "@/lib/constants";
 import { parseSheetItems, templateCsv } from "@/lib/sheetImport";
 
-const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`;
+const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`;
 const CATEGORY_LABELS = LINE_ITEM_CATEGORIES.map((c) => c.label);
 
 /**

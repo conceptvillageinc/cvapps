@@ -44,6 +44,6 @@ export function computeEstimateTotals(lineItems, { taxInclusive = false } = {}) 
 export function toTaxExclusiveUnitPrice(unitPrice, rate = 10) {
   const n = Number(unitPrice) || 0;
   const v = (n * 100) / (100 + Number(rate || 10));
-  // 整数の単価は今までどおり 1 円単位、小数の単価（印刷費など）は小数第二位まで
-  return Number.isInteger(n) ? Math.round(v) : Math.round(Number((v * 100).toFixed(6))) / 100;
+  // 整数の単価は今までどおり 1 円単位、小数の単価（印刷費など）は小数第一位まで
+  return Number.isInteger(n) ? Math.round(v) : Math.round(Number((v * 10).toFixed(6))) / 10;
 }

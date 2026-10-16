@@ -79,11 +79,11 @@ export const applyMarkup = (cost, rate) => {
   return Math.ceil(Number(raw.toFixed(6)));
 };
 
-// 単価は小数第二位まで（印刷費の 3.25 円など）。金額（数量 × 単価）は 1 円未満を切り捨てる（マイナスの値引きは 0 の側へ）
-export const roundUnitPrice = (p) => Math.round(Number(((Number(p) || 0) * 100).toFixed(6))) / 100;
-export const lineAmount = (qty, unitPrice) => Math.trunc(Number(((Number(qty) || 0) * (Number(unitPrice) || 0)).toFixed(6)));
-/** 単価の表示（整数はそのまま、小数は第二位まで） */
-export const fmtUnit = (p) => (Number(p) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 2 });
+// 単価は小数第一位まで（印刷費の 3.2 円など）。金額（数量 × 単価）は 1 円未満を四捨五入する（マイナスの値引きも絶対値で四捨五入）
+export const roundUnitPrice = (p) => Math.round(Number(((Number(p) || 0) * 10).toFixed(6))) / 10;
+export const lineAmount = (qty, unitPrice) => { const v = Number(((Number(qty) || 0) * (Number(unitPrice) || 0)).toFixed(6)); return Math.sign(v) * Math.round(Math.abs(v)); };
+/** 単価の表示（整数はそのまま、小数は第一位まで） */
+export const fmtUnit = (p) => (Number(p) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 });
 
 // 新方式の見積明細で使う大カテゴリ
 export const LINE_ITEM_CATEGORIES = [

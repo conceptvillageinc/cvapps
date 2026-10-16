@@ -21,7 +21,7 @@ const BOTTOM = PAGE.height - MARGIN - 18;
 
 const yen = (n) => `${Math.round(Number(n) || 0).toLocaleString('ja-JP')}`;
 const signedYen = (n) => { const v = Math.round(Number(n) || 0); return `${v < 0 ? '-' : ''}${Math.abs(v).toLocaleString('ja-JP')}`; };
-const fmtUnitPrice = (p) => { const n = Number(p) || 0; return Number.isInteger(n) ? signedYen(n) : n.toLocaleString('ja-JP', { maximumFractionDigits: 2 }); };
+const fmtUnitPrice = (p) => { const n = Number(p) || 0; return Number.isInteger(n) ? signedYen(n) : n.toLocaleString('ja-JP', { maximumFractionDigits: 1 }); };
 const fmtQty = (q) => { const n = Number(q); return Number.isFinite(n) ? (Number.isInteger(n) ? n.toLocaleString('ja-JP') : String(n)) : ''; };
 const fmtDate = (d) => (d ? String(d).slice(0, 10).replace(/-/g, '/') : '');
 const formatPostal = (v) => { const d = String(v || '').replace(/[^0-9]/g, ''); return d.length === 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : String(v || ''); };

@@ -465,7 +465,7 @@ export default function DeliveryNoteEdit() {
                     </td>
                     <td className="px-2 py-1"><Input type="number" value={li.quantity} onChange={(e) => setItem(li.id, { quantity: e.target.value })} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
                     <td className="px-2 py-1"><Input value={li.unit || ""} onChange={(e) => setItem(li.id, { unit: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
-                    <td className="px-2 py-1"><Input type="number" step="0.01" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} onBlur={(e) => { if (e.target.value !== "") setItem(li.id, { unit_price: roundUnitPrice(e.target.value) }); }} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
+                    <td className="px-2 py-1"><Input type="number" step="0.1" value={li.unit_price} onChange={(e) => setItem(li.id, { unit_price: e.target.value })} onBlur={(e) => { if (e.target.value !== "") setItem(li.id, { unit_price: roundUnitPrice(e.target.value) }); }} className={`h-8 text-xs text-right ${noSpinner}`} disabled={locked} /></td>
                     <td className="px-2 py-1 text-right tabular-nums font-medium">{yen(li.amount)}</td>
                     <td className="px-2 py-1">
                       <select value={li.tax_rate ?? 10} onChange={(e) => setItem(li.id, { tax_rate: Number(e.target.value) })} className="h-8 rounded-md border bg-background px-1.5 text-xs" disabled={locked}>
