@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarDays } from "lucide-react";
+import { isLiveRecording, startedAt, fmtTime, elapsedMin } from "@/lib/liveRecordings";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -150,7 +151,8 @@ export default function MeetingDetail() {
     queryKey: ["meeting", id],
     queryFn: () => db.entities.Meeting.get(id),
     enabled: !!id,
-    refetchInterval: (q) => (q.state.data && PROCESSING.has(q.state.data.status) ? 5000 : false),
+    // 処理中は 5 秒ごと、ほかのメンバーが録音中は 30 秒ごとに見直す（録音が終わったら議事録の表示に切り替わる）
+    refetchInterval: (q) => (q.state.data && PROCESSING.has(q.state.data.status) ? 5000 : q.state.data?.status === "recording" ? 30000 : false),
   });
   // 紐づけた案件（共有用のタイトルに案件名を使う）
   const { data: linkedProject } = useQuery({
@@ -332,7 +334,16 @@ export default function MeetingDetail() {
       {meeting.status === "recording" && (
         <Card className="border-red-200">
           <CardContent className="pt-4 space-y-3">
-            {(resumeRecording || recordingThis) ? (
+            {!resumeRecording && !recordingThis && isLiveRecording(meeting) ? (
+              // ほかのメンバーが録音中（合流したとき）: 録音のボタンは出さない
+              <div className="flex items-start gap-3" data-testid="live-by-other">
+                <span className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-600" />
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-sm font-semibold">{meeting.created_by || "メンバー"} さんが録音中です{startedAt(meeting) && <span className="ml-2 text-xs font-normal text-red-600">{fmtTime(startedAt(meeting))}〜（{elapsedMin(startedAt(meeting))} 分経過）</span>}</p>
+                  <p className="text-xs text-muted-foreground">録音が終わると、ここに文字起こしと議事録が自動でできます。この画面は開いたままで大丈夫です。</p>
+                </div>
+              </div>
+            ) : (resumeRecording || recordingThis) ? (
               <MeetingRecorder meetingId={meeting.id} title={meeting.title || ""} startSeq={segments.length} baseDuration={Number(meeting.audio_duration_sec) || 0} onFinish={() => setResumeRecording(false)} />
             ) : (
               <>
