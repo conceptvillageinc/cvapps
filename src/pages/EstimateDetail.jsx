@@ -426,10 +426,7 @@ function EstimateDetail() {
               <Send className="w-3.5 h-3.5" /> レビュー申請
             </Button>
           ) : null}
-          <Button size="sm" onClick={saveNow} disabled={saveMutation.isPending} className="gap-1.5 text-xs" title="今の内容を保存（Ctrl+S / ⌘+S）" data-testid="estimate-save">
-            {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} 保存
-          </Button>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-1 whitespace-nowrap shrink-0" data-testid="estimate-save-status">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pr-1 whitespace-nowrap shrink-0" data-testid="estimate-save-status">
             {saveMutation.isPending ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> 保存中...
@@ -444,6 +441,9 @@ function EstimateDetail() {
               </>
             )}
           </div>
+          <Button size="sm" onClick={saveNow} disabled={saveMutation.isPending} className="gap-1.5 text-xs" title="今の内容を保存（Ctrl+S / ⌘+S）" data-testid="estimate-save">
+            {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} 保存
+          </Button>
         </div>
       </div>
 
