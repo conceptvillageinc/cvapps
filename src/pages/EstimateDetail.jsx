@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList, PackageCheck, FolderKanban
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList, PackageCheck, FolderKanban, Save
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -154,23 +154,47 @@ export default function EstimateDetail() {
       for (const k of SUBMISSION_FIELDS) delete rest[k];
       return db.entities.Estimate.update(estimateId, rest);
     },
-    onSuccess: () => {
+    onSuccess: (_res, saved) => {
       queryClient.invalidateQueries({ queryKey: ["estimate", estimateId] });
+      setLastSavedAt(new Date());
+      if (saved === latestForm.current) setDirty(false);
     },
     onError: (err) => {
-      toast.error("自動保存に失敗しました: " + (err?.message || "不明なエラー"));
+      toast.error("保存に失敗しました: " + (err?.message || "不明なエラー"));
     },
   });
 
-  // 入力が落ち着いたら自動保存（読み込み直後の初回セットはスキップ）
+  // 入力が落ち着いたら自動保存（読み込み直後の初回セットはスキップ）。手動の「保存」ボタン・Ctrl+S でもすぐ保存できる
+  const [dirty, setDirty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const latestForm = useRef(null);
+  const autosaveTimer = useRef(null);
   useEffect(() => {
     if (!formData) return;
+    latestForm.current = formData;
     if (skipAutosave.current) { skipAutosave.current = false; return; }
-    const t = setTimeout(() => {
+    setDirty(true);
+    autosaveTimer.current = setTimeout(() => {
       saveMutation.mutate(formData);
     }, 1000);
-    return () => clearTimeout(t);
+    return () => clearTimeout(autosaveTimer.current);
   }, [formData]);
+  const saveNow = async () => {
+    // 入力中の欄（数量・単価など）を確定させてから保存する
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    await new Promise((r) => setTimeout(r, 0));
+    if (!latestForm.current) return;
+    clearTimeout(autosaveTimer.current);
+    try {
+      await saveMutation.mutateAsync(latestForm.current);
+      toast.success("保存しました");
+    } catch { /* onError で知らせる */ }
+  };
+  useEffect(() => {
+    const onKey = (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveNow(); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const handleUpdate = (updates) => {
     setFormData(prev => ({ ...prev, ...updates }));
@@ -392,14 +416,21 @@ export default function EstimateDetail() {
               <Send className="w-3.5 h-3.5" /> レビュー申請
             </Button>
           ) : null}
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-1 whitespace-nowrap shrink-0">
+          <Button size="sm" onClick={saveNow} disabled={saveMutation.isPending} className="gap-1.5 text-xs" title="今の内容を保存（Ctrl+S / ⌘+S）" data-testid="estimate-save">
+            {saveMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} 保存
+          </Button>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pl-1 whitespace-nowrap shrink-0" data-testid="estimate-save-status">
             {saveMutation.isPending ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> 保存中...
               </>
+            ) : dirty ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-amber-500" /> 未保存の変更あり（まもなく自動保存）
+              </>
             ) : (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> 自動保存されます
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> {lastSavedAt ? `保存済み ${String(lastSavedAt.getHours()).padStart(2, "0")}:${String(lastSavedAt.getMinutes()).padStart(2, "0")}` : "自動保存されます"}
               </>
             )}
           </div>
