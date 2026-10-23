@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useParams } from "react-router-dom";
 import { db } from "@/api/db";
 import { estimateFilename } from "@/lib/docFilename";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -55,7 +55,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-export default function EstimateDetail() {
+// 別の見積へ移ったとき（複製・改訂版・リンク）に、前の見積の入力内容を持ち越さないよう、見積ごとに作り直す
+export default function EstimateDetailPage() {
+  const { id } = useParams();
+  return <EstimateDetail key={id} />;
+}
+
+function EstimateDetail() {
   const urlParams = new URLSearchParams(window.location.search);
   const estimateId = window.location.pathname.split("/estimates/")[1];
   const navigate = useNavigate();
@@ -152,6 +158,10 @@ export default function EstimateDetail() {
     mutationFn: (data) => {
       const rest = { ...data };
       for (const k of SUBMISSION_FIELDS) delete rest[k];
+      // 見積番号・id は画面からは変えない（別の見積の番号で上書きして重複エラーになるのを防ぐ）
+      delete rest.estimate_number;
+      delete rest.id;
+      if (data.id && data.id !== estimateId) throw new Error("別の見積の内容です。画面を開き直してください");
       return db.entities.Estimate.update(estimateId, rest);
     },
     onSuccess: (_res, saved) => {
