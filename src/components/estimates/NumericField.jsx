@@ -29,7 +29,7 @@ export default function NumericField({ value, onCommit, className, placeholder, 
       onChange={e => setText(e.target.value)}
       onBlur={commit}
       onKeyDown={e => {
-        if (e.key === "Enter") {
+        if (e.key === "Enter" && !(e.nativeEvent?.isComposing || e.keyCode === 229)) {
           e.preventDefault();
           commit();
           // Enter で確定したら次の欄へ（明細の表では 名称 → 数量 → 単位 → 単価 → 次の行）

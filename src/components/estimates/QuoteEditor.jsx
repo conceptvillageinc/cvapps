@@ -57,6 +57,8 @@ function nextCellOf(el, dir = 1) {
   const i = cells.indexOf(el);
   return i >= 0 ? cells[i + dir] || null : null;
 }
+// 日本語入力の変換中の Enter（確定）かどうか。確定の Enter で次の欄へ移ると、確定した文字が次の欄に入ってしまう
+const isImeEnter = (e) => !!(e.nativeEvent?.isComposing || e.isComposing || e.keyCode === 229);
 function focusNextCell(el, dir = 1) {
   const next = nextCellOf(el, dir);
   if (!next) return false;
@@ -1142,7 +1144,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
           <Input
             value={item.text || ""}
             onChange={e => onChange({ text: e.target.value })}
-            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); focusNextCell(e.currentTarget); } }}
+            onKeyDown={e => { if (e.key === "Enter" && !isImeEnter(e)) { e.preventDefault(); focusNextCell(e.currentTarget); } }}
             data-cell="text"
             placeholder="見出し・注記（例: ▼ 印刷費）"
             className="h-7 text-xs font-medium bg-transparent border-none px-0 focus-visible:ring-0"
@@ -1211,7 +1213,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
             />
           </td>
           <td className="px-2 py-2 text-right align-top">
-            <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); focusNextCell(e.currentTarget); } }} data-cell="unit" className={`${cellInputClass} text-right w-full`} />
+            <Input value={item.unit} onChange={e => onChange({ unit: e.target.value })} onKeyDown={e => { if (e.key === "Enter" && !isImeEnter(e)) { e.preventDefault(); focusNextCell(e.currentTarget); } }} data-cell="unit" className={`${cellInputClass} text-right w-full`} />
           </td>
           <td className="px-2 py-2 text-right align-top">
             <NumericField
@@ -1457,6 +1459,7 @@ function InlineTextCell({ value, onCommit }) {
         onFocus={e => e.currentTarget.select()}
         onBlur={() => { setEditing(false); if (!skipRef.current && text !== value) onCommit(text); skipRef.current = false; }}
         onKeyDown={e => {
+          if (isImeEnter(e)) return; // 日本語の変換を確定する Enter は何もしない
           if (e.key === "Enter" && !e.shiftKey) {
             // Enter では枠から出ない。内容だけ保存しておく
             e.preventDefault();
