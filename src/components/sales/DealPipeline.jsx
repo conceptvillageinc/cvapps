@@ -12,6 +12,7 @@ import {
   DEAL_COLORS, DEAL_COLOR_KEYS, MAX_DEAL_TAGS, DEFAULT_PER_PERSON, SECTIONS,
   newDeal, renumber, totalsOf, pipelineSummary, dealFromProject, pipelineToCsv,
 } from "@/lib/dealPipeline";
+import { isImeEnter } from "@/lib/ime";
 
 // ============================================================================
 // 案件の積み上げ（確定／見込）
@@ -33,7 +34,7 @@ function YenInput({ value, onChange, className = "", ...rest }) {
       onChange={(e) => setText(e.target.value)}
       onFocus={() => setText(value ? String(value) : "")}
       onBlur={() => { if (text !== null) onChange(toInt(text)); setText(null); }}
-      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) e.currentTarget.blur(); }}
       inputMode="numeric"
       className={`h-7 text-xs text-right tabular-nums px-1.5 ${className}`}
       {...rest}

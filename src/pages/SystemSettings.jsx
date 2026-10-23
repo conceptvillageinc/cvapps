@@ -16,6 +16,7 @@ import { ListColumnsSettings } from "@/components/table/ListColumnsEditor";
 import CostSheetImportCard from "@/components/settings/CostSheetImportCard";
 import CompanyHolidaysCard from "@/components/settings/CompanyHolidaysCard";
 import { useAuth } from "@/lib/AuthContext";
+import { isImeEnter } from "@/lib/ime";
 
 // 設定1件をupsert（存在すれば更新、無ければ新規作成）
 async function upsertSetting(existingList, key, value, description) {
@@ -347,7 +348,7 @@ export default function SystemSettingsPage() {
                 onChange={e => setNewProbabilityInput(e.target.value)}
                 placeholder="新しい選択肢"
                 className="h-8 text-xs"
-                onKeyDown={e => e.key === "Enter" && addToList(dealProbabilityList, setDealProbabilityList, "deal_probability_options", "受注確度の選択肢", newProbabilityInput, setNewProbabilityInput)}
+                onKeyDown={e => (e.key === "Enter" && !isImeEnter(e)) && addToList(dealProbabilityList, setDealProbabilityList, "deal_probability_options", "受注確度の選択肢", newProbabilityInput, setNewProbabilityInput)}
               />
               <Button size="sm" variant="outline" className="h-8 gap-1 text-xs shrink-0" onClick={() => addToList(dealProbabilityList, setDealProbabilityList, "deal_probability_options", "受注確度の選択肢", newProbabilityInput, setNewProbabilityInput)}>
                 <Plus className="w-3.5 h-3.5" /> 追加
@@ -379,7 +380,7 @@ export default function SystemSettingsPage() {
                 onChange={e => setNewPhaseInput(e.target.value)}
                 placeholder="新しい選択肢"
                 className="h-8 text-xs"
-                onKeyDown={e => e.key === "Enter" && addToList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", newPhaseInput, setNewPhaseInput)}
+                onKeyDown={e => (e.key === "Enter" && !isImeEnter(e)) && addToList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", newPhaseInput, setNewPhaseInput)}
               />
               <Button size="sm" variant="outline" className="h-8 gap-1 text-xs shrink-0" onClick={() => addToList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", newPhaseInput, setNewPhaseInput)}>
                 <Plus className="w-3.5 h-3.5" /> 追加

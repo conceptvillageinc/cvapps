@@ -36,6 +36,7 @@ import { formatPostalCode } from "@/lib/postalCode";
 import { toHalfWidth } from "@/lib/halfWidth";
 import { toTaxExcluded } from "@/lib/priceTax";
 import { computeEstimateTotals, lineTaxRate } from "@/lib/estimateTotals";
+import { isImeEnter } from "@/lib/ime";
 
 import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 import WebPriceImport from "@/components/estimates/WebPriceImport";
@@ -57,8 +58,6 @@ function nextCellOf(el, dir = 1) {
   const i = cells.indexOf(el);
   return i >= 0 ? cells[i + dir] || null : null;
 }
-// 日本語入力の変換中の Enter（確定）かどうか。確定の Enter で次の欄へ移ると、確定した文字が次の欄に入ってしまう
-const isImeEnter = (e) => !!(e.nativeEvent?.isComposing || e.isComposing || e.keyCode === 229);
 function focusNextCell(el, dir = 1) {
   const next = nextCellOf(el, dir);
   if (!next) return false;

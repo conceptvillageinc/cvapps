@@ -9,6 +9,7 @@ import { FileSpreadsheet, Loader2, Search, Download, CheckCircle2, AlertTriangle
 import { toast } from "sonner";
 import { matchClients } from "@/components/clients/ClientCombobox";
 import { planCostSheetOrders } from "@/lib/costSheetOrders";
+import { isImeEnter } from "@/lib/ime";
 
 // ============================================================================
 // 原価計算表（社内見積）の取り込み
@@ -39,7 +40,7 @@ function ClientPicker({ value, onChange, clients, fileClientName, label }) {
   const onKeyDown = (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(candidates.length - 1, i + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Enter" && candidates[active]) { e.preventDefault(); pick(candidates[active].id); }
+    else if ((e.key === "Enter" && !isImeEnter(e)) && candidates[active]) { e.preventDefault(); pick(candidates[active].id); }
   };
   return (
     <Popover open={open} onOpenChange={onOpenChange}>

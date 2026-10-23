@@ -9,6 +9,7 @@ import {
   useSalesCategories, useSaveSalesCategories, normalizeSalesCategories, classifySalesCategory, salesCategoryDef,
   DEFAULT_SALES_CATEGORIES, SALES_CATEGORY_COLORS,
 } from "@/lib/salesCategory";
+import { isImeEnter } from "@/lib/ime";
 
 // ============================================================================
 // 売上カテゴリーマスタ: 売上カテゴリー（freee の会計計上部門）の追加・名前の変更・表示順・色・
@@ -128,7 +129,7 @@ export default function SalesCategoryMaster() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") add(); }} placeholder="カテゴリーを追加（例: イベント運営）" className="h-9 text-sm max-w-sm" />
+        <Input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) add(); }} placeholder="カテゴリーを追加（例: イベント運営）" className="h-9 text-sm max-w-sm" />
         <Button variant="outline" size="sm" className="h-9 text-xs gap-1" onClick={add} disabled={!newName.trim()}><Plus className="w-3.5 h-3.5" /> 追加</Button>
       </div>
 

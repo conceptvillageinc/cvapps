@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { UserPlus, Check } from "lucide-react";
+import { isImeEnter } from "@/lib/ime";
 
 // ============================================================================
 // クライアント名の入力欄（部分一致で候補を出す）
@@ -76,7 +77,7 @@ export default function ClientCombobox({ value, onChange, clients, onRegister, r
     if (!open) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(candidates.length - 1, i + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Enter") { if (candidates[active]) { e.preventDefault(); pick(candidates[active]); } }
+    else if ((e.key === "Enter" && !isImeEnter(e))) { if (candidates[active]) { e.preventDefault(); pick(candidates[active]); } }
     else if (e.key === "Escape") { e.stopPropagation(); setOpen(false); }
   };
   const showList = open && !disabled && candidates.length > 0 && !(exact && candidates.length === 1);

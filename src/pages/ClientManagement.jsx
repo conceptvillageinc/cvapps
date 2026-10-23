@@ -11,6 +11,7 @@ import { normalizePostalCode, isValidPostalCode, formatPostalCode, formatPostalI
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ClientFormDialog from "@/components/clients/ClientFormDialog";
 import FreeePartnerImport from "@/components/clients/FreeePartnerImport";
+import { isImeEnter } from "@/lib/ime";
 
 
 // クリックしてその場で編集できるセル。フォーカスを外すと自動保存される。
@@ -52,7 +53,7 @@ function InlineEditCell({ value, onSave, placeholder = "—", className = "", in
         onChange={e => handleChange(e.target.value)}
         onBlur={commit}
         onKeyDown={e => {
-          if (e.key === "Enter") { e.preventDefault(); commit(); }
+          if ((e.key === "Enter" && !isImeEnter(e))) { e.preventDefault(); commit(); }
           if (e.key === "Escape") { setText(value || ""); setEditing(false); }
         }}
         className={`h-7 text-sm ${inputClassName}`}

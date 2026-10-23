@@ -16,6 +16,7 @@ import { usePayablesAccess } from "@/lib/usePayablesAccess";
 import {
   PAY_ENTITIES, parsePayableSheet, rowTotal, sumPayables, downloadPayablesCsv, thisMonth, monthLabel, textToGrid, toAmount, rowsToInvoices, downloadInvoicesCsv,
 } from "@/lib/payables";
+import { isImeEnter } from "@/lib/ime";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -194,7 +195,7 @@ function PayableRow({ row, onChange, onRemove }) {
         onFocus={() => setDraft({ key, value: isNum ? (row[key] ? String(row[key]) : "") : (row[key] || "") })}
         onChange={(e) => setDraft({ key, value: e.target.value })}
         onBlur={(e) => commit(key, e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) e.currentTarget.blur(); }}
         inputMode={isNum ? "numeric" : undefined}
         placeholder={isNum ? "0" : ""}
         className={`h-8 text-xs ${isNum ? "text-right tabular-nums" : ""}`}
@@ -513,7 +514,7 @@ function PayeeRow({ payee, index, busy, onChange, onRemove, onMove, last }) {
       onFocus={() => setDraft({ key, value: payee[key] || "" })}
       onChange={(e) => setDraft({ key, value: e.target.value })}
       onBlur={(e) => { if ((e.target.value || "") !== (payee[key] || "")) onChange({ [key]: e.target.value || null }); setDraft(null); }}
-      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) e.currentTarget.blur(); }}
       placeholder={placeholder} className="h-8 text-xs" aria-label={`${payee.name} ${key}`}
     />
   );

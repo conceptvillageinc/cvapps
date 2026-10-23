@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mic, Plus, Trash2, ArrowUp, ArrowDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { isImeEnter } from "@/lib/ime";
 
 /**
  * 議事録の設定: 打ち合わせの種類、音声の保存日数、種類ごとの「確認すべき項目」
@@ -119,7 +120,7 @@ export default function MeetingSettingsCard({ settings, upsertSetting }) {
               </div>
             ))}
             <div className="flex items-center gap-2">
-              <Input value={newType} onChange={(e) => setNewType(e.target.value)} placeholder="種類を追加（例: 動画制作）" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === "Enter") addType(); }} />
+              <Input value={newType} onChange={(e) => setNewType(e.target.value)} placeholder="種類を追加（例: 動画制作）" className="h-8 text-xs" onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) addType(); }} />
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={addType}><Plus className="w-3.5 h-3.5" /> 追加</Button>
             </div>
           </div>
@@ -142,7 +143,7 @@ export default function MeetingSettingsCard({ settings, upsertSetting }) {
             </div>
           )}
           <div className="flex items-center gap-2">
-            <Input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="項目を追加（例: 校正回数）" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === "Enter" && newItem.trim()) { itemMutation.mutate({ type: "add", label: newItem.trim() }); setNewItem(""); } }} />
+            <Input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="項目を追加（例: 校正回数）" className="h-8 text-xs" onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e)) && newItem.trim()) { itemMutation.mutate({ type: "add", label: newItem.trim() }); setNewItem(""); } }} />
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" disabled={!newItem.trim() || itemMutation.isPending} onClick={() => { itemMutation.mutate({ type: "add", label: newItem.trim() }); setNewItem(""); }}>
               {itemMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} 追加
             </Button>

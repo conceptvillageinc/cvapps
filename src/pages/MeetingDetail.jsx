@@ -29,6 +29,7 @@ import MeetingLinkDialog from "@/components/meetings/MeetingLinkDialog";
 import MeetingPrintSpecs from "@/components/meetings/MeetingPrintSpecs";
 import { useAuth } from "@/lib/AuthContext";
 import { useRecording } from "@/lib/recording";
+import { isImeEnter } from "@/lib/ime";
 
 // useQuery の既定値に毎回新しい配列を渡すと、effect が無限に走るので固定の空配列を使う
 const EMPTY = [];
@@ -59,7 +60,7 @@ function LineField({ value, onChange, className = "", ...props }) {
       value={value || ""}
       minRows={1}
       onChange={(e) => onChange(e.target.value.replace(/\r?\n/g, " "))}
-      onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+      onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) e.preventDefault(); }}
       className={`min-h-0 py-2 text-xs leading-relaxed ${className}`}
       {...props}
     />

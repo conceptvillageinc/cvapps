@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertTriangle, Plus, X } from "lucide-react";
 import { PERSON_IN_CHARGE_OPTIONS } from "@/lib/constants";
 import { usePrintTypes } from "@/lib/printTypes";
+import { isImeEnter } from "@/lib/ime";
 
 export default function SpecForm({ data, onChange, showPersonInCharge = true }) {
   const { names: printTypeNames } = usePrintTypes();
@@ -104,7 +105,7 @@ export default function SpecForm({ data, onChange, showPersonInCharge = true }) 
               value={quantityInput}
               onChange={e => setQuantityInput(e.target.value)}
               placeholder="枚数を入力"
-              onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addQuantity())}
+              onKeyDown={e => (e.key === "Enter" && !isImeEnter(e)) && (e.preventDefault(), addQuantity())}
               className="max-w-[200px]"
             />
             <Button type="button" variant="outline" size="sm" onClick={addQuantity}>

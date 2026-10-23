@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Sparkles, Paperclip, Send, X, FileText, Image as ImageIcon, Sheet, FilePlus2, Copy, ExternalLink, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { QUICK_PROMPTS, BASIS_KIND, CHAT_ACCEPT, CHAT_MAX_FILES, draftAmount, draftCost, draftTotals, draftGroups } from "@/lib/meetingChat";
+import { isImeEnter } from "@/lib/ime";
 
 // ============================================================================
 // 議事録の「AI に依頼」
@@ -349,7 +350,7 @@ export default function MeetingChat({ meeting, references = EMPTY }) {
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } }}
+            onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e)) && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } }}
             rows={3}
             placeholder={"例）議事録の内容と添付の企画資料をあわせて、見積のベースを作ってください。\nGoogle ドキュメント・スライドの URL を書くと、その資料も読みます"}
             className="text-[13px] resize-y"

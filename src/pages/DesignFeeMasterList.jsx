@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Palette, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Loader2, AlertTriangle, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
+import { isImeEnter } from "@/lib/ime";
 
 const DEFAULT_HOURLY = 16000;
 
@@ -336,7 +337,7 @@ export default function DesignFeeMasterList() {
           </DialogHeader>
           <div className="space-y-1">
             <Label className="text-xs">大分類名</Label>
-            <Input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="例: 動画制作" className="h-9 text-sm" autoFocus onKeyDown={(e) => { if (e.key === "Enter") submitCategory(); }} />
+            <Input value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="例: 動画制作" className="h-9 text-sm" autoFocus onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) submitCategory(); }} />
             {categoryDialog?.mode === "add" && <p className="text-[10px] text-muted-foreground">続けて最初の項目を入力します</p>}
           </div>
           <DialogFooter>

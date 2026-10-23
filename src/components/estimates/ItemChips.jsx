@@ -5,6 +5,7 @@ import { X, Plus, PackageCheck, Tag, History, Shapes } from "lucide-react";
 import { usePricingRules } from "@/lib/pricing";
 import { PRINT_ITEMS, clientItemHistory, candidatesForItem } from "@/lib/printItems";
 import { masterCellPrice, masterCellToItem, orderToItems, pastLineToItem } from "@/lib/lineSources";
+import { isImeEnter } from "@/lib/ime";
 
 const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`);
 const ymd = (s) => String(s || "").replace(/-/g, "/");
@@ -89,7 +90,7 @@ export default function ItemChips({ clientName, data, onLinesChange }) {
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addChip(text); setText(""); } }}
+          onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) { e.preventDefault(); addChip(text); setText(""); } }}
           placeholder={chips.length ? "品目を足す（Enter）" : "作る品目を入れて Enter（例: ポスター・のぼり）。下の候補からも選べます"}
           className="h-8 flex-1 min-w-[200px] text-xs"
           aria-label="作るものを足す"

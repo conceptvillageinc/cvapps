@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import {
   defaultRecipients, recipientOptions, buildSpecText, buildEmailPrompt, EMAIL_SCHEMA, requestSubject, replyDeadline, formatJpDate, ensureReplySentence,
 } from "@/lib/estimateEmail";
+import { isImeEnter } from "@/lib/ime";
 
 // 本文の行数に合わせた高さ（最低 14 行、最大 60 行）。毎回マウスで枠を広げなくて済むように
 const bodyRows = (text) => Math.min(60, Math.max(14, String(text || "").split("\n").length + 2));
@@ -290,7 +291,7 @@ export default function EmailPreview({ estimate, emailLogs = [], onEmailSent }) 
                         value={email.subject}
                         onChange={(e) => patchEmail(idx, { subject: e.target.value })}
                         onBlur={() => setInline(null)}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); } }}
+                        onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e)) || e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); } }}
                         className="h-7 text-xs"
                         aria-label="件名"
                       />

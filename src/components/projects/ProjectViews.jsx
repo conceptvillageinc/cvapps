@@ -19,6 +19,7 @@ import { Loader2, FolderKanban, ArrowUp, ArrowDown, ArrowUpDown, Filter, Target,
 import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
 import InlineBadgeSelect from "@/components/projects/InlineBadgeSelect";
 import { useCostTotals } from "@/lib/usePayablesAccess";
+import { isImeEnter } from "@/lib/ime";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -780,7 +781,7 @@ export function NextActionCell({ project, className = "" }) {
         value={text}
         onChange={(e) => setText(e.target.value.replace(/\r?\n/g, " "))}
         onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+        onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) { e.preventDefault(); e.currentTarget.blur(); } }}
         placeholder="ネクストアクションを記載"
         aria-label="ネクストアクション"
         className={`block w-full min-h-8 px-2 py-1.5 rounded-md border text-xs leading-snug resize-none overflow-hidden outline-none transition-colors ${text ? "bg-amber-50/70 border-transparent hover:border-input focus:bg-background focus:border-primary" : "bg-amber-50 border-transparent placeholder:text-amber-700/70 hover:border-input focus:bg-background focus:border-primary"}`}

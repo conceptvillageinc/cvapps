@@ -11,6 +11,7 @@ import {
 } from "@/lib/meetingConditions";
 import { useDesignFeeMaster } from "@/lib/designFees";
 import { designItemsTotal } from "@/lib/designCatalog";
+import { isImeEnter } from "@/lib/ime";
 
 const yen = (v) => {
   const n = Number(String(v ?? "").replace(/[,¥￥円\s]/g, ""));
@@ -32,7 +33,7 @@ function GrowInput({ value, onChange, className = "", ...props }) {
       rows={1}
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value.replace(/\r?\n/g, " "))}
-      onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+      onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) e.preventDefault(); }}
       className={`min-h-0 resize-none overflow-hidden px-2.5 py-1.5 text-xs leading-snug ${className}`}
       {...props}
     />

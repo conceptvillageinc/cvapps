@@ -11,6 +11,7 @@ import { usePrintTypes } from "@/lib/printTypes";
 import { newPrintSpec, specLabel, specMissing } from "@/lib/printSpecs";
 import SizeInput from "@/components/estimates/SizeInput";
 import ColorCountInput from "@/components/estimates/ColorCountInput";
+import { isImeEnter } from "@/lib/ime";
 
 function QuantityEditor({ values, onChange }) {
   const [input, setInput] = useState("");
@@ -26,7 +27,7 @@ function QuantityEditor({ values, onChange }) {
           type="number"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
+          onKeyDown={(e) => (e.key === "Enter" && !isImeEnter(e)) && (e.preventDefault(), add())}
           placeholder="枚数"
           className="h-9 max-w-[140px]"
         />

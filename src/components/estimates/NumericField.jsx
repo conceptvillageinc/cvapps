@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
+import { isImeEnter } from "@/lib/ime";
 
 // 数値入力欄：入力中はローカルの文字列として保持し、フォーカスを外した時（blur）や
 // Enterキーで確定させる。毎回のキー入力で即座にNumber化すると、入力途中の空文字・
@@ -29,7 +30,7 @@ export default function NumericField({ value, onCommit, className, placeholder, 
       onChange={e => setText(e.target.value)}
       onBlur={commit}
       onKeyDown={e => {
-        if (e.key === "Enter" && !(e.nativeEvent?.isComposing || e.keyCode === 229)) {
+        if (e.key === "Enter" && !isImeEnter(e)) {
           e.preventDefault();
           commit();
           // Enter で確定したら次の欄へ（明細の表では 名称 → 数量 → 単位 → 単価 → 次の行）

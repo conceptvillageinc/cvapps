@@ -26,6 +26,7 @@ import SalesCategoryReport from "@/components/sales/SalesCategoryReport";
 import { SALES_CATEGORY_FROM } from "@/lib/salesCategory";
 import { useAuth } from "@/lib/AuthContext";
 import { useCostTotals } from "@/lib/usePayablesAccess";
+import { isImeEnter } from "@/lib/ime";
 
 // 検証済みの配色（dataviz の基準パレット: 青 / オレンジ / アクア / 黄）
 const C = { actual: "#2a78d6", forecast: "#eb6834", target: "#1baf7a", must: "#eda100", grid: "#e5e7eb", text: "#52514e" };
@@ -82,7 +83,7 @@ function SimCell({ value, original, edited, onCommit }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
+        onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) { e.preventDefault(); e.currentTarget.blur(); } }}
         onFocus={(e) => e.currentTarget.select()}
         inputMode="numeric"
         title={edited ? `実データ: ¥${yen(original)}（空にすると実データに戻ります）` : "数字を入れると試算に使います"}
