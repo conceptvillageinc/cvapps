@@ -122,6 +122,12 @@ export default function ProjectDetail() {
   const fs = project?.forecast_source || null;
   const fsEstimate = fs ? estimates.find((e) => e.id === fs.estimate_id) : null;
   const drift = forecastDrift(fs, fsEstimate);
+  // 差があってもこのままにする（sig を覚える。null を渡すとお知らせを出し直す）
+  const keepAsIs = useMutation({
+    mutationFn: (sig = drift?.sig) => db.entities.Project.update(id, { forecast_source: { ...fs, dismissed_sig: sig || null } }),
+    onSuccess: (_r, sig) => { queryClient.invalidateQueries({ queryKey: ["project", id] }); if (sig !== null) toast.success("見込みはこのままにしました。見積がまた変わったらお知らせします"); },
+    onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
+  });
   const reapply = useMutation({
     mutationFn: () => {
       const now = sumLines(forecastLines(fsEstimate), fs.line_ids || []);
@@ -263,7 +269,7 @@ export default function ProjectDetail() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {drift && (
+            {drift && !drift.dismissed && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="forecast-drift">
                 <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />見積（{fs.estimate_number}）が変わっています。見込みと差があります</p>
                 <p className="mt-1 tabular-nums">
@@ -273,11 +279,12 @@ export default function ProjectDetail() {
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   <Button size="sm" className="h-7 text-xs" disabled={reapply.isPending} onClick={() => reapply.mutate()} data-testid="forecast-reapply">{reapply.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}同じチェックで入れ直す</Button>
                   <Button size="sm" variant="outline" className="h-7 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { setForecastInitial({ estimateId: fs.estimate_id, lineIds: fs.line_ids }); setForecastOpen(true); }}>チェックを選び直す</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-amber-900 hover:bg-amber-100" disabled={keepAsIs.isPending} onClick={() => keepAsIs.mutate()} title="見込みは今のままにします。見積がまた変わったら、もう一度お知らせします" data-testid="forecast-keep">このままにする</Button>
                 </div>
               </div>
             )}
             <div>
-              <p className="text-[10px] text-muted-foreground mb-1.5">見込{fs?.estimate_number && <span className="ml-2">見積 {fs.estimate_number} の明細 {(fs.line_ids || []).length} 件から入れました{fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}</span>}</p>
+              <p className="text-[10px] text-muted-foreground mb-1.5">見込{fs?.estimate_number && <span className="ml-2">見積 {fs.estimate_number} の明細 {(fs.line_ids || []).length} 件から入れました{fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}</span>}{drift?.dismissed && <button type="button" className="ml-2 rounded bg-amber-50 px-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100" onClick={() => keepAsIs.mutate(null)} title="押すと、見積との差のお知らせをもう一度出します" data-testid="forecast-kept">見積と差あり（このままにしています）</button>}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Field label="受注見込"><span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span></Field>
                 <Field label="発注見込"><span className="tabular-nums">{yen(project.expected_cost)}</span></Field>

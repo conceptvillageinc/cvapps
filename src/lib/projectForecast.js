@@ -37,7 +37,8 @@ export function defaultEstimate(estimates) {
 }
 
 /**
- * 入れたあとに見積が変わっていないか。変わっていれば { revenue, cost, newLines, missing } を返す（変わっていなければ null）
+ * 入れたあとに見積が変わっていないか。変わっていれば { revenue, cost, newLines, missing, sig, dismissed } を返す（変わっていなければ null）
+ *   dismissed: 「このままにする」を押したときから見積が変わっていない（お知らせは出さない。見積がまた変わったら出す）
  *   newLines: 入れたあとに見積に増えた明細（チェックしていないので見込みには入っていない）
  */
 export function forecastDrift(source, estimate) {
@@ -49,5 +50,7 @@ export function forecastDrift(source, estimate) {
   const newLines = lines.filter((l) => !known.has(l.id));
   const missing = ids.filter((id) => !lines.some((l) => l.id === id)).length;
   if (now.revenue === Number(source.revenue) && now.cost === Number(source.cost) && newLines.length === 0 && missing === 0) return null;
-  return { revenue: now.revenue, cost: now.cost, newLines, missing };
+  // いまの見積の状態の印（「このままにする」を押したときの状態と同じなら、お知らせは出さない）
+  const sig = [now.revenue, now.cost, newLines.map((l) => l.id).sort().join(","), missing].join("|");
+  return { revenue: now.revenue, cost: now.cost, newLines, missing, sig, dismissed: source.dismissed_sig === sig };
 }
