@@ -11,7 +11,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic, PackageCheck } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic, PackageCheck, ListChecks, AlertTriangle } from "lucide-react";
 import { MEETING_STATUS } from "@/lib/meetings";
 import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
 import { toast } from "sonner";
@@ -19,12 +19,15 @@ import { format } from "date-fns";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP, STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
+import ForecastFromEstimateDialog from "@/components/projects/ForecastFromEstimateDialog";
+import { forecastDrift, forecastLines, sumLines } from "@/lib/projectForecast";
 import ScheduleTab from "@/components/schedule/ScheduleTab";
 import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
+const signedYen = (n) => `${Number(n) >= 0 ? "+" : "−"}¥${Math.abs(Math.round(Number(n) || 0)).toLocaleString()}`;
 
 function Field({ label, children, className = "" }) {
   return (
@@ -112,6 +115,25 @@ export default function ProjectDetail() {
     },
     onError: (err) => toast.error("削除できませんでした: " + (err?.message || "不明なエラー")),
   });
+
+  // 見積から入れた受注見込・発注見込（見積があとで変わったら差を出す）
+  const [forecastOpen, setForecastOpen] = useState(false);
+  const [forecastInitial, setForecastInitial] = useState(null);
+  const fs = project?.forecast_source || null;
+  const fsEstimate = fs ? estimates.find((e) => e.id === fs.estimate_id) : null;
+  const drift = forecastDrift(fs, fsEstimate);
+  const reapply = useMutation({
+    mutationFn: () => {
+      const now = sumLines(forecastLines(fsEstimate), fs.line_ids || []);
+      const known = new Set([...(fs.line_ids || []), ...(fs.unchecked_ids || [])]);
+      const added = forecastLines(fsEstimate).filter((l) => !known.has(l.id)).map((l) => l.id);
+      return db.entities.Project.update(id, { expected_revenue: now.revenue, expected_cost: now.cost, forecast_source: { ...fs, revenue: now.revenue, cost: now.cost, unchecked_ids: [...(fs.unchecked_ids || []), ...added], applied_at: new Date().toISOString() } });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["project", id] }); queryClient.invalidateQueries({ queryKey: ["projects"] }); toast.success("見積の今の金額で見込みを入れ直しました"); },
+    onError: (err) => toast.error("入れ直せませんでした: " + (err?.message || "不明なエラー")),
+  });
+
+  const expectedGross = project?.expected_gross_profit ?? ((Number(project?.expected_revenue) || 0) - (Number(project?.expected_cost) || 0) - (Number(project?.other_cost) || 0));
 
   if (isLoading || !project) {
     return (
@@ -235,20 +257,36 @@ export default function ProjectDetail() {
         {/* 金額 */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">金額（税抜）</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-sm">金額（税抜）</CardTitle>
+              <Button size="sm" variant="outline" className="h-7 gap-1 text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { setForecastInitial(null); setForecastOpen(true); }} data-testid="forecast-open"><ListChecks className="w-3.5 h-3.5" /> 見積から見込みを入れる</Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {drift && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="forecast-drift">
+                <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />見積（{fs.estimate_number}）が変わっています。見込みと差があります</p>
+                <p className="mt-1 tabular-nums">
+                  受注見込 {yen(fs.revenue)} → <b>{yen(drift.revenue)}</b>（{signedYen(drift.revenue - fs.revenue)}）　発注見込 {yen(fs.cost)} → <b>{yen(drift.cost)}</b>（{signedYen(drift.cost - fs.cost)}）
+                </p>
+                {(drift.newLines.length > 0 || drift.missing > 0) && <p className="mt-0.5 text-[11px]">{drift.newLines.length > 0 && `見積に明細が ${drift.newLines.length} 件増えています（まだ見込みに入っていません）`}{drift.newLines.length > 0 && drift.missing > 0 && "・"}{drift.missing > 0 && `入れた明細のうち ${drift.missing} 件が見積から消えています`}</p>}
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  <Button size="sm" className="h-7 text-xs" disabled={reapply.isPending} onClick={() => reapply.mutate()} data-testid="forecast-reapply">{reapply.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}同じチェックで入れ直す</Button>
+                  <Button size="sm" variant="outline" className="h-7 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { setForecastInitial({ estimateId: fs.estimate_id, lineIds: fs.line_ids }); setForecastOpen(true); }}>チェックを選び直す</Button>
+                </div>
+              </div>
+            )}
             <div>
-              <p className="text-[10px] text-muted-foreground mb-1.5">見込</p>
+              <p className="text-[10px] text-muted-foreground mb-1.5">見込{fs?.estimate_number && <span className="ml-2">見積 {fs.estimate_number} の明細 {(fs.line_ids || []).length} 件から入れました{fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}</span>}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Field label="受注見込"><span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span></Field>
                 <Field label="発注見込"><span className="tabular-nums">{yen(project.expected_cost)}</span></Field>
                 <Field label="その他費用"><span className="tabular-nums">{yen(project.other_cost)}</span></Field>
                 <Field label="粗利見込">
-                  <span className={`tabular-nums font-medium ${Number(project.expected_gross_profit) < 0 ? "text-destructive" : "text-emerald-700"}`}>{yen(project.expected_gross_profit)}</span>
+                  <span className={`tabular-nums font-medium ${expectedGross < 0 ? "text-destructive" : "text-emerald-700"}`}>{yen(expectedGross)}</span>
                   {Number(project.expected_revenue) > 0 && (
                     <span className="text-[10px] text-muted-foreground ml-1">
-                      {Math.round((Number(project.expected_gross_profit) / Number(project.expected_revenue)) * 100)}%
+                      {Math.round((expectedGross / Number(project.expected_revenue)) * 100)}%
                     </span>
                   )}
                 </Field>
@@ -472,6 +510,7 @@ export default function ProjectDetail() {
       )}
 
       <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} project={project} />
+      <ForecastFromEstimateDialog open={forecastOpen} onOpenChange={setForecastOpen} project={project} estimates={estimates} initial={forecastInitial} />
     </div>
   );
 }
