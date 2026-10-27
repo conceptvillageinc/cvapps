@@ -5,6 +5,7 @@ import { db } from "@/api/db";
 import { receiptFilename } from "@/lib/docFilename";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Save, FileDown, Printer, Trash2, Loader2, CheckCircle2, Mail, Stamp, ReceiptText } from "lucide-react";
+import { ArrowLeft, Save, FileDown, Printer, Trash2, Loader2, CheckCircle2, Mail, ReceiptText, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
 import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, fmtUnit } from "@/lib/constants";
@@ -48,7 +49,6 @@ export default function ReceiptEdit() {
 
   const [form, setForm] = useState(null);
   const [selected, setSelected] = useState(null); // 元の明細のうち含める行の id
-  const [withStamp, setWithStamp] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
 
@@ -158,14 +158,15 @@ export default function ReceiptEdit() {
   });
 
   // A5 単体（データ用）を保存
-  const downloadA5 = async () => {
+  // 電子印鑑あり（メール送付用）／なし（持参して実印を押す用）
+  const downloadA5 = async (withStamp = true) => {
     setPdfLoading(true);
     try { openBlob(await db.documents.pdf("receipt", id, { stamp: withStamp, layout: "a5" }), receiptFilename(form)); }
     catch (err) { toast.error(err.message); }
     finally { setPdfLoading(false); }
   };
   // A4 印刷用（領収書＋控え）を新しいタブで開く
-  const printA4 = async () => {
+  const printA4 = async (withStamp = true) => {
     const tab = openPreviewTab();
     setPdfLoading(true);
     try { showBlobInTab(tab, await db.documents.pdf("receipt", id, { stamp: withStamp, layout: "a4" }), receiptFilename(form)); }
@@ -210,15 +211,28 @@ export default function ReceiptEdit() {
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {!isNew && (
             <>
-              <label className="flex items-center gap-1 text-[11px] cursor-pointer mr-1" title="持参して実印を押す場合は外す">
-                <input type="checkbox" checked={withStamp} onChange={(e) => setWithStamp(e.target.checked)} /> <Stamp className="w-3.5 h-3.5" /> 社印を押す
-              </label>
-              <Button size="sm" className="gap-1.5 text-xs" onClick={printA4} disabled={pdfLoading}>
-                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />} 印刷用（A4に領収書＋控え）
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={downloadA5} disabled={pdfLoading}>
-                <FileDown className="w-3.5 h-3.5" /> PDF保存（A5）
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="gap-1.5 text-xs" disabled={pdfLoading} data-testid="receipt-print">
+                    {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />} 印刷用（A4に領収書＋控え） <ChevronDown className="w-3 h-3 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem className="text-xs" onClick={() => printA4(true)}>電子印鑑あり</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => printA4(false)}>電子印鑑なし（持参して実印を押す用）</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={pdfLoading} data-testid="receipt-pdf">
+                    <FileDown className="w-3.5 h-3.5" /> PDF保存（A5） <ChevronDown className="w-3 h-3 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadA5(true)}>電子印鑑あり（メール送付用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadA5(false)}>電子印鑑なし（持参して実印を押す用）</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}>
                 <Mail className="w-3.5 h-3.5" /> メール送付（A5）
               </Button>
