@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Settings, Plus, X, ArrowUp, ArrowDown, FileText, GripVertical, Trash2, CheckCircle2, Columns3 } from "lucide-react";
+import { Settings, Plus, X, ArrowUp, ArrowDown, FileText, GripVertical, Trash2, CheckCircle2, Columns3, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import PricingRulesCard from "@/components/settings/PricingRulesCard";
 import CompanyInfoCard from "@/components/settings/CompanyInfoCard";
@@ -30,6 +30,15 @@ async function upsertSetting(existingList, key, value, description) {
 }
 
 // テンプレート1件：クリックでその場編集、ドラッグで並び替え
+/** 保存の状態（保存中… / ✓ 保存しました 10:32） */
+function SaveBadge({ state }) {
+  if (!state) return null;
+  if (state.status === "saving") return <span className="inline-flex items-center gap-1 text-[11px] font-normal text-slate-400"><Loader2 className="h-3 w-3 animate-spin" />保存中…</span>;
+  if (state.status === "error") return <span className="text-[11px] font-normal text-destructive">保存できませんでした</span>;
+  const t = state.at;
+  return <span className="inline-flex items-center gap-1 text-[11px] font-normal text-emerald-600" data-testid="save-badge"><CheckCircle2 className="h-3 w-3" />保存しました {t ? `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}` : ""}</span>;
+}
+
 function TemplateRow({ template, isDragging, onDragStart, onDragOver, onDrop, onDragEnd, onUpdate, onRemove }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(template.label);
@@ -53,9 +62,10 @@ function TemplateRow({ template, isDragging, onDragStart, onDragOver, onDrop, on
       <div className="p-2.5 rounded border bg-white space-y-1.5">
         <Input value={label} onChange={e => setLabel(e.target.value)} className="h-7 text-xs font-medium" placeholder="ラベル" autoFocus />
         <Textarea value={text} onChange={e => setText(e.target.value)} rows={2} className="text-xs" placeholder="本文" />
-        <div className="flex justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5">
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={cancel}>キャンセル</Button>
-          <Button size="sm" className="h-7 text-xs" onClick={commit}>完了</Button>
+          <span className="mr-auto self-center text-[11px] text-amber-700">「完了」を押すと保存されます</span>
+          <Button size="sm" className="h-7 text-xs" onClick={commit}>完了（保存）</Button>
         </div>
       </div>
     );
@@ -160,11 +170,17 @@ export default function SystemSettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grossMarginPct]);
 
-  // リスト系（受注確度・フェーズ・テンプレート）は各操作の直後に即座に保存する
+  // リスト系（受注確度・フェーズ・テンプレート）は各操作の直後に即座に保存する。保存できたかを各カードの見出しに出す
+  const [saveState, setSaveState] = useState({}); // { [key]: { status: "saving" | "saved" | "error", at } }
   const saveList = (key, value, description) => {
+    setSaveState((st) => ({ ...st, [key]: { status: "saving" } }));
     upsertSetting(settings, key, JSON.stringify(value), description)
-      .then(() => queryClient.invalidateQueries({ queryKey: ["settings"] }))
-      .catch(err => toast.error("自動保存に失敗しました: " + err.message));
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["settings"] });
+        setSaveState((st) => ({ ...st, [key]: { status: "saved", at: new Date() } }));
+        toast.success("保存しました", { duration: 1500 });
+      })
+      .catch(err => { setSaveState((st) => ({ ...st, [key]: { status: "error" } })); toast.error("保存に失敗しました: " + err.message); });
   };
 
   const moveInList = (list, setList, key, description, index, direction) => {
@@ -320,7 +336,7 @@ export default function SystemSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">受注確度・フェーズの選択肢</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">受注確度・フェーズの選択肢<SaveBadge state={saveState.deal_probability_options || saveState.phase_options} /></CardTitle>
           <CardDescription className="text-xs">見積詳細画面で選べる選択肢を管理します（上下で並び順を変更できます）</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -394,6 +410,7 @@ export default function SystemSettingsPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="w-4 h-4" /> 備考欄のテンプレート
+            <SaveBadge state={saveState.notes_templates} />
           </CardTitle>
           <CardDescription className="text-xs">
             見積画面の備考欄で「+ テンプレートを追加」から選べる定文を管理します。クリックでその場編集、ドラッグで並び替えできます。
@@ -428,9 +445,12 @@ export default function SystemSettingsPage() {
               rows={2}
               className="text-xs"
             />
-            <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={addTemplate}>
-              <Plus className="w-3.5 h-3.5" /> テンプレートを追加
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant={newTemplateLabel.trim() || newTemplateText.trim() ? "default" : "outline"} className="h-8 gap-1 text-xs" onClick={addTemplate} data-testid="notes-template-add">
+                <Plus className="w-3.5 h-3.5" /> テンプレートを追加（保存）
+              </Button>
+              {(newTemplateLabel.trim() || newTemplateText.trim()) && <span className="text-[11px] text-amber-700">まだ保存されていません。「テンプレートを追加（保存）」を押すと保存されます</span>}
+            </div>
           </div>
         </CardContent>
       </Card>
