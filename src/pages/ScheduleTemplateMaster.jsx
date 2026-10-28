@@ -103,6 +103,15 @@ export default function ScheduleTemplateMaster() {
     if (!form?.steps.length) return null;
     try { return draftFromTemplates([{ name: form.name, steps: form.steps }], { mode: "start", date: today, holidays: companyHolidays, parties, today }); } catch { return null; }
   }, [form, today, companyHolidays, parties]);
+  // 見本のタイムラインで ⊕ をドラッグしてつなぐ／矢印を押して外すと、工程の「前の工程」に入る
+  const keyOfPreview = (id) => String(id || "").replace(/^draft_t\d+_/, "").replace(/^draft_/, "");
+  const linkFromPreview = (id, patch) => {
+    if (!form || !("depends_on" in patch)) return;
+    const i = form.steps.findIndex((st) => st.key === keyOfPreview(id));
+    if (i < 0) return;
+    const keys = new Set(form.steps.map((st) => st.key));
+    setStep(i, { after: [...new Set(patch.depends_on.map(keyOfPreview))].filter((k) => keys.has(k) && k !== form.steps[i].key) });
+  };
   const categories = [...new Set(form?.steps.map((s) => s.category).filter(Boolean) || [])];
   const totalDays = preview?.tasks.length ? preview.tasks.map((t) => t.end_date).sort().pop() : null;
 
@@ -178,8 +187,8 @@ export default function ScheduleTemplateMaster() {
 
             {preview && (
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-slate-600">見え方（今日から順に並べた場合）</p>
-                <ScheduleTimeline tasks={preview.tasks} parties={preview.parties} holidays={companyHolidays} scale={preview.tasks.length > 14 ? "week" : "day"} columns="standard" today={today} />
+                <p className="text-xs font-semibold text-slate-600">見え方（今日から順に並べた場合）<span className="ml-2 font-normal text-muted-foreground">棒にマウスを乗せると右端に出る <b className="rounded-full bg-blue-600 px-1 text-white">+</b> をつかんで、あとに続く工程の行で離すとつながります。矢印を押すと外せます</span></p>
+                <ScheduleTimeline tasks={preview.tasks} parties={preview.parties} holidays={companyHolidays} scale={preview.tasks.length > 14 ? "week" : "day"} columns="standard" today={today} linkOnly onChange={linkFromPreview} />
               </div>
             )}
           </div>

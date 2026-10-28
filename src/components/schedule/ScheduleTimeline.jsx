@@ -71,11 +71,12 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  * @param {boolean} [p.fillViewport]  画面の下の端までの高さにして、中だけスクロールする（上のツールバー・日付の見出しは止まったまま）
  * @param {string} [p.boxMaxHeight]  枠の高さの上限（CSS の値）。中だけスクロールして日付の見出しは止まったまま
  * @param {"red"|"blue"} [p.keyTone]  大事な日（納品期限など）の色
+ * @param {boolean} [p.linkOnly]  棒は動かさず、つなぐ・外すだけできる（工程表テンプレートの見本など）
  * @param {object[]} [p.users]  渡すと（editable のとき）担当の欄を押して担当を変えられる
  * @param {(id, toIndex, category) => void} [p.onReorder]
  * @param {({ category, afterId, start, end }) => void} [p.onCreate]
  */
-export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null, fillViewport = false, boxMaxHeight = null, keyTone = "red" }) {
+export default function ScheduleTimeline({ tasks, parties, keyDates = [], holidays = null, scale = "day", columns = "standard", editable = false, onChange, memberName = () => "", memberAvatar = () => "", alwaysMembers = false, today, fitHeight = false, barStyle = "line", onRename, onDelete, editingId, onReorder, onCreate, users = null, fillViewport = false, boxMaxHeight = null, keyTone = "red", linkOnly = false }) {
   // 大事な日の色（社内は赤、クライアント向けは青系）
   const KT = keyTone === "blue" ? { line: "border-sky-500", chip: "bg-sky-600", day: "bg-sky-600" } : { line: "border-red-400", chip: "bg-red-500", day: "bg-red-500" };
   const colW = scale === "week" ? 16 : scale === "dekad" ? 12 : 34;
@@ -186,7 +187,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
   };
 
   // 工程どうしをつなぐ（棒の右端の ⊕ をドラッグ）・矢印を押して外す
-  const canLink = editable && !!onChange;
+  const canLink = (editable || linkOnly) && !!onChange;
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   const [hoverId, setHoverId] = useState(null);
   const [link, setLink] = useState(null); // { fromId, x1, y1, cx, cy, overId, ok, reason }
