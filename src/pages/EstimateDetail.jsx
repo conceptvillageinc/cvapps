@@ -364,44 +364,45 @@ function EstimateDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* 並び: 複製 → 送付 → 発注書作成 → 納品書作成 → 削除 → 保存 */}
+          <Button variant="outline" size="sm" onClick={handleDuplicate} className="gap-1.5 text-xs">
+            <Copy className="w-3.5 h-3.5" /> 複製
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={pdfLoading} data-testid="estimate-send-menu">
+                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} 送付 <ChevronDown className="w-3 h-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {formData.schema_version === 2 && (
+                <>
+                  <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(true)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑あり（メール送付用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(false)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs gap-2" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }}><Mail className="w-3.5 h-3.5" />メールで見積書を送付</DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuItem className="text-xs gap-2" onClick={copyLink} title="「▼見積書_クライアント名_案件名」とこの見積の URL をコピー（CV メンバーへの共有・Asana やチャットに貼る用）"><Link2 className="w-3.5 h-3.5" />CV 共有用のタイトルと URL をコピー</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {formData.schema_version === 2 && (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={pdfLoading}>
-                    {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} PDF <ChevronDown className="w-3 h-3 opacity-60" />
+                    <ClipboardList className="w-3.5 h-3.5" /> 発注書作成{partnerOrders.length > 0 ? `（${partnerOrders.length}）` : ""} <ChevronDown className="w-3 h-3 opacity-60" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(true)}>電子印鑑あり（メール送付用）</DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false)}>電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button variant="outline" size="sm" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }} className="gap-1.5 text-xs">
-                <Mail className="w-3.5 h-3.5" /> 見積書を送付
-              </Button>
-              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs">
-                <Truck className="w-3.5 h-3.5" /> 納品書を作成
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" disabled={pdfLoading}>
-                    <ClipboardList className="w-3.5 h-3.5" /> 発注書を作る{partnerOrders.length > 0 ? `（${partnerOrders.length}）` : ""} <ChevronDown className="w-3 h-3 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="start">
                   <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false, "purchase_order")}>発注書雛形の作成サポート（宛先：CV／発行元：クライアント）</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/partner-orders/new?estimate=${estimateId}`); }}>連携先への発注書（宛先：連携先／発行元：CV）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs">
+                <Truck className="w-3.5 h-3.5" /> 納品書作成
+              </Button>
             </>
           )}
-          <Button variant="outline" size="sm" onClick={copyLink} className="gap-1.5 text-xs" title="「▼見積書_クライアント名_案件名」とこの見積の URL をコピー（CV メンバーへの共有・Asana やチャットに貼る用）">
-            <Link2 className="w-3.5 h-3.5" /> タイトルと URL をコピー
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleDuplicate} className="gap-1.5 text-xs">
-            <Copy className="w-3.5 h-3.5" /> 複製
-          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:text-destructive">
