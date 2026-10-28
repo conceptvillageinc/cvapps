@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { nextMonthEnd } from "@/lib/fiscal";
+import { forecastProjects, addMonthsYm } from "@/lib/projectInvoicing";
 import { BANK_LABELS, accountKeyOf } from "@/lib/bankImport";
 
 const n = (v) => Number(v) || 0;
@@ -66,11 +67,9 @@ export function buildCashPlan({ today, horizonDays = 90, bankTxs, invoices, proj
   const push = (e) => { if (e.date && e.date <= end && e.amount) events.push(e); };
 
   // 請求書（未入金）
-  const invoicedByProject = new Map();
   const overdue = [];
   for (const inv of invoices || []) {
     if (inv.status === "cancelled") continue;
-    if (inv.project_id) invoicedByProject.set(inv.project_id, (invoicedByProject.get(inv.project_id) || 0) + n(inv.total));
     if (inv.status === "paid") continue;
     const due = inv.due_date || nextMonthEnd(inv.invoice_date);
     // 資金繰り表で管理し始める前の入金予定（区切りの日より前）は数えない
@@ -80,9 +79,10 @@ export function buildCashPlan({ today, horizonDays = 90, bankTxs, invoices, proj
     else push({ date: due, amount: n(inv.total), sure: true, group: "入金予定（請求済）", label, link: `/invoices/${inv.id}` });
   }
   // 未請求の案件（見込）
-  for (const p of projects || []) {
+  // 定期売上の案件は、先月〜見る期間の月ごとに 1 件ずつに広げる（請求済み額は明細の案件・月で分ける）
+  for (const p of forecastProjects(projects, invoices, { fromYm: addMonthsYm(today.slice(0, 7), -1), toYm: end.slice(0, 7) })) {
     if (!countsAsForecast(p)) continue;
-    const remaining = Math.max(0, Math.round(n(p.expected_revenue) * 1.1) - (invoicedByProject.get(p.id) || 0));
+    const remaining = Math.max(0, Math.round(n(p.expected_revenue) * 1.1) - p._invoiced.total);
     const inDate = p.payment_due_date || nextMonthEnd(p.due_date || p.registered_at);
     if (remaining > 0 && inDate) push({ date: inDate < today ? today : inDate, amount: remaining, sure: false, group: "入金見込（未請求の案件）", label: `${p.client_name || ""} ${p.name || ""}`.trim(), link: `/projects/${p.id}` });
     const cost = Math.round((n(p.expected_cost) + n(p.other_cost)) * 1.1);

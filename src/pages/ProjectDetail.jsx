@@ -25,6 +25,8 @@ import ScheduleTab from "@/components/schedule/ScheduleTab";
 import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
+import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
+import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const signedYen = (n) => `${Number(n) >= 0 ? "+" : "−"}¥${Math.abs(Math.round(Number(n) || 0)).toLocaleString()}`;
@@ -74,11 +76,19 @@ export default function ProjectDetail() {
     enabled: !!id,
   });
 
-  const { data: invoices = [] } = useQuery({
+  const { data: ownInvoices = [] } = useQuery({
     queryKey: ["invoices", "byProject", id],
     queryFn: () => db.entities.Invoice.filter({ project_id: id }, "-invoice_date"),
     enabled: !!id,
   });
+  // ほかの案件の請求書にまとめられた、この案件の納品書の請求書（売上はこの案件の分だけを数える）
+  const otherInvoiceIds = [...new Set(deliveryNotes.map((n) => n.invoice_id).filter((x) => x && !ownInvoices.some((i) => i.id === x)))];
+  const { data: otherInvoices = [] } = useQuery({
+    queryKey: ["invoices", "byProject", id, "merged", otherInvoiceIds.join(",")],
+    queryFn: async () => (await Promise.all(otherInvoiceIds.map((x) => db.entities.Invoice.get(x).catch(() => null)))).filter(Boolean),
+    enabled: otherInvoiceIds.length > 0,
+  });
+  const invoices = [...ownInvoices, ...otherInvoices].sort((a, b) => String(b.invoice_date || "").localeCompare(String(a.invoice_date || "")));
 
   const { data: client } = useQuery({
     queryKey: ["client", project?.client_id],
@@ -99,7 +109,7 @@ export default function ProjectDetail() {
     mutationFn: async () => {
       if (deleteDocs) {
         // 案件を消すだけだと書類は残る（紐づけが外れるだけ）ので、テストデータなどはここでまとめて消す
-        for (const inv of invoices) await db.entities.Invoice.delete(inv.id);
+        for (const inv of ownInvoices) await db.entities.Invoice.delete(inv.id);
         for (const dn of deliveryNotes) await db.entities.DeliveryNote.delete(dn.id);
         for (const est of estimates) await db.entities.Estimate.delete(est.id);
       }
@@ -172,7 +182,7 @@ export default function ProjectDetail() {
                 <Badge className="text-[10px] bg-teal-100 text-teal-700 hover:bg-teal-100 gap-1"><Repeat className="w-2.5 h-2.5" /> 定期売上</Badge>
               )}
               {project.recurring_template_id && (
-                <Link to="/projects/recurring" className="text-[10px] text-teal-700 hover:underline">ひな形から自動生成</Link>
+                <Link to="/projects/recurring" className="text-[10px] text-teal-700 hover:underline">{isRecurringParent(project) ? "定期売上の設定（ひな形）を開く" : "ひな形から自動生成"}</Link>
               )}
               {legacy && <Badge variant="outline" className="text-[10px] font-normal">freee販売から取込</Badge>}
             </div>
@@ -192,10 +202,10 @@ export default function ProjectDetail() {
               <AlertDialogHeader>
                 <AlertDialogTitle>案件を削除しますか？</AlertDialogTitle>
                 <AlertDialogDescription>
-                  紐付いている見積（{estimates.length}件）・納品書（{deliveryNotes.length}件）・請求書（{invoices.length}件）は、そのままでは削除されず案件との紐付けだけが外れます。この操作は取り消せません。
+                  紐付いている見積（{estimates.length}件）・納品書（{deliveryNotes.length}件）・請求書（{ownInvoices.length}件）は、そのままでは削除されず案件との紐付けだけが外れます。この操作は取り消せません。
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              {(estimates.length + deliveryNotes.length + invoices.length) > 0 && (
+              {(estimates.length + deliveryNotes.length + ownInvoices.length) > 0 && (
                 <label className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50/60 p-3 text-sm cursor-pointer">
                   <Checkbox checked={deleteDocs} onCheckedChange={(v) => setDeleteDocs(!!v)} className="mt-0.5" />
                   <span>
@@ -286,7 +296,7 @@ export default function ProjectDetail() {
             <div>
               <p className="text-[10px] text-muted-foreground mb-1.5">見込{fs?.estimate_number && <span className="ml-2">見積 {fs.estimate_number} の明細 {(fs.line_ids || []).length} 件から入れました{fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}</span>}{drift?.dismissed && <button type="button" className="ml-2 rounded bg-amber-50 px-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100" onClick={() => keepAsIs.mutate(null)} title="押すと、見積との差のお知らせをもう一度出します" data-testid="forecast-kept">見積と差あり（このままにしています）</button>}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Field label="受注見込"><span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span></Field>
+                <Field label={isRecurringParent(project) ? "受注見込（月額）" : "受注見込"}><span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span></Field>
                 <Field label="発注見込"><span className="tabular-nums">{yen(project.expected_cost)}</span></Field>
                 <Field label="その他費用"><span className="tabular-nums">{yen(project.other_cost)}</span></Field>
                 <Field label="粗利見込">
@@ -469,6 +479,8 @@ export default function ProjectDetail() {
         </CardContent>
       </Card>
 
+      {isRecurringParent(project) && <RecurringMonthsCard project={project} deliveryNotes={deliveryNotes} invoices={invoices} />}
+
       {/* 請求書 */}
       <Card>
         <CardHeader className="pb-3">
@@ -491,6 +503,7 @@ export default function ProjectDetail() {
                     <span className="text-xs font-mono text-muted-foreground w-28 shrink-0">{inv.invoice_number}</span>
                     <span className="text-xs text-muted-foreground w-20 shrink-0">{inv.invoice_date}</span>
                     <span className="text-sm flex-1 truncate">{inv.title || "（件名なし）"}</span>
+                    {(() => { const share = invoiceShareFor(inv, project.id); return share.subtotal !== Number(inv.subtotal || 0) ? <span className="text-[10px] text-muted-foreground whitespace-nowrap" title="ほかの案件の納品書とまとめた請求書です。売上はこの案件の分だけを数えます">うちこの案件分 {yen(share.total)}{inv.project_id !== project.id ? "（まとめた請求書）" : ""}</span> : null; })()}
                     <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
                     <span className="text-sm tabular-nums w-28 text-right">{yen(inv.total)}</span>
                   </Link>

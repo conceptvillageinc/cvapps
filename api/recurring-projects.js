@@ -3,9 +3,9 @@ import { adminClient } from './_lib/guard.js';
 // ============================================================================
 // GET /api/recurring-projects  （Vercel cron: 毎月1日 00:00 UTC = 9:00 JST）
 //
-// 定期売上のひな形から、今月分の案件を生成する。
+// 定期売上のひな形ごとの案件（1 つ）に、今月分の納品書の下書きを作る（0039）。
 // 実際の処理は DB 関数 generate_recurring_projects
-// （supabase/migrations/0005_recurring_projects.sql）。
+// （supabase/migrations/0039_recurring_single_project.sql）。
 //
 // 呼び出し元の確認: Vercel は cron からのリクエストに
 // 「Authorization: Bearer <CRON_SECRET>」を付ける。

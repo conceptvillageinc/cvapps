@@ -154,6 +154,7 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurringTemplates"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] }); // ひな形を保存すると定期売上の案件にも反映される
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success(template ? "ひな形を更新しました" : "ひな形を登録しました");
       onOpenChange(false);
@@ -169,7 +170,7 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
         <DialogHeader>
           <DialogTitle>{template ? "ひな形を編集" : "定期売上のひな形を登録"}</DialogTitle>
           <DialogDescription className="text-xs">
-            毎月1日に、この内容で案件が1件作られます。案件名には「（2026年10月分）」のように月が自動で付きます。明細を入れておくと、納品書の下書きも毎月作れます。
+            登録すると、この内容で定期売上の案件が 1 つできます（ひな形を直すと案件にも反映）。見積・納品書・請求書はその案件に紐づきます。明細を入れておくと、毎月1日にその月の納品書の下書きを案件の中に作ります。
           </DialogDescription>
         </DialogHeader>
 
@@ -322,14 +323,20 @@ export default function RecurringProjects() {
     queryKey: ["clients"],
     queryFn: () => db.entities.Client.list("-name"),
   });
-  // 生成済みの案件（ひな形ごとの最終生成月を出すため）
-  const { data: generated = [] } = useQuery({
+  // ひな形ごとの定期売上の案件（1 つ）と、自動で作った納品書のいちばん新しい月
+  const { data: parents = [] } = useQuery({
     queryKey: ["projects", "recurring"],
-    queryFn: () => db.entities.Project.between("recurring_month", "1900-01-01", null, "-recurring_month"),
+    queryFn: () => db.entities.Project.between("recurring_start_month", "1900-01-01", null),
   });
-  const lastMonthByTemplate = {};
-  for (const p of generated) {
-    if (p.recurring_template_id && !lastMonthByTemplate[p.recurring_template_id]) lastMonthByTemplate[p.recurring_template_id] = p.recurring_month;
+  const { data: autoNotes = [] } = useQuery({
+    queryKey: ["deliveryNotes", "recurring"],
+    queryFn: () => db.entities.DeliveryNote.between("recurring_month", "1900-01-01", null, "-recurring_month"),
+  });
+  const projectByTemplate = Object.fromEntries(parents.filter((p) => p.recurring_template_id).map((p) => [p.recurring_template_id, p]));
+  const lastNoteByTemplate = {};
+  for (const n of autoNotes) {
+    const cur = lastNoteByTemplate[n.recurring_template_id];
+    if (n.recurring_template_id && (!cur || String(n.recurring_month) > String(cur.recurring_month))) lastNoteByTemplate[n.recurring_template_id] = n;
   }
 
   const toggleActive = useMutation({
@@ -342,8 +349,7 @@ export default function RecurringProjects() {
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
-      const withNotes = templates.some((t) => t.is_active && t.auto_delivery_note && (t.line_items || []).length > 0);
-      toast.success(count > 0 ? `${monthLabel(month + "-01")}分の案件を${count}件作成しました${withNotes ? "（納品書の下書きも作りました）" : ""}` : `${monthLabel(month + "-01")}分の案件は作成済みです${withNotes ? "（足りない納品書の下書きがあれば作りました）" : "（新しく作った案件はありません）"}`);
+      toast.success(count > 0 ? `${monthLabel(month + "-01")}分の納品書の下書きを${count}件作りました` : `${monthLabel(month + "-01")}分の納品書は作成済みです（「毎月の納品書も作る」のひな形が対象です）`);
     },
     onError: (err) => toast.error(err?.message || "生成に失敗しました"),
   });
@@ -361,7 +367,7 @@ export default function RecurringProjects() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Repeat className="w-5 h-5 text-teal-600" /> 定期売上の設定</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              有効なひな形 {activeCount}件 / 月額合計 {yen(monthlyTotal)}。毎月1日に自動で案件が作られます
+              有効なひな形 {activeCount}件 / 月額合計 {yen(monthlyTotal)}。ひな形ごとに案件が 1 つあり、毎月1日にその月の納品書の下書きを作ります
             </p>
           </div>
         </div>
@@ -372,7 +378,7 @@ export default function RecurringProjects() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">手動で生成する</CardTitle>
+          <CardTitle className="text-sm">手動で作る</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row sm:items-end gap-3">
           <div className="space-y-1.5">
@@ -381,10 +387,10 @@ export default function RecurringProjects() {
           </div>
           <Button variant="secondary" className="gap-2" onClick={() => generate.mutate()} disabled={!month || generate.isPending || activeCount === 0}>
             {generate.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-            この月の案件を生成
+            この月の納品書の下書きを作る
           </Button>
           <p className="text-[10px] text-muted-foreground sm:pb-2">
-            自動生成が動かなかったときや、登録したばかりのひな形の今月分を作るときに使います。すでに作成済みの月は二重になりません
+            自動で動かなかったときや、登録したばかりのひな形の今月分を作るときに使います（「毎月の納品書も作る」のひな形が対象）。すでに作成済みの月は二重になりません
           </p>
         </CardContent>
       </Card>
@@ -409,7 +415,7 @@ export default function RecurringProjects() {
                     <TableHead className="text-xs text-white text-right">受注見込/月</TableHead>
                     <TableHead className="text-xs text-white text-right">粗利見込/月</TableHead>
                     <TableHead className="text-xs text-white">期間</TableHead>
-                    <TableHead className="text-xs text-white">最終生成</TableHead>
+                    <TableHead className="text-xs text-white">案件・最新の納品書</TableHead>
                     <TableHead className="text-xs text-white">状態</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
@@ -427,9 +433,12 @@ export default function RecurringProjects() {
                       <TableCell className="text-right text-sm tabular-nums">{yen(Number(t.expected_revenue || 0) - Number(t.expected_cost || 0) - Number(t.other_cost || 0))}</TableCell>
                       <TableCell className="text-xs whitespace-nowrap">{monthLabel(t.start_month)} 〜 {t.end_month ? monthLabel(t.end_month) : "無期限"}</TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {lastMonthByTemplate[t.id] ? (
-                          <Link to={`/projects?q=${encodeURIComponent(t.name)}`} className="text-primary hover:underline">{monthLabel(lastMonthByTemplate[t.id])}分</Link>
-                        ) : "—"}
+                        {projectByTemplate[t.id] ? (
+                          <Link to={`/projects/${projectByTemplate[t.id].id}`} className="text-primary hover:underline">{projectByTemplate[t.id].project_number || "案件を開く"}</Link>
+                        ) : <span className="text-muted-foreground">—</span>}
+                        {lastNoteByTemplate[t.id] && (
+                          <Link to={`/delivery-notes/${lastNoteByTemplate[t.id].id}`} className="ml-2 text-muted-foreground hover:underline">{monthLabel(lastNoteByTemplate[t.id].recurring_month)}分</Link>
+                        )}
                       </TableCell>
                       <TableCell>
                         <button onClick={() => toggleActive.mutate({ id: t.id, is_active: !t.is_active })} title="クリックで切り替え">

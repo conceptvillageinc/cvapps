@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { db } from "@/api/db";
+import { forecastProjects } from "@/lib/projectInvoicing";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,10 +121,8 @@ export default function Cashflow() {
     const rows = new Map(months.map((k) => [k, { key: k, receivable: [], forecast: [], payable: [], paid: [] }]));
     const overdue = [];
 
-    const invoicedByProject = new Map();
     for (const inv of invoices) {
       if (inv.status === "cancelled") continue;
-      if (inv.project_id) invoicedByProject.set(inv.project_id, (invoicedByProject.get(inv.project_id) || 0) + Number(inv.total || 0));
       if (inv.status === "paid") {
         const k = ym(inv.paid_at);
         if (rows.has(k)) rows.get(k).paid.push(inv);
@@ -136,12 +135,13 @@ export default function Cashflow() {
       if (rows.has(k)) rows.get(k).receivable.push(inv);
     }
 
-    for (const p of projects) {
+    // 定期売上の案件は、先月〜表示する月の月ごとに 1 件ずつに広げる（請求済み額は明細の案件・月で分ける）
+    for (const p of forecastProjects(projects, invoices, { fromYm: addMonths(thisMonth, -1), toYm: months[months.length - 1] })) {
       if (p.status !== "open") continue;
       const prob = p.deal_probability || "";
       if (!(prob === "A" || prob === "A（定期売上）" || /要注意/.test(prob))) continue;
       // 未請求の見込（税込換算）
-      const remaining = Math.max(0, Math.round(Number(p.expected_revenue || 0) * 1.1) - (invoicedByProject.get(p.id) || 0));
+      const remaining = Math.max(0, Math.round(Number(p.expected_revenue || 0) * 1.1) - p._invoiced.total);
       const payKey = ym(p.payment_due_date || nextMonthEnd(p.due_date || p.registered_at));
       if (remaining > 0 && rows.has(payKey)) rows.get(payKey).forecast.push({ ...p, remaining });
       // 支払予定（仕入）
@@ -258,7 +258,7 @@ export default function Cashflow() {
                   </Link>
                 ))}
                 {m.forecast.map((p) => (
-                  <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center gap-2 hover:underline text-muted-foreground">
+                  <Link key={`${p.id}${p._recurring_month || ""}`} to={`/projects/${p.id}`} className="flex items-center gap-2 hover:underline text-muted-foreground">
                     <Badge variant="outline" className="text-[9px] font-normal">見込</Badge>
                     <span className="w-20 shrink-0">{p.payment_due_date || "—"}</span>
                     <span className="truncate flex-1">{p.client_name} / {p.name}</span>
@@ -270,7 +270,7 @@ export default function Cashflow() {
               <div className="space-y-1">
                 <p className="text-[10px] text-muted-foreground">支払（案件の発注見込・その他費用）</p>
                 {m.payable.map((p) => (
-                  <Link key={p.id} to={`/projects/${p.id}`} className="flex items-center gap-2 hover:underline">
+                  <Link key={`${p.id}${p._recurring_month || ""}`} to={`/projects/${p.id}`} className="flex items-center gap-2 hover:underline">
                     <span className="text-muted-foreground w-20 shrink-0">{p.vendor_payment_date || "（既定）"}</span>
                     <span className="truncate flex-1">{p.client_name} / {p.name}</span>
                     <span className="tabular-nums text-red-700">-{yen(p.cost)}</span>

@@ -6,7 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronLeft, ChevronRight, FileText, Receipt, UserRound } from "lucide-react";
 import DeliveryBadge from "@/components/documents/DeliveryBadge";
-import { projectDelivery, estimateDelivery, DELIVERY_STATE, DELIVERY_STATE_ORDER, monthEndOf } from "@/lib/deliveryStatus";
+import { projectDelivery, estimateDelivery, stateOfNotes, DELIVERY_STATE, DELIVERY_STATE_ORDER, monthEndOf } from "@/lib/deliveryStatus";
+import { isRecurringParent, recurringMonths } from "@/lib/projectInvoicing";
 import { submissionOf } from "@/lib/submission";
 import { todayString } from "@/lib/fiscal";
 
@@ -43,8 +44,16 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
 
   const monthStart = `${month}-01`;
   const monthEnd = monthEndOf(monthStart);
-  const rows = useMemo(() => projects
-    .filter((p) => p.status !== "lost" && p.status !== "cancelled" && p.due_date)
+  const rows = useMemo(() => [
+    // 定期売上の案件: 動いている月ごとに、その月の分（納品書は recurring_month か納品日の月）を 1 行
+    ...projects
+      .filter((p) => isRecurringParent(p) && p.status !== "lost" && p.status !== "cancelled" && recurringMonths(p, month, month).length)
+      .map((p) => {
+        const notes = (deliveryIndex.byProject.get(p.id) || []).filter((n) => String(n.recurring_month || n.delivery_date || "").slice(0, 7) === month);
+        return { p: { ...p, name: `${p.name}（${Number(month.slice(5, 7))}月分）`, due_date: monthEnd }, d: { state: stateOfNotes(notes), notes, partial: null }, est: estByProject.get(p.id) || null };
+      }),
+    ...projects
+    .filter((p) => !isRecurringParent(p) && p.status !== "lost" && p.status !== "cancelled" && p.due_date)
     .map((p) => {
       const est = estByProject.get(p.id) || null;
       const d = projectDelivery(p, deliveryIndex.byProject);
@@ -56,7 +65,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
       const due = String(p.due_date);
       if (due >= monthStart && due <= monthEnd) return true; // その月の完了予定
       return due < monthStart && d.state !== "invoiced"; // 前の月までで、請求がまだ
-    }), [projects, deliveryIndex, estByProject, monthStart, monthEnd]);
+    })], [projects, deliveryIndex, estByProject, month, monthStart, monthEnd]);
 
   const count = (st) => rows.filter((r) => r.d.state === st).length;
   const shown = stateFilter ? rows.filter((r) => r.d.state === stateFilter) : rows;

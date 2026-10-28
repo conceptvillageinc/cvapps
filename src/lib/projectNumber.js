@@ -12,7 +12,7 @@ export async function generateProjectNumber(dateStr) {
   return data;
 }
 
-/** 指定した月（"yyyy-MM-dd"、省略時は今月）の定期売上案件を生成する。戻り値は作成件数。 */
+/** 指定した月（"yyyy-MM-dd"、省略時は今月）の定期売上の納品書の下書きを作る（案件はひな形ごとに 1 つ）。戻り値は作った納品書の件数。 */
 export async function generateRecurringProjects(dateStr) {
   const { data, error } = await supabase.rpc("generate_recurring_projects", {
     p_month: dateStr || new Date().toISOString().slice(0, 10),

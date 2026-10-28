@@ -68,6 +68,8 @@ function itemsFromDeliveryNote(dn) {
     transaction_date: dn.delivery_date,
     delivery_note_id: dn.id,
     delivery_number: dn.delivery_number,
+    // 売上を元の案件ごとに分けて集計するため、納品書の案件を明細に持つ（projectInvoicing.js）
+    project_id: dn.project_id || null,
   }));
 }
 
@@ -221,6 +223,22 @@ export default function InvoiceEdit() {
       setForm((f) => ({ ...f, title: f.title || dn.title || "", line_items: [...f.line_items, ...itemsFromDeliveryNote(dn)] }));
     }
   };
+
+  // 売上は明細の案件ごとに分けて数える（納品書をまとめた請求書）。2 つ以上の案件にまたがるときだけ内訳を出す
+  const projectShares = useMemo(() => {
+    const m = new Map();
+    for (const li of form?.line_items || []) {
+      const pid = li.project_id || form?.project_id || "";
+      if (!pid) continue;
+      m.set(pid, (m.get(pid) || 0) + (Number(li.amount) || 0));
+    }
+    return [...m.entries()];
+  }, [form?.line_items, form?.project_id]);
+  const { data: shareProjects = [] } = useQuery({
+    queryKey: ["projects", "byIds", projectShares.map(([pid]) => pid).join(",")],
+    queryFn: async () => (await Promise.all(projectShares.map(([pid]) => db.entities.Project.get(pid).catch(() => null)))).filter(Boolean),
+    enabled: projectShares.length > 1,
+  });
 
   const locked = form?.status === "paid" || form?.status === "cancelled";
 
@@ -520,6 +538,11 @@ export default function InvoiceEdit() {
                   );
                 })}
               </div>
+            )}
+            {projectShares.length > 1 && (
+              <p className="mt-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground" data-testid="project-shares">
+                売上は案件ごとに分けて数えます（税抜）：{projectShares.map(([pid, amt]) => `${shareProjects.find((x) => x.id === pid)?.name || "案件"} ${yen(amt)}`).join("　／　")}
+              </p>
             )}
           </CardContent>
         </Card>

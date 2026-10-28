@@ -14,6 +14,7 @@
 // ============================================================================
 
 import { fiscalYearRange } from "@/lib/fiscal";
+import { forecastProjects } from "@/lib/projectInvoicing";
 
 const n = (v) => Number(v) || 0;
 
@@ -87,13 +88,11 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     actual_other_cost: arr12(t.actual_other_cost),
   };
 
-  // 請求済み額（税抜）を案件ごとに集計（見込から差し引く）
-  const invoicedByProject = new Map();
+  // 請求済み額（税抜）は案件ごとに forecastProjects が付ける（まとめた請求書は明細の案件で分ける）
   const actualSales = Array(12).fill(0);
   const actualSalesCount = Array(12).fill(0);
   for (const inv of invoices || []) {
     if (inv.status === "cancelled") continue;
-    if (inv.project_id) invoicedByProject.set(inv.project_id, (invoicedByProject.get(inv.project_id) || 0) + n(inv.subtotal));
     const k = monthKey(inv.invoice_date);
     if (idx.has(k)) { actualSales[idx.get(k)] += n(inv.subtotal); actualSalesCount[idx.get(k)]++; }
   }
@@ -135,7 +134,8 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     recurring: Array(12).fill(0), countA: Array(12).fill(0), countA2: Array(12).fill(0),
     projectsByMonth: Array.from({ length: 12 }, () => []),
   };
-  for (const p of projects || []) {
+  // 定期売上の案件は、年度の月ごとに 1 件ずつに広げる（月額 − その月の分の請求済み額）
+  for (const p of forecastProjects(projects, invoices, { fromYm: from.slice(0, 7), toYm: to.slice(0, 7) })) {
     if (p.status !== "open") continue;
     const prob = p.deal_probability || "";
     const isA = prob === "A" || prob === "A（定期売上）";
@@ -144,7 +144,7 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     const k = monthKey(p.due_date || p.payment_due_date || p.registered_at);
     if (!idx.has(k)) continue;
     const i = idx.get(k);
-    const invoiced = invoicedByProject.get(p.id) || 0;
+    const invoiced = p._invoiced.subtotal;
     const remaining = Math.max(0, n(p.expected_revenue) - invoiced);
     if (remaining <= 0) continue;
     const ratio = n(p.expected_revenue) > 0 ? remaining / n(p.expected_revenue) : 1;
