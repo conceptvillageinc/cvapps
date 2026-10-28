@@ -38,6 +38,7 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
     setForm({
       markup_package: String(r.markup.package),
       markup_other: String(r.markup.other),
+      package_words: r.package_words.join("、"),
       out_design: String(r.outsourcing.design),
       out_build: String(r.outsourcing.build),
       out_photo: String(r.outsourcing.photo),
@@ -62,6 +63,7 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
       const n = (v, fallback) => (Number(v) > 0 ? Number(v) : fallback);
       const payload = {
         markup: { package: n(form.markup_package, 1.3), other: n(form.markup_other, 1.35) },
+        package_words: String(form.package_words || "").split(/[、,，\s]+/).map((w) => w.trim()).filter(Boolean),
         outsourcing: { design: n(form.out_design, 0.6), build: n(form.out_build, 0.75), photo: n(form.out_photo, 0.6) },
         rounding: { outsourcing: n(form.round_out, 5000), concept: n(form.round_concept, 5000), proofreading: n(form.round_proof, 1000), direction: n(form.round_direction, 5000) },
         concept_fee: { rate: fromPct(n(form.concept_rate, 20)) },
@@ -106,7 +108,11 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
               <NumInput value={form.markup_other} onChange={(v) => set("markup_other", v)} />
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground">印刷物種別・価格マスタのカテゴリ名に「パッケージ」を含むものがパッケージ扱いです</p>
+          <div className="space-y-1.5 max-w-md">
+            <Label className="text-xs">パッケージの掛け率にする言葉（「、」区切り）</Label>
+            <Input value={form.package_words} onChange={(e) => set("package_words", e.target.value)} placeholder="パッケージ、ラベル、シール" className="h-9" />
+          </div>
+          <p className="text-[10px] text-muted-foreground">印刷物種別・価格マスタのカテゴリ名や、PDF から読み取った明細名にこの言葉が入っていればパッケージの掛け率になります（例: 「箱」を足すと箱印刷もパッケージ扱い）</p>
         </section>
 
         <section className="space-y-2">

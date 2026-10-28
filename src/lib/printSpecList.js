@@ -33,13 +33,17 @@ export function missingFields(it) {
   return SPEC_FIELDS.filter((f) => f.required && (f.numeric ? !(num(it[f.key]) > 0) : !str(it[f.key]))).map((f) => f.key);
 }
 
-/** 印刷物種別 → 掛け率（値付けルール。名前に「パッケージ」が入れば package） */
+/** 印刷物種別 → 掛け率（値付けルール。名前に「パッケージ」などが入れば package） */
+//   サーバー（スプレッドシート書き出し）でも使うので pricing.js は読み込まず、同じ決め方をここに書く
 export function markupForType(rules, printType) {
   const m = rules?.markup || { package: 1.3, other: 1.35 };
-  return String(printType || "").includes("パッケージ") ? Number(m.package) || 1.3 : Number(m.other) || 1.35;
+  return isPackageType(printType, rules) ? Number(m.package) || 1.3 : Number(m.other) || 1.35;
 }
-/** 原価計算表のどの見出しの下に書くか */
-export const isPackageType = (printType) => String(printType || "").includes("パッケージ");
+/** 原価計算表のどの見出しの下に書くか（パッケージの掛け率になる種別か） */
+export const isPackageType = (printType, rules) => {
+  const words = rules?.package_words?.length ? rules.package_words : ["パッケージ", "ラベル", "シール"];
+  return words.some((w) => w && String(printType || "").includes(w));
+};
 
 /** 浮動小数点の誤差を除いて切り上げ（12000 × 1.35 が 16201 にならないように） */
 const ceilClean = (v) => Math.ceil(Number(Number(v).toFixed(6)));
