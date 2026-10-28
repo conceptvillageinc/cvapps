@@ -79,6 +79,7 @@ function withLineIds(items) {
 /**
  * 請求書の作成・編集・表示。
  *   /invoices/new?delivery=ID  納品書から作る（同じクライアントの未請求の納品書をまとめられる）
+ *   /invoices/new?delivery=ID1,ID2,...  納品書一覧で選んだ複数の納品書をまとめて作る（納品日の順に並べる）
  *   /invoices/new?project=ID   案件から作る
  *   /invoices/:id              編集
  */
@@ -104,15 +105,21 @@ export default function InvoiceEdit() {
     queryFn: () => db.entities.Invoice.get(id),
     enabled: !isNew,
   });
-  const sourceDeliveryId = searchParams.get("delivery");
+  const sourceDeliveryIds = useMemo(() => [...new Set((searchParams.get("delivery") || "").split(",").map((x) => x.trim()).filter(Boolean))], [searchParams]);
+  const sourceDeliveryId = sourceDeliveryIds.join(",") || null;
   const sourceProjectId = searchParams.get("project");
   // 納品書は開くたびに読み直してから写す（直したばかりの明細・請求済みの状態を写すため）
-  const { data: sourceDelivery, isFetchedAfterMount: sourceDeliveryFresh } = useQuery({
-    queryKey: ["deliveryNote", sourceDeliveryId],
-    queryFn: () => db.entities.DeliveryNote.get(sourceDeliveryId),
+  const { data: sourceDeliveries, isFetchedAfterMount: sourceDeliveryFresh } = useQuery({
+    queryKey: ["deliveryNotesForInvoice", sourceDeliveryId], // 納品書の画面の ["deliveryNote", id]（1 件）とは別のキーにする
+    queryFn: async () => {
+      const list = await Promise.all(sourceDeliveryIds.map((x) => db.entities.DeliveryNote.get(x)));
+      // 請求済みのものは写さない（一覧で選んでから別の画面で請求された場合）。納品日の順に並べる
+      return list.filter((dn) => dn && !dn.invoice_id).sort((a, b) => String(a.delivery_date || "").localeCompare(String(b.delivery_date || "")));
+    },
     enabled: isNew && !!sourceDeliveryId,
     staleTime: 0,
   });
+  const sourceDelivery = sourceDeliveries?.[0] || null;
   const projectId = form?.project_id || sourceProjectId || sourceDelivery?.project_id || null;
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -155,7 +162,7 @@ export default function InvoiceEdit() {
       if (existing) setForm({ ...emptyForm(user), ...existing, line_items: withLineIds(existing.line_items) });
       return;
     }
-    if (sourceDeliveryId && (!sourceDelivery || !sourceDeliveryFresh)) return;
+    if (sourceDeliveryId && (!sourceDeliveries || !sourceDeliveryFresh)) return;
     if (sourceProjectId && !project) return;
     const base = emptyForm(user);
     if (sourceDelivery) {
@@ -167,7 +174,7 @@ export default function InvoiceEdit() {
         client_postal_code: sourceDelivery.client_postal_code || "",
         client_address: sourceDelivery.client_address || "",
         title: sourceDelivery.title || "",
-        line_items: itemsFromDeliveryNote(sourceDelivery),
+        line_items: sourceDeliveries.filter((dn) => dn.client_name === sourceDelivery.client_name).flatMap(itemsFromDeliveryNote),
         person_in_charge: sourceDelivery.person_in_charge || base.person_in_charge,
       });
     } else if (project) {
@@ -176,7 +183,7 @@ export default function InvoiceEdit() {
     base.notes = company.invoice_notes || "";
     setForm(base);
      
-  }, [isNew, existing, sourceDelivery, sourceDeliveryFresh, project, sourceDeliveryId, sourceProjectId, company.invoice_notes]);
+  }, [isNew, existing, sourceDeliveries, sourceDeliveryFresh, project, sourceDeliveryId, sourceProjectId, company.invoice_notes]);
 
   // クライアントマスタから住所・送付方法を補う
   useEffect(() => {
@@ -505,6 +512,8 @@ export default function InvoiceEdit() {
                       <span className="font-mono text-muted-foreground">{dn.delivery_number}</span>
                       <span className="text-muted-foreground">{dn.delivery_date}</span>
                       <span className="flex-1 truncate">{dn.title || "（件名なし）"}</span>
+                      {dn.recurring_template_id && <Badge className="text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50">定期</Badge>}
+                      {dn.status === "draft" && <Badge variant="outline" className="text-[9px] font-normal text-muted-foreground">下書き</Badge>}
                       {dn.project_id && projectId && dn.project_id !== projectId && <Badge variant="outline" className="text-[9px] font-normal">別案件</Badge>}
                       <span className="tabular-nums">{yen(dn.total)}</span>
                     </label>

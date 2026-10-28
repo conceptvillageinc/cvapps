@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Loader2, Truck, ArrowRight, Plus, Trash2 } from "lucide-react";
+import { Search, Loader2, Truck, ArrowRight, Plus, Trash2, Receipt, AlertTriangle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
@@ -45,6 +45,22 @@ export default function DeliveryNoteList() {
   }, [notes, search, filter]);
 
   const total = filtered.reduce((s, n) => s + Number(n.total || 0), 0);
+
+  // 選んだ納品書から請求書を作る（同じクライアントの未請求分だけ。1 枚の請求書にまとめる）
+  const pickedNotes = notes.filter((n) => picked.has(n.id));
+  const pickedClients = [...new Set(pickedNotes.map((n) => (n.client_name || "").trim()))];
+  const pickedInvoiced = pickedNotes.filter((n) => n.invoice_id);
+  const invoiceBlock = pickedInvoiced.length > 0
+    ? `請求済の納品書が ${pickedInvoiced.length} 件入っています（外すと作れます）`
+    : pickedClients.length > 1 ? `クライアントが違う納品書が入っています（${pickedClients.slice(0, 3).join("・")}${pickedClients.length > 3 ? " ほか" : ""}）` : "";
+  const sameClientRest = !invoiceBlock && pickedClients.length === 1
+    ? notes.filter((n) => !n.invoice_id && (n.client_name || "").trim() === pickedClients[0] && !picked.has(n.id))
+    : [];
+  const pickedTotal = pickedNotes.reduce((s, n) => s + Number(n.total || 0), 0);
+  const invoicePicked = () => {
+    const ids = [...pickedNotes].sort((a, b) => String(a.delivery_date || "").localeCompare(String(b.delivery_date || ""))).map((n) => n.id);
+    navigate(`/invoices/new?delivery=${ids.join(",")}`);
+  };
 
   const togglePick = (id) => setPicked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const deletePicked = async () => {
@@ -107,6 +123,23 @@ export default function DeliveryNoteList() {
         </div>
       </div>
 
+      {picked.size > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="picked-bar">
+          <span>選択中 <strong>{picked.size} 件</strong>　合計 {yen(pickedTotal)}（税込）{pickedClients.length === 1 && <>　<span className="font-medium">{pickedClients[0]}</span></>}</span>
+          {invoiceBlock && <span className="inline-flex items-center gap-1 text-amber-800"><AlertTriangle className="w-3.5 h-3.5" /> {invoiceBlock}</span>}
+          <span className="flex-1" />
+          {sameClientRest.length > 0 && (
+            <Button size="sm" variant="outline" className="h-8 text-xs bg-white" onClick={() => setPicked((prev) => new Set([...prev, ...sameClientRest.map((n) => n.id)]))}>
+              同じクライアントの未請求 {sameClientRest.length} 件も選ぶ
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setPicked(new Set())}>選択を外す</Button>
+          <Button size="sm" className="h-8 gap-1.5 text-xs" disabled={!!invoiceBlock} onClick={invoicePicked} title={invoiceBlock || "選んだ納品書を 1 枚の請求書にまとめます（納品日の順に並びます）"}>
+            <Receipt className="w-3.5 h-3.5" /> 選択した {picked.size} 件で請求書を作る
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -140,7 +173,7 @@ export default function DeliveryNoteList() {
                   {filtered.map((n) => {
                     const st = DELIVERY_STATUS_MAP[n.status] || DELIVERY_STATUS_MAP.draft;
                     return (
-                      <TableRow key={n.id} className={`group cursor-pointer hover:bg-muted/40 ${picked.has(n.id) ? "bg-red-50/60" : ""}`} onClick={() => navigate(`/delivery-notes/${n.id}`)}>
+                      <TableRow key={n.id} className={`group cursor-pointer hover:bg-muted/40 ${picked.has(n.id) ? "bg-sky-50/70" : ""}`} onClick={() => navigate(`/delivery-notes/${n.id}`)}>
                         <TableCell className="w-8 px-2" onClick={(e) => e.stopPropagation()}>
                           <Checkbox aria-label="選択" checked={picked.has(n.id)} onCheckedChange={() => togglePick(n.id)} />
                         </TableCell>
@@ -149,7 +182,12 @@ export default function DeliveryNoteList() {
                             case "delivery_number": return <TableCell key={k} className="text-xs font-mono text-muted-foreground whitespace-nowrap">{n.delivery_number}</TableCell>;
                             case "delivery_date": return <TableCell key={k} className="text-xs whitespace-nowrap">{n.delivery_date}</TableCell>;
                             case "client_name": return <TableCell key={k} className="text-sm font-medium max-w-[220px] truncate">{n.client_name}</TableCell>;
-                            case "title": return <TableCell key={k} className="text-sm max-w-[300px] truncate">{n.title || "—"}</TableCell>;
+                            case "title": return (
+                              <TableCell key={k} className="text-sm max-w-[300px] truncate">
+                                {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50" title="定期売上のひな形から毎月作られた納品書">定期</Badge>}
+                                {n.title || "—"}
+                              </TableCell>
+                            );
                             case "total": return <TableCell key={k} className="text-right text-sm tabular-nums">{yen(n.total)}</TableCell>;
                             case "status": return <TableCell key={k}><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>;
                             case "invoice": return (

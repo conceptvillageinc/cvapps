@@ -100,6 +100,7 @@ const WRITABLE_COLUMNS = {
     'client_id', 'client_name', 'name', 'deal_probability', 'phase',
     'expected_revenue', 'expected_cost', 'other_cost',
     'start_month', 'end_month', 'is_active', 'notes', 'created_by',
+    'auto_delivery_note', 'line_items',
   ],
   projects: [
     'project_number', 'client_id', 'client_name', 'name', 'deal_probability', 'phase',

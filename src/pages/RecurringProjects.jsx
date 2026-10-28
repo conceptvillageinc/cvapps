@@ -14,12 +14,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Plus, Pencil, Repeat, Loader2, ChevronsUpDown, Check, PlayCircle } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Repeat, Loader2, ChevronsUpDown, Check, PlayCircle, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { generateRecurringProjects } from "@/lib/projectNumber";
 import { todayString } from "@/lib/fiscal";
+import { lineAmount } from "@/lib/constants";
+import { useSalesCategories, classifySalesCategory } from "@/lib/salesCategory";
 
 const yen = (n) => `¥${Math.round(Number(n || 0)).toLocaleString()}`;
 const toNumber = (v) => {
@@ -43,7 +45,52 @@ const emptyForm = () => ({
   end_month: "",
   is_active: true,
   notes: "",
+  auto_delivery_note: false,
+  line_items: [],
 });
+
+// 毎月の納品書の明細（品名の {年月} は「2026年10月分」に置き換わる）
+const newTplLine = (patch = {}) => ({ key: `tl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: "", quantity: 1, unit: "式", unit_price: "", tax_rate: 10, sales_category: "", ...patch });
+const tplLinesTotal = (lines) => (lines || []).reduce((s, l) => s + lineAmount(toNumber(l.quantity) || 0, toNumber(l.unit_price)), 0);
+const sampleMonthLabel = (m) => { const d = m || todayString().slice(0, 7); return `${d.slice(0, 4)}年${Number(d.slice(5, 7))}月分`; };
+
+/** 毎月の納品書の明細を編集する表 */
+function TemplateLines({ lines, onChange, monthHint }) {
+  const { active: categories } = useSalesCategories();
+  const setLine = (key, patch) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  return (
+    <div className="space-y-1.5" data-testid="tpl-lines">
+      <div className="grid grid-cols-[minmax(13rem,1fr)_3.5rem_3.5rem_5.5rem_4.25rem_8rem_1.75rem] gap-1 text-[10px] text-muted-foreground px-0.5">
+        <span>品名</span><span className="text-right">数量</span><span>単位</span><span className="text-right">単価（税抜）</span><span>税率</span><span>売上カテゴリー</span><span />
+      </div>
+      {lines.map((l) => {
+        const auto = classifySalesCategory({ name: l.name });
+        return (
+          <div key={l.key} className="grid grid-cols-[minmax(13rem,1fr)_3.5rem_3.5rem_5.5rem_4.25rem_8rem_1.75rem] gap-1 items-center">
+            <Input value={l.name} onChange={(e) => setLine(l.key, { name: e.target.value })} placeholder="例: SNS運用サポート {年月}" className="h-8 text-xs" aria-label="品名" />
+            <Input inputMode="decimal" value={l.quantity} onChange={(e) => setLine(l.key, { quantity: e.target.value })} className="h-8 text-xs text-right tabular-nums" aria-label="数量" />
+            <Input value={l.unit} onChange={(e) => setLine(l.key, { unit: e.target.value })} className="h-8 text-xs" aria-label="単位" />
+            <Input inputMode="decimal" value={l.unit_price} onChange={(e) => setLine(l.key, { unit_price: e.target.value })} placeholder="0" className="h-8 text-xs text-right tabular-nums" aria-label="単価" />
+            <select value={l.tax_rate} onChange={(e) => setLine(l.key, { tax_rate: Number(e.target.value) })} className="h-8 rounded-md border bg-background px-1.5 text-xs" aria-label="税率">
+              <option value={10}>10%</option>
+              <option value={8}>8%※</option>
+            </select>
+            <select value={l.sales_category || ""} onChange={(e) => setLine(l.key, { sales_category: e.target.value })} className="h-8 rounded-md border bg-background px-1.5 text-xs truncate" aria-label="売上カテゴリー">
+              <option value="">自動（{categories.find((c) => c.key === auto)?.short || "—"}）</option>
+              {categories.map((c) => <option key={c.key} value={c.key}>{c.short}</option>)}
+            </select>
+            <button type="button" className="grid place-items-center h-8 w-7 text-muted-foreground hover:text-destructive" onClick={() => onChange(lines.filter((x) => x.key !== l.key))} aria-label="この行を消す"><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
+        );
+      })}
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <Button type="button" size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => onChange([...lines, newTplLine()])}><Plus className="w-3 h-3" /> 行を追加</Button>
+        <span className="text-xs text-muted-foreground">合計（税抜） <strong className="text-foreground tabular-nums">{yen(tplLinesTotal(lines))}</strong></span>
+      </div>
+      <p className="text-[10px] text-muted-foreground">品名に <code className="rounded bg-muted px-1">{"{年月}"}</code> と書くと「{sampleMonthLabel(monthHint)}」のように、その月に置き換わります</p>
+    </div>
+  );
+}
 
 function TemplateDialog({ open, onOpenChange, template, clients }) {
   const queryClient = useQueryClient();
@@ -61,6 +108,8 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
         start_month: toMonthInput(template.start_month),
         end_month: toMonthInput(template.end_month),
         is_active: !!template.is_active,
+        auto_delivery_note: !!template.auto_delivery_note,
+        line_items: (template.line_items || []).map((l) => newTplLine({ ...l, unit_price: l.unit_price ?? "", sales_category: l.sales_category || "" })),
       });
     } else {
       setForm(emptyForm());
@@ -87,6 +136,10 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
         end_month: fromMonthInput(form.end_month),
         is_active: !!form.is_active,
         notes: form.notes || null,
+        auto_delivery_note: !!form.auto_delivery_note,
+        line_items: form.line_items
+          .filter((l) => l.name.trim())
+          .map((l) => ({ name: l.name.trim(), quantity: toNumber(l.quantity) || 1, unit: (l.unit || "").trim() || "式", unit_price: toNumber(l.unit_price), tax_rate: Number(l.tax_rate) === 8 ? 8 : 10, sales_category: l.sales_category || null })),
       };
       if (template) return db.entities.RecurringProjectTemplate.update(template.id, payload);
       if (!client && payload.client_name) {
@@ -112,11 +165,11 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{template ? "ひな形を編集" : "定期売上のひな形を登録"}</DialogTitle>
           <DialogDescription className="text-xs">
-            毎月1日に、この内容で案件が1件作られます。案件名には「（2026年10月分）」のように月が自動で付きます。
+            毎月1日に、この内容で案件が1件作られます。案件名には「（2026年10月分）」のように月が自動で付きます。明細を入れておくと、納品書の下書きも毎月作れます。
           </DialogDescription>
         </DialogHeader>
 
@@ -214,6 +267,28 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
             </div>
           </div>
 
+          <div className={`rounded-lg border p-3 space-y-2.5 ${form.auto_delivery_note ? "border-teal-300 bg-teal-50/40" : ""}`}>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={form.auto_delivery_note} data-testid="auto-dn"
+                onChange={(e) => setForm((f) => ({ ...f, auto_delivery_note: e.target.checked, line_items: e.target.checked && f.line_items.length === 0 ? [newTplLine({ name: f.name ? `${f.name} {年月}` : "", unit_price: f.expected_revenue || "" })] : f.line_items }))} />
+              <span>
+                <span className="font-semibold flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> 毎月の納品書（下書き）も作る</span>
+                <span className="block text-[11px] text-muted-foreground mt-0.5">案件といっしょに、この明細で納品書の下書きを作ります（納品日はその月の末日）。月末に、同じクライアントのほかの納品書と 1 枚の請求書にまとめられます</span>
+              </span>
+            </label>
+            {form.auto_delivery_note && (
+              <>
+                <TemplateLines lines={form.line_items} onChange={(v) => set("line_items", v)} monthHint={form.start_month} />
+                {tplLinesTotal(form.line_items) !== toNumber(form.expected_revenue) && tplLinesTotal(form.line_items) > 0 && (
+                  <p className="flex items-center gap-2 text-[11px] text-amber-800">
+                    明細の合計と受注見込（{yen(toNumber(form.expected_revenue))}）が違います
+                    <button type="button" className="font-semibold text-primary hover:underline" onClick={() => set("expected_revenue", String(tplLinesTotal(form.line_items)))}>受注見込を明細の合計にする</button>
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <Label className="text-xs">社内メモ（生成される案件にも入ります）</Label>
             <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} />
@@ -266,7 +341,9 @@ export default function RecurringProjects() {
     mutationFn: () => generateRecurringProjects(`${month}-01`),
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast.success(count > 0 ? `${monthLabel(month + "-01")}分の案件を${count}件作成しました` : `${monthLabel(month + "-01")}分は作成済みです（新しく作った案件はありません）`);
+      queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
+      const withNotes = templates.some((t) => t.is_active && t.auto_delivery_note && (t.line_items || []).length > 0);
+      toast.success(count > 0 ? `${monthLabel(month + "-01")}分の案件を${count}件作成しました${withNotes ? "（納品書の下書きも作りました）" : ""}` : `${monthLabel(month + "-01")}分の案件は作成済みです${withNotes ? "（足りない納品書の下書きがあれば作りました）" : "（新しく作った案件はありません）"}`);
     },
     onError: (err) => toast.error(err?.message || "生成に失敗しました"),
   });
@@ -343,6 +420,7 @@ export default function RecurringProjects() {
                       <TableCell className="text-sm font-medium">{t.client_name}</TableCell>
                       <TableCell className="text-sm">
                         {t.name}
+                        {t.auto_delivery_note && (t.line_items || []).length > 0 && <Badge className="ml-1.5 text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50" title={(t.line_items || []).map((l) => l.name).join(" / ")}><Truck className="w-2.5 h-2.5 mr-0.5" />納品書も作る（{t.line_items.length}行）</Badge>}
                         {t.notes && <div className="text-[10px] text-muted-foreground truncate max-w-[280px]">{t.notes}</div>}
                       </TableCell>
                       <TableCell className="text-right text-sm tabular-nums">{yen(t.expected_revenue)}</TableCell>
