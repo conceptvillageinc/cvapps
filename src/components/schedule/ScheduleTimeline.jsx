@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Check, X, GripVertical } from "lucide-react"
 import { useRowReorder } from "./useRowReorder";
 import PartyPicker from "./PartyPicker";
 import EditableCell from "./EditableCell";
-import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, weekStart, dekadStart, dekadEnd, dekadOf, DEKAD_LABELS, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
+import { partyInitial, addDays, dayInfo, daysBetween, diffDays, taskRange, partyOf, partyText, categoryColors, scheduleBounds, wouldCycle, weekStart, dekadStart, dekadEnd, dekadOf, DEKAD_LABELS, md, jpDate, parseYmd, WEEKDAYS } from "@/lib/schedule";
 
 const mdw = (s) => `${md(s)}（${WEEKDAYS[parseYmd(s).getDay()]}）`;
 
@@ -57,6 +57,7 @@ export function PartyAvatars({ task, parties, memberName = () => "", memberAvata
  *   onReorder があれば、行の左端（⋮⋮）をつかんで上下にドラッグすると並びが変わる（別のカテゴリーに入れるとカテゴリーも移る）。
  *   onCreate があれば、空いているところを横にドラッグすると、その期間の工程をその行のあとに足す。
  *   日付がまだ無い工程（「工程を追加」で足した直後）の行では、ドラッグ（またはクリック）でその工程の期間を引く。
+ *   editable なら、棒の右端に出る ⊕ をつかんで、あとに続く工程の行で離すと「前の工程」としてつながる。矢印を押すと外せる。
  * @param {object} p
  * @param {object[]} p.tasks
  * @param {object[]} p.parties     担当の区分 [{ key, label, color }]
@@ -156,6 +157,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
   const gridRef = useRef(null);
   const [draw, setDraw] = useState(null); // { y, i0, i1, moved }
   const startDraw = (e) => {
+    if (edgeSel) setEdgeSel(null);
     if (!editable || e.button > 0 || !gridRef.current) return;
     const box = gridRef.current.getBoundingClientRect();
     const y = e.clientY - box.top;
@@ -181,6 +183,60 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
       onCreate({ category, afterId, start: days[a].date, end: days[b].date });
     };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+
+  // 工程どうしをつなぐ（棒の右端の ⊕ をドラッグ）・矢印を押して外す
+  const canLink = editable && !!onChange;
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  const [hoverId, setHoverId] = useState(null);
+  const [link, setLink] = useState(null); // { fromId, x1, y1, cx, cy, overId, ok, reason }
+  const [edgeSel, setEdgeSel] = useState(null); // { pid, tid, x, y }
+  const [edgeHover, setEdgeHover] = useState(null);
+  const rowAtY = (y) => rows.list.find((r) => r.type === "task" && y >= r.y && y < r.y + r.h) || null;
+  const endPoint = (t, row) => {
+    const r = rangeOf(t);
+    if (!r) return null;
+    return { x: t.is_milestone ? idx(r.start) * colW + colW / 2 + 9 : (idx(r.end) + 1) * colW - 2, y: row.y + ROW_H / 2 };
+  };
+  const onGridHover = (e) => {
+    if (!canLink || link || drag || !gridRef.current) return;
+    const row = rowAtY(e.clientY - gridRef.current.getBoundingClientRect().top);
+    const id = row && rangeOf(row.t) ? row.t.id : null;
+    if (id !== hoverId) setHoverId(id);
+  };
+  const startLink = (e, t, row) => {
+    e.preventDefault(); e.stopPropagation();
+    const p = endPoint(t, row);
+    if (!p || !gridRef.current) return;
+    let cur = { fromId: t.id, x1: p.x, y1: p.y, cx: p.x, cy: p.y, overId: null, ok: false, reason: "" };
+    setLink(cur); setEdgeSel(null);
+    document.body.style.cursor = "crosshair";
+    const move = (ev) => {
+      const box = gridRef.current.getBoundingClientRect();
+      const cx = ev.clientX - box.left; const cy = ev.clientY - box.top;
+      const over = rowAtY(cy);
+      const target = over && over.t.id !== t.id ? over.t : null;
+      let ok = !!target; let reason = "";
+      if (target && (target.depends_on || []).includes(t.id)) { ok = false; reason = "もうつながっています"; }
+      else if (target && wouldCycle(tasks, target.id, t.id)) { ok = false; reason = "この順ではつなげません（輪になります）"; }
+      cur = { ...cur, cx, cy, overId: target?.id || null, ok, reason };
+      setLink(cur);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+      const fin = cur; setLink(null);
+      if (fin.overId && fin.ok) {
+        const target = taskById.get(fin.overId);
+        onChange(fin.overId, { depends_on: [...(target?.depends_on || []), fin.fromId] });
+      }
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+  const removeEdge = (pid, tid) => {
+    const target = taskById.get(tid);
+    onChange(tid, { depends_on: (target?.depends_on || []).filter((x) => x !== pid) });
+    setEdgeSel(null);
   };
 
   // 月の見出し／週の見出し
@@ -339,7 +395,7 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
             ))}
           </div>
 
-          <div ref={gridRef} onPointerDown={startDraw} className={`relative ${editable && onCreate ? "cursor-cell" : ""}`} style={{ width: gridW, height: rows.height }} data-testid="timeline-grid">
+          <div ref={gridRef} onPointerDown={startDraw} onPointerMove={onGridHover} onPointerLeave={() => setHoverId(null)} className={`relative ${editable && onCreate ? "cursor-cell" : ""}`} style={{ width: gridW, height: rows.height }} data-testid="timeline-grid">
             {/* 休みの日の網掛け・月の区切り */}
             {days.map((d, i) => d.off && <div key={d.date} className="absolute top-0 bottom-0 bg-slate-50" style={{ left: i * colW, width: colW }} />)}
             {scale === "day" && days.map((d, i) => d.day === 1 && i > 0 && <div key={`m${d.date}`} className="absolute top-0 bottom-0 border-l border-slate-200" style={{ left: i * colW }} />)}
@@ -414,6 +470,27 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                     ? `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 3},${y2}`
                     : `M${x1},${y1} h8 v${(y2 - y1) / 2} H${x2 - 10} V${y2} H${x2 - 3}`;
                   line(`${e.pid}-${e.tid}`, d, true);
+                }
+                // 押して外せるように、矢印ごとに太い透明の線を重ねる（マウスを乗せると青く）
+                if (canLink) for (const e of edges) {
+                  const { x1, y1, x2, y2 } = e;
+                  const bend = Math.max(14, Math.min(40, Math.abs(x2 - x1) / 2));
+                  const d = x2 >= x1 + 12
+                    ? `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 3},${y2}`
+                    : `M${x1},${y1} h8 v${(y2 - y1) / 2} H${x2 - 10} V${y2} H${x2 - 3}`;
+                  const k = `${e.pid}>${e.tid}`;
+                  const on = edgeHover === k || (edgeSel && `${edgeSel.pid}>${edgeSel.tid}` === k);
+                  if (on) out.push(<path key={`hl${k}`} d={d} fill="none" stroke="#2563eb" strokeWidth="2.2" />);
+                  out.push(<path key={`hit${k}`} d={d} fill="none" stroke="transparent" strokeWidth="12" style={{ pointerEvents: "stroke", cursor: "pointer" }} data-testid="edge-hit"
+                    onPointerEnter={() => setEdgeHover(k)} onPointerLeave={() => setEdgeHover((h) => (h === k ? null : h))}
+                    onPointerDown={(ev) => ev.stopPropagation()}
+                    onClick={(ev) => { const box = gridRef.current.getBoundingClientRect(); setEdgeSel({ pid: e.pid, tid: e.tid, x: ev.clientX - box.left, y: ev.clientY - box.top }); }}>
+                    <title>押すと、このつながりを外せます</title>
+                  </path>);
+                }
+                // つなぐドラッグ中の線
+                if (link) {
+                  out.push(<path key="linking" d={`M${link.x1},${link.y1} C${link.x1 + 30},${link.y1} ${link.cx - 30},${link.cy} ${link.cx},${link.cy}`} fill="none" stroke={link.overId && !link.ok ? "#ef4444" : "#2563eb"} strokeWidth="2" strokeDasharray="5 4" />);
                 }
                 return out;
               })()}
@@ -520,6 +597,43 @@ export default function ScheduleTimeline({ tasks, parties, keyDates = [], holida
                 {outside}
               </>);
             })}
+            {/* つなぐ ⊕（マウスを乗せた工程の棒の右端） */}
+            {canLink && !link && hoverId && (() => {
+              const row = rowOf.get(hoverId); const t = taskById.get(hoverId);
+              const p = row && t ? endPoint(t, row) : null;
+              if (!p) return null;
+              return (
+                <button type="button" onPointerDown={(e) => startLink(e, t, row)} title="ドラッグして、あとに続く工程の行で離すとつながります"
+                  className="absolute z-[13] flex h-[18px] w-[18px] -translate-y-1/2 cursor-crosshair items-center justify-center rounded-full bg-blue-600 text-[13px] font-bold leading-none text-white shadow ring-2 ring-white hover:scale-110"
+                  style={{ left: p.x + 6, top: p.y }} data-testid="link-handle">+</button>
+              );
+            })()}
+            {link && (() => {
+              const over = link.overId ? rowOf.get(link.overId) : null;
+              const target = link.overId ? taskById.get(link.overId) : null;
+              const from = taskById.get(link.fromId);
+              return (
+                <>
+                  {over && <div className={`pointer-events-none absolute left-0 right-0 z-[7] ${link.ok ? "bg-blue-100/60 ring-1 ring-inset ring-blue-300" : "bg-red-50/70 ring-1 ring-inset ring-red-200"}`} style={{ top: over.y, height: ROW_H }} />}
+                  <div className={`pointer-events-none absolute z-[14] whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold shadow ${link.overId && !link.ok ? "bg-red-600 text-white" : "bg-blue-600 text-white"}`} style={{ left: link.cx + 12, top: link.cy + 10 }} data-testid="link-tip">
+                    {target ? (link.ok ? `「${from?.name}」→「${target.name}」をつなぐ` : link.reason) : "つなげたい工程の行で離す"}
+                  </div>
+                </>
+              );
+            })()}
+            {edgeSel && (() => {
+              const a = taskById.get(edgeSel.pid); const b = taskById.get(edgeSel.tid);
+              return (
+                <div className="absolute z-[15] w-64 rounded-lg border bg-white p-2.5 text-xs shadow-lg" style={{ left: Math.min(edgeSel.x + 8, gridW - 270), top: edgeSel.y + 8 }} onPointerDown={(e) => e.stopPropagation()} data-testid="edge-popover">
+                  <p className="break-words leading-snug"><span className="text-muted-foreground">つながり：</span>「{a?.name}」→「{b?.name}」</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">外すと、前の工程が延びても後ろの工程はずれなくなります（日付はそのまま）</p>
+                  <div className="mt-2 flex justify-end gap-1.5">
+                    <button type="button" className="h-7 rounded-md border px-2.5 hover:bg-slate-50" onClick={() => setEdgeSel(null)}>閉じる</button>
+                    <button type="button" className="h-7 rounded-md bg-red-600 px-2.5 font-semibold text-white hover:bg-red-700" onClick={() => removeEdge(edgeSel.pid, edgeSel.tid)} data-testid="edge-remove">つながりを外す</button>
+                  </div>
+                </div>
+              );
+            })()}
             {/* ドラッグで足す工程の下書き */}
             {draw?.moved && (() => {
               const a = Math.min(draw.i0, draw.i1); const b = Math.max(draw.i0, draw.i1);

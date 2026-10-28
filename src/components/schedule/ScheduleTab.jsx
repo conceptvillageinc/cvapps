@@ -250,6 +250,8 @@ export default function ScheduleTab({ project, fullPage = false, backTo = null }
                   <li>棒をドラッグで日付を移動（端をつかむと開始日・終了日だけ）</li>
                   <li>空いているところを横にドラッグで工程を足す</li>
                   <li>担当のアイコンを押すと担当を変えられます</li>
+                  <li>棒にマウスを乗せると右端に出る <b className="rounded-full bg-blue-600 px-1 text-white">+</b> をつかんで、あとに続く工程の行で離すとつながります（前の工程が延びると後ろもずれます）</li>
+                  <li>つながりの矢印を押すと外せます</li>
                 </>}
                 <li>行の左端 ⋮⋮ をつかんで上下に並べ替え（別のカテゴリーに入れるとカテゴリーも移ります）</li>
                 <li>工程名・タイトルはクリックで直せます</li>
