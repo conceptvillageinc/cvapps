@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Download, Search, Lightbulb,
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp, PackageCheck,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp, PackageCheck, Camera,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -25,7 +25,8 @@ import {
 import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
 import PrintOrderDialog from "@/components/printOrders/PrintOrderDialog";
-import { lineShots, shotsPatch, MAX_LINE_SHOTS } from "@/lib/lineShots";
+import { lineShots, shotsPatch, needsShot, MAX_LINE_SHOTS } from "@/lib/lineShots";
+import { captureUrlShot } from "@/lib/captureShot";
 import { isPrintLine, orderFromLine, fmtOrderDate } from "@/lib/printOrders";
 import { masterCellPrice, masterCellToItem, orderToItems, pastLineToItem } from "@/lib/lineSources";
 import { searchItems } from "@/lib/itemSearch";
@@ -194,6 +195,32 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 
   const addTextRow = () => {
     commitItems([...lineItems, { id: uid(), row_type: "text", text: "" }]);
+  };
+
+  // 入稿先 URL だけでスクショが無い明細を、まとめて撮る（リンク切れに備える）。撮っている間の編集を消さないよう、最新の明細に当てる
+  const itemsRef = useRef(lineItems);
+  itemsRef.current = lineItems;
+  const missingShots = lineItems.filter(needsShot);
+  const [shooting, setShooting] = useState(null); // { done, total }
+  const captureMissingShots = async () => {
+    const urls = [...new Set(missingShots.map((li) => String(li.source_url).trim()))];
+    if (urls.length === 0) return;
+    setShooting({ done: 0, total: urls.length });
+    let ok = 0;
+    const failed = [];
+    for (const u of urls) {
+      try {
+        const path = await captureUrlShot(u);
+        commitItems(itemsRef.current.map((li) => (needsShot(li) && String(li.source_url).trim() === u ? { ...li, ...shotsPatch([path]) } : li)));
+        ok++;
+      } catch (err) {
+        failed.push(err.message);
+      }
+      setShooting((cur) => cur && { ...cur, done: cur.done + 1 });
+    }
+    setShooting(null);
+    if (failed.length === 0) toast.success(`${ok} ページのスクショを撮って明細に付けました`);
+    else toast.error(`${failed.length} ページは撮れませんでした（${failed[0]}）。${ok ? `${ok} ページは付けました。` : ""}明細の「スクショを追加」から画像を入れることもできます`);
   };
 
   const updateItem = (id, patch) => {
@@ -573,6 +600,19 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                   <p className="text-[10px] text-amber-700">粗利率</p>
                   <p className="text-sm font-bold text-amber-800">{profitRate}%</p>
                 </div>
+              </div>
+            )}
+
+            {showInternal && (missingShots.length > 0 || shooting) && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="missing-shots">
+                <Camera className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1 min-w-[12rem]">
+                  {shooting ? <>ページのスクショを撮っています… {shooting.done}/{shooting.total}（1 ページ 5〜15 秒）</>
+                    : <>入稿先 URL だけでスクショが無い明細が <strong>{missingShots.length} 行</strong>あります。リンク切れに備えて、ページの画像を残せます。</>}
+                </span>
+                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs bg-white" onClick={captureMissingShots} disabled={!!shooting}>
+                  {shooting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />} まとめてスクショを撮る
+                </Button>
               </div>
             )}
 

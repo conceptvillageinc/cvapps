@@ -13,6 +13,8 @@ import { WEB_VENDORS, applyMarkup } from "@/lib/constants";
 import { usePrintTypes } from "@/lib/printTypes";
 import { usePricingRules, markupRateFor } from "@/lib/pricing";
 import { todayString } from "@/lib/fiscal";
+import { shotsPatch } from "@/lib/lineShots";
+import { captureUrlShot } from "@/lib/captureShot";
 
 // URL/スクショ取込用の抽出スキーマ（価格マスタ画面と同じ形）
 const GRID_EXTRACT_SCHEMA = {
@@ -118,6 +120,9 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
   const [screenshotPath, setScreenshotPath] = useState("");
   const [screenshotName, setScreenshotName] = useState("");
   const [readMethod, setReadMethod] = useState(null); // 'url' | 'file'
+  // URL から読むときは、同時にページのスクショも撮っておく（リンク切れに備えて、価格マスタと明細に残す）
+  const [pageShot, setPageShot] = useState(null); // { url, status: 'capturing' | 'done' | 'failed', path, error }
+  const pageShotRef = useRef(null); // { url, promise }
   const [optionsNote, setOptionsNote] = useState(""); // 加工・オプション代金を含めた小計で読んだときの内訳
   const [loading, setLoading] = useState(null); // 'url' | 'file' | 'save'
   const [error, setError] = useState(null);
@@ -190,8 +195,18 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
     toast.success(`価格表を${(data.price_grid || []).length}行読み取りました。明細に入れるマスを選んでください`);
   };
 
+  const startPageShot = (target) => {
+    if (pageShotRef.current?.url === target && pageShot?.status !== "failed") return;
+    setPageShot({ url: target, status: "capturing" });
+    const promise = captureUrlShot(target)
+      .then((path) => { if (pageShotRef.current?.url === target) setPageShot({ url: target, status: "done", path }); return path; })
+      .catch((err) => { if (pageShotRef.current?.url === target) setPageShot({ url: target, status: "failed", error: err.message }); return null; });
+    pageShotRef.current = { url: target, promise };
+  };
+
   const runUrl = async () => {
     setLoading("url"); setError(null);
+    startPageShot(url.trim());
     try {
       const res = await db.functions.invoke("fetchPriceFromUrl", { url: url.trim(), spec_summary: specSummary });
       if (res?.data?.error) setError(res.data.error);
@@ -247,6 +262,9 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
     if (picked.length === 0) { toast.error("明細に入れるマスを1つ以上選んでください"); return; }
     setLoading("save");
     try {
+      // ページのスクショがまだ撮影中なら待つ（撮れなくても登録は続ける）
+      const pagePath = pageShotRef.current?.url === url.trim() ? await pageShotRef.current.promise : null;
+      const shots = [screenshotPath, pagePath].filter(Boolean);
       // 選んだセルに selected を立てた価格表を作る（既存マスタの選択は残す）
       const newGrid = grid.map((row, r) => ({
         quantity: row.quantity,
@@ -266,7 +284,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
         last_updated: todayString(),
         source_url: url.trim(),
         price_tax_mode: effectiveTaxMode,
-        ...(screenshotPath ? { screenshot_url: screenshotPath } : {}),
+        ...(shots.length ? { screenshot_url: shots[0] } : {}),
       };
       const master = existing
         ? await db.entities.PriceMaster.update(existing.id, payload)
@@ -287,7 +305,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
         source_type: "price_master",
         source_ref: master.id,
         source_url: payload.source_url || null,
-        ...(screenshotPath ? { screenshot_path: screenshotPath } : {}),
+        ...(shots.length ? shotsPatch(shots) : {}),
       })));
       toast.success(existing ? "価格マスタを更新し、明細に追加しました" : "価格マスタに登録し、明細に追加しました");
       onClose();
@@ -471,12 +489,23 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
           </div>
 
           <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
-            {screenshotPath ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <Globe className="w-3.5 h-3.5 shrink-0" />}
+            {screenshotPath || pageShot ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <Globe className="w-3.5 h-3.5 shrink-0" />}
             <span>
-              {screenshotPath ? <>読み取り元のスクショ <span className="text-foreground font-medium">{screenshotName}</span> と URL を価格マスタに保存します。</> : <>URL を価格マスタに保存します。</>}
+              {screenshotPath ? <>読み取り元のスクショ <span className="text-foreground font-medium">{screenshotName}</span>{pageShot?.status === "done" ? "・ページのスクショ" : ""} と URL を価格マスタと明細に残します。</>
+                : pageShot?.status === "done" ? <>ページのスクショと URL を価格マスタと明細に残します（リンクが切れても画像で確かめられます）。</>
+                : pageShot?.status === "capturing" ? <>ページのスクショを撮っています…（そのまま登録して大丈夫です。撮り終わってから明細に入れます）</>
+                : <>URL を価格マスタと明細に残します。</>}
               　読み取り結果が違う場合は、登録後に「価格マスタ」画面で表を直せます。
             </span>
+            {pageShot?.status === "capturing" && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 ml-auto" data-testid="page-shot-capturing" />}
           </div>
+          {pageShot?.status === "failed" && !screenshotPath && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-900" data-testid="page-shot-failed">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span className="flex-1">ページのスクショを撮れませんでした（{pageShot.error}）。このまま登録すると URL だけが残ります。</span>
+              <button type="button" className="shrink-0 font-semibold text-primary hover:underline" onClick={() => startPageShot(url.trim())}>撮り直す</button>
+            </div>
+          )}
 
           {!sameUrl && similarMasters.length > 0 && (
               <div className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] space-y-1" data-testid="similar-master">
@@ -493,7 +522,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
               <span className="text-xs text-muted-foreground">選択中 <strong className="text-foreground">{pickedCells.length} パターン</strong>{pickedCells.length > 0 && <>　出し値 合計 ¥{pickedCells.reduce((s, c) => s + c.amount, 0).toLocaleString()}</>}</span>
               <Button onClick={save} disabled={!!loading || pickedCells.length === 0} className="gap-1.5">
                 {loading === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                価格マスタに{existing ? "更新" : "登録"}して明細に追加
+                {loading === "save" && pageShot?.status === "capturing" ? "スクショを待っています…" : <>価格マスタに{existing ? "更新" : "登録"}して明細に追加</>}
               </Button>
             </div>
           </div>

@@ -21,3 +21,8 @@ export function addShotPatch(li, path) {
   if (!path || cur.includes(path) || cur.length >= MAX_LINE_SHOTS) return shotsPatch(cur);
   return shotsPatch([...cur, path]);
 }
+
+/** 入稿先 URL があるのに、スクショが 1 枚も無い明細（リンク切れに備えて撮っておきたい行） */
+export function needsShot(li) {
+  return li?.row_type !== "text" && !!String(li?.source_url || "").trim() && lineShots(li).length === 0;
+}
