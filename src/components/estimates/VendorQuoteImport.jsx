@@ -9,8 +9,9 @@ import {
 import { Loader2, FileUp, AlertTriangle, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import NumericField from "@/components/estimates/NumericField";
-import { LINE_ITEM_CATEGORIES, applyMarkup } from "@/lib/constants";
+import { LINE_ITEM_CATEGORIES, applyMarkup, lineAmount } from "@/lib/constants";
 import { usePricingRules, markupForText } from "@/lib/pricing";
+import { MARKUP_KIND_LABELS } from "@/lib/markupKinds";
 import { extractVendorQuote, costPerUnit, lineName } from "@/lib/vendorQuote";
 
 // ============================================================================
@@ -65,7 +66,7 @@ export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }
   const withAutoMarkup = (row, vendorName) => {
     if (row.markupAuto === false) return row;
     const m = autoMarkup(row.name, vendorName);
-    return { ...row, markupRate: m.rate, markupWord: m.word, markupAuto: true };
+    return { ...row, markupRate: m.rate, markupWord: m.word, markupKind: m.kind, markupAuto: true };
   };
 
   const openDraft = (result) => {
@@ -141,7 +142,7 @@ export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }
         quantity,
         unit: "枚",
         unit_price: unitPrice,
-        amount: unitPrice * quantity,
+        amount: lineAmount(quantity, unitPrice),
         cost_price: cost,
         markup_rate: Number(row.markupRate) || 1,
         source_type: "vendor_quote",
@@ -230,7 +231,7 @@ export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }
               key={bulkKey}
               value=""
               onCommit={setAllMarkup}
-              placeholder={`例: ${rules.markup.package}`}
+              placeholder={`例: ${rules.markup.label}`}
               className="h-9 text-sm"
             />
             <Button type="button" size="sm" variant="ghost" className="h-9 px-2 text-xs shrink-0" onClick={resetAutoMarkup} title="明細の名前から掛け率を決め直します">名前から決め直す</Button>
@@ -238,7 +239,7 @@ export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }
         </div>
       </div>
       <p className="text-[11px] text-muted-foreground -mt-2" data-testid="markup-rule">
-        掛け率は行ごとに、明細の名前から自動で決めています。「{rules.package_words.join("・")}」が入っていればパッケージの掛け率 ×{rules.markup.package}、それ以外は ×{rules.markup.other}（システム設定の値付けルールで変えられます）。
+        掛け率は行ごとに、明細の名前から自動で決めています。「{rules.label_words.join("・")}」→ ×{rules.markup.label}、「{rules.package_words.join("・")}」→ ×{rules.markup.package}、それ以外 ×{rules.markup.other}（システム設定の値付けルールで変えられます）。
       </p>
 
       <div className="border rounded-lg overflow-x-auto">
@@ -284,7 +285,7 @@ export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }
                     aria-label={`${row.name || "この行"}の掛け率`}
                   />
                   <p className={`mt-0.5 text-right text-[10px] whitespace-nowrap ${row.markupAuto ? (row.markupWord ? "text-blue-700" : "text-muted-foreground") : "text-amber-700"}`} data-testid="markup-reason">
-                    {!row.markupAuto ? "手で変更" : row.markupWord ? `「${row.markupWord}」→ パッケージ` : "パッケージ以外"}
+                    {!row.markupAuto ? "手で変更" : row.markupWord ? `「${row.markupWord}」→ ${MARKUP_KIND_LABELS[row.markupKind]}` : "パッケージ以外"}
                   </p>
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">

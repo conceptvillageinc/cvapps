@@ -21,6 +21,7 @@ function NumInput({ value, onChange, step = "0.01", suffix, className = "" }) {
 // 0.07 ↔ "7" のように、%で編集する
 const toPct = (rate) => String(Math.round(Number(rate) * 1000) / 10);
 const fromPct = (pct) => Number(pct) / 100;
+const splitWords = (text) => String(text || "").split(/[、,，\s]+/).map((w) => w.trim()).filter(Boolean);
 
 /**
  * 値付けルール（「デザイン制作原価売価計算表」の%と単価）の編集。
@@ -37,7 +38,9 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
     const r = pricingRulesFromSettings(settings);
     setForm({
       markup_package: String(r.markup.package),
+      markup_label: String(r.markup.label),
       markup_other: String(r.markup.other),
+      label_words: r.label_words.join("、"),
       package_words: r.package_words.join("、"),
       out_design: String(r.outsourcing.design),
       out_build: String(r.outsourcing.build),
@@ -62,8 +65,9 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
     const t = setTimeout(() => {
       const n = (v, fallback) => (Number(v) > 0 ? Number(v) : fallback);
       const payload = {
-        markup: { package: n(form.markup_package, 1.3), other: n(form.markup_other, 1.35) },
-        package_words: String(form.package_words || "").split(/[、,，\s]+/).map((w) => w.trim()).filter(Boolean),
+        markup: { package: n(form.markup_package, 1.3), label: n(form.markup_label, 1.3), other: n(form.markup_other, 1.35) },
+        label_words: splitWords(form.label_words),
+        package_words: splitWords(form.package_words),
         outsourcing: { design: n(form.out_design, 0.6), build: n(form.out_build, 0.75), photo: n(form.out_photo, 0.6) },
         rounding: { outsourcing: n(form.round_out, 5000), concept: n(form.round_concept, 5000), proofreading: n(form.round_proof, 1000), direction: n(form.round_direction, 5000) },
         concept_fee: { rate: fromPct(n(form.concept_rate, 20)) },
@@ -98,7 +102,11 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
       <CardContent className="space-y-6">
         <section className="space-y-2">
           <p className="text-xs font-semibold">印刷費の掛け率（出し値 = 原価 × 掛け率）</p>
-          <div className="grid grid-cols-2 gap-4 max-w-md">
+          <div className="grid grid-cols-3 gap-4 max-w-2xl">
+            <div className="space-y-1.5">
+              <Label className="text-xs">ラベル・シール</Label>
+              <NumInput value={form.markup_label} onChange={(v) => set("markup_label", v)} />
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">パッケージ</Label>
               <NumInput value={form.markup_package} onChange={(v) => set("markup_package", v)} />
@@ -108,11 +116,17 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
               <NumInput value={form.markup_other} onChange={(v) => set("markup_other", v)} />
             </div>
           </div>
-          <div className="space-y-1.5 max-w-md">
-            <Label className="text-xs">パッケージの掛け率にする言葉（「、」区切り）</Label>
-            <Input value={form.package_words} onChange={(e) => set("package_words", e.target.value)} placeholder="パッケージ、ラベル、シール" className="h-9" />
+          <div className="grid grid-cols-2 gap-4 max-w-2xl">
+            <div className="space-y-1.5">
+              <Label className="text-xs">ラベル・シールの掛け率にする言葉（「、」区切り）</Label>
+              <Input value={form.label_words} onChange={(e) => set("label_words", e.target.value)} placeholder="ラベル、シール" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">パッケージの掛け率にする言葉（「、」区切り）</Label>
+              <Input value={form.package_words} onChange={(e) => set("package_words", e.target.value)} placeholder="パッケージ" className="h-9" />
+            </div>
           </div>
-          <p className="text-[10px] text-muted-foreground">印刷物種別・価格マスタのカテゴリ名や、PDF から読み取った明細名にこの言葉が入っていればパッケージの掛け率になります（例: 「箱」を足すと箱印刷もパッケージ扱い）</p>
+          <p className="text-[10px] text-muted-foreground">印刷物種別・価格マスタのカテゴリ名や、PDF から読み取った明細名にこの言葉が入っていれば、その掛け率になります（両方入っていればラベル・シールが先。例:「パッケージラベル印刷」→ ラベル・シール）。どれにも入っていなければパッケージ以外。掛けたあとの単価は小数第一位まで切り上げます</p>
         </section>
 
         <section className="space-y-2">

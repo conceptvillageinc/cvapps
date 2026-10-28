@@ -74,9 +74,12 @@ export const getMarkupRate = (printType) => {
 // 単純に Math.ceil(cost * rate) とすると、12000 × 1.35 が浮動小数点の誤差で
 // 16200.000000000002 になり、1円高い 16201 が出てしまう。
 // 掛け算の結果を一度まるめてから切り上げる。
-export const applyMarkup = (cost, rate) => {
+// 単価は小数第一位まで切り上げ（2.83 × 1.3 = 3.679 → 3.7。1 円単位にすると 4 円になり高すぎる）。
+// 旧方式の見積の合計（印刷費の総額）など、1 円単位にしたいときは wholeYen: true。
+export const applyMarkup = (cost, rate, { wholeYen = false } = {}) => {
   const raw = (Number(cost) || 0) * (Number(rate) || 1);
-  return Math.ceil(Number(raw.toFixed(6)));
+  const scale = wholeYen ? 1 : 10;
+  return Math.ceil(Number((raw * scale).toFixed(6))) / scale;
 };
 
 // 単価は小数第一位まで（印刷費の 3.2 円など）。金額（数量 × 単価）は 1 円未満を四捨五入する（マイナスの値引きも絶対値で四捨五入）

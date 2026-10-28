@@ -2,7 +2,7 @@
 // 探した候補（価格マスタのセル・入稿記録・過去見積の明細）を、見積の明細の行にする。
 //   見積書の画面（明細の上の検索バー・品名の「似た候補」）と、新規見積作成の「作るもの」で共通に使う。
 // ============================================================================
-import { LINE_ITEM_CATEGORIES, applyMarkup } from "@/lib/constants";
+import { LINE_ITEM_CATEGORIES, applyMarkup, lineAmount } from "@/lib/constants";
 import { markupRateFor } from "@/lib/pricing";
 import { toTaxExcluded } from "@/lib/priceTax";
 import { linesFromOrder } from "@/lib/printOrders";
@@ -13,7 +13,7 @@ export const newLineId = () => `li_${Date.now()}_${Math.random().toString(36).sl
 export function masterCellPrice(entry, cell, rules) {
   const quantity = cell.quantity || 1;
   const cost = toTaxExcluded(cell.price, entry.price_tax_mode);
-  return { cost, price: applyMarkup(cost / quantity, markupRateFor(rules, entry.category)) * quantity };
+  return { cost, price: lineAmount(quantity, applyMarkup(cost / quantity, markupRateFor(rules, entry.category))) };
 }
 
 /** 価格マスタのセル → 明細（区分は価格マスタの紙／紙以外から。仕入先・納期は社内メモに） */
@@ -33,7 +33,7 @@ export function masterCellToItem(entry, cell, rules) {
     quantity,
     unit: "枚",
     unit_price: unitPrice,
-    amount: unitPrice * quantity,
+    amount: lineAmount(quantity, unitPrice),
     cost_price: Math.round(costPerUnit * 100) / 100,
     markup_rate: markupRate,
     source_type: "price_master",

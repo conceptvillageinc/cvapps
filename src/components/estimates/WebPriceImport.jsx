@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Link2, FileUp, AlertTriangle, Check, Globe, Save, ArrowLeft, ArrowRight, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
-import { WEB_VENDORS, applyMarkup } from "@/lib/constants";
+import { WEB_VENDORS, applyMarkup, lineAmount } from "@/lib/constants";
 import { usePrintTypes } from "@/lib/printTypes";
 import { usePricingRules, markupRateFor } from "@/lib/pricing";
 import { todayString } from "@/lib/fiscal";
@@ -255,7 +255,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
     const row = grid[rowIdx]; const cell = row.cells[cellIdx];
     const costPerUnit = costOf(row, cell);
     const unitPrice = applyMarkup(costPerUnit, markup);
-    return { quantity: Number(row.quantity) || 1, label: cell.label, price: Number(cell.price) || 0, costPerUnit, unitPrice, amount: unitPrice * (Number(row.quantity) || 1) };
+    return { quantity: Number(row.quantity) || 1, label: cell.label, price: Number(cell.price) || 0, costPerUnit, unitPrice, amount: lineAmount(Number(row.quantity) || 1, unitPrice) };
   });
 
   const save = async () => {
@@ -466,7 +466,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
                       const cell = ci >= 0 ? row.cells[ci] : null;
                       const on = ci >= 0 && isPicked(r, ci);
                       const cost = cell ? costOf(row, cell) : 0;
-                      const sell = cell ? applyMarkup(cost, markup) * (Number(row.quantity) || 1) : 0;
+                      const sell = cell ? lineAmount(Number(row.quantity) || 1, applyMarkup(cost, markup)) : 0;
                       return (
                         <td key={col} className="px-1 py-0.5 text-right align-top">
                           {cell ? (

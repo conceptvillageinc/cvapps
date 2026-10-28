@@ -964,7 +964,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                         {inCat.filter(e => (e.spec_summary || "（仕様未記入）") === spec).flatMap((entry) =>
                           [...entry.selectedCells].sort((a, b) => (a.quantity - b.quantity) || String(a.label).localeCompare(String(b.label), "ja")).map((cell, i) => {
                             const cost = toTaxExcluded(cell.price, entry.price_tax_mode);
-                            const price = applyMarkup(cost / (cell.quantity || 1), markup) * (cell.quantity || 1);
+                            const price = lineAmount(cell.quantity || 1, applyMarkup(cost / (cell.quantity || 1), markup));
                             return (
                               <tr key={`${entry.id}-${i}`} className="border-t hover:bg-emerald-50 cursor-pointer" onClick={() => pickPriceMasterCell(entry, cell)} title="クリックで明細に追加">
                                 <td className="px-3 py-1.5">{i === 0 ? entry.vendor_name : ""}</td>
@@ -1000,7 +1000,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                   >
                     <span>{cell.quantity}枚 ・ {cell.label}納期</span>
                     <span className="text-primary font-medium">
-                      原価¥{(cell.price || 0).toLocaleString()} → 出し値¥{(applyMarkup(cell.price / (cell.quantity || 1), markupRateFor(rules, priceMasterPick.category)) * (cell.quantity || 1)).toLocaleString()}
+                      原価¥{(cell.price || 0).toLocaleString()} → 出し値¥{lineAmount(cell.quantity || 1, applyMarkup(cell.price / (cell.quantity || 1), markupRateFor(rules, priceMasterPick.category))).toLocaleString()}
                     </span>
                   </button>
                 ))}

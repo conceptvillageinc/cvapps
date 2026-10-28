@@ -2,9 +2,10 @@
 // 印刷仕様の一覧（価格調べ。print_spec_lists）の共通部分。見積の print_specs（printSpecs.js）とは別物（画面とサーバーの両方で使う）
 //   1. 議事録から印刷物を書き出す（AI）… 品目・印刷物種別・サイズ・用紙・色数・加工・数量・単位・納期・備考・根拠
 //   2. 過不足を直して確定 → 仕入（税抜）・URL を入れる
-//   3. 社内見積（原価計算表）の形にする … 掛け率は印刷物種別で決まる（名前に「パッケージ」→ 1.3、それ以外 1.35。値付けルール）
+//   3. 社内見積（原価計算表）の形にする … 掛け率は印刷物種別で決まる（名前に「ラベル」「シール」→ 1.3、「パッケージ」→ 1.3、それ以外 1.35。値付けルール）
 //      売価単価 = 仕入単価 × 掛け率 を 1 円単位で切り上げ（原価計算表の M 列と同じ）、売価計 = 売価単価 × 数量
 // ============================================================================
+import { markupKindOf } from "./markupKinds.js";
 
 /** 仕様の列（一覧表の並び）。required は空なら「未確認」 */
 export const SPEC_FIELDS = [
@@ -34,19 +35,15 @@ export function missingFields(it) {
 }
 
 /** 印刷物種別 → 掛け率（値付けルール。名前に「パッケージ」などが入れば package） */
-//   サーバー（スプレッドシート書き出し）でも使うので pricing.js は読み込まず、同じ決め方をここに書く
 export function markupForType(rules, printType) {
-  const m = rules?.markup || { package: 1.3, other: 1.35 };
-  return isPackageType(printType, rules) ? Number(m.package) || 1.3 : Number(m.other) || 1.35;
+  return markupKindOf(rules, printType).rate;
 }
-/** 原価計算表のどの見出しの下に書くか（パッケージの掛け率になる種別か） */
-export const isPackageType = (printType, rules) => {
-  const words = rules?.package_words?.length ? rules.package_words : ["パッケージ", "ラベル", "シール"];
-  return words.some((w) => w && String(printType || "").includes(w));
-};
+/** 原価計算表のどの見出しの下に書くか（パッケージ・ラベルの見出しの下なら true） */
+export const isPackageType = (printType, rules) => markupKindOf(rules, printType).kind !== "other";
 
 /** 浮動小数点の誤差を除いて切り上げ（12000 × 1.35 が 16201 にならないように） */
-const ceilClean = (v) => Math.ceil(Number(Number(v).toFixed(6)));
+// 単価は小数第一位まで（3.679 → 3.7）。金額は 1 円未満を四捨五入
+const ceilClean = (v) => Math.ceil(Number((Number(v) * 10).toFixed(6))) / 10;
 
 /**
  * 1 行の金額（社内見積の形）。
@@ -58,7 +55,7 @@ export function specAmounts(it, rules) {
   const costUnit = qty > 0 && costTotal > 0 ? Math.round((costTotal / qty) * 100) / 100 : 0;
   const markup = markupForType(rules, it.print_type);
   const sellUnit = costUnit > 0 ? ceilClean(costUnit * markup) : 0;
-  const sellTotal = sellUnit * qty;
+  const sellTotal = Math.round(Number((sellUnit * qty).toFixed(6)));
   return { qty, costTotal, costUnit, costCalc: Math.round(costUnit * qty), markup, sellUnit, sellTotal, gross: sellTotal - Math.round(costUnit * qty) };
 }
 

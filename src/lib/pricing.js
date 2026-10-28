@@ -4,8 +4,8 @@
 // 各%・単価は system_settings の pricing_rules（JSON）で変更できる。
 // ここには既定値と計算式だけを置く。既定値は計算表の xlsx から写した。
 //
-//   印刷費      : 出し値 = 原価 × 掛け率（パッケージ 1.3 / それ以外 1.35）
-//                 名前に package_words（パッケージ・ラベル・シール）のどれかが入っていればパッケージの掛け率
+//   印刷費      : 出し値 = 原価 × 掛け率（ラベル・シール 1.3 / パッケージ 1.3 / それ以外 1.35）
+//                 どれになるかは名前に入っている言葉で決める（markupKinds.js）。単価は小数第一位まで切り上げ
 //   外注        : 売価   = 仕入 ÷ 率（デザイン 0.6 / 構築 0.75 / 撮影 0.6）を 5,000円単位で切り上げ
 //   コンセプト設計費: 印刷費を除く合計 × 20% を 5,000円単位で切り上げ
 //   ディレクション費: 印刷費を除く合計 × 10% を 5,000円単位で切り上げ
@@ -15,12 +15,14 @@
 
 import { useMemo } from "react";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { DEFAULT_MARKUP, DEFAULT_LABEL_WORDS, DEFAULT_PACKAGE_WORDS, markupKindOf } from "@/lib/markupKinds";
 
 export const DEFAULT_PRICING_RULES = {
   // 印刷費の掛け率
-  markup: { package: 1.3, other: 1.35 },
-  // この言葉が名前（印刷物種別・明細名など）に入っていれば、パッケージの掛け率にする
-  package_words: ["パッケージ", "ラベル", "シール"],
+  markup: { ...DEFAULT_MARKUP },
+  // この言葉が名前（印刷物種別・明細名など）に入っていれば、その掛け率にする（ラベルを先に見る）
+  label_words: DEFAULT_LABEL_WORDS,
+  package_words: DEFAULT_PACKAGE_WORDS,
   // 外注: 売価 = 仕入 ÷ 率
   outsourcing: { design: 0.6, build: 0.75, photo: 0.6 },
   // 切り上げの単位（円）
@@ -70,10 +72,14 @@ export function mergePricingRules(saved, legacyMarkup) {
     if (Number(legacyMarkup.package_label) > 0) markup.package = Number(legacyMarkup.package_label);
     if (Number(legacyMarkup.other) > 0) markup.other = Number(legacyMarkup.other);
   }
-  const words = Array.isArray(s.package_words) ? s.package_words.map((w) => String(w || "").trim()).filter(Boolean) : [];
+  const clean = (list) => (Array.isArray(list) ? list.map((w) => String(w || "").trim()).filter(Boolean) : []);
+  // 「ラベル」「シール」はラベルの区分で見るので、パッケージの言葉からは外す（前の版で入っていた分）
+  const labelWords = clean(s.label_words).length ? clean(s.label_words) : d.label_words;
+  const packageWords = clean(s.package_words).filter((w) => !labelWords.includes(w));
   return {
     markup,
-    package_words: words.length ? words : d.package_words,
+    label_words: labelWords,
+    package_words: packageWords.length ? packageWords : d.package_words,
     outsourcing: { ...d.outsourcing, ...(s.outsourcing || {}) },
     rounding: { ...d.rounding, ...(s.rounding || {}) },
     concept_fee: { ...d.concept_fee, ...(s.concept_fee || {}) },
@@ -105,25 +111,13 @@ export function markupRateFor(rules, printType) {
   return markupForText(rules, printType).rate;
 }
 
-/** 文字列に入っている「パッケージ扱いの言葉」（無ければ空） */
-export function packageWordIn(rules, text) {
-  const words = (rules || DEFAULT_PRICING_RULES).package_words || DEFAULT_PRICING_RULES.package_words;
-  const t = String(text || "");
-  return words.find((w) => w && t.includes(w)) || "";
-}
-
 /**
  * 名前から掛け率を決める。前から順に見て、最初に言葉が見つかったものを使う
- * （例: 明細名「ラベル印刷 A4」→ ラベル → パッケージの掛け率）。どれにも無ければパッケージ以外の掛け率。
- * @returns {{ rate: number, kind: "package" | "other", word: string }}
+ * （例: 明細名「商品ラベル 60×40」→ ラベル → ラベル・シールの掛け率）。どれにも無ければパッケージ以外の掛け率。
+ * @returns {{ rate: number, kind: "label" | "package" | "other", word: string }}
  */
 export function markupForText(rules, ...texts) {
-  const r = rules || DEFAULT_PRICING_RULES;
-  for (const t of texts) {
-    const word = packageWordIn(r, t);
-    if (word) return { rate: Number(r.markup.package) || DEFAULT_PRICING_RULES.markup.package, kind: "package", word };
-  }
-  return { rate: Number(r.markup.other) || DEFAULT_PRICING_RULES.markup.other, kind: "other", word: "" };
+  return markupKindOf(rules || DEFAULT_PRICING_RULES, ...texts);
 }
 
 /** 外注の売価: 仕入 ÷ 率 を切り上げ */

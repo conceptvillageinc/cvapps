@@ -28,7 +28,7 @@ export default function CostCalculation({ estimate, onUpdate }) {
 
   const recalculate = () => {
     if (costPrice > 0) {
-      const newSellingPrice = applyMarkup(costPrice, markupRate);
+      const newSellingPrice = applyMarkup(costPrice, markupRate, { wholeYen: true });
       onUpdate({
         selling_price: newSellingPrice,
         gross_profit: newSellingPrice - costPrice,
@@ -68,7 +68,7 @@ export default function CostCalculation({ estimate, onUpdate }) {
             <NumericField
               value={costPrice || null}
               onCommit={(cost) => {
-                const selling = applyMarkup(cost, markupRate);
+                const selling = applyMarkup(cost, markupRate, { wholeYen: true });
                 onUpdate({
                   cost_price: cost,
                   selling_price: selling,

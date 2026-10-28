@@ -38,7 +38,7 @@ export default function PriceTable({ estimate, onUpdate }) {
     const updated = vendorPrices.map((v, i) => ({ ...v, is_selected: i === idx }));
     const selected = updated[idx];
     const costPrice = selected.price;
-    const sellingPrice = applyMarkup(costPrice, markupRate);
+    const sellingPrice = applyMarkup(costPrice, markupRate, { wholeYen: true });
     const grossProfit = sellingPrice - costPrice;
 
     onUpdate({

@@ -7,6 +7,7 @@ import SizeInput from "@/components/estimates/SizeInput";
 import ColorCountInput from "@/components/estimates/ColorCountInput";
 import ConfirmPopover from "@/components/ConfirmPopover";
 import { SPEC_FIELDS, missingFields, markupForType, isPackageType, quantitiesOf } from "@/lib/printSpecList";
+import { markupKindOf, MARKUP_KIND_LABELS } from "@/lib/markupKinds";
 
 const LABEL = Object.fromEntries(SPEC_FIELDS.map((f) => [f.key, f.label]));
 
@@ -84,7 +85,7 @@ export default function PrintSpecCard({ item: it, index, count, printTypes, rule
           <span className="min-w-0 break-words text-sm font-semibold text-slate-800">{it.name || <span className="font-normal text-muted-foreground">（品目を入れてください）</span>}</span>
           {!open && <span className="hidden min-w-0 truncate text-xs text-muted-foreground lg:inline">{summaryOf(it)}</span>}
         </button>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] ${isPackageType(it.print_type) ? "bg-blue-50 text-blue-800" : "bg-slate-100 text-slate-700"}`}>× {markupForType(rules, it.print_type)}（{isPackageType(it.print_type) ? "パッケージ" : "パッケージ以外"}）</span>
+        <span className={`rounded px-1.5 py-0.5 text-[10px] ${isPackageType(it.print_type) ? "bg-blue-50 text-blue-800" : "bg-slate-100 text-slate-700"}`}>× {markupForType(rules, it.print_type)}（{MARKUP_KIND_LABELS[markupKindOf(rules, it.print_type).kind]}）</span>
         {miss.size > 0 && <span className="flex items-center gap-1 text-[11px] text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{[...miss].map((k) => LABEL[k]).join("・")}が未確認</span>}
         {!readOnly && (
           <span className="flex items-center">
