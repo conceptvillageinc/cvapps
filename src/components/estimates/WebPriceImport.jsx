@@ -36,6 +36,7 @@ const GRID_EXTRACT_SCHEMA = {
         },
       },
     },
+    options_included: { type: "string", description: "加工・オプション代金を含めた小計を価格にしたときの内訳（例: 印刷代金 29,330円＋加工・オプション 5,500円）。無ければ空" },
     notes: { type: "string", description: "特記事項があれば簡潔に" },
   },
 };
@@ -117,6 +118,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
   const [screenshotPath, setScreenshotPath] = useState("");
   const [screenshotName, setScreenshotName] = useState("");
   const [readMethod, setReadMethod] = useState(null); // 'url' | 'file'
+  const [optionsNote, setOptionsNote] = useState(""); // 加工・オプション代金を含めた小計で読んだときの内訳
   const [loading, setLoading] = useState(null); // 'url' | 'file' | 'save'
   const [error, setError] = useState(null);
   const [picked, setPicked] = useState([]); // [{ rowIdx, cellIdx }]
@@ -180,6 +182,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
 
   const applyResult = (data, method) => {
     setGrid(data.price_grid || []);
+    setOptionsNote(data.options_included || "");
     if (data.spec_summary && !specSummary) setSpecSummary(data.spec_summary);
     setPicked([]);
     setReadMethod(method);
@@ -412,6 +415,11 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
       {step === 3 && (
         <div className="space-y-4">
           {summaryBadge}
+          {optionsNote && (
+            <p className="flex items-start gap-1.5 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900 ring-1 ring-blue-200" data-testid="options-included">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span><b>加工・オプション代金を含めた小計</b>で読み取りました（{optionsNote}）。下の表の金額はこの小計を税別に直したものです。</span>
+            </p>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
               <p className="text-xs font-semibold">読み取った価格表（原価は税別に直して表示）</p>

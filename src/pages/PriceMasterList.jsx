@@ -23,6 +23,7 @@ const OTHER_VENDOR = "__other__";
 const GRID_EXTRACT_SCHEMA = {
   type: "object",
   properties: {
+    options_included: { type: "string", description: "加工・オプション代金を含めた小計を価格にしたときの内訳。無ければ空" },
     spec_summary: { type: "string", description: "仕様の要約（紙質・厚さ・面など）。わかる場合のみ" },
     price_grid: {
       type: "array",

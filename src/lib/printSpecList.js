@@ -240,7 +240,7 @@ export function specsFromResult(res, printTypes = []) {
 export const PRICE_SHOT_SCHEMA = {
   type: "object",
   properties: {
-    total_ex_tax: { type: "number", description: "指定の数量の価格（税抜・円）。読めなければ 0" },
+    total_ex_tax: { type: "number", description: "指定の数量の価格（税抜・円・加工・オプション代金を含む・送料別）。読めなければ 0" },
     total_inc_tax: { type: "number", description: "同じ価格の税込（円）。無ければ 0" },
     condition: { type: "string", description: "その価格の条件（商品名・サイズ・用紙・色数・数量・納期（営業日））を短く" },
     note: { type: "string", description: "指定の数量が表に無い、税込しか無いなど確かめてほしいこと。無ければ空" },
@@ -253,7 +253,8 @@ export function priceShotPrompt(it) {
 数量: ${it.quantity || "（未定）"}${it.unit || ""}
 納期: ${it.due || "（未定）"}
 - 指定の数量の価格を読みます。表に複数の納期があれば、納期に間に合う中で一番安いものを選びます。
-- 税抜で返します（税込しか無ければ ÷1.1 して円未満を切り捨て、note にその旨を書きます）。`;
+- 税抜で返します（税込しか無ければ ÷1.1 して円未満を切り捨て、note にその旨を書きます）。
+- 「印刷代金」とは別に「加工・オプション代金」（PP加工・袋入れ・セット作業など）があり「小計」が書かれている場合は、オプションを含めた小計を価格にします（送料・決済手数料は含めない）。condition に「印刷代金〇円＋加工・オプション〇円」と内訳を書きます。`;
 }
 
 // ---------------------------------------------------------------------------

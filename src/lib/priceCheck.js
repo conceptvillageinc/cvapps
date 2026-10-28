@@ -178,6 +178,7 @@ export const PRICE_GRID_SCHEMA = {
   type: "object",
   properties: {
     spec_summary: { type: "string", description: "仕様の要約（紙質・厚さ・面など）。わかる場合のみ" },
+    options_included: { type: "string", description: "加工・オプション代金を含めた小計を価格にしたときの内訳。無ければ空" },
     price_grid: {
       type: "array",
       description: "縦=枚数・横=納期の価格表。写っている枚数パターンをすべて行にし、それぞれの納期パターンと価格を cells に入れる。単価しか無い見積書なら、その数量の合計金額を price に入れる",
