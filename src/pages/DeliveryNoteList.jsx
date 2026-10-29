@@ -56,6 +56,10 @@ export default function DeliveryNoteList() {
   const sameClientRest = !invoiceBlock && pickedClients.length === 1
     ? notes.filter((n) => !n.invoice_id && (n.client_name || "").trim() === pickedClients[0] && !picked.has(n.id))
     : [];
+  // 同じクライアントの未請求の納品書（選んだものも含む）。選んだ 1 件から、ほかの分をその場で足せるように並べる
+  const sameClientAll = !invoiceBlock && pickedClients.length === 1
+    ? notes.filter((n) => !n.invoice_id && (n.client_name || "").trim() === pickedClients[0])
+    : [];
   const pickedTotal = pickedNotes.reduce((s, n) => s + Number(n.total || 0), 0);
   const invoicePicked = () => {
     const ids = [...pickedNotes].sort((a, b) => String(a.delivery_date || "").localeCompare(String(b.delivery_date || ""))).map((n) => n.id);
@@ -148,6 +152,28 @@ export default function DeliveryNoteList() {
             <Button size="sm" className="h-8 gap-1.5 text-xs" disabled={!!invoiceBlock} onClick={invoicePicked} title={invoiceBlock || "選んだ納品書を 1 枚の請求書にまとめます（納品日の順に並びます）"}>
               <SquareCheck className="w-3.5 h-3.5" /> 選択した {picked.size} 件で請求書を作る
             </Button>
+            {/* 同じクライアントの未請求の納品書を、その場でチェックして足せるように並べる */}
+            {sameClientAll.length > 1 && (
+              <div className="basis-full rounded-md border border-sky-200 bg-white" data-testid="same-client-rest">
+                <p className="px-3 py-1.5 text-[11px] font-semibold text-sky-900 border-b border-sky-100">同じクライアント（{pickedClients[0]}）の未請求の納品書 {sameClientAll.length} 件　<span className="font-normal text-muted-foreground">チェックした分を 1 枚の請求書にまとめます</span></p>
+                <div className="max-h-48 overflow-y-auto divide-y">
+                  {[...sameClientAll].sort((a, b) => String(a.delivery_date || "").localeCompare(String(b.delivery_date || ""))).map((n) => (
+                    <label key={n.id} className="flex items-center gap-3 px-3 py-1.5 text-xs cursor-pointer hover:bg-sky-50/60">
+                      <Checkbox checked={picked.has(n.id)} onCheckedChange={() => togglePick(n.id)} aria-label={`${n.delivery_number}を選ぶ`} />
+                      <span className="font-mono text-muted-foreground w-24 shrink-0">{n.delivery_number}</span>
+                      <span className="text-muted-foreground w-20 shrink-0 tabular-nums">{n.delivery_date}</span>
+                      <span className="flex-1 min-w-0 truncate">
+                        {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50">定期</Badge>}
+                        {n.status === "draft" && <Badge variant="outline" className="mr-1.5 text-[9px] font-normal text-muted-foreground">下書き</Badge>}
+                        {n.title || "（件名なし）"}
+                      </span>
+                      <span className="tabular-nums w-24 text-right">{yen(n.total)}</span>
+                      <a href={`/delivery-notes/${n.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[11px] text-primary hover:underline shrink-0">開く</a>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
