@@ -264,7 +264,7 @@ export default function ProjectDetail() {
           </div>
           <div className="space-y-1.5 sm:col-span-3">
             <p className="text-xs text-muted-foreground">ネクストアクション <span className="text-[10px]">（案件一覧の「案件別ネクストアクション」にも出ます）</span></p>
-            <NextActionCell project={project} />
+            <NextActionCell project={project} tone="gray" />
           </div>
           <div className="space-y-1.5 sm:col-span-3">
             <p className="text-xs text-muted-foreground">案件メモ <span className="text-[10px]">（この案件のページだけに出ます。改行できます）</span></p>

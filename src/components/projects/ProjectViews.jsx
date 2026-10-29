@@ -729,8 +729,8 @@ function NextGroupRows({ group: g }) {
   );
 }
 
-/** その場で書いて保存するネクストアクション欄（一覧・案件詳細で共用） */
-export function NextActionCell({ project, className = "" }) {
+/** その場で書いて保存するネクストアクション欄（一覧・案件詳細で共用）。tone="gray" は案件詳細用（案件メモと同じ色） */
+export function NextActionCell({ project, className = "", tone = "cream" }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [text, setText] = useState(project.next_action || "");
@@ -784,7 +784,7 @@ export function NextActionCell({ project, className = "" }) {
         onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) { e.preventDefault(); e.currentTarget.blur(); } }}
         placeholder="ネクストアクションを記載"
         aria-label="ネクストアクション"
-        className={`block w-full min-h-8 px-2 py-1.5 rounded-md border text-xs leading-snug resize-none overflow-hidden outline-none transition-colors ${text ? "bg-amber-50/70 border-transparent hover:border-input focus:bg-background focus:border-primary" : "bg-amber-50 border-transparent placeholder:text-amber-700/70 hover:border-input focus:bg-background focus:border-primary"}`}
+        className={`block w-full min-h-8 px-2 py-1.5 rounded-md border text-xs leading-snug resize-none overflow-hidden outline-none transition-colors ${tone === "gray" ? "bg-slate-50 border-transparent placeholder:text-muted-foreground/70 hover:border-input focus:bg-background focus:border-primary" : text ? "bg-amber-50/70 border-transparent hover:border-input focus:bg-background focus:border-primary" : "bg-amber-50 border-transparent placeholder:text-amber-700/70 hover:border-input focus:bg-background focus:border-primary"}`}
       />
       <div className="text-[9px] text-muted-foreground whitespace-nowrap h-3">
         {save.isPending ? "保存中…" : stamp || (text ? "" : "未記入")}
