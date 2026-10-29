@@ -263,7 +263,7 @@ export default function ProjectDetail() {
             </Select>
           </div>
           <div className="space-y-1.5 sm:col-span-3">
-            <p className="text-xs text-muted-foreground">ネクストアクション <span className="text-[10px]">（案件一覧の「案件別ネクストアクション」にも出ます）</span></p>
+            <p className="text-xs text-muted-foreground">備考 <span className="text-[10px]">（案件一覧の「案件別備考」にも出ます）</span></p>
             <NextActionCell project={project} />
           </div>
         </CardContent>

@@ -25,7 +25,7 @@ const ALL_YEARS = "all";
 const VIEWS = [
   { key: "standard", label: "標準" },
   { key: "daily", label: "速報デイリー" },
-  { key: "next", label: "案件別ネクストアクション" },
+  { key: "next", label: "案件別備考" },
   { key: "monthend", label: "月末チェック（納品・請求）" },
 ];
 
