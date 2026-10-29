@@ -368,6 +368,7 @@ const DAILY_COLS = [
 
 export function DailyView({ projects, isLoading }) {
   const today = todayString();
+  const yesterday = addDaysYmd(today, -1);
   const settings = useSystemSettings();
   const [sort, toggleSort] = useColumnSort();
   const [filters, setFilter] = useColumnFilters();
@@ -405,16 +406,17 @@ export function DailyView({ projects, isLoading }) {
       if (countsTowardTarget(p)) { g.counted += Number(p.expected_gross_profit || 0); g.countedCount += 1; }
       g.actual += Number(p.actual_gross_profit || 0);
     }
-    // 今日の案件が無くても「今日」のまとまりは出す（0 件・目標未達が分かるように）
-    if (!out.some((g) => g.date === today)) out.push({ date: today, rows: [], revenue: 0, gross: 0, actual: 0, counted: 0, countedCount: 0 });
+    // 今日・昨日の案件が無くても、そのまとまりは出す（0 件・目標未達が分かるように。開いたときは昨日から見せる）
+    for (const d of [yesterday, today]) if (!out.some((g) => g.date === d)) out.push({ date: d, rows: [], revenue: 0, gross: 0, actual: 0, counted: 0, countedCount: 0 });
     out.sort((a, b) => a.date.localeCompare(b.date));
     // 受注確度・フェーズで並べ替えるときは、日ごとのまとまりはそのままで中の行だけ並べ替える
     const cmp = optionComparator(sort, settings);
     if (cmp) for (const g of out) g.rows.sort(cmp);
     return out;
-  }, [filtered, sort, settings, today]);
+  }, [filtered, sort, settings, today, yesterday]);
 
-  useScrollToRowOnce(!isLoading && groups.length > 0, `[data-day="${today}"]`);
+  // 開いたときは昨日のまとまりを見出しの直下に（昨日の実績と今日をいっしょに見る）
+  useScrollToRowOnce(!isLoading && groups.length > 0, `[data-day="${yesterday}"]`);
 
   const monthLabel = `${Number(today.slice(5, 7))}月`;
   // 週・月の目標 = 1 日あたりの粗利目標 × その週・月の営業日数（土日・祝日・年末年始・会社の休業日を除く）。1 日あたりの目標を変えると自動で変わる
@@ -474,11 +476,11 @@ export function DailyView({ projects, isLoading }) {
                     <TableRow><TableCell colSpan={DAILY_COLS.length} className="py-10 text-center text-sm text-muted-foreground">絞り込みに合う案件がありません。見出しの絞り込み（黄色のマーク）から解除できます</TableCell></TableRow>
                   )}
                   {groups.map((g) => (
-                    <GroupRows key={g.date || "none"} group={g} target={target} isToday={g.date === today} />
+                    <GroupRows key={g.date || "none"} group={g} target={target} isToday={g.date === today} isYesterday={g.date === yesterday} />
                   ))}
                 </TableBody>
               </PlainTable>
-              {/* 今日のまとまりを見出しの直下に置けるように、下に余白を取る */}
+              {/* 昨日のまとまりを見出しの直下に置けるように、下に余白を取る */}
               <div className="h-[85vh]" aria-hidden="true" />
             </div>
           )}
@@ -488,19 +490,19 @@ export function DailyView({ projects, isLoading }) {
   );
 }
 
-function GroupRows({ group: g, target, isToday }) {
+function GroupRows({ group: g, target, isToday, isYesterday }) {
   return (
     <>
       <TableRow className={`${isToday ? "bg-blue-100/70 hover:bg-blue-100/70" : "bg-slate-100 hover:bg-slate-100"}`} data-day={g.date}>
         <TableCell colSpan={DAILY_COLS.length} className="py-1.5 text-[11px] font-semibold text-slate-700">
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span>{withWeekday(g.date)}{isToday && "（今日）"}　新規 {g.rows.length}件　売上見込 {yen(g.revenue)}　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
+            <span>{withWeekday(g.date)}{isToday && "（今日）"}{isYesterday && "（昨日）"}　新規 {g.rows.length}件　売上見込 {yen(g.revenue)}　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
             <TargetBadge gross={g.counted} target={target} />
           </span>
         </TableCell>
       </TableRow>
       {g.rows.length === 0 && (
-        <TableRow><TableCell colSpan={DAILY_COLS.length} className="py-3 text-center text-xs text-muted-foreground">今日はまだ新規の案件がありません</TableCell></TableRow>
+        <TableRow><TableCell colSpan={DAILY_COLS.length} className="py-3 text-center text-xs text-muted-foreground">{isToday ? "今日はまだ新規の案件がありません" : "この日の新規の案件はありません"}</TableCell></TableRow>
       )}
       {g.rows.map((p) => (
         <TableRow key={p.id} className="group hover:bg-muted/40">

@@ -331,7 +331,7 @@ export default function ProjectList() {
           </button>
         ))}
         <span className="ml-auto text-[11px] text-muted-foreground pr-1">
-          {view === "daily" ? "今日を先頭に表示。上に戻ると前の日（取消・失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（期をまたいで表示）" : view === "monthend" ? "完了予定がその月の案件と、前の月までで請求が済んでいない案件を担当者ごとに" : ""}
+          {view === "daily" ? "昨日を先頭に表示。上に戻ると前の日（取消・失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（期をまたいで表示）" : view === "monthend" ? "完了予定がその月の案件と、前の月までで請求が済んでいない案件を担当者ごとに" : ""}
         </span>
       </div>
 
