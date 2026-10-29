@@ -389,7 +389,17 @@ export function DailyView({ projects, isLoading }) {
         countedCount: counted.length,
       };
     };
-    return { today: agg(today), week: { ...agg(ws), from: ws }, month: agg(ms) };
+    const y = addDaysYmd(today, -1);
+    const yRows = projects.filter((p) => (p.registered_at || "") === y);
+    const yCounted = yRows.filter(countsTowardTarget);
+    const yesterdayAgg = {
+      count: yRows.length,
+      revenue: yRows.reduce((s, p) => s + Number(p.expected_revenue || 0), 0),
+      gross: yRows.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
+      counted: yCounted.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
+      countedCount: yCounted.length,
+    };
+    return { yesterday: yesterdayAgg, today: agg(today), week: { ...agg(ws), from: ws }, month: agg(ms) };
   }, [projects, today]);
 
   const groups = useMemo(() => {
@@ -422,31 +432,36 @@ export function DailyView({ projects, isLoading }) {
   // 週・月の目標 = 1 日あたりの粗利目標 × その週・月の営業日数（土日・祝日・年末年始・会社の休業日を除く）。1 日あたりの目標を変えると自動で変わる
   const weekDays = countBusinessDays(summary.week.from, addDaysYmd(summary.week.from, 6), holidays);
   const monthDays = countBusinessDays(today.slice(0, 8) + "01", monthEndYmd(today), holidays);
+  // 昨日が休みの日（土日・祝日など）なら目標は 0（目標の札を出さない）
+  const yesterdayDays = countBusinessDays(yesterday, yesterday, holidays);
   const cards = [
-    { label: `今日（${shortDate(today).replace("-", "/")}）の新規案件`, v: summary.today, target, isToday: true },
+    { label: `昨日（${shortDate(yesterday).replace("-", "/")}）の新規案件`, v: summary.yesterday, target: target * yesterdayDays, isDay: true, noTarget: yesterdayDays === 0 },
+    { label: `今日（${shortDate(today).replace("-", "/")}）の新規案件`, v: summary.today, target, isDay: true },
     { label: `今週（${shortDate(summary.week.from).replace("-", "/")}〜）の新規案件`, v: summary.week, target: target * weekDays, days: weekDays },
     { label: `今月（${monthLabel}）の新規案件`, v: summary.month, target: target * monthDays, days: monthDays },
   ];
 
   return (
     <div className="flex flex-col h-full min-h-0 gap-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 shrink-0">
         <DailyTargetCard dt={dt} />
         {cards.map((c) => (
           <Card key={c.label}>
             <CardContent className="p-4">
               <p className="text-[11px] text-muted-foreground">{c.label}</p>
-              {target > 0 && (
+              {target > 0 && !c.noTarget && (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1" data-testid="period-target">
                   <TargetBadge gross={c.v.counted} target={c.target} />
                   <span className="text-[10.5px] text-muted-foreground tabular-nums" title="1日あたりの粗利目標 × 営業日数（土日・祝日・年末年始を除く）">
-                    目標 {yen(c.target)}{c.isToday ? "" : `（${c.days}営業日 × ${yen(target)}）`}
+                    目標 {yen(c.target)}{c.isDay ? "" : `（${c.days}営業日 × ${yen(target)}）`}
                   </span>
                 </div>
               )}
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-1">
                 <span className="text-2xl font-bold tabular-nums">{c.v.count}<span className="text-sm font-medium ml-0.5">件</span></span>
-                <span className="text-xs text-muted-foreground tabular-nums">受注見込 {yen(c.v.revenue)}　粗利見込 {yen(c.v.gross)}</span>
+                {/* 5 枚並ぶと幅が狭いので、項目ごとに折り返す（「粗利見込」と金額が離れないように） */}
+                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">受注見込 {yen(c.v.revenue)}</span>
+                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">粗利見込 {yen(c.v.gross)}</span>
                 <span className="text-xs tabular-nums font-medium" title={TARGET_RULE}>計上 {yen(c.v.counted)}（{c.countedCount ?? c.v.countedCount}件）</span>
               </div>
             </CardContent>
