@@ -26,8 +26,6 @@ import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
-import ExtraCostsCard from "@/components/projects/ExtraCostsCard";
-import { extraCostsTotal } from "@/lib/extraCosts";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
@@ -304,10 +302,7 @@ export default function ProjectDetail() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Field label={isRecurringParent(project) ? "受注見込（月額）" : "受注見込"}><span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span></Field>
                 <Field label="発注見込"><span className="tabular-nums">{yen(project.expected_cost)}</span></Field>
-                <Field label="その他費用">
-                  <span className="tabular-nums">{yen(project.other_cost)}</span>
-                  {extraCostsTotal(project.extra_costs) > 0 && <span className="block text-[10px] text-muted-foreground whitespace-nowrap">うち見積外の原価 {yen(extraCostsTotal(project.extra_costs))}</span>}
-                </Field>
+                <Field label="その他費用"><span className="tabular-nums">{yen(project.other_cost)}</span></Field>
                 <Field label="粗利見込">
                   <span className={`tabular-nums font-medium ${expectedGross < 0 ? "text-destructive" : "text-emerald-700"}`}>{yen(expectedGross)}</span>
                   {Number(project.expected_revenue) > 0 && (
@@ -371,8 +366,6 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
       </div>
-
-      <ExtraCostsCard project={project} />
 
       {/* 議事録 */}
       <Card>
