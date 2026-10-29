@@ -1,3 +1,4 @@
+import { extraCostsTotal } from "@/lib/extraCosts";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
@@ -267,6 +268,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
               <div className="space-y-1.5">
                 <Label className="text-xs">その他費用</Label>
                 <Input inputMode="numeric" value={form.other_cost} onChange={(e) => set("other_cost", e.target.value)} placeholder="0" className="h-9 text-right tabular-nums" />
+                {extraCostsTotal(project?.extra_costs) > 0 && <p className="text-[10px] text-muted-foreground">見積外の原価 ¥{extraCostsTotal(project.extra_costs).toLocaleString()} を含みます</p>}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">粗利見込</Label>
