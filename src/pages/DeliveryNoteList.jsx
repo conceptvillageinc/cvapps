@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Loader2, Truck, ArrowRight, Plus, Trash2, Receipt, AlertTriangle } from "lucide-react";
+import { Search, Loader2, Truck, ArrowRight, Plus, Trash2, SquareCheck, AlertTriangle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
@@ -127,11 +127,11 @@ export default function DeliveryNoteList() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="picked-bar">
         {picked.size === 0 ? (
           <>
-            <span className="inline-flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 text-sky-700 shrink-0" /><span>左のチェックで納品書を選ぶと、<strong>同じクライアントの未請求の納品書を 1 枚の請求書にまとめて</strong>作れます</span></span>
+            <span className="inline-flex items-center gap-1.5"><SquareCheck className="w-3.5 h-3.5 text-sky-700 shrink-0" /><span>左のチェックで納品書を選ぶと、<strong>同じクライアントの未請求の納品書を 1 枚の請求書にまとめて</strong>作れます</span></span>
             <span className="flex-1" />
             {filter !== "uninvoiced" && <Button size="sm" variant="outline" className="h-8 text-xs bg-white" onClick={() => setFilter("uninvoiced")}>未請求だけ表示</Button>}
             <Button size="sm" className="h-8 gap-1.5 text-xs" disabled title="先に左のチェックで納品書を選んでください">
-              <Receipt className="w-3.5 h-3.5" /> 選択した納品書で請求書を作る
+              <SquareCheck className="w-3.5 h-3.5" /> 選択した納品書で請求書を作る
             </Button>
           </>
         ) : (
@@ -146,7 +146,7 @@ export default function DeliveryNoteList() {
             )}
             <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setPicked(new Set())}>選択を外す</Button>
             <Button size="sm" className="h-8 gap-1.5 text-xs" disabled={!!invoiceBlock} onClick={invoicePicked} title={invoiceBlock || "選んだ納品書を 1 枚の請求書にまとめます（納品日の順に並びます）"}>
-              <Receipt className="w-3.5 h-3.5" /> 選択した {picked.size} 件で請求書を作る
+              <SquareCheck className="w-3.5 h-3.5" /> 選択した {picked.size} 件で請求書を作る
             </Button>
           </>
         )}
