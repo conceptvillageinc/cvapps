@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -266,6 +266,10 @@ export default function ProjectDetail() {
             <p className="text-xs text-muted-foreground">ネクストアクション <span className="text-[10px]">（案件一覧の「案件別ネクストアクション」にも出ます）</span></p>
             <NextActionCell project={project} />
           </div>
+          <div className="space-y-1.5 sm:col-span-3">
+            <p className="text-xs text-muted-foreground">案件メモ <span className="text-[10px]">（この案件のページだけに出ます。改行できます）</span></p>
+            <ProjectMemoField project={project} />
+          </div>
         </CardContent>
       </Card>
 
@@ -362,16 +366,6 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
       </div>
-
-      {/* メモ */}
-      {project.notes && (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">社内メモ</CardTitle></CardHeader>
-          <CardContent>
-            <p className="text-sm whitespace-pre-wrap break-words">{project.notes}</p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* 議事録 */}
       <Card>
@@ -531,6 +525,60 @@ export default function ProjectDetail() {
 
       <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} project={project} />
       <ForecastFromEstimateDialog open={forecastOpen} onOpenChange={setForecastOpen} project={project} estimates={estimates} initial={forecastInitial} />
+    </div>
+  );
+}
+
+/**
+ * 案件メモ（projects.notes）。案件詳細のページだけに出す自由なメモで、ネクストアクションとは別。
+ * 書いて枠の外をクリックすると保存する（Enter は改行）。案件の「編集」の「案件メモ」と同じ欄。
+ */
+function ProjectMemoField({ project }) {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState(project.notes || "");
+  const [base, setBase] = useState(project.notes || "");
+  const [savedAt, setSavedAt] = useState(null);
+  // 編集ダイアログなど、別の場所で更新されたら追従する
+  if ((project.notes || "") !== base) {
+    setBase(project.notes || "");
+    setText(project.notes || "");
+  }
+  const save = useMutation({
+    mutationFn: (value) => db.entities.Project.update(project.id, { notes: value || null }),
+    onSuccess: () => {
+      setSavedAt(new Date());
+      queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (err) => toast.error("案件メモを保存できませんでした: " + (err?.message || "不明なエラー")),
+  });
+  const commit = () => {
+    if (text.trim() === (project.notes || "").trim()) return;
+    save.mutate(text.trim());
+  };
+  // 内容に合わせて高さが伸びる
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(56, el.scrollHeight + 2)}px`;
+  }, [text]);
+  return (
+    <div className="space-y-0.5">
+      <textarea
+        ref={ref}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        placeholder="案件のメモを記載（予算の根拠、関連URL、注意点など）"
+        aria-label="案件メモ"
+        data-testid="project-memo"
+        className="block w-full min-h-14 px-2 py-1.5 rounded-md border bg-slate-50 border-transparent text-xs leading-relaxed resize-none overflow-hidden outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-input focus:bg-background focus:border-primary"
+      />
+      <div className="text-[9px] text-muted-foreground h-3">
+        {save.isPending ? "保存中…" : savedAt ? `保存しました（${format(savedAt, "H:mm")}）` : ""}
+      </div>
     </div>
   );
 }

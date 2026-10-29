@@ -328,7 +328,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">社内メモ</Label>
+            <Label className="text-xs">案件メモ</Label>
             <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} placeholder="予算の根拠、関連URL、注意点など" />
           </div>
         </div>
