@@ -179,7 +179,7 @@ export default function ProjectDetail() {
               <Badge className={`text-[10px] ${getDealProbabilityColor(project.deal_probability)}`}>{project.deal_probability}</Badge>
               <Badge className={`text-[10px] ${getPhaseColor(project.phase)}`}>{project.phase}</Badge>
               {project.is_recurring && (
-                <Badge className="text-[10px] bg-teal-100 text-teal-700 hover:bg-teal-100 gap-1"><Repeat className="w-2.5 h-2.5" /> 定期売上</Badge>
+                <Badge className="text-[10px] bg-rose-100 text-rose-700 hover:bg-rose-100 gap-1"><Repeat className="w-2.5 h-2.5" /> 定期売上</Badge>
               )}
               {project.recurring_template_id && (
                 <Link to="/projects/recurring" className="text-[10px] text-teal-700 hover:underline">{isRecurringParent(project) ? "定期売上の設定（ひな形）を開く" : "ひな形から自動生成"}</Link>

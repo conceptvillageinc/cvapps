@@ -307,7 +307,7 @@ export default function ClientKarte() {
               <Field label="住所">{client.postal_code ? `${formatPostalCode(client.postal_code)} ` : ""}{client.address}</Field>
               <Field label="請求書の送付">
                 {INVOICE_DELIVERY_METHODS[client.invoice_delivery_method] || "—"}
-                {client.has_recurring_billing && <Badge className="ml-2 text-[9px] bg-teal-100 text-teal-700 hover:bg-teal-100">定期売上あり</Badge>}
+                {client.has_recurring_billing && <Badge className="ml-2 text-[9px] bg-rose-100 text-rose-700 hover:bg-rose-100">定期売上あり</Badge>}
                 {client.invoice_delivery_notes && <p className="text-xs text-amber-700 mt-0.5">{client.invoice_delivery_notes}</p>}
               </Field>
               <Field label="振込名義（入金確認で学習）">{(client.bank_payee_names || []).join(" / ")}</Field>

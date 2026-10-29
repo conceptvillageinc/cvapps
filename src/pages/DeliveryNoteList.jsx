@@ -163,7 +163,7 @@ export default function DeliveryNoteList() {
                       <span className="font-mono text-muted-foreground w-24 shrink-0">{n.delivery_number}</span>
                       <span className="text-muted-foreground w-20 shrink-0 tabular-nums">{n.delivery_date}</span>
                       <span className="flex-1 min-w-0 truncate">
-                        {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50">定期</Badge>}
+                        {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50">定期</Badge>}
                         {n.status === "draft" && <Badge variant="outline" className="mr-1.5 text-[9px] font-normal text-muted-foreground">下書き</Badge>}
                         {n.title || "（件名なし）"}
                       </span>
@@ -222,7 +222,7 @@ export default function DeliveryNoteList() {
                             case "client_name": return <TableCell key={k} className="text-sm font-medium max-w-[220px] truncate">{n.client_name}</TableCell>;
                             case "title": return (
                               <TableCell key={k} className="text-sm max-w-[300px] truncate">
-                                {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50" title="定期売上のひな形から毎月作られた納品書">定期</Badge>}
+                                {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50" title="定期売上のひな形から毎月作られた納品書">定期</Badge>}
                                 {n.title || "—"}
                               </TableCell>
                             );

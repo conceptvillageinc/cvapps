@@ -51,7 +51,7 @@ function ProjectCell({ col, p, delivery, today }) {
       <TableCell className="text-sm max-w-[320px]">
         <div className="flex items-center gap-1.5">
           <span className="truncate" title={p.name}>{p.name}</span>
-          {p.is_recurring && <Repeat className="w-3 h-3 text-teal-600 shrink-0" title="定期売上" />}
+          {p.is_recurring && <Repeat className="w-3 h-3 text-rose-600 shrink-0" title="定期売上" />}
         </div>
       </TableCell>
     );

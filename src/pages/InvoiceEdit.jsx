@@ -530,7 +530,7 @@ export default function InvoiceEdit() {
                       <span className="font-mono text-muted-foreground">{dn.delivery_number}</span>
                       <span className="text-muted-foreground">{dn.delivery_date}</span>
                       <span className="flex-1 truncate">{dn.title || "（件名なし）"}</span>
-                      {dn.recurring_template_id && <Badge className="text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50">定期</Badge>}
+                      {dn.recurring_template_id && <Badge className="text-[9px] font-normal bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50">定期</Badge>}
                       {dn.status === "draft" && <Badge variant="outline" className="text-[9px] font-normal text-muted-foreground">下書き</Badge>}
                       {dn.project_id && projectId && dn.project_id !== projectId && <Badge variant="outline" className="text-[9px] font-normal">別案件</Badge>}
                       <span className="tabular-nums">{yen(dn.total)}</span>
