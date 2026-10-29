@@ -197,7 +197,7 @@ export default function InvoiceList() {
                     const st = INVOICE_STATUS_MAP[inv.status] || INVOICE_STATUS_MAP.draft;
                     const late = inv.status === "sent" && inv.due_date && inv.due_date < today;
                     return (
-                      <TableRow key={inv.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => navigate(`/invoices/${inv.id}`)}>
+                      <TableRow key={inv.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => window.open(`/invoices/${inv.id}`, "_blank", "noopener")} title="新しいタブで開きます">
                         {cols.map((k) => {
                           switch (k) {
                             case "invoice_number": return <TableCell key={k} className="text-xs font-mono text-muted-foreground whitespace-nowrap">{inv.invoice_number}</TableCell>;

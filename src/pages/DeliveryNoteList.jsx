@@ -173,7 +173,7 @@ export default function DeliveryNoteList() {
                   {filtered.map((n) => {
                     const st = DELIVERY_STATUS_MAP[n.status] || DELIVERY_STATUS_MAP.draft;
                     return (
-                      <TableRow key={n.id} className={`group cursor-pointer hover:bg-muted/40 ${picked.has(n.id) ? "bg-sky-50/70" : ""}`} onClick={() => navigate(`/delivery-notes/${n.id}`)}>
+                      <TableRow key={n.id} className={`group cursor-pointer hover:bg-muted/40 ${picked.has(n.id) ? "bg-sky-50/70" : ""}`} onClick={() => window.open(`/delivery-notes/${n.id}`, "_blank", "noopener")} title="新しいタブで開きます">
                         <TableCell className="w-8 px-2" onClick={(e) => e.stopPropagation()}>
                           <Checkbox aria-label="選択" checked={picked.has(n.id)} onCheckedChange={() => togglePick(n.id)} />
                         </TableCell>
@@ -193,7 +193,7 @@ export default function DeliveryNoteList() {
                             case "invoice": return (
                               <TableCell key={k}>
                                 {n.invoice_id
-                                  ? <Link to={`/invoices/${n.invoice_id}`} onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline">請求済</Link>
+                                  ? <Link to={`/invoices/${n.invoice_id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline">請求済</Link>
                                   : <span className="text-xs text-amber-700">未請求</span>}
                               </TableCell>
                             );
