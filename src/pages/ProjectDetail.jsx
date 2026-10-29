@@ -279,7 +279,7 @@ export default function ProjectDetail() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-sm">金額（税抜）</CardTitle>
-              <Button size="sm" variant="outline" className="h-7 gap-1 text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { setForecastInitial(null); setForecastOpen(true); }} data-testid="forecast-open"><ListChecks className="w-3.5 h-3.5" /> 見積から見込みを入れる</Button>
+              <Button size="sm" className="h-7 gap-1 text-xs bg-blue-600 text-white hover:bg-blue-700 shadow-sm" onClick={() => { setForecastInitial(null); setForecastOpen(true); }} data-testid="forecast-open"><ListChecks className="w-3.5 h-3.5" /> 見積から見込みを入れる</Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
