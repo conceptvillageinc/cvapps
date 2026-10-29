@@ -11,6 +11,7 @@ import { Plus, Search, ArrowRight, Loader2, FolderKanban, Repeat } from "lucide-
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
 import { CondChip, ConditionsRow, joinValues, CheckListEditor, SortEditor } from "@/components/projects/ListConditions";
 import InlineBadgeSelect from "@/components/projects/InlineBadgeSelect";
+import InlineDateCell from "@/components/projects/InlineDateCell";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { PROJECT_STATUS_MAP } from "@/lib/constants";
@@ -74,7 +75,7 @@ function ProjectCell({ col, p, delivery, today }) {
       <TableCell className="text-xs whitespace-nowrap">{p.payment_due_date || "—"}</TableCell>
     );
     case "registered_at": return (
-      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{p.registered_at}</TableCell>
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap"><InlineDateCell project={p} field="registered_at" /></TableCell>
     );
     default: return <TableCell />;
   }
