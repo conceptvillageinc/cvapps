@@ -546,7 +546,7 @@ const NEXT_COLS = [
   { key: "expected_cost", label: "発注見込", num: true },
   { key: "confirmed_cost", label: "仕入合計(税抜)", num: true },
   { key: "other_cost", label: "その他費用", num: true },
-  { key: "next_action", label: "備考" },
+  { key: "next_action", label: "ネクストアクション" },
 ];
 
 const sameStatus = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
@@ -639,7 +639,7 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
           onClear={statusFilter ? () => setStatusFilter(null) : undefined}
           editor={() => <CheckListEditor options={NEXT_STATUS_KEYS} selected={statusFilter} onChange={setStatusFilter} labelOf={(k) => PROJECT_STATUS_MAP[k]?.label || k} />}
         />
-        {onlyEmpty && <CondChip label="備考" value="空の案件だけ" onClear={() => setOnlyEmpty(false)} />}
+        {onlyEmpty && <CondChip label="ネクストアクション" value="空の案件だけ" onClear={() => setOnlyEmpty(false)} />}
         {!sameStatus(statusFilter, NEXT_DEFAULT_STATUS) && <button type="button" onClick={() => setStatusFilter(NEXT_DEFAULT_STATUS)} className="ml-1 text-primary hover:underline">状態を進行中・完了に戻す</button>}
       </ConditionsRow>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground shrink-0">
@@ -648,7 +648,7 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
         </span>
         <label className="flex items-center gap-1.5 cursor-pointer select-none">
           <input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} className="w-3.5 h-3.5" />
-          備考が空の案件だけ（{emptyCount}件）
+          ネクストアクションが空の案件だけ（{emptyCount}件）
         </label>
       </div>
 
@@ -680,7 +680,7 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
           )}
         </CardContent>
       </Card>
-      <p className="text-[11px] text-muted-foreground shrink-0">備考は、書いて Enter か枠の外をクリックすると保存されます。案件詳細の「進捗」にも同じ欄があります。</p>
+      <p className="text-[11px] text-muted-foreground shrink-0">ネクストアクションは、書いて Enter か枠の外をクリックすると保存されます。案件詳細の「進捗」にも同じ欄があります。</p>
     </div>
   );
 }
@@ -751,7 +751,7 @@ export function NextActionCell({ project, className = "" }) {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
     },
-    onError: (err) => toast.error("備考を保存できませんでした: " + (err?.message || "不明なエラー")),
+    onError: (err) => toast.error("ネクストアクションを保存できませんでした: " + (err?.message || "不明なエラー")),
   });
 
   const commit = () => {
@@ -782,8 +782,8 @@ export function NextActionCell({ project, className = "" }) {
         onChange={(e) => setText(e.target.value.replace(/\r?\n/g, " "))}
         onBlur={commit}
         onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) { e.preventDefault(); e.currentTarget.blur(); } }}
-        placeholder="備考を記載"
-        aria-label="備考"
+        placeholder="ネクストアクションを記載"
+        aria-label="ネクストアクション"
         className={`block w-full min-h-8 px-2 py-1.5 rounded-md border text-xs leading-snug resize-none overflow-hidden outline-none transition-colors ${text ? "bg-amber-50/70 border-transparent hover:border-input focus:bg-background focus:border-primary" : "bg-amber-50 border-transparent placeholder:text-amber-700/70 hover:border-input focus:bg-background focus:border-primary"}`}
       />
       <div className="text-[9px] text-muted-foreground whitespace-nowrap h-3">
