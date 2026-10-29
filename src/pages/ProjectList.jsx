@@ -101,7 +101,8 @@ export default function ProjectList() {
   const { dealProbabilityOptions, phaseOptions, fiscalYearStartMonth } = useSystemSettings();
 
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
-  const [fiscalYear, setFiscalYear] = useState(String(currentFy));
+  // 期の絞り込みは最初「すべての期」（標準・速報デイリーで共通。期を選ぶとその期だけ）
+  const [fiscalYear, setFiscalYear] = useState(ALL_YEARS);
   const [search, setSearch] = useState(searchParams.get("q") || "");
   // 既定では進行中・完了の案件を表示する（失注・取消は隠す）
   const [columnFilters, setColumnFilters] = useState({ status: DEFAULT_STATUS_FILTER });
