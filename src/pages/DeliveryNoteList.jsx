@@ -123,22 +123,34 @@ export default function DeliveryNoteList() {
         </div>
       </div>
 
-      {picked.size > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="picked-bar">
-          <span>選択中 <strong>{picked.size} 件</strong>　合計 {yen(pickedTotal)}（税込）{pickedClients.length === 1 && <>　<span className="font-medium">{pickedClients[0]}</span></>}</span>
-          {invoiceBlock && <span className="inline-flex items-center gap-1 text-amber-800"><AlertTriangle className="w-3.5 h-3.5" /> {invoiceBlock}</span>}
-          <span className="flex-1" />
-          {sameClientRest.length > 0 && (
-            <Button size="sm" variant="outline" className="h-8 text-xs bg-white" onClick={() => setPicked((prev) => new Set([...prev, ...sameClientRest.map((n) => n.id)]))}>
-              同じクライアントの未請求 {sameClientRest.length} 件も選ぶ
+      {/* 選んでいないときも出して、選ぶと請求書にまとめられることが分かるようにする */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="picked-bar">
+        {picked.size === 0 ? (
+          <>
+            <span className="inline-flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5 text-sky-700 shrink-0" /><span>左のチェックで納品書を選ぶと、<strong>同じクライアントの未請求の納品書を 1 枚の請求書にまとめて</strong>作れます</span></span>
+            <span className="flex-1" />
+            {filter !== "uninvoiced" && <Button size="sm" variant="outline" className="h-8 text-xs bg-white" onClick={() => setFilter("uninvoiced")}>未請求だけ表示</Button>}
+            <Button size="sm" className="h-8 gap-1.5 text-xs" disabled title="先に左のチェックで納品書を選んでください">
+              <Receipt className="w-3.5 h-3.5" /> 選択した納品書で請求書を作る
             </Button>
-          )}
-          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setPicked(new Set())}>選択を外す</Button>
-          <Button size="sm" className="h-8 gap-1.5 text-xs" disabled={!!invoiceBlock} onClick={invoicePicked} title={invoiceBlock || "選んだ納品書を 1 枚の請求書にまとめます（納品日の順に並びます）"}>
-            <Receipt className="w-3.5 h-3.5" /> 選択した {picked.size} 件で請求書を作る
-          </Button>
-        </div>
-      )}
+          </>
+        ) : (
+          <>
+            <span>選択中 <strong>{picked.size} 件</strong>　合計 {yen(pickedTotal)}（税込）{pickedClients.length === 1 && <>　<span className="font-medium">{pickedClients[0]}</span></>}</span>
+            {invoiceBlock && <span className="inline-flex items-center gap-1 text-amber-800"><AlertTriangle className="w-3.5 h-3.5" /> {invoiceBlock}</span>}
+            <span className="flex-1" />
+            {sameClientRest.length > 0 && (
+              <Button size="sm" variant="outline" className="h-8 text-xs bg-white" onClick={() => setPicked((prev) => new Set([...prev, ...sameClientRest.map((n) => n.id)]))}>
+                同じクライアントの未請求 {sameClientRest.length} 件も選ぶ
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setPicked(new Set())}>選択を外す</Button>
+            <Button size="sm" className="h-8 gap-1.5 text-xs" disabled={!!invoiceBlock} onClick={invoicePicked} title={invoiceBlock || "選んだ納品書を 1 枚の請求書にまとめます（納品日の順に並びます）"}>
+              <Receipt className="w-3.5 h-3.5" /> 選択した {picked.size} 件で請求書を作る
+            </Button>
+          </>
+        )}
+      </div>
 
       <Card>
         <CardContent className="p-0">
