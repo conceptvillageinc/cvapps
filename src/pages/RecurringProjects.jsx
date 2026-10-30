@@ -371,9 +371,9 @@ export default function RecurringProjects() {
             </p>
           </div>
         </div>
-        <Button className="gap-2" onClick={() => { setEditing(null); setDialogOpen(true); }}>
-          <Plus className="w-4 h-4" /> ひな形を登録
-        </Button>
+        <p className="max-w-sm rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-900 leading-relaxed" data-testid="recurring-howto">
+          <Repeat className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />定期売上は、<strong>案件または見積の画面の「定期売上にする」</strong>から登録します。見積の明細のうち毎月請求するものが、月額と毎月の納品書になります
+        </p>
       </div>
 
       <Card>
@@ -402,8 +402,8 @@ export default function RecurringProjects() {
           ) : templates.length === 0 ? (
             <div className="text-center py-16">
               <Repeat className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">ひな形がまだありません</p>
-              <p className="text-xs text-muted-foreground mt-1">毎月請求する案件（運用サポート、保守など）を登録してください</p>
+              <p className="text-sm text-muted-foreground">定期売上はまだありません</p>
+              <p className="text-xs text-muted-foreground mt-1">毎月請求する案件（運用サポート、保守など）は、案件または見積の画面の「定期売上にする」から登録してください</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -448,7 +448,7 @@ export default function RecurringProjects() {
                         </button>
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(t); setDialogOpen(true); }}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { if (projectByTemplate[t.id]) navigate(`/projects/${projectByTemplate[t.id].id}?recurring=1`); else { setEditing(t); setDialogOpen(true); } }} title="案件の画面で定期売上の設定を開きます">
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>

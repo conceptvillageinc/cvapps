@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Send, Copy, Trash2, Loader2,
-  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList, PackageCheck, FolderKanban, Save
+  FileText, Calculator, Mail, CheckSquare, AlertTriangle, Palette, FileOutput, CheckCircle2, ArrowRightLeft, Truck, Link2, UserCheck, FileDown, ChevronDown, ChevronRight, ClipboardList, PackageCheck, FolderKanban, Save, Repeat
 } from "lucide-react";
+import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
+import { isRecurringParent } from "@/lib/projectInvoicing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -87,6 +89,19 @@ function EstimateDetail() {
     queryKey: ["project", estimate?.project_id],
     queryFn: () => db.entities.Project.get(estimate.project_id),
     enabled: !!estimate?.project_id,
+  });
+
+  // 定期売上にする（この見積の明細から月額と毎月の納品書を決める）
+  const [recurringOpen, setRecurringOpen] = useState(false);
+  const { data: projectEstimates = [] } = useQuery({
+    queryKey: ["estimates", "byProject", estimate?.project_id],
+    queryFn: () => db.entities.Estimate.filter({ project_id: estimate.project_id }, "-created_date"),
+    enabled: recurringOpen && !!estimate?.project_id,
+  });
+  const { data: recurringTemplate = null } = useQuery({
+    queryKey: ["recurringTemplates", "byId", project?.recurring_template_id],
+    queryFn: () => db.entities.RecurringProjectTemplate.get(project.recurring_template_id),
+    enabled: !!project?.recurring_template_id,
   });
 
   const [formData, setFormData] = useState(null);
@@ -401,6 +416,9 @@ function EstimateDetail() {
               <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs">
                 <Truck className="w-3.5 h-3.5" /> 納品書作成
               </Button>
+              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } setRecurringOpen(true); }} className="gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={!!project?.recurring_template_id && !recurringTemplate} data-testid="estimate-recurring">
+                <Repeat className="w-3.5 h-3.5" /> {isRecurringParent(project) ? "定期売上の設定" : "定期売上にする"}
+              </Button>
             </>
           )}
           <AlertDialog>
@@ -711,6 +729,15 @@ function EstimateDetail() {
         </TabsContent>
       </Tabs>
       )}
+      <RecurringSetupDialog
+        open={recurringOpen}
+        onOpenChange={setRecurringOpen}
+        project={project || null}
+        estimates={project ? (projectEstimates.some((e) => e.id === estimateId) ? projectEstimates.map((e) => (e.id === estimateId ? formData : e)) : [formData, ...projectEstimates]) : formData ? [formData] : []}
+        initialEstimateId={estimateId}
+        template={isRecurringParent(project) ? recurringTemplate : null}
+        onDone={(pid) => { if (pid) navigate(`/projects/${pid}`); }}
+      />
       <ProjectLinkDialog
         open={linkOpen}
         onOpenChange={setLinkOpen}

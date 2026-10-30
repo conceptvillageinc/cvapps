@@ -26,6 +26,7 @@ import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
+import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
@@ -128,6 +129,13 @@ export default function ProjectDetail() {
 
   // 見積から入れた受注見込・発注見込（見積があとで変わったら差を出す）
   const [forecastOpen, setForecastOpen] = useState(false);
+  // 定期売上にする・定期売上の設定（?recurring=1 で開く: 定期売上の設定の一覧から来たとき）
+  const [recurringOpen, setRecurringOpen] = useState(() => searchParams.get("recurring") === "1");
+  const { data: recurringTemplate = null } = useQuery({
+    queryKey: ["recurringTemplates", "byId", project?.recurring_template_id],
+    queryFn: () => db.entities.RecurringProjectTemplate.get(project.recurring_template_id),
+    enabled: !!project?.recurring_template_id,
+  });
   const [forecastInitial, setForecastInitial] = useState(null);
   const fs = project?.forecast_source || null;
   const fsEstimate = fs ? estimates.find((e) => e.id === fs.estimate_id) : null;
@@ -189,6 +197,9 @@ export default function ProjectDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" onClick={() => setRecurringOpen(true)} disabled={!!project.recurring_template_id && !recurringTemplate} data-testid="recurring-open">
+            <Repeat className="w-3.5 h-3.5" /> {isRecurringParent(project) ? "定期売上の設定" : "定期売上にする"}
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setEditOpen(true)}>
             <Pencil className="w-3.5 h-3.5" /> 編集
           </Button>
@@ -524,6 +535,7 @@ export default function ProjectDetail() {
       )}
 
       <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} project={project} />
+      <RecurringSetupDialog open={recurringOpen} onOpenChange={setRecurringOpen} project={project} estimates={estimates} template={isRecurringParent(project) ? recurringTemplate : null} />
       <ForecastFromEstimateDialog open={forecastOpen} onOpenChange={setForecastOpen} project={project} estimates={estimates} initial={forecastInitial} />
     </div>
   );
