@@ -116,7 +116,7 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
   const updateDealProbability = (v) => {
     lostWithDeal(v);
     if (project) {
-      projectUpdate.mutate({ deal_probability: v, is_recurring: project.is_recurring || /定期/.test(v) });
+      projectUpdate.mutate({ deal_probability: v });
       return;
     }
     onUpdate({ deal_probability: v, ...(v !== "失注" ? { lost_reason: "" } : {}) });

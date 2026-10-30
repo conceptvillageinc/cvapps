@@ -281,7 +281,7 @@ export default function ProjectDetail() {
         <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">受注確度</p>
-            <Select value={project.deal_probability} onValueChange={(v) => quickUpdate.mutate({ deal_probability: v, is_recurring: project.is_recurring || /定期/.test(v) })}>
+            <Select value={project.deal_probability} onValueChange={(v) => { quickUpdate.mutate({ deal_probability: v }); if (/定期/.test(v) && !isRecurringParent(project)) toast.info("定期売上にするには、右上の「定期売上にする」を押してください"); }}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {[...new Set([...dealProbabilityOptions, project.deal_probability].filter(Boolean))].map((o) => (

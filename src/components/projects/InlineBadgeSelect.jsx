@@ -11,7 +11,7 @@ import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/li
 // ============================================================================
 // 一覧の札（受注確度・フェーズ・状態）をクリックして、その場で変える
 //   案件一覧（標準）と案件別ネクストアクションで共通。選ぶとすぐ保存する。
-//   受注確度を「定期」を含む値にしたときは、案件の編集画面と同じく定期売上の印も付ける
+//   受注確度を「定期」を含む値にしても、定期売上の印は付けない（「定期売上にする」で付く。案内だけ出す）
 // ============================================================================
 
 const FIELD_LABEL = { deal_probability: "受注確度", phase: "フェーズ", status: "状態" };
@@ -39,15 +39,14 @@ export default function InlineBadgeSelect({ project, field }) {
 
   const save = useMutation({
     mutationFn: (value) => {
-      const patch = { [field]: value };
-      if (field === "deal_probability" && /定期/.test(value)) patch.is_recurring = true;
-      return db.entities.Project.update(project.id, patch);
+      return db.entities.Project.update(project.id, { [field]: value });
     },
     onSuccess: (_row, value) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       const label = list.find((c) => c.value === value)?.label || value;
       toast.success(`${FIELD_LABEL[field]}を「${label}」にしました`);
+      if (field === "deal_probability" && /定期/.test(value) && !project.recurring_start_month) toast.info("定期売上にするには、案件の画面の「定期売上にする」を押してください");
     },
     onError: (err) => toast.error(`${FIELD_LABEL[field]}を変えられませんでした: ` + (err?.message || "不明なエラー")),
   });

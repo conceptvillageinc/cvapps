@@ -149,7 +149,8 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
         due_date: form.due_date || null,
         payment_due_date: form.payment_due_date || null,
         vendor_payment_date: form.vendor_payment_date || null,
-        is_recurring: !!form.is_recurring || /定期/.test(form.deal_probability),
+        // 定期売上の印は「定期売上にする」で付く（ここでは今の値のまま）
+        is_recurring: !!project?.is_recurring,
         notes: form.notes || null,
       };
 
@@ -216,7 +217,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">受注確度</Label>
               <Select value={form.deal_probability} onValueChange={(v) => set("deal_probability", v)}>
@@ -239,19 +240,13 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">定期売上</Label>
-              <label className="flex items-center gap-2 h-9 text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={!!form.is_recurring || /定期/.test(form.deal_probability)}
-                  disabled={/定期/.test(form.deal_probability)}
-                  onChange={(e) => set("is_recurring", e.target.checked)}
-                />
-                毎月発生する
-              </label>
-            </div>
           </div>
+          {/* 定期売上は案件の画面の「定期売上にする」で登録する（月額・期間・毎月の納品書をそこで決める）。ここでは印を付けない */}
+          {/定期/.test(form.deal_probability) && !project?.recurring_start_month && (
+            <p className="-mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-900" data-testid="recurring-hint">
+              定期売上にするには、{project ? "" : "作成したあと、"}案件（または見積）の画面の「<strong>定期売上にする</strong>」を押してください。月額・期間・毎月の納品書をそこで決めます
+            </p>
+          )}
 
           <div className="rounded-md border p-3 space-y-3">
             <p className="text-xs font-medium">見込（税抜）</p>
