@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users, Layers, LayoutTemplate,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { db } from "@/api/db";
@@ -30,6 +30,7 @@ const navItems = [
   { path: "/history", label: "提出見積履歴", icon: History },
   { path: "/delivery-notes", label: "納品書", icon: Truck },
   { path: "/invoices", label: "請求書", icon: ReceiptJapaneseYen },
+  { path: "/projects/recurring", label: "定期売上", icon: Repeat },
   { path: "/receipts", label: "領収書", icon: ReceiptText },
   { path: "/partner-orders", label: "発注書", icon: ClipboardList },
   { path: "/sales-report", label: "売上粗利管理表", icon: BarChart3 },
@@ -78,8 +79,9 @@ export default function Layout() {
   };
 
   const NavLink = ({ item, onClick }) => {
-    const isActive = location.pathname === item.path ||
-      (item.path !== "/" && location.pathname.startsWith(item.path));
+    const matches = (path) => location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
+    // いちばん長く一致するメニューだけを選んだ状態にする（/projects/recurring で「案件一覧」まで光らないように）
+    const isActive = matches(item.path) && ![...navItems, ...adminItems].some((o) => o.path.length > item.path.length && matches(o.path));
     return (
       <Link
         to={item.path}
