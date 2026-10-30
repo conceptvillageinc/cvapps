@@ -366,7 +366,7 @@ export default function RecurringProjects() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Repeat className="w-5 h-5 text-teal-600" /> 定期売上の設定</h1>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Repeat className="w-5 h-5 text-teal-600" /> 定期売上一覧</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               有効なひな形 {activeCount}件 / 月額合計 {yen(monthlyTotal)}。ひな形ごとに案件が 1 つあり、毎月1日にその月の納品書の下書きを作ります
             </p>

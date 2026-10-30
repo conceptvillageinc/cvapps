@@ -30,7 +30,7 @@ const navItems = [
   { path: "/history", label: "提出見積履歴", icon: History },
   { path: "/delivery-notes", label: "納品書", icon: Truck },
   { path: "/invoices", label: "請求書", icon: ReceiptJapaneseYen },
-  { path: "/projects/recurring", label: "定期売上", icon: Repeat },
+  { path: "/projects/recurring", label: "定期売上一覧", icon: Repeat },
   { path: "/receipts", label: "領収書", icon: ReceiptText },
   { path: "/partner-orders", label: "発注書", icon: ClipboardList },
   { path: "/sales-report", label: "売上粗利管理表", icon: BarChart3 },
