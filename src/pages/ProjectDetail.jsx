@@ -4,7 +4,6 @@ import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { todayString } from "@/lib/fiscal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +30,7 @@ import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
 import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
 import { recurringDrift, recurringPayloadFromEstimate, templateAddsMonth } from "@/lib/recurringSetup";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
+import MonthSelect from "@/components/ui/month-select";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const signedYen = (n) => `${Number(n) >= 0 ? "+" : "−"}¥${Math.abs(Math.round(Number(n) || 0)).toLocaleString()}`;
@@ -229,8 +229,8 @@ export default function ProjectDetail() {
                   <AlertDialogDescription>何月分まで続けるかを選んでください。その月の分までは毎月の納品書を作り、売上見込にも入れます。翌月からは作りません（案件・見積・納品書・請求書はそのまま残ります）。</AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="flex items-center gap-2 text-sm">
-                  <Input type="month" value={stopMonth} min={String(project.recurring_start_month || "").slice(0, 7)} onChange={(e) => setStopMonth(e.target.value)} className="h-9 w-44" aria-label="何月分まで" />
-                  <span>分まで</span>
+                  <MonthSelect value={stopMonth} min={String(project.recurring_start_month || "").slice(0, 7)} onChange={setStopMonth} ariaLabel="何月分まで" yearsAhead={10} monthSuffix="" />
+                  <span>月分まで</span>
                 </div>
                 <AlertDialogFooter>
                   <AlertDialogCancel>キャンセル</AlertDialogCancel>

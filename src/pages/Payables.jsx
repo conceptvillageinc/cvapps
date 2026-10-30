@@ -17,6 +17,7 @@ import {
   PAY_ENTITIES, parsePayableSheet, rowTotal, sumPayables, downloadPayablesCsv, thisMonth, monthLabel, textToGrid, toAmount, rowsToInvoices, downloadInvoicesCsv,
 } from "@/lib/payables";
 import { isImeEnter } from "@/lib/ime";
+import MonthSelect from "@/components/ui/month-select";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -102,7 +103,7 @@ function PayablesPage() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs">利用月</Label>
-            <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 w-40" />
+            <MonthSelect value={month} onChange={(v) => v && setMonth(v)} ariaLabel="支払月" />
           </div>
           <CardChargesTab month={month} />
         </>
@@ -110,7 +111,7 @@ function PayablesPage() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs">支払月（月末払）</Label>
-            <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 w-40" />
+            <MonthSelect value={month} onChange={(v) => v && setMonth(v)} ariaLabel="支払月" />
             <span className="text-xs text-muted-foreground">{monthLabel(month)}</span>
             <CostMonthSetting />
             <div className="flex-1" />

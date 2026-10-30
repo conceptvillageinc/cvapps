@@ -6,7 +6,6 @@ import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { forecastLines, defaultEstimate } from "@/lib/projectForecast";
@@ -17,6 +16,7 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
 const nextMonth = () => { const d = new Date(); d.setMonth(d.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
 const monthLabel = (ym) => (ym ? `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月分` : "");
 import { MONTH_TOKEN, recurringPayloadFromEstimate, recurringNoteLines, recurringSums, templateAddsMonth } from "@/lib/recurringSetup";
+import MonthSelect from "@/components/ui/month-select";
 
 /**
  * 案件（または見積）を定期売上にする・定期売上の設定を直す。
@@ -183,12 +183,12 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">開始月 <span className="text-destructive">*</span></Label>
-                <Input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="h-9" />
+                <MonthSelect value={startMonth} onChange={setStartMonth} ariaLabel="開始月" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">終了月</Label>
-                <Input type="month" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} className="h-9" />
-                <p className="text-[10px] text-muted-foreground">空欄なら無期限</p>
+                <MonthSelect value={endMonth} onChange={setEndMonth} min={startMonth} allowEmpty emptyLabel="無期限" ariaLabel="終了月" yearsAhead={10} />
+                <p className="text-[10px] text-muted-foreground">「無期限」なら終わりを決めない</p>
               </div>
             </div>
 

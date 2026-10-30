@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Camera, Loader2, Upload, Plus, Trash2, AlertTriangle, ImagePlus } from "lucide-react";
 import { BILL_TO } from "@/lib/payables";
 import { CARD_OCR_PROMPT, CARD_OCR_SCHEMA, ocrRowsFromResult, ocrRowToCharge, shrinkImage, existingFingerprints } from "@/lib/cardCharges";
+import MonthSelect from "@/components/ui/month-select";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const MAX_PHOTOS = 10;
@@ -104,7 +105,7 @@ export default function CardOcrDialog({ open, onOpenChange, month, onDone }) {
             <div className="flex-1" />
             <div className="space-y-0.5">
               <Label className="text-[11px]">明細のお支払い月</Label>
-              <Input type="month" value={statementMonth} onChange={(e) => setStatementMonth(e.target.value)} className="h-9 w-36" aria-label="明細のお支払い月" />
+              <MonthSelect value={statementMonth} onChange={setStatementMonth} ariaLabel="明細のお支払い月" />
             </div>
             <div className="space-y-0.5">
               <Label className="text-[11px]">どの会社のカード</Label>

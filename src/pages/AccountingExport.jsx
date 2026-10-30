@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { accountingSettingsFrom, buildJournal, toCsv, downloadText, MF_COLUMNS } from "@/lib/mfExport";
 import { todayString } from "@/lib/fiscal";
+import MonthSelect from "@/components/ui/month-select";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -89,7 +90,7 @@ export default function AccountingExport() {
         <CardContent className="pt-5 flex flex-col sm:flex-row sm:items-end gap-4">
           <div className="space-y-1.5">
             <Label className="text-xs">対象月</Label>
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-9 w-44" />
+            <MonthSelect value={month} onChange={setMonth} ariaLabel="対象月" />
           </div>
           <label className="flex items-center gap-2 text-xs cursor-pointer h-9"><Checkbox checked={includeSales} onCheckedChange={(v) => setIncludeSales(!!v)} /> 売上計上（請求日ベース: 売掛金 / 売上高）</label>
           <label className="flex items-center gap-2 text-xs cursor-pointer h-9"><Checkbox checked={includePayments} onCheckedChange={(v) => setIncludePayments(!!v)} /> 入金（入金日ベース: 普通預金 / 売掛金）</label>

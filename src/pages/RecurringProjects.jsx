@@ -22,6 +22,7 @@ import { generateRecurringProjects } from "@/lib/projectNumber";
 import { todayString } from "@/lib/fiscal";
 import { lineAmount } from "@/lib/constants";
 import { useSalesCategories, classifySalesCategory } from "@/lib/salesCategory";
+import MonthSelect from "@/components/ui/month-select";
 
 const yen = (n) => `¥${Math.round(Number(n || 0)).toLocaleString()}`;
 const toNumber = (v) => {
@@ -252,12 +253,12 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">開始月 <span className="text-destructive">*</span></Label>
-              <Input type="month" value={form.start_month} onChange={(e) => set("start_month", e.target.value)} className="h-9" />
+              <MonthSelect value={form.start_month} onChange={(v) => set("start_month", v)} ariaLabel="開始月" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">終了月</Label>
-              <Input type="month" value={form.end_month} onChange={(e) => set("end_month", e.target.value)} className="h-9" />
-              <p className="text-[10px] text-muted-foreground">空欄なら無期限</p>
+              <MonthSelect value={form.end_month} onChange={(v) => set("end_month", v)} allowEmpty emptyLabel="無期限" ariaLabel="終了月" yearsAhead={10} />
+              <p className="text-[10px] text-muted-foreground">「無期限」なら終わりを決めない</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">状態</Label>
@@ -383,7 +384,7 @@ export default function RecurringProjects() {
         <CardContent className="flex flex-col sm:flex-row sm:items-end gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs">対象月</Label>
-            <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-9 w-44" />
+            <MonthSelect value={month} onChange={setMonth} ariaLabel="対象月" />
           </div>
           <Button variant="secondary" className="gap-2" onClick={() => generate.mutate()} disabled={!month || generate.isPending || activeCount === 0}>
             {generate.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}

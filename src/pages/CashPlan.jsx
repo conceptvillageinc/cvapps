@@ -19,6 +19,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { useCashAccess } from "@/lib/useCashAccess";
 import { todayString, fiscalYearOf, fiscalYearRange } from "@/lib/fiscal";
 import { buildCashPlan, autoSafetyLine, CATEGORIES, directionOf, addDays, diffDays } from "@/lib/cashPlan";
+import MonthSelect from "@/components/ui/month-select";
 
 const RECEIVABLE_FROM_DEFAULT = "2026-10-01"; // 入金確認の区切りが未設定のとき
 
@@ -412,8 +413,8 @@ function ItemDialog({ item, onClose, onSaved, nextOrder }) {
               <>
                 <div className="space-y-1"><Label className="text-xs">毎月の支払日（31 = 月末）</Label><Input type="number" min={1} max={31} value={form.day_of_month} onChange={(e) => set("day_of_month", e.target.value)} className="h-9" /></div>
                 <div></div>
-                <div className="space-y-1"><Label className="text-xs">開始月（任意）</Label><Input type="month" value={form.start_month} onChange={(e) => set("start_month", e.target.value)} className="h-9" /></div>
-                <div className="space-y-1"><Label className="text-xs">終了月（任意。借入の最終回など）</Label><Input type="month" value={form.end_month} onChange={(e) => set("end_month", e.target.value)} className="h-9" /></div>
+                <div className="space-y-1"><Label className="text-xs">開始月（任意）</Label><MonthSelect value={form.start_month} onChange={(v) => set("start_month", v)} allowEmpty ariaLabel="開始月" yearsAhead={10} /></div>
+                <div className="space-y-1"><Label className="text-xs">終了月（任意。借入の最終回など）</Label><MonthSelect value={form.end_month} onChange={(v) => set("end_month", v)} allowEmpty ariaLabel="終了月" yearsAhead={15} /></div>
               </>
             ) : (
               <div className="space-y-1"><Label className="text-xs">日付</Label><Input type="date" value={form.on_date} onChange={(e) => set("on_date", e.target.value)} className="h-9" /></div>

@@ -9,6 +9,7 @@ import { FileUp, Loader2, Upload, CheckCircle2, AlertTriangle, FileText, X, Down
 import {
   PAY_ENTITIES, BILL_TO, extractInvoices, invoicesToRows, mergePayableRow, monthLabel, nextMonth, thisMonth, toAmount, downloadInvoicesCsv,
 } from "@/lib/payables";
+import MonthSelect from "@/components/ui/month-select";
 
 const MAX_FILES = 30;
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -229,7 +230,7 @@ export default function InvoiceImportDialog({ open, onOpenChange, month, existin
                 <div className="flex flex-wrap items-center gap-3 text-xs">
                   <span className="font-semibold">一覧に入れる形（支払い先ごとに 1 行、{rows.length} 行）</span>
                   <Label className="text-xs">支払月</Label>
-                  <Input type="month" value={payMonth} onChange={(e) => e.target.value && setPayMonth(e.target.value)} className="h-7 w-36 text-xs" aria-label="支払月" />
+                  <MonthSelect value={payMonth} onChange={(v) => v && setPayMonth(v)} ariaLabel="支払月" />
                   <span className="text-muted-foreground">{monthLabel(payMonth)}（届いた月の翌月末が目安）</span>
                   <div className="flex-1" />
                   <label className="flex items-center gap-1 cursor-pointer"><input type="radio" name="inv-mode" checked={mode === "append"} onChange={() => setMode("append")} /> 今の一覧に追加（同じ支払い先は金額を足す）</label>
