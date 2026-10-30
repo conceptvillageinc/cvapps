@@ -145,6 +145,9 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
         other_cost: toNumber(form.other_cost),
         confirmed_revenue: toNumber(form.confirmed_revenue),
         confirmed_cost: toNumber(form.confirmed_cost),
+        // 実績を手で直したら「手入力」にする（請求書・発注書から自動で上書きしない）。直していなければ今のまま
+        actual_revenue_manual: toNumber(form.confirmed_revenue) !== (Number(project?.confirmed_revenue) || 0) ? true : !!project?.actual_revenue_manual,
+        actual_cost_manual: toNumber(form.confirmed_cost) !== (Number(project?.confirmed_cost) || 0) ? true : !!project?.actual_cost_manual,
         registered_at: form.registered_at || todayString(),
         due_date: form.due_date || null,
         payment_due_date: form.payment_due_date || null,
@@ -286,6 +289,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
                     {yen(toNumber(form.confirmed_revenue) - toNumber(form.confirmed_cost))}
                   </div>
                 </div>
+                <p className="col-span-2 sm:col-span-4 text-[10px] text-muted-foreground">受注合計は請求書から、発注合計は連携先への発注書と入稿記録から自動で入ります。ここで直すと「手入力」になり、自動では変わりません（案件の画面の「自動に戻す」で戻せます）</p>
               </div>
             )}
           </div>

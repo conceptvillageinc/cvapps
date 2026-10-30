@@ -16,6 +16,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
+import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
@@ -126,7 +127,7 @@ export default function InvoiceList() {
       if (status === "draft") { patch.sent_at = null; patch.paid_at = null; patch.paid_amount = null; }
       return db.entities.Invoice.update(id, patch);
     },
-    onSuccess: (_, v) => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); toast.success(`状態を「${INVOICE_STATUS_MAP[v.status]?.label || v.status}」にしました`); },
+    onSuccess: (row, v) => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); refreshProjectActuals(projectIdsOfInvoice(row)).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] })); toast.success(`状態を「${INVOICE_STATUS_MAP[v.status]?.label || v.status}」にしました`); },
     onError: (err) => toast.error("変更できませんでした: " + err.message),
   });
 

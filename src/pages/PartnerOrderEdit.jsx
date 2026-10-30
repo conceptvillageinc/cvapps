@@ -29,6 +29,7 @@ import {
   computeDocTotals, generateDocumentNumber, companyInfoFromSettings, PARTNER_ORDER_STATUS_MAP, DELIVERY_TO_KINDS, paymentTermsFromSettings,
   TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
+import { refreshProjectActuals } from "@/lib/projectActuals";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -189,6 +190,7 @@ export default function PartnerOrderEdit() {
       queryClient.invalidateQueries({ queryKey: ["partnerOrders"] });
       queryClient.invalidateQueries({ queryKey: ["partnerOrder", row.id] });
       toast.success(isNew ? `発注書 ${row.po_number} を発行しました` : "保存しました");
+      refreshProjectActuals([form.project_id, row.project_id]).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] })); // 案件の実績（発注合計）
       setForm((f) => ({ ...f, ...row, line_items: row.line_items || f.line_items || [] }));
       if (isNew) navigate(`/partner-orders/${row.id}`, { replace: true });
     },
@@ -196,7 +198,7 @@ export default function PartnerOrderEdit() {
   });
   const remove = useMutation({
     mutationFn: () => db.entities.PartnerOrder.delete(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["partnerOrders"] }); toast.success("発注書を削除しました"); navigate("/partner-orders"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["partnerOrders"] }); refreshProjectActuals([form.project_id]).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] })); toast.success("発注書を削除しました"); navigate("/partner-orders"); },
     onError: (err) => toast.error("削除できませんでした: " + (err?.message || "不明なエラー")),
   });
   const addTerm = useMutation({

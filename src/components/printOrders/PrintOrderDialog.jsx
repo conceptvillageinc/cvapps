@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { orderItems } from "@/lib/printOrders";
 import PrintOrderItems from "@/components/printOrders/PrintOrderItems";
 import { touchMasterOnOrder } from "@/lib/priceMasterSync";
+import { refreshProjectActuals } from "@/lib/projectActuals";
 
 const yen = (n) => (n === null || n === undefined || n === "" ? "—" : `¥${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
 
@@ -73,6 +74,7 @@ export default function PrintOrderDialog({ open, onOpenChange, order, onSaved })
       // 価格マスタから入れた明細を入稿したら、そのマスタの最終更新日（確認日）を入稿日にする
       if (isNew && form._master_id && await touchMasterOnOrder(form._master_id, form.ordered_on).catch(() => false)) queryClient.invalidateQueries({ queryKey: ["priceMaster"] });
       queryClient.invalidateQueries({ queryKey: ["printOrders"] });
+      refreshProjectActuals([form.project_id, saved?.project_id]).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] })); // 案件の実績（発注合計）
       onSaved?.(saved);
       onOpenChange(false);
     } catch (e) {
@@ -88,6 +90,7 @@ export default function PrintOrderDialog({ open, onOpenChange, order, onSaved })
       await db.entities.PrintOrder.delete(form.id);
       toast.success("入稿記録を削除しました");
       queryClient.invalidateQueries({ queryKey: ["printOrders"] });
+      refreshProjectActuals([form.project_id]).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] }));
       onSaved?.(null);
       onOpenChange(false);
     } catch (e) {

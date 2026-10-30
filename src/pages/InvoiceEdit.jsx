@@ -33,6 +33,7 @@ import {
   newDocItem, computeDocTotals, generateDocumentNumber, defaultDueDate,
   companyInfoFromSettings, INVOICE_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
+import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -274,6 +275,9 @@ export default function InvoiceEdit() {
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
       queryClient.invalidateQueries({ queryKey: ["deliveryNote"] }); // 納品書の画面の「請求書を開く／作成」を新しくする
       toast.success(isNew ? `請求書 ${row.invoice_number} を作成しました` : "保存しました");
+      // 案件の実績（受注合計）を合わせ直す（前の版にあった案件も）
+      refreshProjectActuals([...projectIdsOfInvoice(existing), ...projectIdsOfInvoice(row)]).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] }));
+      queryClient.invalidateQueries({ queryKey: ["project"] });
       setForm((f) => ({ ...f, ...row, line_items: row.line_items || f.line_items || [] }));
       if (isNew) navigate(`/invoices/${row.id}`, { replace: true });
     },
@@ -286,6 +290,7 @@ export default function InvoiceEdit() {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["invoice", id] });
       setForm((f) => ({ ...f, ...row, line_items: row.line_items || f.line_items || [] }));
+      refreshProjectActuals(projectIdsOfInvoice(row)).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] })); // 取消にしたときなど
     },
     onError: (err) => toast.error("更新できませんでした: " + (err?.message || "不明なエラー")),
   });
@@ -300,6 +305,7 @@ export default function InvoiceEdit() {
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
       queryClient.invalidateQueries({ queryKey: ["deliveryNote"] });
       toast.success("請求書を削除しました");
+      refreshProjectActuals(projectIdsOfInvoice(form)).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] }));
       navigate("/invoices");
     },
     onError: (err) => toast.error("削除できませんでした: " + (err?.message || "不明なエラー")),

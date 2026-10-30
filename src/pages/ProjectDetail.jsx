@@ -28,6 +28,7 @@ import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
 import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
+import { computeActuals, actualsPatch } from "@/lib/projectActuals";
 import { recurringDrift, recurringPayloadFromEstimate, templateAddsMonth } from "@/lib/recurringSetup";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 import MonthSelect from "@/components/ui/month-select";
@@ -74,25 +75,37 @@ export default function ProjectDetail() {
     enabled: !!id,
   });
 
-  const { data: deliveryNotes = [] } = useQuery({
+  const { data: deliveryNotes = [], isFetched: dnFetched } = useQuery({
     queryKey: ["deliveryNotes", "byProject", id],
     queryFn: () => db.entities.DeliveryNote.filter({ project_id: id }, "-delivery_date"),
     enabled: !!id,
   });
 
-  const { data: ownInvoices = [] } = useQuery({
+  const { data: ownInvoices = [], isFetched: invFetched } = useQuery({
     queryKey: ["invoices", "byProject", id],
     queryFn: () => db.entities.Invoice.filter({ project_id: id }, "-invoice_date"),
     enabled: !!id,
   });
   // ほかの案件の請求書にまとめられた、この案件の納品書の請求書（売上はこの案件の分だけを数える）
   const otherInvoiceIds = [...new Set(deliveryNotes.map((n) => n.invoice_id).filter((x) => x && !ownInvoices.some((i) => i.id === x)))];
-  const { data: otherInvoices = [] } = useQuery({
+  const { data: otherInvoices = [], isFetched: otherFetched } = useQuery({
     queryKey: ["invoices", "byProject", id, "merged", otherInvoiceIds.join(",")],
     queryFn: async () => (await Promise.all(otherInvoiceIds.map((x) => db.entities.Invoice.get(x).catch(() => null)))).filter(Boolean),
     enabled: otherInvoiceIds.length > 0,
   });
   const invoices = [...ownInvoices, ...otherInvoices].sort((a, b) => String(b.invoice_date || "").localeCompare(String(a.invoice_date || "")));
+
+  // 実績（受注合計・発注合計）は、請求書・発注書・入稿記録から自動で出す（手入力にした方は触らない）
+  const { data: partnerOrders = [], isFetched: poFetched } = useQuery({
+    queryKey: ["partnerOrders", "byProject", id],
+    queryFn: () => db.entities.PartnerOrder.filter({ project_id: id }, "-order_date"),
+    enabled: !!id, retry: false,
+  });
+  const { data: printOrders = [], isFetched: prFetched } = useQuery({
+    queryKey: ["printOrders", "actuals", id],
+    queryFn: () => db.entities.PrintOrder.filter({ project_id: id }, "-ordered_on"),
+    enabled: !!id, retry: false,
+  });
 
   const { data: client } = useQuery({
     queryKey: ["client", project?.client_id],
@@ -176,6 +189,28 @@ export default function ProjectDetail() {
   });
 
   const expectedGross = project?.expected_gross_profit ?? ((Number(project?.expected_revenue) || 0) - (Number(project?.expected_cost) || 0) - (Number(project?.other_cost) || 0));
+
+  const actuals = computeActuals(id, { invoices, partnerOrders, printOrders });
+  const actualsReady = !!project && dnFetched && invFetched && poFetched && prFetched && (otherInvoiceIds.length === 0 || otherFetched);
+  const actualsSynced = useRef("");
+  useEffect(() => {
+    if (!actualsReady) return;
+    const patch = actualsPatch(project, actuals);
+    const sig = JSON.stringify([project.id, patch]);
+    if (!Object.keys(patch).length || actualsSynced.current === sig) return;
+    actualsSynced.current = sig;
+    db.entities.Project.update(project.id, patch)
+      .then(() => { queryClient.invalidateQueries({ queryKey: ["project", id] }); queryClient.invalidateQueries({ queryKey: ["projects"] }); })
+      .catch((err) => console.warn("実績を合わせられませんでした", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actualsReady, project?.id, project?.confirmed_revenue, project?.confirmed_cost, project?.actual_revenue_manual, project?.actual_cost_manual, actuals.revenue, actuals.cost]);
+  const setActualAuto = useMutation({
+    mutationFn: (which) => db.entities.Project.update(id, which === "revenue"
+      ? { actual_revenue_manual: false, confirmed_revenue: actuals.revenue }
+      : { actual_cost_manual: false, confirmed_cost: actuals.cost }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["project", id] }); queryClient.invalidateQueries({ queryKey: ["projects"] }); toast.success("自動（請求書・発注書などから）に戻しました"); },
+    onError: (err) => toast.error("戻せませんでした: " + (err?.message || "不明なエラー")),
+  });
 
   if (isLoading || !project) {
     return (
@@ -365,7 +400,7 @@ export default function ProjectDetail() {
               </div>
             )}
             <div>
-              <p className="text-[10px] text-muted-foreground mb-1.5">見込{fs?.estimate_number && <span className="ml-2">見積 {fs.estimate_number} の明細 {(fs.line_ids || []).length} 件から入れました{fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}</span>}{drift?.dismissed && <button type="button" className="ml-2 rounded bg-amber-50 px-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100" onClick={() => keepAsIs.mutate(null)} title="押すと、見積との差のお知らせをもう一度出します" data-testid="forecast-kept">見積と差あり（このままにしています）</button>}</p>
+              <p className="text-[10px] text-muted-foreground mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">見込<ForecastSourceBadge project={project} fs={fs} template={recurringTemplate} estimates={estimates} />{drift?.dismissed && <button type="button" className="ml-2 rounded bg-amber-50 px-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100" onClick={() => keepAsIs.mutate(null)} title="押すと、見積との差のお知らせをもう一度出します" data-testid="forecast-kept">見積と差あり（このままにしています）</button>}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Field label={isRecurringParent(project) ? "受注見込（月額）" : "受注見込"}>
                   <span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span>
@@ -385,17 +420,33 @@ export default function ProjectDetail() {
             </div>
             <div className="border-t pt-3">
               <p className="text-[10px] text-muted-foreground mb-1.5">実績</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Field label="受注合計"><span className="tabular-nums font-medium">{yen(project.confirmed_revenue)}</span></Field>
-                <Field label="発注合計"><span className="tabular-nums">{yen(project.confirmed_cost)}</span></Field>
-                <Field label="粗利（実績）" className="col-span-2">
-                  <span className="tabular-nums font-medium">{yen(project.actual_gross_profit)}</span>
-                  {Number(project.confirmed_revenue) > 0 && (
-                    <span className="text-[10px] text-muted-foreground ml-1">{Math.round((Number(project.actual_gross_profit) / Number(project.confirmed_revenue)) * 100)}%</span>
-                  )}
-                </Field>
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-2">受注合計・発注合計は案件の編集で入力します（受注合計は請求書の税抜額、発注合計は仕入先への支払額）。粗利（実績）＝受注合計−発注合計。</p>
+              {(() => {
+                const revManual = !!project.actual_revenue_manual;
+                const costManual = !!project.actual_cost_manual;
+                const rev = revManual ? Number(project.confirmed_revenue) || 0 : actuals.revenue;
+                const cost = costManual ? Number(project.confirmed_cost) || 0 : actuals.cost;
+                const gross = rev - cost;
+                const tag = (manual, autoText, which, autoValue) => manual ? (
+                  <span className="block text-[10px] text-amber-700">手入力{autoValue > 0 && <> ・<button type="button" className="text-primary hover:underline" onClick={() => setActualAuto.mutate(which)} disabled={setActualAuto.isPending}>自動に戻す（{yen(autoValue)}）</button></>}</span>
+                ) : <span className="block text-[10px] text-muted-foreground">{autoText}</span>;
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="actuals">
+                    <Field label="受注合計">
+                      <span className="tabular-nums font-medium">{yen(rev)}</span>
+                      {tag(revManual, actuals.revenueCount ? `自動・請求書 ${actuals.revenueCount} 件から` : "自動・請求書はまだありません", "revenue", actuals.revenue)}
+                    </Field>
+                    <Field label="発注合計">
+                      <span className="tabular-nums">{yen(cost)}</span>
+                      {tag(costManual, actuals.poCount || actuals.printCount ? `自動・${[actuals.poCount && `発注書 ${actuals.poCount} 件`, actuals.printCount && `入稿記録 ${actuals.printCount} 件`].filter(Boolean).join("・")}から` : "自動・発注書／入稿記録はまだありません", "cost", actuals.cost)}
+                    </Field>
+                    <Field label="粗利（実績）" className="col-span-2">
+                      <span className="tabular-nums font-medium">{yen(gross)}</span>
+                      {rev > 0 && <span className="text-[10px] text-muted-foreground ml-1">{Math.round((gross / rev) * 100)}%</span>}
+                    </Field>
+                  </div>
+                );
+              })()}
+              <p className="text-[10px] text-muted-foreground mt-2">受注合計はこの案件の請求書（取消を除く・税抜。まとめた請求書はこの案件の分だけ）、発注合計は連携先への発注書（下書きを除く・税抜）と入稿記録の原価から自動で入ります。案件の「編集」で直すと手入力になります。粗利（実績）＝受注合計−発注合計。</p>
             </div>
           </CardContent>
         </Card>
@@ -652,4 +703,22 @@ function ProjectMemoField({ project }) {
       </div>
     </div>
   );
+}
+
+/**
+ * 見込み（受注見込・発注見込）がどこから入ったか。
+ *   定期売上の設定から ／ 見積 CV-xxxx から ／ 手入力（見積から入れたあとに直した、を含む）
+ */
+function ForecastSourceBadge({ project, fs, template, estimates }) {
+  const pill = (cls, text, title) => <span className={`rounded border px-1.5 py-px ${cls}`} title={title} data-testid="forecast-source">{text}</span>;
+  if (isRecurringParent(project)) {
+    const est = template?.source_estimate_id ? estimates.find((e) => e.id === template.source_estimate_id) : null;
+    return pill("border-rose-200 bg-rose-50 text-rose-700", `定期売上の設定から${est ? `（見積 ${est.estimate_number}）` : ""}`, "月額は「定期売上の設定」で決まります（案件の編集で直しても、設定の値に戻ります）");
+  }
+  if (fs?.estimate_id) {
+    const same = Number(fs.revenue) === (Number(project.expected_revenue) || 0) && Number(fs.cost) === (Number(project.expected_cost) || 0);
+    if (same) return pill("border-blue-200 bg-blue-50 text-blue-700", `見積 ${fs.estimate_number || ""} の明細 ${(fs.line_ids || []).length} 件から${fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}`, "「見積から見込みを入れる」で入れた金額です");
+    return pill("border-slate-200 bg-slate-50 text-slate-600", `手入力（見積 ${fs.estimate_number || ""} から入れたあとに直しています）`, "案件の編集で金額を直しています");
+  }
+  return pill("border-slate-200 bg-slate-50 text-slate-600", "手入力", "案件の新規作成・編集で入れた金額です。「見積から見込みを入れる」で見積の明細から入れることもできます");
 }
