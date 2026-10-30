@@ -22,7 +22,7 @@ import { generateRecurringProjects } from "@/lib/projectNumber";
 import { todayString } from "@/lib/fiscal";
 import { lineAmount } from "@/lib/constants";
 import { useSalesCategories, classifySalesCategory } from "@/lib/salesCategory";
-import MonthSelect from "@/components/ui/month-select";
+import MonthSelect, { PeriodEndSelect } from "@/components/ui/month-select";
 
 const yen = (n) => `¥${Math.round(Number(n || 0)).toLocaleString()}`;
 const toNumber = (v) => {
@@ -257,8 +257,8 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">終了月</Label>
-              <MonthSelect value={form.end_month} onChange={(v) => set("end_month", v)} allowEmpty emptyLabel="無期限" ariaLabel="終了月" yearsAhead={10} />
-              <p className="text-[10px] text-muted-foreground">「無期限」なら終わりを決めない</p>
+              <PeriodEndSelect start={form.start_month} value={form.end_month} onChange={(v) => set("end_month", v)} ariaLabel="終了月" />
+              <p className="text-[10px] text-muted-foreground">開始月から何か月分続けるかを選べます（「無期限」なら終わりを決めない）</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">状態</Label>

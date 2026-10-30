@@ -46,3 +46,27 @@ export default function MonthSelect({ value = "", onChange, min = "", max = "", 
     </div>
   );
 }
+
+/**
+ * 期間の終わりを選ぶ（定期売上の終了月など）。開始月から順に「2027年4月分まで（6か月）」のように 1 つのプルダウンで並べる。
+ *   値は "YYYY-MM"（「無期限」は ""）。開始月より前は出さない。
+ */
+export function PeriodEndSelect({ start, value = "", onChange, months = 60, emptyLabel = "無期限", className = "", ariaLabel = "終了月", disabled = false }) {
+  const s = /^\d{4}-\d{2}$/.test(start || "") ? start : null;
+  const opts = [];
+  if (s) {
+    let [yy, mm] = [Number(s.slice(0, 4)), Number(s.slice(5, 7))];
+    for (let n = 1; n <= months; n++) {
+      opts.push({ v: `${yy}-${pad(mm)}`, label: `${yy}年${mm}月分まで（${n}か月${n % 12 === 0 ? `・${n / 12}年` : ""}）` });
+      mm += 1; if (mm > 12) { mm = 1; yy += 1; }
+    }
+  }
+  // 範囲の外の値（前に入れた値など）も選んだままにできるように残す
+  if (value && !opts.some((o) => o.v === value)) opts.unshift({ v: value, label: `${Number(value.slice(0, 4))}年${Number(value.slice(5, 7))}月分まで` });
+  return (
+    <select value={value || ""} onChange={(e) => onChange(e.target.value)} className={`${SELECT} ${className}`} aria-label={ariaLabel} disabled={disabled || !s}>
+      <option value="">{emptyLabel}</option>
+      {opts.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+    </select>
+  );
+}

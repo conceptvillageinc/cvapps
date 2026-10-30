@@ -16,7 +16,7 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
 const nextMonth = () => { const d = new Date(); d.setMonth(d.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
 const monthLabel = (ym) => (ym ? `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月分` : "");
 import { MONTH_TOKEN, recurringPayloadFromEstimate, recurringNoteLines, recurringSums, templateAddsMonth } from "@/lib/recurringSetup";
-import MonthSelect from "@/components/ui/month-select";
+import MonthSelect, { PeriodEndSelect } from "@/components/ui/month-select";
 
 /**
  * 案件（または見積）を定期売上にする・定期売上の設定を直す。
@@ -183,12 +183,12 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">開始月 <span className="text-destructive">*</span></Label>
-                <MonthSelect value={startMonth} onChange={setStartMonth} ariaLabel="開始月" />
+                <MonthSelect value={startMonth} onChange={(v) => { setStartMonth(v); if (endMonth && endMonth < v) setEndMonth(""); }} ariaLabel="開始月" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">終了月</Label>
-                <MonthSelect value={endMonth} onChange={setEndMonth} min={startMonth} allowEmpty emptyLabel="無期限" ariaLabel="終了月" yearsAhead={10} />
-                <p className="text-[10px] text-muted-foreground">「無期限」なら終わりを決めない</p>
+                <PeriodEndSelect start={startMonth} value={endMonth} onChange={setEndMonth} ariaLabel="終了月" />
+                <p className="text-[10px] text-muted-foreground">開始月から何か月分続けるかを選べます（「無期限」なら終わりを決めない）</p>
               </div>
             </div>
 
