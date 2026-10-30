@@ -716,7 +716,7 @@ function NextGroupRows({ group: g }) {
       )}
       {g.rows.map((p) => (
         <TableRow key={p.id} className="hover:bg-muted/40">
-          <TableCell className="text-xs whitespace-nowrap">{p.due_date ? withWeekday(p.due_date).slice(5) : <span className="text-muted-foreground">—</span>}</TableCell>
+          <TableCell className="text-xs whitespace-nowrap">{p.due_date ? withWeekday(p.due_date) : <span className="text-muted-foreground">—</span>}</TableCell>
           <TableCell className="text-right text-sm tabular-nums">{yen(p.confirmed_revenue)}</TableCell>
           <TableCell className="text-sm max-w-[320px]">
             {/* クライアント名（小さく）を上、案件名を下に */}
