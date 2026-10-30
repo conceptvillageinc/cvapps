@@ -103,6 +103,7 @@ const WRITABLE_COLUMNS = {
     'auto_delivery_note', 'line_items',
     'project_id', 'source_estimate_id', 'source_line_ids', 'lines_applied_at',
     'source_all_line_ids', 'one_time_revenue', 'one_time_cost', 'drift_dismissed_sig',
+    'first_note_one_time', 'one_time_line_items',
   ],
   projects: [
     'project_number', 'client_id', 'client_name', 'name', 'deal_probability', 'phase',

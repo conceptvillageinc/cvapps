@@ -17,7 +17,7 @@ import { lineAmount } from "@/lib/constants";
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
 const nextMonth = () => { const d = new Date(); d.setMonth(d.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
 const monthLabel = (ym) => (ym ? `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月分` : "");
-import { MONTH_TOKEN, recurringPayloadFromEstimate, recurringNoteLines, recurringSums, templateAddsMonth } from "@/lib/recurringSetup";
+import { MONTH_TOKEN, recurringPayloadFromEstimate, recurringNoteLines, recurringOneTimeLines, recurringSums, templateAddsMonth } from "@/lib/recurringSetup";
 import MonthSelect, { PeriodEndSelect } from "@/components/ui/month-select";
 
 /**
@@ -41,6 +41,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
   const [endMonth, setEndMonth] = useState("");
   const [autoNote, setAutoNote] = useState(true);
   const [addMonth, setAddMonth] = useState(true);
+  const [firstOneTime, setFirstOneTime] = useState(true); // 初回の納品書に初回だけの費用も入れる
   const est = candidates.find((e) => e.id === estimateId) || null;
   const lines = useMemo(() => forecastLines(est), [est]);
 
@@ -52,6 +53,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
     setEndMonth(template?.end_month ? template.end_month.slice(0, 7) : "");
     setAutoNote(template ? !!template.auto_delivery_note : true);
     setAddMonth(template ? templateAddsMonth(template) : true);
+    setFirstOneTime(template ? !!template.first_note_one_time : true);
   }, [open]);
   useEffect(() => {
     if (!est) { setChecked(new Set()); return; }
@@ -68,7 +70,10 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
   const name = project?.name || est?.estimate_title || "";
 
   // 毎月の納品書の明細（見積の明細を税抜で写す。品名の後ろに「（{年月}）」を付ける）
-  const noteLines = useMemo(() => recurringNoteLines(est, [...checked], addMonth), [est, checked, addMonth]);
+  const monthlyLines = useMemo(() => recurringNoteLines(est, [...checked], addMonth), [est, checked, addMonth]);
+  const oneTimeLines = useMemo(() => recurringOneTimeLines(est, [...checked]), [est, checked]);
+  // 開始月の納品書の例（初回だけの費用も入れるなら先に並べる）
+  const noteLines = firstOneTime && oneTimeLines.length ? [...oneTimeLines, ...monthlyLines] : monthlyLines;
   const sampleTotal = noteLines.reduce((s, l) => s + lineAmount(l.quantity, l.unit_price), 0);
 
   const save = useMutation({
@@ -87,6 +92,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
         end_month: endMonth ? `${endMonth}-01` : null,
         is_active: true,
         auto_delivery_note: autoNote,
+        first_note_one_time: autoNote && firstOneTime && oneTimeLines.length > 0,
         project_id: project?.id || null,
       };
       const tpl = template
@@ -102,14 +108,29 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
       await db.entities.Project.update(projectId, patch);
       // 見積が案件に紐づいていなかったときは、できた定期売上の案件に紐づける
       if (!project && est) await db.entities.Estimate.update(est.id, { project_id: projectId });
-      return projectId;
+      // 開始月が今月以前なら、開始月〜今月の納品書の下書きをすぐ作る（毎月 1 日を待たない。作成済みの月は作らない）
+      let notes = 0;
+      if (autoNote) {
+        const now = new Date();
+        const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        let ym = startMonth;
+        for (let i = 0; i < 24 && ym <= thisYm && (!endMonth || ym <= endMonth); i++) {
+          const { data: n, error } = await supabase.rpc("generate_recurring_notes", { p_month: `${ym}-01`, p_template_id: tpl.id });
+          if (error) throw new Error(`納品書の下書きを作れませんでした（${error.message}）`);
+          notes += Number(n) || 0;
+          const [y, m] = ym.split("-").map(Number);
+          ym = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+        }
+      }
+      return { projectId, notes };
     },
-    onSuccess: (projectId) => {
+    onSuccess: ({ projectId, notes }) => {
+      qc.invalidateQueries({ queryKey: ["deliveryNotes"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["project"] });
       qc.invalidateQueries({ queryKey: ["recurringTemplates"] });
       qc.invalidateQueries({ queryKey: ["estimates"] });
-      toast.success(template ? "定期売上の設定を直しました" : `定期売上にしました（${monthLabel(startMonth).replace("分", "")}から 月額 ${yen(monthly)}）`);
+      toast.success(`${template ? "定期売上の設定を直しました" : `定期売上にしました（${monthLabel(startMonth).replace("分", "")}から 月額 ${yen(monthly)}）`}${notes ? `。納品書の下書きを ${notes} 件作りました` : ""}`);
       onOpenChange(false);
       onDone?.(projectId);
     },
@@ -124,7 +145,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Repeat className="w-4 h-4 text-rose-600" /> {template ? "定期売上を編集" : "定期売上にする"}</DialogTitle>
           <DialogDescription className="text-xs">
-            {clientName}　{name}　―　見積の明細のうち<strong>毎月請求するもの</strong>にチェックすると、その合計が月額になり、毎月の納品書の明細になります。初期費用など 1 回だけのものはチェックを外すと「初回だけの費用」として開始月の見込みに入ります（納品書はふつうに作ってください）。
+            {clientName}　{name}　―　見積の明細のうち<strong>毎月請求するもの</strong>にチェックすると、その合計が月額になり、毎月の納品書の明細になります。初期費用など 1 回だけのものはチェックを外すと「初回だけの費用」として開始月の見込みに入ります（納品書は下の設定で初回の納品書に入れるか、見積からふつうに作ってください）。
           </DialogDescription>
         </DialogHeader>
 
@@ -213,6 +234,12 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
                     <Checkbox checked={addMonth} onCheckedChange={(v) => setAddMonth(!!v)} />
                     品名の後ろに「（{monthLabel(startMonth) || "2026年11月分"}）」のように月を付ける
                   </label>
+                  {oneTimeLines.length > 0 && (
+                    <label className="flex items-center gap-2 text-xs cursor-pointer pl-6" data-testid="recurring-first-onetime">
+                      <Checkbox checked={firstOneTime} onCheckedChange={(v) => setFirstOneTime(!!v)} />
+                      初回（{monthLabel(startMonth)}）の納品書に、初回だけの費用（{yen(oneTime)}）も入れる
+                    </label>
+                  )}
                   {noteLines.length > 0 && (
                     <div className="ml-6 rounded-md border bg-white px-3 py-2 text-[11px]" data-testid="recurring-note-preview">
                       <p className="font-semibold text-muted-foreground mb-1">{monthLabel(startMonth)}の納品書（下書き）の例</p>

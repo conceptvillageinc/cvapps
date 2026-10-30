@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
-import { openBlob, openPreviewTab, showBlobInTab } from "@/lib/documents";
+import { openBlob, openPreviewTab, showBlobInTab, docItemsFromEstimate } from "@/lib/documents";
 import { shareText, copyShareText } from "@/lib/shareText";
 import { toast } from "sonner";
 import { STATUS_MAP } from "@/lib/constants";
@@ -103,8 +103,14 @@ function EstimateDetail() {
     queryFn: () => db.entities.RecurringProjectTemplate.get(project.recurring_template_id),
     enabled: !!project?.recurring_template_id,
   });
+  // 定期売上の元の見積から納品書を作るときは、毎月の分が自動の納品書と重ならないように確かめる
+  const [noteChoiceOpen, setNoteChoiceOpen] = useState(false);
 
   const [formData, setFormData] = useState(null);
+  const recurringNoteSource = isRecurringParent(project) && !!recurringTemplate?.auto_delivery_note && recurringTemplate.source_estimate_id === estimateId;
+  const oneTimeLineIds = recurringNoteSource && formData
+    ? docItemsFromEstimate(formData).map((li) => li.source_line_id).filter((id) => id && !(recurringTemplate.source_line_ids || []).includes(id))
+    : [];
   // レビュー申請先を選ぶダイアログ
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewerId, setReviewerId] = useState("");
@@ -413,7 +419,7 @@ function EstimateDetail() {
                   <DropdownMenuItem className="text-xs" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/partner-orders/new?estimate=${estimateId}`); }}>連携先への発注書（宛先：連携先／発行元：CV）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs">
+              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } if (recurringNoteSource) setNoteChoiceOpen(true); else navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs" data-testid="estimate-create-note">
                 <Truck className="w-3.5 h-3.5" /> 納品書作成
               </Button>
               <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } setRecurringOpen(true); }} className="gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={!!project?.recurring_template_id && !recurringTemplate} data-testid="estimate-recurring">
@@ -729,6 +735,31 @@ function EstimateDetail() {
         </TabsContent>
       </Tabs>
       )}
+      <Dialog open={noteChoiceOpen} onOpenChange={setNoteChoiceOpen}>
+        <DialogContent className="max-w-md" data-testid="recurring-note-choice">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Repeat className="w-4 h-4 text-rose-600" />定期売上の見積です</DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              毎月の分（{(recurringTemplate?.source_line_ids || []).length} 行）は、毎月 1 日に納品書の下書きが自動でできます{recurringTemplate?.first_note_one_time ? "（初回だけの費用も、開始月の自動の納品書に入ります）" : ""}。ここで全部の明細で作ると、自動の納品書と重なります。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Button className="w-full justify-start h-auto py-2 text-left" disabled={!oneTimeLineIds.length || !!recurringTemplate?.first_note_one_time} onClick={() => { setNoteChoiceOpen(false); navigate(`/delivery-notes/new?estimate=${estimateId}&only=${oneTimeLineIds.join(",")}`); }} data-testid="note-choice-onetime">
+              <span>
+                <span className="block text-sm">初回だけの費用だけで作る（{oneTimeLineIds.length} 行）</span>
+                {!oneTimeLineIds.length ? <span className="block text-[11px] opacity-80">初回だけの費用の明細はありません</span>
+                  : recurringTemplate?.first_note_one_time ? <span className="block text-[11px] opacity-80">初回だけの費用は、開始月の自動の納品書に入ります</span> : null}
+              </span>
+            </Button>
+            <Button variant="outline" className="w-full justify-start text-sm" onClick={() => { setNoteChoiceOpen(false); navigate(`/delivery-notes/new?estimate=${estimateId}`); }} data-testid="note-choice-all">
+              すべての明細で作る
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setNoteChoiceOpen(false)}>キャンセル</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <RecurringSetupDialog
         open={recurringOpen}
         onOpenChange={setRecurringOpen}

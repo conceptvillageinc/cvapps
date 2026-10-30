@@ -145,7 +145,9 @@ export default function DeliveryNoteEdit() {
         // ほかの納品書で納品済みの行は最初から外す（分納）。下の「今回納品する行を選ぶ」で選び直せる
         line_items: (() => {
           const done = deliveredElsewhereMap(siblingNotes, null);
-          const all = docItemsFromEstimate(sourceEstimate);
+          // ?only=行id,… のときはその行だけ（定期売上の案件で「初回だけの費用の分だけで作る」）
+          const only = (searchParams.get("only") || "").split(",").filter(Boolean);
+          const all = docItemsFromEstimate(sourceEstimate).filter((li) => !only.length || only.includes(li.source_line_id));
           const rest = all.filter((li) => !done.has(li.source_line_id));
           if (rest.length < all.length) toast.info(`ほかの納品書で納品済みの ${all.length - rest.length} 行は外しています`);
           return rest;

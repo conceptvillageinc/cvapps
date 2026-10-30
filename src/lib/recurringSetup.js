@@ -30,6 +30,15 @@ export function recurringNoteLines(estimate, checkedIds, addMonth) {
     }));
 }
 
+/** 初回だけの明細（チェックしなかった明細。品名に月は付けない）。開始月の納品書に入れるときに使う */
+export function recurringOneTimeLines(estimate, checkedIds) {
+  if (!estimate) return [];
+  const set = new Set(checkedIds || []);
+  return docItemsFromEstimate(estimate)
+    .filter((li) => !set.has(li.source_line_id))
+    .map((li) => ({ name: li.name, quantity: li.quantity, unit: li.unit, unit_price: li.unit_price, tax_rate: li.tax_rate, sales_category: li.sales_category || null }));
+}
+
 /** ひな形の明細の品名に月が付いているか（入れ直すときに同じ付け方にする） */
 export const templateAddsMonth = (template) => !(template?.line_items || []).length || (template.line_items || []).some((l) => String(l.name || "").includes(MONTH_TOKEN));
 
@@ -42,6 +51,7 @@ export function recurringPayloadFromEstimate(estimate, checkedIds, addMonth) {
     one_time_revenue: s.oneTime,
     one_time_cost: s.oneTimeCost,
     line_items: recurringNoteLines(estimate, checkedIds, addMonth),
+    one_time_line_items: recurringOneTimeLines(estimate, checkedIds),
     source_estimate_id: estimate?.id || null,
     source_line_ids: [...(checkedIds || [])],
     source_all_line_ids: forecastLines(estimate).map((l) => l.id),
