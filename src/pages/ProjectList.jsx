@@ -35,7 +35,10 @@ const VIEWS = [
 const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status", "delivery"];
 
 // 案件一覧（標準）の列の並び
-const COLUMN_ORDER = ["registered_at", "client_name", "due_date", "name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "delivery", "payment_due_date", "project_number"];
+//   横スクロールなしで見られるように、クライアント・案件名・案件番号は 1 つの欄、完了予定と入金予定も 1 つの欄にまとめる
+const COLUMN_ORDER = ["registered_at", "due_date", "client_name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "delivery"];
+// 見出しの名前（まとめた欄）
+const HEAD_LABEL = { client_name: "クライアント／案件名", due_date: "完了予定／入金予定" };
 
 /** 案件一覧（標準）の 1 マス */
 function ProjectCell({ col, p, delivery, today }) {
@@ -45,8 +48,18 @@ function ProjectCell({ col, p, delivery, today }) {
     case "project_number": return (
       <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
     );
+    // クライアント（上の行・案件番号つき）と案件名（下の行）
     case "client_name": return (
-      <TableCell className="text-sm font-medium max-w-[220px] truncate" title={p.client_name}>{p.client_name}</TableCell>
+      <TableCell className="min-w-[260px]">
+        <div className="flex items-baseline gap-2 min-w-0 text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground/80 truncate" title={p.client_name}>{p.client_name}</span>
+          <span className="font-mono shrink-0">{p.project_number}</span>
+        </div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm leading-snug line-clamp-2 break-all" title={p.name}>{p.name}</span>
+          {p.is_recurring && <RecurringMark />}
+        </div>
+      </TableCell>
     );
     case "name": return (
       <TableCell className="text-sm max-w-[320px]">
@@ -70,7 +83,10 @@ function ProjectCell({ col, p, delivery, today }) {
       </TableCell>
     );
     case "due_date": return (
-      <TableCell className="text-xs whitespace-nowrap">{p.due_date || "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap tabular-nums">
+        {p.due_date || "—"}
+        <span className="block text-[10px] text-muted-foreground" title="入金予定日">入金 {p.payment_due_date || "—"}</span>
+      </TableCell>
     );
     case "payment_due_date": return (
       <TableCell className="text-xs whitespace-nowrap">{p.payment_due_date || "—"}</TableCell>
@@ -408,7 +424,7 @@ export default function ProjectList() {
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {COLUMN_ORDER.map((key) => [key, columnDefs[key]]).map(([key, def]) => (
                       <TableHead key={key} className={`text-xs text-white whitespace-nowrap ${key.includes("revenue") || key.includes("profit") ? "text-right" : ""}`}>
-                        {def.label}
+                        {HEAD_LABEL[key] || def.label}
                         {FILTERABLE_KEYS.includes(key) && (
                           <ColumnFilter
                             label={def.label}
