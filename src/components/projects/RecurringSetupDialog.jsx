@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Repeat, Loader2, Truck, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/api/db";
+import { supabase } from "@/lib/supabase";
+import { useSystemSettings } from "@/lib/useSystemSettings";
 import { useAuth } from "@/lib/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,7 @@ import MonthSelect, { PeriodEndSelect } from "@/components/ui/month-select";
 export default function RecurringSetupDialog({ open, onOpenChange, project, estimates = [], initialEstimateId = null, template = null, onDone }) {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { phaseOptions = [] } = useSystemSettings();
   const candidates = useMemo(() => estimates.filter((e) => (e.line_items || []).length), [estimates]);
   const [estimateId, setEstimateId] = useState(null);
   const [checked, setChecked] = useState(new Set());
@@ -76,7 +79,8 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
         client_name: clientName,
         name,
         deal_probability: prob,
-        phase: project?.phase || "受注済",
+        // 定期売上にした案件は受注が決まっているので、フェーズは「受注済」にする（設定に無いときは今のまま）
+        phase: phaseOptions.includes("受注済") ? "受注済" : (project?.phase || "受注済"),
         ...recurringPayloadFromEstimate(est, [...checked], addMonth),
         other_cost: Number(project?.other_cost) || 0,
         start_month: `${startMonth}-01`,
@@ -88,13 +92,16 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
       const tpl = template
         ? await db.entities.RecurringProjectTemplate.update(template.id, payload)
         : await db.entities.RecurringProjectTemplate.create({ ...payload, created_by: user?.id || null });
+      // 案件に反映する（月額・受注確度・定期売上の印・期間）。ひな形を保存したときにも DB 側で動くが、確実に、ここでもう一度呼ぶ
+      const { data: syncedId, error: syncError } = await supabase.rpc("sync_recurring_project", { p_template_id: tpl.id });
+      if (syncError) throw new Error(`案件に反映できませんでした（${syncError.message}）`);
+      const projectId = project?.id || syncedId || null;
+      if (!projectId) throw new Error("定期売上の案件が見つかりませんでした");
+      // 受注確度・フェーズを合わせる（案件の画面からもすぐ分かるように）
+      const patch = { deal_probability: prob, ...(phaseOptions.includes("受注済") ? { phase: "受注済" } : {}), is_recurring: true };
+      await db.entities.Project.update(projectId, patch);
       // 見積が案件に紐づいていなかったときは、できた定期売上の案件に紐づける
-      let projectId = project?.id || null;
-      if (!projectId) {
-        const [p] = await db.entities.Project.filter({ recurring_template_id: tpl.id });
-        projectId = p?.id || null;
-        if (projectId && est) await db.entities.Estimate.update(est.id, { project_id: projectId });
-      }
+      if (!project && est) await db.entities.Estimate.update(est.id, { project_id: projectId });
       return projectId;
     },
     onSuccess: (projectId) => {
