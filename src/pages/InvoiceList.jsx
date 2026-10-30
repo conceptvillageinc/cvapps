@@ -17,6 +17,7 @@ import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/l
 import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
+import RecurringMark, { useRecurringProjectIds, invoiceHasRecurring } from "@/components/projects/RecurringMark";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
@@ -92,6 +93,7 @@ export default function InvoiceList() {
   const cols = useListColumns("invoices"); // 列の並び・表示（全員共通）
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const recurringIds = useRecurringProjectIds();
   const { fiscalYearStartMonth } = useSystemSettings();
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
@@ -205,7 +207,7 @@ export default function InvoiceList() {
                             case "invoice_date": return <TableCell key={k} className="text-xs whitespace-nowrap">{inv.invoice_date}</TableCell>;
                             case "due_date": return <TableCell key={k} className={`text-xs whitespace-nowrap ${late ? "text-red-700 font-medium" : ""}`}>{inv.due_date || "—"}</TableCell>;
                             case "client_name": return <TableCell key={k} className="text-sm font-medium max-w-[220px] truncate">{inv.client_name}</TableCell>;
-                            case "title": return <TableCell key={k} className="text-sm max-w-[300px] truncate">{inv.title || "—"}</TableCell>;
+                            case "title": return <TableCell key={k} className="text-sm max-w-[300px] truncate">{invoiceHasRecurring(inv, recurringIds) && <RecurringMark className="mr-1.5 align-middle" title="定期売上の分が入っている請求書" />}{inv.title || "—"}</TableCell>;
                             case "total": return <TableCell key={k} className="text-right text-sm tabular-nums">{yen(inv.total)}</TableCell>;
                             case "status": return (
                         <TableCell key={k} onClick={(e) => e.stopPropagation()}>

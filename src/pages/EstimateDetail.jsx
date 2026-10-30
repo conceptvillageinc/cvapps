@@ -417,7 +417,7 @@ function EstimateDetail() {
                 <Truck className="w-3.5 h-3.5" /> 納品書作成
               </Button>
               <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } setRecurringOpen(true); }} className="gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={!!project?.recurring_template_id && !recurringTemplate} data-testid="estimate-recurring">
-                <Repeat className="w-3.5 h-3.5" /> {isRecurringParent(project) ? "定期売上の設定" : "定期売上にする"}
+                <Repeat className="w-3.5 h-3.5" /> {isRecurringParent(project) || project?.recurring_template_id ? "定期売上を編集" : "定期売上にする"}
               </Button>
             </>
           )}
@@ -735,7 +735,7 @@ function EstimateDetail() {
         project={project || null}
         estimates={project ? (projectEstimates.some((e) => e.id === estimateId) ? projectEstimates.map((e) => (e.id === estimateId ? formData : e)) : [formData, ...projectEstimates]) : formData ? [formData] : []}
         initialEstimateId={estimateId}
-        template={isRecurringParent(project) ? recurringTemplate : null}
+        template={project?.recurring_template_id ? recurringTemplate : null}
         onDone={(pid) => { if (pid) navigate(`/projects/${pid}`); }}
       />
       <ProjectLinkDialog

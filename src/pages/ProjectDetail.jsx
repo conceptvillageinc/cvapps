@@ -251,7 +251,7 @@ export default function ProjectDetail() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" className="gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" onClick={() => setRecurringOpen(true)} disabled={!!project.recurring_template_id && !recurringTemplate} data-testid="recurring-open">
-            <Repeat className="w-3.5 h-3.5" /> {isRecurringParent(project) ? "定期売上の設定" : "定期売上にする"}
+            <Repeat className="w-3.5 h-3.5" /> {isRecurringParent(project) || project?.recurring_template_id ? "定期売上を編集" : "定期売上にする"}
           </Button>
           {isRecurringParent(project) && recurringTemplate && (
             <AlertDialog open={stopOpen} onOpenChange={setStopOpen}>
@@ -645,7 +645,7 @@ export default function ProjectDetail() {
       )}
 
       <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} project={project} />
-      <RecurringSetupDialog open={recurringOpen} onOpenChange={setRecurringOpen} project={project} estimates={estimates} template={isRecurringParent(project) ? recurringTemplate : null} />
+      <RecurringSetupDialog open={recurringOpen} onOpenChange={setRecurringOpen} project={project} estimates={estimates} template={project?.recurring_template_id ? recurringTemplate : null} />
       <ForecastFromEstimateDialog open={forecastOpen} onOpenChange={setForecastOpen} project={project} estimates={estimates} initial={forecastInitial} />
     </div>
   );

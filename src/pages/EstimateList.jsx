@@ -26,6 +26,7 @@ import { todayString } from "@/lib/fiscal";
 import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submission";
 import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
+import RecurringMark from "@/components/projects/RecurringMark";
 
 /** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
 function estimateGross(e) {
@@ -207,7 +208,7 @@ export default function EstimateList() {
         return (
           <TableCell key={key} className="text-sm">
             {latest}
-            <div className="font-medium">{est.client_name}</div>
+            <div className="font-medium flex items-center gap-1.5">{est.client_name}{est.project_id && projectById[est.project_id]?.is_recurring && <RecurringMark title="定期売上の案件の見積" />}</div>
             {est.project_id && projectById[est.project_id] && (
               <div className="text-[10px] text-muted-foreground truncate max-w-[220px]">
                 {projectById[est.project_id].project_number} {projectById[est.project_id].name}

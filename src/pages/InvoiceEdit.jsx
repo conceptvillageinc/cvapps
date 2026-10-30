@@ -34,6 +34,7 @@ import {
   companyInfoFromSettings, INVOICE_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
 import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
+import RecurringMark from "@/components/projects/RecurringMark";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -536,7 +537,7 @@ export default function InvoiceEdit() {
                       <span className="font-mono text-muted-foreground">{dn.delivery_number}</span>
                       <span className="text-muted-foreground">{dn.delivery_date}</span>
                       <span className="flex-1 truncate">{dn.title || "（件名なし）"}</span>
-                      {dn.recurring_template_id && <Badge className="text-[9px] font-normal bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50">定期</Badge>}
+                      {dn.recurring_template_id && <RecurringMark />}
                       {dn.status === "draft" && <Badge variant="outline" className="text-[9px] font-normal text-muted-foreground">下書き</Badge>}
                       {dn.project_id && projectId && dn.project_id !== projectId && <Badge variant="outline" className="text-[9px] font-normal">別案件</Badge>}
                       <span className="tabular-nums">{yen(dn.total)}</span>

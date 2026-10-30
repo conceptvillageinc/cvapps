@@ -17,6 +17,7 @@ import {
 import { DELIVERY_STATUS_MAP } from "@/lib/documents";
 import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
+import RecurringMark, { useRecurringProjectIds, noteIsRecurring } from "@/components/projects/RecurringMark";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -27,6 +28,7 @@ export default function DeliveryNoteList() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all"); // all | uninvoiced | draft
   const [picked, setPicked] = useState(() => new Set());
+  const recurringIds = useRecurringProjectIds();
   const [deleting, setDeleting] = useState(false);
 
   const { data: notes = [], isLoading } = useQuery({
@@ -163,7 +165,7 @@ export default function DeliveryNoteList() {
                       <span className="font-mono text-muted-foreground w-24 shrink-0">{n.delivery_number}</span>
                       <span className="text-muted-foreground w-20 shrink-0 tabular-nums">{n.delivery_date}</span>
                       <span className="flex-1 min-w-0 truncate">
-                        {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50">定期</Badge>}
+                        {noteIsRecurring(n, recurringIds) && <RecurringMark className="mr-1.5 align-middle" />}
                         {n.status === "draft" && <Badge variant="outline" className="mr-1.5 text-[9px] font-normal text-muted-foreground">下書き</Badge>}
                         {n.title || "（件名なし）"}
                       </span>
@@ -222,7 +224,7 @@ export default function DeliveryNoteList() {
                             case "client_name": return <TableCell key={k} className="text-sm font-medium max-w-[220px] truncate">{n.client_name}</TableCell>;
                             case "title": return (
                               <TableCell key={k} className="text-sm max-w-[300px] truncate">
-                                {n.recurring_template_id && <Badge className="mr-1.5 text-[9px] font-normal bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-50" title="定期売上のひな形から毎月作られた納品書">定期</Badge>}
+                                {noteIsRecurring(n, recurringIds) && <RecurringMark className="mr-1.5 align-middle" title={n.recurring_template_id ? "定期売上から毎月作られた納品書" : "定期売上の案件の納品書"} />}
                                 {n.title || "—"}
                               </TableCell>
                             );

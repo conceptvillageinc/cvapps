@@ -10,6 +10,7 @@ import { projectDelivery, estimateDelivery, stateOfNotes, DELIVERY_STATE, DELIVE
 import { isRecurringParent, recurringMonths } from "@/lib/projectInvoicing";
 import { submissionOf } from "@/lib/submission";
 import { todayString } from "@/lib/fiscal";
+import RecurringMark from "@/components/projects/RecurringMark";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const md = (s) => (s ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}` : "—");
@@ -125,7 +126,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
                     <span className="w-28 shrink-0"><DeliveryBadge info={d} due={p.status === "open" && String(p.due_date) <= monthEnd} /></span>
                     <Link to={`/projects/${p.id}?from=monthend`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 hover:underline">
                       <span className="text-[11px] text-muted-foreground mr-2">{p.client_name}</span>
-                      <span className="font-medium">{p.name}</span>
+                      <span className="font-medium">{p.name}</span>{p.is_recurring && <RecurringMark className="ml-1.5 align-middle" />}
                     </Link>
                     <span className="tabular-nums text-xs text-muted-foreground w-24 text-right">{yen(p.expected_revenue)}</span>
                     <span className="w-36 shrink-0 text-right">

@@ -20,6 +20,7 @@ import { DailyView, NextActionView } from "@/components/projects/ProjectViews";
 import MonthEndView from "@/components/projects/MonthEndView";
 import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
 import { projectDelivery, isDeliveryDue, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
+import RecurringMark from "@/components/projects/RecurringMark";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const ALL_YEARS = "all";
@@ -51,7 +52,7 @@ function ProjectCell({ col, p, delivery, today }) {
       <TableCell className="text-sm max-w-[320px]">
         <div className="flex items-center gap-1.5">
           <span className="truncate" title={p.name}>{p.name}</span>
-          {p.is_recurring && <Repeat className="w-3 h-3 text-rose-600 shrink-0" title="定期売上" />}
+          {p.is_recurring && <RecurringMark />}
         </div>
       </TableCell>
     );

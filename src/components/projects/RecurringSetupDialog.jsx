@@ -115,7 +115,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="recurring-setup">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Repeat className="w-4 h-4 text-rose-600" /> {template ? "定期売上の設定" : "定期売上にする"}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Repeat className="w-4 h-4 text-rose-600" /> {template ? "定期売上を編集" : "定期売上にする"}</DialogTitle>
           <DialogDescription className="text-xs">
             {clientName}　{name}　―　見積の明細のうち<strong>毎月請求するもの</strong>にチェックすると、その合計が月額になり、毎月の納品書の明細になります。初期費用など 1 回だけのものはチェックを外すと「初回だけの費用」として開始月の見込みに入ります（納品書はふつうに作ってください）。
           </DialogDescription>
