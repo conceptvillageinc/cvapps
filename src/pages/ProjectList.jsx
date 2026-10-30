@@ -313,7 +313,7 @@ export default function ProjectList() {
             </SelectContent>
           </Select>
           <Button variant="outline" className="gap-2" onClick={() => navigate("/projects/recurring")}>
-            <Repeat className="w-4 h-4 text-teal-600" /> 定期売上
+            <Repeat className="w-4 h-4 text-teal-600" /> 定期売上一覧
           </Button>
           <Button className="gap-2" onClick={() => setCreateOpen(true)}>
             <Plus className="w-4 h-4" /> 新規案件
