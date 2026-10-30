@@ -11,6 +11,7 @@
 //    定期売上は 1 つの案件に、毎月の納品書・請求書がぶら下がる。
 //    見込は「月額（expected_revenue）× 月」で、月ごとに
 //      その月の分として請求した額（明細の service_month → 取引日 = 納品日の月 → 請求日の月）
+//    開始月は、初回だけの費用（recurring_one_time_revenue / _cost）も足す（0041）
 //    service_month は、月ごとの案件（旧）を 1 つにまとめたときに、元の案件の月を明細に残したもの（0039）
 //    を差し引く。画面ではその月の分の案件として 1 行ずつ出す。
 // ============================================================================
@@ -98,10 +99,18 @@ export function forecastProjects(projects, invoices, { fromYm, toYm }) {
   const out = [];
   for (const p of projects || []) {
     if (!isRecurringParent(p)) { out.push({ ...p, _invoiced: byProject.get(p.id) || { subtotal: 0, total: 0 } }); continue; }
+    const startYm = ymOf(p.recurring_start_month);
     for (const m of recurringMonths(p, fromYm, toYm)) {
+      // 開始月は、初回だけの費用（初期設定費など）も見込みに足す
+      const first = m === startYm && (Number(p.recurring_one_time_revenue) || Number(p.recurring_one_time_cost));
       out.push({
         ...p,
-        name: `${p.name}（${monthLabel(m)}）`,
+        ...(first ? {
+          expected_revenue: (Number(p.expected_revenue) || 0) + (Number(p.recurring_one_time_revenue) || 0),
+          expected_cost: (Number(p.expected_cost) || 0) + (Number(p.recurring_one_time_cost) || 0),
+          expected_gross_profit: (Number(p.expected_gross_profit ?? 0) || 0) + (Number(p.recurring_one_time_revenue) || 0) - (Number(p.recurring_one_time_cost) || 0),
+        } : {}),
+        name: `${p.name}（${monthLabel(m)}${first ? "・初回費用込み" : ""}）`,
         registered_at: `${m}-01`,
         due_date: lastDay(m),
         payment_due_date: lastDay(addMonthsYm(m, 1)),

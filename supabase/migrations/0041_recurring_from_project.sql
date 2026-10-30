@@ -7,6 +7,9 @@
 --     （source_estimate_id・source_line_ids に、どの見積のどの明細から入れたかを残す）
 --   * 案件名・クライアントは案件の方を正にする（ひな形を直しても、案件名は上書きしない）
 --   * 案件に紐づかないひな形（これまでの「定期売上の設定」から登録したもの）は、今までどおり案件を作る
+--   * チェックしなかった明細（初期費用など 1 回だけのもの）は「初回だけの費用」として、開始月の見込みに足す
+--     （projects.recurring_one_time_revenue / _cost。画面の見込みの計算で使う）
+--   * 元にした見積が変わったら、案件の画面で「入れ直す／このままにする」を出す（drift_dismissed_sig）
 --
 -- Supabase の SQL Editor に貼り付けて実行する（冪等）。
 -- ============================================================================
@@ -15,7 +18,17 @@ alter table public.recurring_project_templates
   add column if not exists project_id uuid references public.projects (id) on delete set null,
   add column if not exists source_estimate_id uuid references public.estimates (id) on delete set null,
   add column if not exists source_line_ids jsonb not null default '[]'::jsonb,
-  add column if not exists lines_applied_at timestamptz;
+  add column if not exists lines_applied_at timestamptz,
+  add column if not exists source_all_line_ids jsonb not null default '[]'::jsonb,
+  add column if not exists one_time_revenue numeric not null default 0,
+  add column if not exists one_time_cost numeric not null default 0,
+  add column if not exists drift_dismissed_sig text;
+
+alter table public.projects
+  add column if not exists recurring_one_time_revenue numeric not null default 0,
+  add column if not exists recurring_one_time_cost numeric not null default 0;
+
+comment on column public.projects.recurring_one_time_revenue is '定期売上の案件: 初回だけの費用（税抜）。開始月の見込みに足す';
 
 comment on column public.recurring_project_templates.project_id is '定期売上にした案件（案件・見積の画面から登録したとき）';
 comment on column public.recurring_project_templates.source_estimate_id is '毎月の納品書の明細を入れた見積';
@@ -52,13 +65,15 @@ begin
       project_number, client_id, client_name, name, deal_probability, phase, status,
       expected_revenue, expected_cost, other_cost,
       registered_at, due_date, payment_due_date, is_recurring, notes,
-      recurring_template_id, recurring_month, recurring_start_month, recurring_end_month, created_by
+      recurring_template_id, recurring_month, recurring_start_month, recurring_end_month,
+      recurring_one_time_revenue, recurring_one_time_cost, created_by
     ) values (
       public.next_project_number(t.start_month),
       t.client_id, t.client_name, t.name, t.deal_probability, t.phase, 'open',
       t.expected_revenue, t.expected_cost, t.other_cost,
       t.start_month, (t.end_month + interval '1 month - 1 day')::date, null, true, t.notes,
-      t.id, null, t.start_month, t.end_month, t.created_by
+      t.id, null, t.start_month, t.end_month,
+      coalesce(t.one_time_revenue, 0), coalesce(t.one_time_cost, 0), t.created_by
     ) returning id into pid;
     update public.recurring_project_templates set project_id = pid where id = t.id and project_id is distinct from pid;
   else
@@ -71,7 +86,8 @@ begin
       expected_revenue = t.expected_revenue, expected_cost = t.expected_cost, other_cost = t.other_cost,
       due_date = (t.end_month + interval '1 month - 1 day')::date,
       is_recurring = true,
-      recurring_start_month = t.start_month, recurring_end_month = t.end_month
+      recurring_start_month = t.start_month, recurring_end_month = t.end_month,
+      recurring_one_time_revenue = coalesce(t.one_time_revenue, 0), recurring_one_time_cost = coalesce(t.one_time_cost, 0)
     where id = pid;
   end if;
   return pid;

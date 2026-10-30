@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { docItemsFromEstimate } from "@/lib/documents";
 import { forecastLines, defaultEstimate } from "@/lib/projectForecast";
 import { submissionOf, SUBMISSION_STATUS } from "@/lib/submission";
 import { lineAmount } from "@/lib/constants";
@@ -17,7 +16,7 @@ import { lineAmount } from "@/lib/constants";
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
 const nextMonth = () => { const d = new Date(); d.setMonth(d.getMonth() + 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
 const monthLabel = (ym) => (ym ? `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月分` : "");
-const MONTH_TOKEN = "{年月}";
+import { MONTH_TOKEN, recurringPayloadFromEstimate, recurringNoteLines, recurringSums, templateAddsMonth } from "@/lib/recurringSetup";
 
 /**
  * 案件（または見積）を定期売上にする・定期売上の設定を直す。
@@ -49,7 +48,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
     setStartMonth(template?.start_month ? template.start_month.slice(0, 7) : nextMonth());
     setEndMonth(template?.end_month ? template.end_month.slice(0, 7) : "");
     setAutoNote(template ? !!template.auto_delivery_note : true);
-    setAddMonth(template ? (template.line_items || []).some((l) => String(l.name || "").includes(MONTH_TOKEN)) || !(template.line_items || []).length : true);
+    setAddMonth(template ? templateAddsMonth(template) : true);
   }, [open]);
   useEffect(() => {
     if (!est) { setChecked(new Set()); return; }
@@ -59,23 +58,14 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
   }, [estimateId]);
 
   const picked = lines.filter((l) => checked.has(l.id));
-  const monthly = picked.reduce((s, l) => s + l.revenue, 0);
-  const monthlyCost = picked.reduce((s, l) => s + l.cost, 0);
+  const { monthly, monthlyCost, oneTime, oneTimeCost } = recurringSums(est, [...checked]);
   const toggle = (id) => setChecked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allOn = lines.length > 0 && lines.every((l) => checked.has(l.id));
   const clientName = project?.client_name || est?.client_name || "";
   const name = project?.name || est?.estimate_title || "";
 
   // 毎月の納品書の明細（見積の明細を税抜で写す。品名の後ろに「（{年月}）」を付ける）
-  const noteLines = useMemo(() => {
-    if (!est) return [];
-    return docItemsFromEstimate(est)
-      .filter((li) => checked.has(li.source_line_id))
-      .map((li) => ({
-        name: addMonth && !String(li.name).includes(MONTH_TOKEN) ? `${li.name}（${MONTH_TOKEN}）` : li.name,
-        quantity: li.quantity, unit: li.unit, unit_price: li.unit_price, tax_rate: li.tax_rate, sales_category: li.sales_category || null,
-      }));
-  }, [est, checked, addMonth]);
+  const noteLines = useMemo(() => recurringNoteLines(est, [...checked], addMonth), [est, checked, addMonth]);
   const sampleTotal = noteLines.reduce((s, l) => s + lineAmount(l.quantity, l.unit_price), 0);
 
   const save = useMutation({
@@ -87,18 +77,13 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
         name,
         deal_probability: prob,
         phase: project?.phase || "受注済",
-        expected_revenue: monthly,
-        expected_cost: monthlyCost,
+        ...recurringPayloadFromEstimate(est, [...checked], addMonth),
         other_cost: Number(project?.other_cost) || 0,
         start_month: `${startMonth}-01`,
         end_month: endMonth ? `${endMonth}-01` : null,
         is_active: true,
         auto_delivery_note: autoNote,
-        line_items: noteLines,
         project_id: project?.id || null,
-        source_estimate_id: est?.id || null,
-        source_line_ids: [...checked],
-        lines_applied_at: new Date().toISOString(),
       };
       const tpl = template
         ? await db.entities.RecurringProjectTemplate.update(template.id, payload)
@@ -132,7 +117,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Repeat className="w-4 h-4 text-rose-600" /> {template ? "定期売上の設定" : "定期売上にする"}</DialogTitle>
           <DialogDescription className="text-xs">
-            {clientName}　{name}　―　見積の明細のうち<strong>毎月請求するもの</strong>にチェックすると、その合計が月額になり、毎月の納品書の明細になります。初期費用など 1 回だけのものは外して、ふつうの納品書で出してください。
+            {clientName}　{name}　―　見積の明細のうち<strong>毎月請求するもの</strong>にチェックすると、その合計が月額になり、毎月の納品書の明細になります。初期費用など 1 回だけのものはチェックを外すと「初回だけの費用」として開始月の見込みに入ります（納品書はふつうに作ってください）。
           </DialogDescription>
         </DialogHeader>
 
@@ -171,7 +156,7 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
                   {lines.map((l) => (
                     <tr key={l.id} className={checked.has(l.id) ? "" : "text-muted-foreground bg-muted/30"}>
                       <td className="px-2 py-1.5 text-center"><Checkbox checked={checked.has(l.id)} onCheckedChange={() => toggle(l.id)} aria-label={`${l.name}を毎月の分に入れる`} /></td>
-                      <td className="px-2 py-1.5">{l.name}{!checked.has(l.id) && <span className="ml-1.5 text-[10px]">（1 回だけ・定期にしない）</span>}</td>
+                      <td className="px-2 py-1.5">{l.name}{!checked.has(l.id) && <span className="ml-1.5 text-[10px]">（初回だけの費用）</span>}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{l.qty}{l.unit}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{yen(l.revenue)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{l.hasCost ? yen(l.cost) : "—"}</td>
@@ -184,6 +169,13 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
                     <td className="px-2 py-1.5 text-right font-bold tabular-nums text-rose-800" data-testid="recurring-monthly">{yen(monthly)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{yen(monthlyCost)}</td>
                   </tr>
+                  {oneTime !== 0 && (
+                    <tr className="bg-white">
+                      <td colSpan={3} className="px-2 py-1.5 text-right text-muted-foreground">初回だけの費用（チェックしなかった明細。開始月の見込みに足します）</td>
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums" data-testid="recurring-onetime">{yen(oneTime)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{yen(oneTimeCost)}</td>
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>

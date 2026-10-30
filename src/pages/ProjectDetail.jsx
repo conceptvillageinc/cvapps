@@ -4,6 +4,8 @@ import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { todayString } from "@/lib/fiscal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,6 +29,7 @@ import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
 import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
+import { recurringDrift, recurringPayloadFromEstimate, templateAddsMonth } from "@/lib/recurringSetup";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
@@ -139,7 +142,22 @@ export default function ProjectDetail() {
   const [forecastInitial, setForecastInitial] = useState(null);
   const fs = project?.forecast_source || null;
   const fsEstimate = fs ? estimates.find((e) => e.id === fs.estimate_id) : null;
-  const drift = forecastDrift(fs, fsEstimate);
+  // 定期売上の案件は、見込みを定期売上の設定（元にした見積）で決めるので、ふつうの見込みのお知らせは出さない
+  const drift = project && isRecurringParent(project) ? null : forecastDrift(fs, fsEstimate);
+  // 定期売上の元にした見積が変わったときのお知らせ
+  const recEstimate = recurringTemplate?.source_estimate_id ? estimates.find((e) => e.id === recurringTemplate.source_estimate_id) : null;
+  const recDrift = project && isRecurringParent(project) ? recurringDrift(recurringTemplate, recEstimate) : null;
+  const recUpdate = useMutation({
+    mutationFn: (patch) => db.entities.RecurringProjectTemplate.update(recurringTemplate.id, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recurringTemplates"] });
+      queryClient.invalidateQueries({ queryKey: ["project", id] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
+  });
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopMonth, setStopMonth] = useState(() => todayString().slice(0, 7));
   // 差があってもこのままにする（sig を覚える。null を渡すとお知らせを出し直す）
   const keepAsIs = useMutation({
     mutationFn: (sig = drift?.sig) => db.entities.Project.update(id, { forecast_source: { ...fs, dismissed_sig: sig || null } }),
@@ -200,6 +218,27 @@ export default function ProjectDetail() {
           <Button variant="outline" size="sm" className="gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" onClick={() => setRecurringOpen(true)} disabled={!!project.recurring_template_id && !recurringTemplate} data-testid="recurring-open">
             <Repeat className="w-3.5 h-3.5" /> {isRecurringParent(project) ? "定期売上の設定" : "定期売上にする"}
           </Button>
+          {isRecurringParent(project) && recurringTemplate && (
+            <AlertDialog open={stopOpen} onOpenChange={setStopOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" data-testid="recurring-stop">定期売上をやめる</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>定期売上をやめますか？</AlertDialogTitle>
+                  <AlertDialogDescription>何月分まで続けるかを選んでください。その月の分までは毎月の納品書を作り、売上見込にも入れます。翌月からは作りません（案件・見積・納品書・請求書はそのまま残ります）。</AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="flex items-center gap-2 text-sm">
+                  <Input type="month" value={stopMonth} min={String(project.recurring_start_month || "").slice(0, 7)} onChange={(e) => setStopMonth(e.target.value)} className="h-9 w-44" aria-label="何月分まで" />
+                  <span>分まで</span>
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction disabled={!stopMonth || stopMonth < String(project.recurring_start_month || "").slice(0, 7)} onClick={() => recUpdate.mutate({ end_month: `${stopMonth}-01` }, { onSuccess: () => toast.success(`定期売上を ${Number(stopMonth.slice(0, 4))}年${Number(stopMonth.slice(5, 7))}月分までにしました`) })}>この月までにする</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setEditOpen(true)}>
             <Pencil className="w-3.5 h-3.5" /> 編集
           </Button>
@@ -290,10 +329,27 @@ export default function ProjectDetail() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-sm">金額（税抜）</CardTitle>
-              <Button size="sm" className="h-7 gap-1 text-xs bg-blue-600 text-white hover:bg-blue-700 shadow-sm" onClick={() => { setForecastInitial(null); setForecastOpen(true); }} data-testid="forecast-open"><ListChecks className="w-3.5 h-3.5" /> 見積から見込みを入れる</Button>
+              {isRecurringParent(project)
+                ? <Button size="sm" className="h-7 gap-1 text-xs bg-rose-600 text-white hover:bg-rose-700 shadow-sm" onClick={() => setRecurringOpen(true)} disabled={!recurringTemplate}><Repeat className="w-3.5 h-3.5" /> 見積から月額を入れ直す</Button>
+                : <Button size="sm" className="h-7 gap-1 text-xs bg-blue-600 text-white hover:bg-blue-700 shadow-sm" onClick={() => { setForecastInitial(null); setForecastOpen(true); }} data-testid="forecast-open"><ListChecks className="w-3.5 h-3.5" /> 見積から見込みを入れる</Button>}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {recDrift && !recDrift.dismissed && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="recurring-drift">
+                <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />定期売上の元にした見積（{recEstimate?.estimate_number}）が変わっています</p>
+                <p className="mt-1 tabular-nums">
+                  月額 {yen(recurringTemplate.expected_revenue)} → <b>{yen(recDrift.monthly)}</b>（{signedYen(recDrift.monthly - Number(recurringTemplate.expected_revenue || 0))}）
+                  {recDrift.oneTime !== Number(recurringTemplate.one_time_revenue || 0) && <>　初回だけの費用 {yen(recurringTemplate.one_time_revenue)} → <b>{yen(recDrift.oneTime)}</b></>}
+                </p>
+                {(recDrift.newLines.length > 0 || recDrift.missing > 0) && <p className="mt-0.5 text-[11px]">{recDrift.newLines.length > 0 && `見積に明細が ${recDrift.newLines.length} 件増えています（まだ月額にも初回にも入っていません）`}{recDrift.newLines.length > 0 && recDrift.missing > 0 && "・"}{recDrift.missing > 0 && `月額に入れた明細のうち ${recDrift.missing} 件が見積から消えています`}</p>}
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  <Button size="sm" className="h-7 text-xs" disabled={recUpdate.isPending} onClick={() => recUpdate.mutate(recurringPayloadFromEstimate(recEstimate, recurringTemplate.source_line_ids || [], templateAddsMonth(recurringTemplate)), { onSuccess: () => toast.success("同じチェックで月額と毎月の納品書の明細を入れ直しました") })} data-testid="recurring-reapply">{recUpdate.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}同じチェックで入れ直す</Button>
+                  <Button size="sm" variant="outline" className="h-7 bg-white text-xs hover:bg-rose-50 hover:text-rose-800" onClick={() => setRecurringOpen(true)}>チェックを選び直す</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-amber-900 hover:bg-amber-100" disabled={recUpdate.isPending} onClick={() => recUpdate.mutate({ drift_dismissed_sig: recDrift.sig }, { onSuccess: () => toast.success("月額はこのままにしました。見積がまた変わったらお知らせします") })} data-testid="recurring-keep">このままにする</Button>
+                </div>
+              </div>
+            )}
             {drift && !drift.dismissed && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="forecast-drift">
                 <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />見積（{fs.estimate_number}）が変わっています。見込みと差があります</p>
@@ -311,7 +367,10 @@ export default function ProjectDetail() {
             <div>
               <p className="text-[10px] text-muted-foreground mb-1.5">見込{fs?.estimate_number && <span className="ml-2">見積 {fs.estimate_number} の明細 {(fs.line_ids || []).length} 件から入れました{fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}</span>}{drift?.dismissed && <button type="button" className="ml-2 rounded bg-amber-50 px-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100" onClick={() => keepAsIs.mutate(null)} title="押すと、見積との差のお知らせをもう一度出します" data-testid="forecast-kept">見積と差あり（このままにしています）</button>}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Field label={isRecurringParent(project) ? "受注見込（月額）" : "受注見込"}><span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span></Field>
+                <Field label={isRecurringParent(project) ? "受注見込（月額）" : "受注見込"}>
+                  <span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span>
+                  {isRecurringParent(project) && Number(project.recurring_one_time_revenue) > 0 && <span className="block text-[10px] text-muted-foreground whitespace-nowrap" data-testid="onetime-note">＋初回だけの費用 {yen(project.recurring_one_time_revenue)}（開始月）</span>}
+                </Field>
                 <Field label="発注見込"><span className="tabular-nums">{yen(project.expected_cost)}</span></Field>
                 <Field label="その他費用"><span className="tabular-nums">{yen(project.other_cost)}</span></Field>
                 <Field label="粗利見込">

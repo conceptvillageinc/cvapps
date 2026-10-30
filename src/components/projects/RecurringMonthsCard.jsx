@@ -44,7 +44,7 @@ export default function RecurringMonthsCard({ project, deliveryNotes, invoices }
         <div className="divide-y">
           {shown.map(({ m, notes, invs, billed, state }) => (
             <div key={m} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm ${m === thisMonth ? "bg-teal-50/40" : ""}`}>
-              <span className="w-32 shrink-0 font-medium tabular-nums whitespace-nowrap">{label(m)}{m === thisMonth && <span className="ml-1 text-[10px] text-teal-700">今月</span>}</span>
+              <span className="w-32 shrink-0 font-medium tabular-nums whitespace-nowrap">{label(m)}{m === thisMonth && <span className="ml-1 text-[10px] text-teal-700">今月</span>}{m === String(project.recurring_start_month || "").slice(0, 7) && Number(project.recurring_one_time_revenue) > 0 && <span className="block text-[10px] font-normal text-muted-foreground">＋初回 {yen(project.recurring_one_time_revenue)}</span>}</span>
               <span className={`w-28 shrink-0 rounded border px-1.5 py-0.5 text-center text-[11px] ${DELIVERY_STATE[state].cls}`}>{DELIVERY_STATE[state].label}</span>
               <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
                 {notes.map((n) => <Link key={n.id} to={`/delivery-notes/${n.id}`} className="inline-flex items-center gap-1 text-primary hover:underline"><FileText className="w-3 h-3" />{n.delivery_number}{n.status === "draft" ? "（下書き）" : ""}</Link>)}
