@@ -174,7 +174,7 @@ function RecurringHandover({ clients, projects }) {
                   : "案件（受注確度は定期売上）と、読み取った明細の見積（提出済み）を作ります。"}
                 そのあと案件の画面で「定期売上にする」が開くので、毎月請求する明細・開始月・終了月を選んで登録してください。{doc.period && <>読み取った期間: <strong>{doc.period}</strong></>}
               </p>
-              <Button className="gap-2 bg-rose-600 hover:bg-rose-700" disabled={saving || !doc.line_items.length || (mode === "existing" ? !picked : !clientName.trim() || !projectName.trim())} onClick={create} data-testid="fh-create-recurring">
+              <Button className="gap-2" disabled={saving || !doc.line_items.length || (mode === "existing" ? !picked : !clientName.trim() || !projectName.trim())} onClick={create} data-testid="fh-create-recurring">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Repeat className="w-4 h-4" />}
                 {mode === "existing" ? (picked ? `案件 ${picked.project_number} に見積を作って、定期売上の設定へ` : "案件を選んでください") : "案件と見積を作って、定期売上の設定へ"}
               </Button>
