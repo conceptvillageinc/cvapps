@@ -731,8 +731,22 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               onPickLine={(c) => commitItems([...lineItems, itemFromPastLine(c)])}
             />
 
-            {/* 合計（1 行。左に原価・粗利、右に小計・消費税・見積金額） */}
+            {/* 合計（1 行。左に小計・消費税・見積金額、右に原価・粗利） */}
             <div className="flex flex-col sm:flex-row gap-2" data-testid="quote-totals">
+              <div className="flex flex-1 border rounded-lg overflow-hidden divide-x">
+                <div className="flex-1 text-center py-1.5 bg-muted/30">
+                  <p className="text-[10px] text-muted-foreground">小計</p>
+                  <p className="text-xs font-bold tabular-nums">{subtotal.toLocaleString()}円</p>
+                </div>
+                <div className="flex-1 text-center py-1.5 bg-muted/30">
+                  <p className="text-[10px] text-muted-foreground">消費税</p>
+                  <p className="text-xs font-bold tabular-nums">{tax.toLocaleString()}円</p>
+                </div>
+                <div className="flex-1 text-center py-1.5 bg-primary/10">
+                  <p className="text-[10px] text-muted-foreground">見積金額</p>
+                  <p className="text-sm font-bold text-primary tabular-nums">{total.toLocaleString()}円</p>
+                </div>
+              </div>
               {showInternal && (
                 <div className="flex flex-1 border rounded-lg overflow-hidden divide-x border-amber-200 divide-amber-200">
                   <div className="flex-1 text-center py-1.5 bg-amber-50">
@@ -749,20 +763,6 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                   </div>
                 </div>
               )}
-              <div className="flex flex-1 border rounded-lg overflow-hidden divide-x">
-                <div className="flex-1 text-center py-1.5 bg-muted/30">
-                  <p className="text-[10px] text-muted-foreground">小計</p>
-                  <p className="text-xs font-bold tabular-nums">{subtotal.toLocaleString()}円</p>
-                </div>
-                <div className="flex-1 text-center py-1.5 bg-muted/30">
-                  <p className="text-[10px] text-muted-foreground">消費税</p>
-                  <p className="text-xs font-bold tabular-nums">{tax.toLocaleString()}円</p>
-                </div>
-                <div className="flex-1 text-center py-1.5 bg-primary/10">
-                  <p className="text-[10px] text-muted-foreground">見積金額</p>
-                  <p className="text-sm font-bold text-primary tabular-nums">{total.toLocaleString()}円</p>
-                </div>
-              </div>
             </div>
 
             {estimate.additional_notes !== undefined && (
@@ -1069,16 +1069,18 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 
 
 /** 行の左端: つかんで動かすハンドルと、上下に 1 つ動かすボタン（行にカーソルを乗せると出る） */
-/** 「項目を追加」のボタン。kind="add" はその場で 1 行足す（⊕）、kind="menu" は選ぶ画面を開く（▼） */
+/** 「項目を追加」のボタン。kind="add" はその場で 1 行足す（⊕）、kind="menu" は選ぶ画面を開く（▼）。印は枠と同じ色 */
 const AddChip = forwardRef(function AddChip({ kind = "add", tone = "emerald", children, className = "", ...props }, ref) {
   const Mark = kind === "menu" ? CircleChevronDown : CirclePlus;
+  // 印（⊕・▼）は枠と同じ色
   const toneCls = tone === "sky"
-    ? "border-sky-300 text-sky-900 hover:bg-sky-100 hover:text-sky-900"
-    : "border-emerald-200 text-foreground hover:bg-emerald-100 hover:text-foreground";
+    ? "border-sky-400 text-sky-900 hover:bg-sky-100 hover:text-sky-900"
+    : "border-emerald-400 text-foreground hover:bg-emerald-100 hover:text-foreground";
+  const markCls = tone === "sky" ? "text-sky-400" : "text-emerald-400";
   return (
     <Button ref={ref} type="button" size="sm" variant="outline" className={`h-8 px-2 gap-1 text-[11px] flex-1 basis-auto justify-center whitespace-nowrap bg-white ${toneCls} ${className}`} {...props}>
       <span>{children}</span>
-      <Mark className="w-3.5 h-3.5 shrink-0 text-rose-500" aria-hidden="true" />
+      <Mark className={`w-3.5 h-3.5 shrink-0 ${markCls}`} aria-hidden="true" />
     </Button>
   );
 });
