@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Repeat, Loader2, Truck, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/api/db";
@@ -32,6 +33,7 @@ import MonthSelect, { PeriodEndSelect } from "@/components/ui/month-select";
  */
 export default function RecurringSetupDialog({ open, onOpenChange, project, estimates = [], initialEstimateId = null, template = null, onDone }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { phaseOptions = [] } = useSystemSettings();
   const candidates = useMemo(() => estimates.filter((e) => (e.line_items || []).length), [estimates]);
@@ -150,7 +152,15 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
         </DialogHeader>
 
         {candidates.length === 0 ? (
-          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> この案件には明細のある見積がありません。先に見積を作ってください</p>
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 space-y-2" data-testid="recurring-no-estimate">
+            <p className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> この案件には明細のある見積がありません。先に見積を作ってください</p>
+            {project?.id && (
+              <Button size="sm" className="h-7 text-xs" onClick={() => { onOpenChange(false); navigate(`/estimates/new?project=${project.id}`); }} data-testid="recurring-create-estimate">
+                この案件の見積を作成
+              </Button>
+            )}
+            <p className="text-[11px] text-amber-800">見積を保存したら、見積の画面の「定期売上にする」で、毎月請求する明細を選んで登録します</p>
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="space-y-1.5">

@@ -23,6 +23,8 @@ import { todayString } from "@/lib/fiscal";
 import { lineAmount } from "@/lib/constants";
 import { useSalesCategories, classifySalesCategory } from "@/lib/salesCategory";
 import MonthSelect, { PeriodEndSelect } from "@/components/ui/month-select";
+import { Checkbox } from "@/components/ui/checkbox";
+import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 
 const yen = (n) => `¥${Math.round(Number(n || 0)).toLocaleString()}`;
 const toNumber = (v) => {
@@ -315,6 +317,11 @@ export default function RecurringProjects() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [month, setMonth] = useState(todayString().slice(0, 7));
+  const [createOpen, setCreateOpen] = useState(false); // 定期売上の案件を新しく作る
+  const [removing, setRemoving] = useState(null); // 定期売上一覧から消すひな形
+  const [removeProject, setRemoveProject] = useState(true);
+  const { dealProbabilityOptions } = useSystemSettings();
+  const recurringProbability = (dealProbabilityOptions || []).find((o) => /定期/.test(o));
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["recurringTemplates"],
@@ -355,6 +362,22 @@ export default function RecurringProjects() {
     onError: (err) => toast.error(err?.message || "生成に失敗しました"),
   });
 
+  // 定期売上一覧から消す（案件も消すときは、ひな形を先に消してから案件を消す。見積・納品書・請求書は残る）
+  const remove = useMutation({
+    mutationFn: async ({ template, project, withProject }) => {
+      await db.entities.RecurringProjectTemplate.delete(template.id);
+      if (withProject && project) await db.entities.Project.delete(project.id);
+    },
+    onSuccess: (_, v) => {
+      queryClient.invalidateQueries({ queryKey: ["recurringTemplates"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success(v.withProject && v.project ? `定期売上一覧から削除し、案件 ${v.project.project_number || ""} も削除しました` : "定期売上一覧から削除しました");
+      setRemoving(null);
+    },
+    onError: (err) => toast.error("削除できませんでした: " + (err?.message || "不明なエラー")),
+  });
+  const orphanCount = templates.filter((t) => !projectByTemplate[t.id]).length;
+
   const activeCount = templates.filter((t) => t.is_active).length;
   const monthlyTotal = templates.filter((t) => t.is_active).reduce((s, t) => s + Number(t.expected_revenue || 0), 0);
 
@@ -372,10 +395,21 @@ export default function RecurringProjects() {
             </p>
           </div>
         </div>
-        <p className="max-w-sm rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-900 leading-relaxed" data-testid="recurring-howto">
-          <Repeat className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />定期売上は、<strong>案件または見積の画面の「定期売上にする」</strong>から登録します。見積の明細のうち毎月請求するものが、月額と毎月の納品書になります
-        </p>
+        <div className="flex flex-col items-stretch sm:items-end gap-2">
+          <Button className="gap-2 bg-rose-600 hover:bg-rose-700" onClick={() => setCreateOpen(true)} data-testid="recurring-new">
+            <Plus className="w-4 h-4" /> 定期売上の案件を作成
+          </Button>
+          <p className="max-w-sm rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-900 leading-relaxed" data-testid="recurring-howto">
+            <Repeat className="inline w-3.5 h-3.5 mr-1 -mt-0.5" />案件を作ったら、見積を作って<strong>「定期売上にする」</strong>で登録します（すでにある案件・見積の画面からも登録できます）。見積の明細のうち毎月請求するものが、月額と毎月の納品書になります
+          </p>
+        </div>
       </div>
+
+      {orphanCount > 0 && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="recurring-orphans">
+          案件が削除された定期売上が <strong>{orphanCount}件</strong> あります（表の「案件なし」）。いらなければ右のごみ箱で定期売上一覧から削除してください
+        </p>
+      )}
 
       <Card>
         <CardHeader className="pb-3">
@@ -418,7 +452,7 @@ export default function RecurringProjects() {
                     <TableHead className="text-xs text-white">期間</TableHead>
                     <TableHead className="text-xs text-white">案件・最新の納品書</TableHead>
                     <TableHead className="text-xs text-white">状態</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    <TableHead className="w-20"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -436,7 +470,7 @@ export default function RecurringProjects() {
                       <TableCell className="text-xs whitespace-nowrap">
                         {projectByTemplate[t.id] ? (
                           <Link to={`/projects/${projectByTemplate[t.id].id}`} className="text-primary hover:underline">{projectByTemplate[t.id].project_number || "案件を開く"}</Link>
-                        ) : <span className="text-muted-foreground">—</span>}
+                        ) : <span className="font-medium text-amber-700" title="案件が削除されています">案件なし（削除済み）</span>}
                         {lastNoteByTemplate[t.id] && (
                           <Link to={`/delivery-notes/${lastNoteByTemplate[t.id].id}`} className="ml-2 text-muted-foreground hover:underline">{monthLabel(lastNoteByTemplate[t.id].recurring_month)}分</Link>
                         )}
@@ -452,6 +486,9 @@ export default function RecurringProjects() {
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { if (projectByTemplate[t.id]) navigate(`/projects/${projectByTemplate[t.id].id}?recurring=1`); else { setEditing(t); setDialogOpen(true); } }} title="案件の画面で定期売上の設定を開きます">
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => { setRemoveProject(true); setRemoving(t); }} title="定期売上一覧から削除" data-testid="recurring-remove">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -463,6 +500,40 @@ export default function RecurringProjects() {
       </Card>
 
       <TemplateDialog open={dialogOpen} onOpenChange={setDialogOpen} template={editing} clients={clients} />
+
+      {/* 定期売上の案件を作る → 案件の画面で「定期売上にする」を開く（見積がまだなら、そこから見積を作る） */}
+      <ProjectFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaults={recurringProbability ? { deal_probability: recurringProbability } : {}}
+        onSaved={(row) => navigate(`/projects/${row.id}?recurring=1`)}
+      />
+
+      <Dialog open={!!removing} onOpenChange={(v) => !v && !remove.isPending && setRemoving(null)}>
+        <DialogContent className="max-w-md" data-testid="recurring-remove-dialog">
+          <DialogHeader>
+            <DialogTitle>定期売上一覧から削除しますか？</DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              {removing?.client_name}　{removing?.name}（月額 {yen(removing?.expected_revenue)}）の定期売上の設定を削除します。これまでに作った納品書・請求書は残ります。この操作は取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+          {removing && projectByTemplate[removing.id] && (
+            <label className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50/60 p-3 text-sm cursor-pointer">
+              <Checkbox checked={removeProject} onCheckedChange={(v) => setRemoveProject(!!v)} className="mt-0.5" />
+              <span>
+                <span className="font-medium text-red-800">案件 {projectByTemplate[removing.id].project_number} も削除する</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">案件に紐づく見積・納品書・請求書は残り、案件との紐づけだけが外れます</span>
+              </span>
+            </label>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoving(null)} disabled={remove.isPending}>キャンセル</Button>
+            <Button variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate({ template: removing, project: projectByTemplate[removing.id] || null, withProject: removeProject })} data-testid="recurring-remove-run">
+              {remove.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} 削除する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

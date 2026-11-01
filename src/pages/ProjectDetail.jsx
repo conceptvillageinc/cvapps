@@ -58,6 +58,7 @@ export default function ProjectDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false); // 案件を複製
   const [deleteDocs, setDeleteDocs] = useState(false); // 紐づく見積・納品書・請求書も一緒に消す
+  const [deleteRecurring, setDeleteRecurring] = useState(true); // 定期売上の案件なら、定期売上一覧（ひな形）からも消す
 
   const { data: project, isLoading } = useQuery({
     queryKey: ["project", id],
@@ -124,6 +125,8 @@ export default function ProjectDetail() {
     onError: (err) => toast.error("更新できませんでした: " + (err?.message || "不明なエラー")),
   });
 
+  // 定期売上の案件（ひな形ごとの 1 件）か
+  const recurringParent = !!project?.recurring_template_id && !project?.recurring_month;
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (deleteDocs) {
@@ -132,6 +135,8 @@ export default function ProjectDetail() {
         for (const dn of deliveryNotes) await db.entities.DeliveryNote.delete(dn.id);
         for (const est of estimates) await db.entities.Estimate.delete(est.id);
       }
+      // 定期売上一覧からも消すときは、ひな形を先に消す（残すときはDB側でひな形を停止中にする。案件は作り直さない）
+      if (recurringParent && deleteRecurring) await db.entities.RecurringProjectTemplate.delete(project.recurring_template_id);
       return db.entities.Project.delete(id);
     },
     onSuccess: () => {
@@ -139,7 +144,8 @@ export default function ProjectDetail() {
       queryClient.invalidateQueries({ queryKey: ["estimates"] });
       queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast.success(deleteDocs ? "案件と紐づく書類を削除しました" : "案件を削除しました");
+      queryClient.invalidateQueries({ queryKey: ["recurringTemplates"] });
+      toast.success(`${deleteDocs ? "案件と紐づく書類を削除しました" : "案件を削除しました"}${recurringParent ? (deleteRecurring ? "（定期売上一覧からも削除）" : "（定期売上一覧には停止中で残しました）") : ""}`);
       navigate(listUrl);
     },
     onError: (err) => toast.error("削除できませんでした: " + (err?.message || "不明なエラー")),
@@ -301,6 +307,15 @@ export default function ProjectDetail() {
                   <span>
                     <span className="font-medium text-red-800">紐づく見積・納品書・請求書も一緒に削除する</span>
                     <span className="block text-xs text-muted-foreground mt-0.5">テストデータの片付けなど、案件ごとまるごと消したいときに使います</span>
+                  </span>
+                </label>
+              )}
+              {recurringParent && (
+                <label className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50/60 p-3 text-sm cursor-pointer" data-testid="delete-recurring">
+                  <Checkbox checked={deleteRecurring} onCheckedChange={(v) => setDeleteRecurring(!!v)} className="mt-0.5" />
+                  <span>
+                    <span className="font-medium text-rose-800">定期売上一覧からも削除する</span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">外すと、定期売上の設定は「停止中」で定期売上一覧に残ります（毎月の納品書は作りません）</span>
                   </span>
                 </label>
               )}
