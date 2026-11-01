@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { useRecurringAlerts } from "@/lib/recurringStatus";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users, Layers, LayoutTemplate,
   LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft
@@ -73,6 +74,9 @@ export default function Layout() {
   useSalesCategories(); // 売上カテゴリーマスタを読み込んでおく（見積から請求書へ写すときの自動の振り分けに使う）
   const canSeeCashflow = cashflowAllowedEmails.includes(String(user?.email || "").toLowerCase());
   const { canViewPayables } = usePayablesAccess();
+  // 定期売上の要対応（まもなく終了・終了月を過ぎた・見直しの時期）の件数を「定期売上一覧」に出す
+  const { count: recurringAlertCount } = useRecurringAlerts();
+  const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : 0);
   const visibleNav = navItems.filter((item) => !item.restricted || (item.restricted === "cashflow" && canSeeCashflow) || (item.restricted === "payables" && canViewPayables));
 
   const handleLogout = () => {
@@ -95,8 +99,16 @@ export default function Layout() {
             : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
         }`}
       >
-        <item.icon className="w-4.5 h-4.5 shrink-0" />
+        <span className="relative shrink-0">
+          <item.icon className="w-4.5 h-4.5" />
+          {badgeOf(item) > 0 && collapsed && <span className="absolute -top-1 -right-1 hidden lg:block h-2 w-2 rounded-full bg-red-500" />}
+        </span>
         <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
+        {badgeOf(item) > 0 && (
+          <span className={`ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white ${collapsed ? "lg:hidden" : ""}`} title={`対応が必要な定期売上が ${badgeOf(item)} 件あります`} data-testid="recurring-badge">
+            {badgeOf(item)}
+          </span>
+        )}
       </Link>
     );
   };

@@ -9,6 +9,8 @@ import {
   ArrowRight
 } from "lucide-react";
 import { format } from "date-fns";
+import { Repeat } from "lucide-react";
+import { useRecurringAlerts, RECURRING_STATUS } from "@/lib/recurringStatus";
 import { ja } from "date-fns/locale";
 
 const STATUS_MAP = {
@@ -36,6 +38,7 @@ export default function Dashboard() {
   };
 
   const recentEstimates = estimates.slice(0, 5);
+  const { alerts: recurringAlerts } = useRecurringAlerts(); // 終了・見直しの対応が必要な定期売上
 
   const StatCard = ({ icon: Icon, label, value, color, to }) => (
     <Link to={to}>
@@ -78,6 +81,33 @@ export default function Dashboard() {
         <StatCard icon={AlertTriangle} label="レビュー待ち" value={stats.pendingReview} color="bg-accent" to="/estimates" />
         <StatCard icon={CheckCircle2} label="承認済み" value={stats.approved} color="bg-success" to="/estimates" />
       </div>
+
+      {/* 対応が必要な定期売上（まもなく終了・終了月を過ぎた・見直しの時期） */}
+      {recurringAlerts.length > 0 && (
+        <Card className="border-rose-200" data-testid="dashboard-recurring-alerts">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Repeat className="w-4 h-4 text-rose-600" /> 対応が必要な定期売上
+                <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">{recurringAlerts.length}</span>
+              </CardTitle>
+              <Link to="/projects/recurring?filter=action" className="text-xs text-primary hover:underline flex items-center gap-1">
+                定期売上一覧で対応する <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="divide-y">
+            {recurringAlerts.map(({ template: t, status }) => (
+              <Link key={t.id} to="/projects/recurring?filter=action" className="flex items-center gap-3 py-2 text-sm hover:bg-muted/40 -mx-2 px-2 rounded">
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${RECURRING_STATUS[status.key].cls}`}>{RECURRING_STATUS[status.key].label}</span>
+                <span className="shrink-0 text-xs text-muted-foreground max-w-[12rem] truncate">{t.client_name}</span>
+                <span className="flex-1 truncate font-medium">{t.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{status.note}</span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent estimates */}
       <Card>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
@@ -25,6 +25,8 @@ import { useSalesCategories, classifySalesCategory } from "@/lib/salesCategory";
 import MonthSelect, { PeriodEndSelect } from "@/components/ui/month-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
+import { recurringStatus, RECURRING_STATUS, addMonths, ymLabel } from "@/lib/recurringStatus";
+import { catchUpRecurringNotes } from "@/lib/projectNumber";
 
 const yen = (n) => `¥${Math.round(Number(n || 0)).toLocaleString()}`;
 const toNumber = (v) => {
@@ -318,6 +320,14 @@ export default function RecurringProjects() {
   const [editing, setEditing] = useState(null);
   const [month, setMonth] = useState(todayString().slice(0, 7));
   const [createOpen, setCreateOpen] = useState(false); // 定期売上の案件を新しく作る
+  // 要対応（まもなく終了・終了月を過ぎた・見直しの時期）だけ／すべて。?filter=action で要対応から開く
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filter = searchParams.get("filter") === "action" ? "action" : "all";
+  const setFilter = (f) => setSearchParams((prev) => { const n = new URLSearchParams(prev); if (f === "action") n.set("filter", "action"); else n.delete("filter"); return n; }, { replace: true });
+  const [renewing, setRenewing] = useState(null); // { template, mode: "renew" | "set_end" }
+  const [renewEnd, setRenewEnd] = useState("");
+  const [renewAmount, setRenewAmount] = useState(false);
+  const [ending, setEnding] = useState(null); // 「更新しない（終了）」を確かめる定期売上
   const [removing, setRemoving] = useState(null); // 定期売上一覧から消すひな形
   const [removeProject, setRemoveProject] = useState(true);
   const { dealProbabilityOptions } = useSystemSettings();
@@ -378,6 +388,38 @@ export default function RecurringProjects() {
   });
   const orphanCount = templates.filter((t) => !projectByTemplate[t.id]).length;
 
+  // 終了・更新
+  const statusOf = (t) => recurringStatus(t);
+  const actionCount = templates.filter((t) => RECURRING_STATUS[statusOf(t).key].action).length;
+  const shown = filter === "action"
+    ? templates.filter((t) => RECURRING_STATUS[statusOf(t).key].action).sort((a, b) => (statusOf(a).endYm || statusOf(a).reviewYm || "").localeCompare(statusOf(b).endYm || statusOf(b).reviewYm || ""))
+    : templates;
+  const openRenew = (t, mode) => {
+    const st = statusOf(t);
+    const now = todayString().slice(0, 7);
+    // 更新: 今の終了月の翌月から 12 か月（終了月を過ぎていても、続きの月から）。終了月を決める: 今月から
+    setRenewEnd(mode === "renew" && st.endYm ? addMonths(st.endYm, 12) : addMonths(now, 11));
+    setRenewAmount(false);
+    setRenewing({ template: t, mode });
+  };
+  const patchTemplate = useMutation({
+    mutationFn: async ({ template, patch, catchUpFrom }) => {
+      await db.entities.RecurringProjectTemplate.update(template.id, patch);
+      // 終了月を過ぎてから更新したときは、止まっていた月（前の終了月の翌月〜今月）の納品書もすぐ作る
+      if (catchUpFrom && template.auto_delivery_note) return catchUpRecurringNotes(template.id, catchUpFrom, patch.end_month ? patch.end_month.slice(0, 7) : "");
+      return 0;
+    },
+    onSuccess: (notes, v) => {
+      queryClient.invalidateQueries({ queryKey: ["recurringTemplates"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
+      toast.success(`${v.message}${notes ? `（止まっていた月の納品書の下書きを ${notes} 件作りました）` : ""}`);
+      setRenewing(null); setEnding(null);
+      if (v.reopenAmount && projectByTemplate[v.template.id]) navigate(`/projects/${projectByTemplate[v.template.id].id}?recurring=1`);
+    },
+    onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
+  });
+
   const activeCount = templates.filter((t) => t.is_active).length;
   const monthlyTotal = templates.filter((t) => t.is_active).reduce((s, t) => s + Number(t.expected_revenue || 0), 0);
 
@@ -430,10 +472,22 @@ export default function RecurringProjects() {
         </CardContent>
       </Card>
 
+      {/* 要対応だけ／すべて */}
+      <div className="flex items-center gap-1 border-b">
+        {[["action", `要対応（${actionCount}）`], ["all", `すべて（${templates.length}）`]].map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setFilter(k)} className={`px-3 py-2 text-sm border-b-2 -mb-px ${filter === k ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground hover:text-foreground"}`} data-testid={`recurring-filter-${k}`}>
+            {l}
+          </button>
+        ))}
+        <span className="ml-auto text-[11px] text-muted-foreground">終了月の 2 か月前から「まもなく終了」、無期限は 1 年ごとに「見直しの時期」として知らせます</span>
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : filter === "action" && shown.length === 0 && templates.length > 0 ? (
+            <p className="text-center py-12 text-sm text-muted-foreground" data-testid="recurring-no-action">対応が必要な定期売上はありません</p>
           ) : templates.length === 0 ? (
             <div className="text-center py-16">
               <Repeat className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -450,13 +504,14 @@ export default function RecurringProjects() {
                     <TableHead className="text-xs text-white text-right">受注見込/月</TableHead>
                     <TableHead className="text-xs text-white text-right">粗利見込/月</TableHead>
                     <TableHead className="text-xs text-white">期間</TableHead>
+                    <TableHead className="text-xs text-white">終了・更新</TableHead>
                     <TableHead className="text-xs text-white">案件・最新の納品書</TableHead>
                     <TableHead className="text-xs text-white">状態</TableHead>
                     <TableHead className="w-20"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {templates.map((t) => (
+                  {shown.map((t) => (
                     <TableRow key={t.id} className={t.is_active ? "" : "opacity-60"}>
                       <TableCell className="text-sm font-medium">{t.client_name}</TableCell>
                       <TableCell className="text-sm">
@@ -467,6 +522,35 @@ export default function RecurringProjects() {
                       <TableCell className="text-right text-sm tabular-nums">{yen(t.expected_revenue)}</TableCell>
                       <TableCell className="text-right text-sm tabular-nums">{yen(Number(t.expected_revenue || 0) - Number(t.expected_cost || 0) - Number(t.other_cost || 0))}</TableCell>
                       <TableCell className="text-xs whitespace-nowrap">{monthLabel(t.start_month)} 〜 {t.end_month ? monthLabel(t.end_month) : "無期限"}</TableCell>
+                      <TableCell className="text-xs" data-testid="recurring-status">
+                        {(() => {
+                          const st = statusOf(t);
+                          const def = RECURRING_STATUS[st.key];
+                          return (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${def.cls}`}>{def.label}</span>
+                                {st.note && <span className="text-[10px] text-muted-foreground">{st.note}</span>}
+                              </div>
+                              {def.action && (
+                                <div className="flex flex-wrap gap-1">
+                                  {st.key === "review" ? (
+                                    <>
+                                      <Button size="sm" className="h-6 px-2 text-[11px]" disabled={patchTemplate.isPending} onClick={() => patchTemplate.mutate({ template: t, patch: { last_reviewed_month: `${st.reviewYm}-01` }, message: `見直し済みにしました（次の見直しは ${ymLabel(addMonths(st.reviewYm, 12))}）` })} data-testid="recurring-reviewed">見直し済み（このまま継続）</Button>
+                                      <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => openRenew(t, "set_end")}>終了月を決める</Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => openRenew(t, "renew")} data-testid="recurring-renew">更新する</Button>
+                                      <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => setEnding(t)} data-testid="recurring-end">更新しない（終了）</Button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
                         {projectByTemplate[t.id] ? (
                           <Link to={`/projects/${projectByTemplate[t.id].id}`} className="text-primary hover:underline">{projectByTemplate[t.id].project_number || "案件を開く"}</Link>
@@ -477,7 +561,7 @@ export default function RecurringProjects() {
                       </TableCell>
                       <TableCell>
                         <button onClick={() => toggleActive.mutate({ id: t.id, is_active: !t.is_active })} title="クリックで切り替え">
-                          <Badge className={`text-[10px] ${t.is_active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-600 hover:bg-slate-100"}`}>
+                          <Badge className={`text-[10px] whitespace-nowrap ${t.is_active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-600 hover:bg-slate-100"}`}>
                             {t.is_active ? "有効" : "停止中"}
                           </Badge>
                         </button>
@@ -508,6 +592,74 @@ export default function RecurringProjects() {
         defaults={recurringProbability ? { deal_probability: recurringProbability } : {}}
         onSaved={(row) => navigate(`/projects/${row.id}?recurring=1`)}
       />
+
+      {/* 更新する（終了月を延ばす）／終了月を決める（無期限の見直し） */}
+      <Dialog open={!!renewing} onOpenChange={(v) => !v && !patchTemplate.isPending && setRenewing(null)}>
+        <DialogContent className="max-w-md" data-testid="recurring-renew-dialog">
+          <DialogHeader>
+            <DialogTitle>{renewing?.mode === "renew" ? "定期売上を更新する" : "終了月を決める"}</DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              {renewing?.template.client_name}　{renewing?.template.name}（月額 {yen(renewing?.template.expected_revenue)}）
+              {renewing?.mode === "renew" ? "の終了月を延ばします。同じ案件のまま、新しい終了月まで毎月の納品書を作ります。" : "の終了月を入れます。その月の分まで毎月の納品書を作ります。"}
+            </DialogDescription>
+          </DialogHeader>
+          {renewing && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">新しい終了月</Label>
+                <PeriodEndSelect
+                  start={renewing.mode === "renew" && statusOf(renewing.template).endYm ? addMonths(statusOf(renewing.template).endYm, 1) : todayString().slice(0, 7)}
+                  value={renewEnd} onChange={setRenewEnd} emptyLabel={renewing.mode === "renew" ? "無期限にする" : "（選んでください）"} ariaLabel="新しい終了月" className="w-full"
+                />
+              </div>
+              <label className="flex items-start gap-2 text-xs cursor-pointer">
+                <Checkbox checked={renewAmount} onCheckedChange={(v) => setRenewAmount(!!v)} className="mt-0.5" />
+                <span>月額が変わる（保存のあと案件の画面で「定期売上を編集」を開き、新しい見積から月額を入れ直す）</span>
+              </label>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenewing(null)} disabled={patchTemplate.isPending}>キャンセル</Button>
+            <Button
+              disabled={patchTemplate.isPending || (renewing?.mode === "set_end" && !renewEnd)}
+              onClick={() => {
+                const t = renewing.template;
+                const st = statusOf(t);
+                patchTemplate.mutate({
+                  template: t,
+                  patch: { end_month: renewEnd ? `${renewEnd}-01` : null, is_active: true, ended_confirmed_at: null },
+                  catchUpFrom: st.key === "expired" ? st.endYm : null,
+                  reopenAmount: renewAmount,
+                  message: !renewEnd ? "無期限で更新しました" : renewing.mode === "renew" ? `${ymLabel(renewEnd)}分まで更新しました` : `${ymLabel(renewEnd)}分までにしました`,
+                });
+              }}
+              data-testid="recurring-renew-save"
+            >
+              {patchTemplate.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} {renewing?.mode === "renew" ? "更新する" : "この月までにする"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 更新しない（終了）: 要対応から外す。終了月までは毎月の納品書を作る */}
+      <Dialog open={!!ending} onOpenChange={(v) => !v && !patchTemplate.isPending && setEnding(null)}>
+        <DialogContent className="max-w-md" data-testid="recurring-end-dialog">
+          <DialogHeader>
+            <DialogTitle>更新しないで終了にしますか？</DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              {ending?.client_name}　{ending?.name} を{ending?.end_month ? ` ${monthLabel(ending.end_month)}で` : ""}終了にします。
+              {ending && statusOf(ending).key === "ending_soon" ? "終了月の分までは、これまでどおり毎月の納品書を作ります。" : ""}
+              要対応の数字からは外れ、定期売上一覧には「終了」として残ります。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEnding(null)} disabled={patchTemplate.isPending}>キャンセル</Button>
+            <Button disabled={patchTemplate.isPending} onClick={() => patchTemplate.mutate({ template: ending, patch: { ended_confirmed_at: new Date().toISOString() }, message: "更新しないで終了にしました" })} data-testid="recurring-end-save">
+              {patchTemplate.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />} 終了にする
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!removing} onOpenChange={(v) => !v && !remove.isPending && setRemoving(null)}>
         <DialogContent className="max-w-md" data-testid="recurring-remove-dialog">
