@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment, forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Download, Search, Lightbulb,
-  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, Type, ChevronRight, GripVertical, FileText, FileUp, Calculator, Lock, Globe, History, Sigma, Table2, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp, PackageCheck, Camera,
+  Palette, Printer, Hammer, Cpu, Plus, Trash2, FileOutput, Eye, EyeOff, ChevronRight, GripVertical, FileText, Lock, Globe, History, Sigma, Link2, Image as ImageIcon, Clipboard, Loader2, X, Pencil, ChevronDown, Copy, ChevronUp, PackageCheck, Camera, CirclePlus, CircleChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -571,38 +571,6 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               </table>
             </div>
 
-            <div className="flex border rounded-lg overflow-hidden divide-x">
-              <div className="flex-1 text-center py-2 bg-muted/30">
-                <p className="text-[10px] text-muted-foreground">小計</p>
-                <p className="text-sm font-bold">{subtotal.toLocaleString()}円</p>
-              </div>
-              <div className="flex-1 text-center py-2 bg-muted/30">
-                <p className="text-[10px] text-muted-foreground">消費税</p>
-                <p className="text-sm font-bold">{tax.toLocaleString()}円</p>
-              </div>
-              <div className="flex-1 text-center py-2 bg-primary/10">
-                <p className="text-[10px] text-muted-foreground">見積金額</p>
-                <p className="text-lg font-bold text-primary">{total.toLocaleString()}円</p>
-              </div>
-            </div>
-
-            {showInternal && (
-              <div className="flex border rounded-lg overflow-hidden divide-x border-amber-200">
-                <div className="flex-1 text-center py-2 bg-amber-50">
-                  <p className="text-[10px] text-amber-700">総原価（参考）</p>
-                  <p className="text-sm font-bold text-amber-800">¥{totalCost.toLocaleString()}</p>
-                </div>
-                <div className="flex-1 text-center py-2 bg-amber-50">
-                  <p className="text-[10px] text-amber-700">この見積の粗利</p>
-                  <p className="text-sm font-bold text-amber-800">¥{grossProfit.toLocaleString()}</p>
-                </div>
-                <div className="flex-1 text-center py-2 bg-amber-50">
-                  <p className="text-[10px] text-amber-700">粗利率</p>
-                  <p className="text-sm font-bold text-amber-800">{profitRate}%</p>
-                </div>
-              </div>
-            )}
-
             {showInternal && (missingShots.length > 0 || shooting) && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="missing-shots">
                 <Camera className="w-3.5 h-3.5 shrink-0" />
@@ -615,105 +583,6 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 </Button>
               </div>
             )}
-
-            {/* 明細追加バー （表の直前に配置し、スクロールなしで触れるように）
-                4 行: 大カテゴリ ／ 外から読み込む（インポート） ／ 自動計算行 ／ その他 */}
-            <div className="border border-dashed border-emerald-300 rounded-lg p-3 bg-emerald-50/60 space-y-2">
-              <p className="text-xs font-semibold text-emerald-800">+ 明細を追加</p>
-
-              {/* 1. 大カテゴリ: 幅に関わらず 1 行に収める（5 等分） */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-emerald-700 w-20 shrink-0">大カテゴリから</span>
-                <div className="flex-1 grid grid-cols-5 gap-1.5 min-w-0">
-                  {LINE_ITEM_CATEGORIES.filter(cat => cat.key !== "other").map(cat => {
-                    const Icon = CATEGORY_ICONS[cat.key];
-                    return (
-                      <Button key={cat.key} size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-1.5 min-w-0 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => openAddPanel(cat)} title={cat.label}>
-                        <Icon className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{cat.label}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 2. 外から読み込む（インポート）: 色を変えて「取り込み」だと分かるように。1 行に収める（3 等分） */}
-              <div className="rounded-md border border-sky-200 bg-sky-50/70 px-2 py-1.5 -mx-0.5 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-sky-800 w-20 shrink-0 inline-flex items-center gap-1"><Download className="w-3 h-3" /> 読み込む</span>
-                  <div className="flex-1 grid grid-cols-3 gap-1.5 min-w-0">
-                    <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-1.5 min-w-0 bg-white text-sky-900 hover:bg-sky-100 hover:text-sky-900 border-sky-300" onClick={() => setAddPanel("web_price")} title="ネット印刷の価格ページを読み取って明細にします">
-                      <Globe className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">ネット印刷</span>
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-1.5 min-w-0 bg-white text-sky-900 hover:bg-sky-100 hover:text-sky-900 border-sky-300" onClick={() => setAddPanel("vendor_quote")} title="仕入先の見積書（PDF・画像）を読み取って明細にします">
-                      <FileUp className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">仕入先見積</span>
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-1.5 min-w-0 bg-white text-sky-900 hover:bg-sky-100 hover:text-sky-900 border-sky-300" onClick={() => setAddPanel("sheet_import")} title="スプレッドシートの内容を読み取って明細にします">
-                      <Table2 className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">スプレッドシート</span>
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-[10px] text-sky-700 pl-[88px]">価格ページ・見積書PDF・シートの内容を読み取って明細にします</p>
-              </div>
-
-              {/* 3. 自動計算行 */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-emerald-700 w-20 shrink-0">合計から計算</span>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-2 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200">
-                      <Calculator className="w-3.5 h-3.5" /> 自動計算行（コンセプト・ディレクション・校正・割引）
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-1" align="start">
-                    <p className="text-[10px] text-muted-foreground px-2 py-1">他の明細の合計から金額が決まる行です。%は追加後に行ごとに変えられます（初期値はシステム設定）</p>
-                    <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("concept_fee")}>
-                      コンセプト設計費 <span className="text-muted-foreground">（印刷費を除く合計の{Math.round(rules.concept_fee.rate * 100)}%）</span>
-                    </button>
-                    <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("direction_fee")}>
-                      ディレクション費 <span className="text-muted-foreground">（印刷費を除く合計の{Math.round(rules.direction_fee.rate * 100)}%）</span>
-                    </button>
-                    <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("proofreading_fee")}>
-                      校正費 <span className="text-muted-foreground">（デザイン費の{Math.round(rules.proofreading_fee.rate * 100)}%）</span>
-                    </button>
-                    <div className="border-t my-1" />
-                    {rules.discounts.map(d => (
-                      <button key={d.key} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("discount", d)}>
-                        {d.label} <span className="text-muted-foreground">（デザイン費の{Math.round(d.rate * 100)}%を値引き）</span>
-                      </button>
-                    ))}
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* 4. その他 */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-emerald-700 w-20 shrink-0">その他</span>
-                <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-2 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => setAddPanel("past_estimate")}>
-                  <History className="w-3.5 h-3.5" /> 過去見積から複製
-                </Button>
-                {(() => { const cat = LINE_ITEM_CATEGORIES.find(c => c.key === "other"); const Icon = CATEGORY_ICONS.other; return (
-                  <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-2 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => openAddPanel(cat)}>
-                    <Icon className="w-3.5 h-3.5" /> 項目自由入力
-                  </Button>
-                ); })()}
-                <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-2 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={addTextRow}>
-                  <Type className="w-3.5 h-3.5" /> テキスト行を追加
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1 text-[11px] h-8 px-2 bg-white text-foreground hover:bg-emerald-100 hover:text-foreground border-emerald-200" onClick={() => commitItems([...lineItems, { id: uid(), row_type: "subtotal", name: "小計", amount: 0, source_type: "subtotal" }])}>
-                  <Sigma className="w-3.5 h-3.5" /> 小計行を追加
-                </Button>
-              </div>
-            </div>
-
-            {/* 品名・仕様で探す（価格マスタ・前回の入稿・過去見積の明細）。押すとそのまま明細に入る */}
-            <ItemSearchBar
-              data={searchData}
-              excludeEstimateId={estimate.id}
-              priceOf={priceOfCell}
-              onPickCell={(entry, cell) => addItem(itemFromMasterCell(entry, cell))}
-              onPickOrder={(order) => commitItems([...lineItems, ...itemsFromOrder(order)])}
-              onPickLine={(c) => commitItems([...lineItems, itemFromPastLine(c)])}
-            />
 
             {/* table-fixed: 数量・単価などの入力欄が幅を取りすぎて「名称」が縦長に潰れないよう、
                 各列の幅を固定し、残り幅をすべて名称に回す */}
@@ -743,7 +612,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 {lineItems.length === 0 && (
                   <tr>
                     <td colSpan={7} className="text-center text-xs text-muted-foreground py-8">
-                      下の「+ 明細を追加」からデザイン費・印刷費などを追加してください
+                      下の「項目を追加」からデザイン費・印刷費などを追加してください
                     </td>
                   </tr>
                 )}
@@ -790,6 +659,111 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 名称は Enter を押しても枠内に残ります（Shift+Enter で改行、Tab で数量へ、Esc で元に戻す）。数量・単位・単価は Enter で次の欄へ進みます。行は左のつまみをドラッグするか、カーソルを乗せて出る ▲▼ で動かせます。右のコピーのアイコンで同じ行を下に追加します
               </p>
             )}
+
+            {/* 項目を追加（表の下）。⊕ はその場で 1 行足す、▼ は選ぶ画面を開く
+                1 行目: 自動計算行（コンセプト・ディレクション・校正・割引）／ 2 行目: 大カテゴリ ／ 3 行目: 取り込む ／ 4 行目: その他 */}
+            <div className="border border-dashed border-emerald-300 rounded-lg p-3 bg-emerald-50/60 space-y-2" data-testid="add-panel">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-emerald-800 w-16 shrink-0">項目を追加</span>
+                <div className="flex-1 flex flex-wrap gap-1.5 min-w-0">
+                  {[
+                    ["concept_fee", "コンセプト", `コンセプト設計費（印刷費を除く合計の${Math.round(rules.concept_fee.rate * 100)}%）を追加`],
+                    ["direction_fee", "ディレクション", `ディレクション費（印刷費を除く合計の${Math.round(rules.direction_fee.rate * 100)}%）を追加`],
+                    ["proofreading_fee", "校正", `校正費（デザイン費の${Math.round(rules.proofreading_fee.rate * 100)}%）を追加`],
+                  ].map(([key, label, title]) => (
+                    <AddChip key={key} kind="add" onClick={() => addRuleRow(key)} title={title}>{label}</AddChip>
+                  ))}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <AddChip kind="menu" title="割引の種類を選んで追加">割引</AddChip>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-1" align="end">
+                      <p className="text-[10px] text-muted-foreground px-2 py-1">デザイン費の合計から値引きする行です。%は追加後に行ごとに変えられます（初期値はシステム設定）</p>
+                      {rules.discounts.map(d => (
+                        <button key={d.key} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("discount", d)}>
+                          {d.label} <span className="text-muted-foreground">（デザイン費の{Math.round(d.rate * 100)}%を値引き）</span>
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {/* 大カテゴリ: 幅に関わらず 1 行に収める（5 等分） */}
+              <div className="flex flex-wrap gap-1.5">
+                  {LINE_ITEM_CATEGORIES.filter(cat => cat.key !== "other").map(cat => (
+                    <AddChip key={cat.key} kind="menu" onClick={() => openAddPanel(cat)} title={`${cat.label}の項目を選んで追加`}>{cat.label}</AddChip>
+                  ))}
+              </div>
+
+              {/* 取り込む（インポート）: 色を変えて「取り込み」だと分かるように。1 行に収める（3 等分） */}
+              <div className="rounded-md border border-sky-200 bg-sky-50/70 px-2 py-1.5 -mx-0.5 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-sky-800 w-16 shrink-0 inline-flex items-center gap-1"><Download className="w-3 h-3" /> 取り込む</span>
+                  <div className="flex-1 flex flex-wrap gap-1.5 min-w-0">
+                    <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("web_price")} title="ネット印刷の価格ページを読み取って明細にします">ネット印刷</AddChip>
+                    <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("vendor_quote")} title="仕入先の見積書（PDF・画像）を読み取って明細にします">仕入先見積</AddChip>
+                    <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("sheet_import")} title="スプレッドシートの内容を読み取って明細にします">スプレッドシート</AddChip>
+                  </div>
+                </div>
+                <p className="text-[10px] text-sky-700 pl-[72px]">価格ページ・見積書PDF・シートの内容を読み取って明細にします</p>
+              </div>
+
+              {/* その他 */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-emerald-700 w-16 shrink-0">その他</span>
+                <div className="flex-1 flex flex-wrap gap-1.5 min-w-0">
+                  <AddChip kind="menu" onClick={() => setAddPanel("past_estimate")} title="過去の見積の明細を選んで複製">過去見積から複製</AddChip>
+                  <AddChip kind="menu" onClick={() => openAddPanel(LINE_ITEM_CATEGORIES.find(c => c.key === "other"))} title="名称・金額を自由に入れて追加">項目自由入力</AddChip>
+                  <AddChip kind="add" onClick={addTextRow} title="見出しや説明のための文字だけの行を追加">テキスト行を追加</AddChip>
+                  <AddChip kind="add" onClick={() => commitItems([...lineItems, { id: uid(), row_type: "subtotal", name: "小計", amount: 0, source_type: "subtotal" }])} title="直前の小計からここまでの合計を出す行を追加">小計行を追加</AddChip>
+                </div>
+              </div>
+            </div>
+
+            {/* 品名・仕様で探す（価格マスタ・前回の入稿・過去見積の明細）。押すとそのまま明細に入る */}
+            <ItemSearchBar
+              data={searchData}
+              excludeEstimateId={estimate.id}
+              priceOf={priceOfCell}
+              onPickCell={(entry, cell) => addItem(itemFromMasterCell(entry, cell))}
+              onPickOrder={(order) => commitItems([...lineItems, ...itemsFromOrder(order)])}
+              onPickLine={(c) => commitItems([...lineItems, itemFromPastLine(c)])}
+            />
+
+            {/* 合計（1 行。左に原価・粗利、右に小計・消費税・見積金額） */}
+            <div className="flex flex-col sm:flex-row gap-2" data-testid="quote-totals">
+              {showInternal && (
+                <div className="flex flex-1 border rounded-lg overflow-hidden divide-x border-amber-200 divide-amber-200">
+                  <div className="flex-1 text-center py-1.5 bg-amber-50">
+                    <p className="text-[10px] text-amber-700">総原価（参考）</p>
+                    <p className="text-xs font-bold text-amber-800 tabular-nums">¥{totalCost.toLocaleString()}</p>
+                  </div>
+                  <div className="flex-1 text-center py-1.5 bg-amber-50">
+                    <p className="text-[10px] text-amber-700">この見積の粗利</p>
+                    <p className="text-xs font-bold text-amber-800 tabular-nums">¥{grossProfit.toLocaleString()}</p>
+                  </div>
+                  <div className="flex-1 text-center py-1.5 bg-amber-50">
+                    <p className="text-[10px] text-amber-700">粗利率</p>
+                    <p className="text-xs font-bold text-amber-800 tabular-nums">{profitRate}%</p>
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-1 border rounded-lg overflow-hidden divide-x">
+                <div className="flex-1 text-center py-1.5 bg-muted/30">
+                  <p className="text-[10px] text-muted-foreground">小計</p>
+                  <p className="text-xs font-bold tabular-nums">{subtotal.toLocaleString()}円</p>
+                </div>
+                <div className="flex-1 text-center py-1.5 bg-muted/30">
+                  <p className="text-[10px] text-muted-foreground">消費税</p>
+                  <p className="text-xs font-bold tabular-nums">{tax.toLocaleString()}円</p>
+                </div>
+                <div className="flex-1 text-center py-1.5 bg-primary/10">
+                  <p className="text-[10px] text-muted-foreground">見積金額</p>
+                  <p className="text-sm font-bold text-primary tabular-nums">{total.toLocaleString()}円</p>
+                </div>
+              </div>
+            </div>
 
             {estimate.additional_notes !== undefined && (
               <div>
@@ -1095,6 +1069,20 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 
 
 /** 行の左端: つかんで動かすハンドルと、上下に 1 つ動かすボタン（行にカーソルを乗せると出る） */
+/** 「項目を追加」のボタン。kind="add" はその場で 1 行足す（⊕）、kind="menu" は選ぶ画面を開く（▼） */
+const AddChip = forwardRef(function AddChip({ kind = "add", tone = "emerald", children, className = "", ...props }, ref) {
+  const Mark = kind === "menu" ? CircleChevronDown : CirclePlus;
+  const toneCls = tone === "sky"
+    ? "border-sky-300 text-sky-900 hover:bg-sky-100 hover:text-sky-900"
+    : "border-emerald-200 text-foreground hover:bg-emerald-100 hover:text-foreground";
+  return (
+    <Button ref={ref} type="button" size="sm" variant="outline" className={`h-8 px-2 gap-1 text-[11px] flex-1 basis-auto justify-center whitespace-nowrap bg-white ${toneCls} ${className}`} {...props}>
+      <span>{children}</span>
+      <Mark className="w-3.5 h-3.5 shrink-0 text-rose-500" aria-hidden="true" />
+    </Button>
+  );
+});
+
 function RowHandle({ onDragStart, onDragEnd, onMove, isFirst, isLast }) {
   return (
     <div className="flex flex-col items-center">
