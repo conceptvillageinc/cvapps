@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic, PackageCheck, ListChecks, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic, PackageCheck, ListChecks, AlertTriangle, Copy } from "lucide-react";
 import { MEETING_STATUS } from "@/lib/meetings";
 import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
 import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
+import DuplicateProjectDialog from "@/components/projects/DuplicateProjectDialog";
 import { computeActuals, actualsPatch } from "@/lib/projectActuals";
 import { recurringDrift, recurringPayloadFromEstimate, templateAddsMonth } from "@/lib/recurringSetup";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
@@ -55,6 +56,7 @@ export default function ProjectDetail() {
   const queryClient = useQueryClient();
   const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
   const [editOpen, setEditOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false); // 案件を複製
   const [deleteDocs, setDeleteDocs] = useState(false); // 紐づく見積・納品書・請求書も一緒に消す
 
   const { data: project, isLoading } = useQuery({
@@ -274,6 +276,9 @@ export default function ProjectDetail() {
               </AlertDialogContent>
             </AlertDialog>
           )}
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setDuplicateOpen(true)} title="この案件をもとに新しい案件を作ります（見積も選んで複製できます）" data-testid="project-duplicate">
+            <Copy className="w-3.5 h-3.5" /> 複製
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setEditOpen(true)}>
             <Pencil className="w-3.5 h-3.5" /> 編集
           </Button>
@@ -645,6 +650,7 @@ export default function ProjectDetail() {
       )}
 
       <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} project={project} />
+      <DuplicateProjectDialog open={duplicateOpen} onOpenChange={setDuplicateOpen} project={project} estimates={estimates} />
       <RecurringSetupDialog open={recurringOpen} onOpenChange={setRecurringOpen} project={project} estimates={estimates} template={project?.recurring_template_id ? recurringTemplate : null} />
       <ForecastFromEstimateDialog open={forecastOpen} onOpenChange={setForecastOpen} project={project} estimates={estimates} initial={forecastInitial} />
     </div>
