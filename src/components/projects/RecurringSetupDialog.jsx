@@ -57,6 +57,12 @@ export default function RecurringSetupDialog({ open, onOpenChange, project, esti
     setAddMonth(template ? templateAddsMonth(template) : true);
     setFirstOneTime(template ? !!template.first_note_one_time : true);
   }, [open]);
+  // 開いたときに見積がまだ読み込めていなかったら（案件の画面を ?recurring=1 で開いたときなど）、読み込めたところで選ぶ
+  useEffect(() => {
+    if (!open || estimateId || !candidates.length) return;
+    const first = candidates.find((e) => e.id === (initialEstimateId || template?.source_estimate_id)) || defaultEstimate(candidates);
+    setEstimateId(first?.id || null);
+  }, [open, candidates]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!est) { setChecked(new Set()); return; }
     const all = forecastLines(est).map((l) => l.id);

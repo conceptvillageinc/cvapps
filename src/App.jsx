@@ -38,6 +38,7 @@ import FaqPage from '@/pages/FaqPage';
 import ProjectList from '@/pages/ProjectList';
 import ProjectDetail from '@/pages/ProjectDetail';
 import RecurringProjects from '@/pages/RecurringProjects';
+import FreeeHandover from '@/pages/FreeeHandover';
 import DeliveryNoteList from '@/pages/DeliveryNoteList';
 import DeliveryNoteEdit from '@/pages/DeliveryNoteEdit';
 import ReceiptList from '@/pages/ReceiptList';
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
           <Route path="/" element={<Dashboard />} />
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/recurring" element={<RecurringProjects />} />
+          <Route path="/freee-handover" element={<FreeeHandover />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/schedule" element={<ProjectSchedulePage />} />
           <Route path="/sales-report" element={<SalesReport />} />
