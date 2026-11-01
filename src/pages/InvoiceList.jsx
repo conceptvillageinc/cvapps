@@ -17,7 +17,7 @@ import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
 import RecurringMark, { useRecurringProjectIds, invoiceHasRecurring } from "@/components/projects/RecurringMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
-import { exportInvoicesCsv, exportInvoiceLinesCsv } from "@/lib/listCsv";
+import { exportInvoicesCsv } from "@/lib/listCsv";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
@@ -90,7 +90,7 @@ export default function InvoiceList() {
               <SelectItem value={ALL} className="text-xs">すべての期</SelectItem>
             </SelectContent>
           </Select>
-          <CsvExportButton count={filtered.length} onExport={() => exportInvoicesCsv(filtered)} onExportLines={() => exportInvoiceLinesCsv(filtered)} />
+          <CsvExportButton count={filtered.length} onExport={() => exportInvoicesCsv(filtered)} />
           <ListColumnsButton list="invoices" />
           <Button className="gap-2" onClick={() => navigate("/invoices/new")}><Plus className="w-4 h-4" /> 請求書を作成</Button>
         </div>

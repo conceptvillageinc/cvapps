@@ -7,7 +7,8 @@
 //   ・ブラウザの中で作ってダウンロードするだけ（どこにも送らない）
 //
 // 列は { label, value: (row) => 値 } の配列で決める。
-// 見積・納品書・請求書は「1行＝1書類」と「1行＝1明細」の 2 種類を出す（docLineRows / lineColumns）。
+// 見積・納品書・請求書は 1 ファイルで「1行＝1明細」。書類の番号・合計などは各行にくり返して入れる
+// （書類ごとに数えるときは「行」が 1 の行だけを見る。明細の無い書類も 1 行出す）。
 // ============================================================================
 import { db } from "@/api/db";
 import { downloadText } from "@/lib/mfExport";
@@ -51,29 +52,29 @@ export const mark = (b) => (b ? "○" : "");
 // ---------------------------------------------------------------------------
 // 明細（1行＝1明細）
 // ---------------------------------------------------------------------------
-/** 書類の明細を 1 行ずつに（見出し・小計の行は除く）。{ doc, li, no } の配列 */
+/** 書類の明細を 1 行ずつに（見出し・小計の行は除く）。{ doc, li, no } の配列。明細の無い書類は li = {}・no = 1 の 1 行 */
 export function docLineRows(docs) {
-  return (docs || []).flatMap((doc) =>
-    (doc.line_items || [])
-      .filter((li) => li && li.row_type !== "text" && li.row_type !== "subtotal")
-      .map((li, i) => ({ doc, li, no: i + 1 })));
+  return (docs || []).flatMap((doc) => {
+    const lines = (doc.line_items || []).filter((li) => li && li.row_type !== "text" && li.row_type !== "subtotal");
+    return lines.length ? lines.map((li, i) => ({ doc, li, no: i + 1 })) : [{ doc, li: {}, no: 1 }];
+  });
 }
 
-/** 明細の列（書類の列の頭 headColumns に、明細の列を足す） */
-export function lineColumns(headColumns, { cost = false, extra = [] } = {}) {
+/** 書類の列 docColumns（各行にくり返す）のあとに、明細の列を足す */
+export function lineColumns(docColumns, { cost = false, extra = [] } = {}) {
   return [
-    ...headColumns.map((c) => ({ label: c.label, value: (r) => c.value(r.doc) })),
+    ...docColumns.map((c) => ({ label: c.label, value: (r) => c.value(r.doc) })),
     { label: "行", value: (r) => r.no },
     { label: "区分", value: (r) => r.li.category || "" },
     { label: "品名", value: (r) => oneLine(r.li.name) },
     { label: "数量", value: (r) => dec(r.li.quantity) },
     { label: "単位", value: (r) => r.li.unit || "" },
     { label: "単価", value: (r) => dec(r.li.unit_price) },
-    { label: "金額", value: (r) => num(r.li.amount) },
+    { label: "明細の金額", value: (r) => num(r.li.amount) },
     { label: "税率", value: (r) => (r.li.tax_rate === null || r.li.tax_rate === undefined || r.li.tax_rate === "" ? "" : `${r.li.tax_rate}%`) },
     ...(cost ? [
-      { label: "原価単価", value: (r) => dec(r.li.cost_price) },
-      { label: "原価", value: (r) => (r.li.cost_price === null || r.li.cost_price === undefined || r.li.cost_price === "" ? "" : num(Number(r.li.cost_price) * (Number(r.li.quantity) || 0))) },
+      { label: "明細の原価単価", value: (r) => dec(r.li.cost_price) },
+      { label: "明細の原価", value: (r) => (r.li.cost_price === null || r.li.cost_price === undefined || r.li.cost_price === "" ? "" : num(Number(r.li.cost_price) * (Number(r.li.quantity) || 0))) },
     ] : []),
     { label: "売上カテゴリー", value: (r) => r.li.sales_category || "" },
     ...extra,

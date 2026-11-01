@@ -1,5 +1,6 @@
 // ============================================================================
 // 各一覧の CSV の列（案件・見積・納品書・請求書・クライアント）。列名は CVアプリの画面の表示名にそろえる。
+//   見積・納品書・請求書は 1 ファイルで 1行＝1明細（書類の列は各行にくり返す。書類ごとに数えるときは「行」が 1 の行）。
 //   どれも「書き出した行数」を返す（CsvExportButton のお知らせに使う）。
 // ============================================================================
 import { exportCsv, docLineRows, lineColumns, rowsById, num, day, oneLine, mark } from "@/lib/csvExport";
@@ -82,8 +83,9 @@ function estimateHead({ projectById = {}, probabilityOf, phaseOf, deliveryLabel 
   ];
 }
 
+/** 1行＝1明細（見積の列は各行にくり返す） */
 export function exportEstimatesCsv(rows, ctx) {
-  const columns = [
+  const doc = [
     ...estimateHead(ctx),
     { label: "金額（税抜）", value: (e) => num(estimateAmounts(e).subtotal) },
     { label: "消費税", value: (e) => num(estimateAmounts(e).tax) },
@@ -93,14 +95,8 @@ export function exportEstimatesCsv(rows, ctx) {
     { label: "粗利率", value: (e) => { const a = estimateAmounts(e); return a.cost === null ? "" : rate(a.subtotal - a.cost, a.subtotal); } },
     { label: "税込で見積", value: (e) => mark(e.tax_inclusive) },
   ];
-  exportCsv("見積一覧", columns, rows);
-  return rows.length;
-}
-
-export function exportEstimateLinesCsv(rows, ctx) {
-  const head = estimateHead(ctx).filter((c) => ["見積番号", "版", "見積日", "案件番号", "クライアント", "件名", "ステータス", "提出"].includes(c.label));
   const lines = docLineRows(rows);
-  exportCsv("見積明細", [...lineColumns(head, { cost: true }), { label: "税込で見積", value: (r) => mark(r.doc.tax_inclusive) }], lines);
+  exportCsv("見積一覧", lineColumns(doc, { cost: true }), lines);
   return lines.length;
 }
 
@@ -132,22 +128,17 @@ function noteHead({ projects, estimates, invoices }) {
   ];
 }
 
+/** 1行＝1明細（納品書の列は各行にくり返す） */
 export async function exportDeliveryNotesCsv(rows) {
-  const head = noteHead(await noteRefs(rows));
-  exportCsv("納品書一覧", [
-    ...head,
+  const doc = [
+    ...noteHead(await noteRefs(rows)),
     { label: "小計（税抜）", value: (n) => num(n.subtotal) },
     { label: "消費税", value: (n) => num(n.tax) },
     { label: "合計（税込）", value: (n) => num(n.total) },
     { label: "備考", value: (n) => oneLine(n.notes) },
-  ], rows);
-  return rows.length;
-}
-
-export async function exportDeliveryNoteLinesCsv(rows) {
-  const head = noteHead(await noteRefs(rows)).filter((c) => ["納品書番号", "納品日", "案件番号", "クライアント", "件名", "状態", "請求書番号"].includes(c.label));
+  ];
   const lines = docLineRows(rows);
-  exportCsv("納品書明細", lineColumns(head), lines);
+  exportCsv("納品書一覧", lineColumns(doc), lines);
   return lines.length;
 }
 
@@ -171,9 +162,10 @@ function invoiceHead(projects) {
 
 const invoiceProjectIds = (rows) => rows.flatMap((i) => [i.project_id, ...(i.line_items || []).map((li) => li.project_id)]);
 
+/** 1行＝1明細（請求書の列は各行にくり返す） */
 export async function exportInvoicesCsv(rows) {
   const projects = await rowsById("Project", invoiceProjectIds(rows));
-  exportCsv("請求書一覧", [
+  const doc = [
     ...invoiceHead(projects),
     { label: "小計（税抜）", value: (i) => num(i.subtotal) },
     { label: "消費税", value: (i) => num(i.tax) },
@@ -184,15 +176,9 @@ export async function exportInvoicesCsv(rows) {
     { label: "入金額", value: (i) => num(i.paid_amount) },
     { label: "担当者", value: (i) => i.person_in_charge || "" },
     { label: "備考", value: (i) => oneLine(i.notes) },
-  ], rows);
-  return rows.length;
-}
-
-export async function exportInvoiceLinesCsv(rows) {
-  const projects = await rowsById("Project", invoiceProjectIds(rows));
-  const head = invoiceHead(projects).filter((c) => c.label !== "案件名");
+  ];
   const lines = docLineRows(rows);
-  exportCsv("請求書明細", lineColumns(head, {
+  exportCsv("請求書一覧", lineColumns(doc, {
     extra: [
       { label: "明細の案件番号", value: (r) => projects[r.li.project_id]?.project_number || "" },
       { label: "提供月", value: (r) => (r.li.service_month ? String(r.li.service_month).slice(0, 7) : "") },

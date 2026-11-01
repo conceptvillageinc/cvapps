@@ -28,7 +28,7 @@ import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark from "@/components/projects/RecurringMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
-import { exportEstimatesCsv, exportEstimateLinesCsv } from "@/lib/listCsv";
+import { exportEstimatesCsv } from "@/lib/listCsv";
 
 /** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
 function estimateGross(e) {
@@ -286,7 +286,7 @@ export default function EstimateList() {
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <CsvExportButton count={sorted.length} onExport={() => exportEstimatesCsv(sorted, csvCtx)} onExportLines={() => exportEstimateLinesCsv(sorted, csvCtx)} />
+          <CsvExportButton count={sorted.length} onExport={() => exportEstimatesCsv(sorted, csvCtx)} />
           <ListColumnsButton list="estimates" />
           <Link to="/estimates/new">
             <Button className="gap-2">
