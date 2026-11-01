@@ -686,10 +686,10 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                       <AddChip kind="menu" title="割引の種類を選んで追加">割引</AddChip>
                     </PopoverTrigger>
                     <PopoverContent className="w-72 p-1" align="end">
-                      <p className="text-[10px] text-muted-foreground px-2 py-1">デザイン費の合計から値引きする行です。決まった割引は追加後に変えられません。自由に決めるときは「カスタム」を使います</p>
+                      <p className="text-[10px] text-muted-foreground px-2 py-1">明細の合計（デザイン・構築・印刷・コンセプト・ディレクション・校正などすべて）から値引きする行です。決まった割引は追加後に変えられません。自由に決めるときは「カスタム」を使います</p>
                       {rules.discounts.map(d => (
                         <button key={d.key} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => { addRuleRow("discount", d); setDiscountOpen(false); }}>
-                          {d.label} <span className="text-muted-foreground">（デザイン費の{Math.round(d.rate * 100)}%を値引き）</span>
+                          {d.label} <span className="text-muted-foreground">（合計の{Math.round(d.rate * 100)}%を値引き）</span>
                         </button>
                       ))}
                       <div className="border-t my-1" />

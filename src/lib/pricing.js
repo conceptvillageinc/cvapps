@@ -135,12 +135,14 @@ export function outsourcingPrice(rules, kind, cost) {
 //   rule: "concept_fee"      印刷費を除く合計 × rate
 //   rule: "direction_fee"    印刷費を除く合計 × rate
 //   rule: "proofreading_fee" デザイン費合計 × rate
-//   rule: "discount"         デザイン費合計 × rate のマイナス
+//   rule: "discount"         明細の合計 × rate のマイナス
+//                            （デザイン・構築・印刷・自由入力・コンセプト・ディレクション・校正をすべて含む。
+//                              割引の行どうし・マイナスの行・テキスト行・小計行は含めない）
 // 行の rate は個別の見積で書き換えられる（システム設定の%は追加時の初期値）。
 // ただし割引のうち、システム設定の割引（CV割引など）は追加したら変えられない。
 // 自由に決めたいときは「カスタム」の割引（discount_key: "custom"）を使う。%か金額のどちらでも指定できる
-//   discount_mode: "rate"   … デザイン費合計 × rate のマイナス
-//   discount_mode: "amount" … fixed_amount のマイナス（rate はデザイン費合計に対する割合を表示用に入れる）
+//   discount_mode: "rate"   … 明細の合計 × rate のマイナス
+//   discount_mode: "amount" … fixed_amount のマイナス（rate は明細の合計に対する割合を表示用に入れる）
 // ----------------------------------------------------------------------------
 const PRINT_CATEGORY = /印刷費/;
 const DESIGN_CATEGORY = "デザイン費";
@@ -157,7 +159,7 @@ export function ruleRowLabel(rule, rate, discountLabel) {
   if (rule === "concept_fee") return `コンセプト設計費（印刷費を除く合計の${pct}）`;
   if (rule === "direction_fee") return `ディレクション費（印刷費を除く合計の${pct}）`;
   if (rule === "proofreading_fee") return `校正費（デザイン費の${pct}）`;
-  return discountLabel || `割引（デザイン費の${pct}）`;
+  return discountLabel || `割引（合計の${pct}）`;
 }
 
 export const CUSTOM_DISCOUNT_KEY = "custom";
@@ -226,16 +228,19 @@ export function recomputeRuleRows(lineItems, rules) {
       li.amount = li.unit_price;
     }
   }
-  // 3) 割引（デザイン費に依存。マイナス）
+  // 3) 割引（明細の合計に依存。マイナス）。1)・2) で入れた自動計算行も含め、割引の行・マイナスの行・小計行は除く
+  const discountBase = sumAmount(items.filter((li) =>
+    isAmountRow(li) && li.row_type !== "subtotal" && !(isRuleRow(li) && li.rule === "discount") && (Number(li.amount) || 0) > 0
+  ));
   for (const li of items) {
     if (isRuleRow(li) && li.rule === "discount" && li.discount_key === CUSTOM_DISCOUNT_KEY && li.discount_mode === "amount") {
       const a = Math.abs(Number(li.fixed_amount) || 0);
       li.unit_price = -a;
       li.quantity = 1;
       li.amount = li.unit_price;
-      li.rate = designBase > 0 ? a / designBase : 0;
+      li.rate = discountBase > 0 ? a / discountBase : 0;
     } else if (isRuleRow(li) && li.rule === "discount") {
-      li.unit_price = -Math.round(designBase * (Number(li.rate) || 0));
+      li.unit_price = -Math.round(discountBase * (Number(li.rate) || 0));
       li.quantity = 1;
       li.amount = li.unit_price;
     }
@@ -266,8 +271,8 @@ export function ruleRowHint(li) {
   if (li.rule === "concept_fee") return "印刷費を除く合計から自動計算";
   if (li.rule === "direction_fee") return "印刷費を除く合計から自動計算";
   if (li.rule === "proofreading_fee") return "デザイン費の合計から自動計算";
-  if (isCustomDiscount(li)) return li.discount_mode === "amount" ? "カスタムの割引（金額で指定）" : "カスタムの割引（デザイン費の%で指定）";
-  if (li.rule === "discount") return "デザイン費の合計から自動計算（値引き・変更不可）";
+  if (isCustomDiscount(li)) return li.discount_mode === "amount" ? "カスタムの割引（金額で指定）" : "カスタムの割引（明細の合計の%で指定）";
+  if (li.rule === "discount") return "明細の合計から自動計算（値引き・変更不可）";
   return "";
 }
 

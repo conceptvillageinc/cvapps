@@ -186,7 +186,7 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
         </section>
 
         <section className="space-y-2">
-          <p className="text-xs font-semibold">割引（デザイン費の合計に対する%を値引き）</p>
+          <p className="text-xs font-semibold">割引（明細の合計に対する%を値引き。デザイン・構築・印刷・コンセプト・ディレクション・校正などすべてが対象）</p>
           <div className="space-y-2 max-w-xl">
             {form.discounts.map((d, i) => (
               <div key={i} className="flex items-center gap-2">
