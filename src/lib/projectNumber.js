@@ -20,3 +20,27 @@ export async function generateRecurringProjects(dateStr) {
   if (error) throw new Error("定期案件の生成に失敗しました: " + error.message);
   return data;
 }
+
+/**
+ * 定期売上の初回の納品書（下書き）を作る。ym（"YYYY-MM"）の月末の納品日で、その月の分として作る。
+ * 2 回目からは毎月 1 日に自動で作られる（初回の月の翌月から）。戻り値は作った件数（作成済みなら 0）。
+ */
+export async function createFirstRecurringNote(templateId, ym) {
+  const { data, error } = await supabase.rpc("generate_recurring_notes", { p_month: `${ym}-01`, p_template_id: templateId, p_first: true });
+  if (error) throw new Error("初回の納品書を作れませんでした: " + error.message);
+  return Number(data) || 0;
+}
+
+/** 初回の月の翌月〜今月（終了月まで）で、まだ無い月の納品書の下書きを作る（毎月 1 日を過ぎて登録したとき用）。戻り値は作った件数 */
+export async function catchUpRecurringNotes(templateId, firstYm, endYm) {
+  const now = new Date();
+  const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const next = (ym) => { const [y, m] = ym.split("-").map(Number); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; };
+  let count = 0;
+  for (let ym = next(firstYm), i = 0; i < 24 && ym <= thisYm && (!endYm || ym <= endYm); ym = next(ym), i++) {
+    const { data, error } = await supabase.rpc("generate_recurring_notes", { p_month: `${ym}-01`, p_template_id: templateId, p_first: false });
+    if (error) throw new Error("納品書の下書きを作れませんでした: " + error.message);
+    count += Number(data) || 0;
+  }
+  return count;
+}

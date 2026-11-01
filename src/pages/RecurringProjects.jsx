@@ -425,7 +425,7 @@ export default function RecurringProjects() {
             この月の納品書の下書きを作る
           </Button>
           <p className="text-[10px] text-muted-foreground sm:pb-2">
-            自動で動かなかったときや、登録したばかりのひな形の今月分を作るときに使います（「毎月の納品書も作る」のひな形が対象）。すでに作成済みの月は二重になりません
+            自動で動かなかったときに使います（2 回目以降の分。初回の納品書は案件の画面の「初回の納品書を作成」で作ります）。すでに作成済みの月は二重になりません
           </p>
         </CardContent>
       </Card>

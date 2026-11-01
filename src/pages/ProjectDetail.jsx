@@ -27,6 +27,7 @@ import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import RecurringMonthsCard from "@/components/projects/RecurringMonthsCard";
+import RecurringFirstNote from "@/components/projects/RecurringFirstNote";
 import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
 import DuplicateProjectDialog from "@/components/projects/DuplicateProjectDialog";
 import { computeActuals, actualsPatch } from "@/lib/projectActuals";
@@ -614,6 +615,7 @@ export default function ProjectDetail() {
         </CardContent>
       </Card>
 
+      {isRecurringParent(project) && recurringTemplate && <RecurringFirstNote key={recurringTemplate.id} template={recurringTemplate} />}
       {isRecurringParent(project) && <RecurringMonthsCard project={project} deliveryNotes={deliveryNotes} invoices={invoices} />}
 
       {/* 請求書 */}

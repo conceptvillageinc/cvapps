@@ -740,7 +740,7 @@ function EstimateDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Repeat className="w-4 h-4 text-rose-600" />定期売上の見積です</DialogTitle>
             <DialogDescription className="text-xs leading-relaxed">
-              毎月の分（{(recurringTemplate?.source_line_ids || []).length} 行）は、毎月 1 日に納品書の下書きが自動でできます{recurringTemplate?.first_note_one_time ? "（初回だけの費用も、開始月の自動の納品書に入ります）" : ""}。ここで全部の明細で作ると、自動の納品書と重なります。
+              毎月の分（{(recurringTemplate?.source_line_ids || []).length} 行）は、初回の納品書（案件の画面の「初回の納品書を作成」）と、2 回目から毎月 1 日に自動でできる納品書で請求します{recurringTemplate?.first_note_one_time ? "（初回だけの費用も、初回の納品書に入ります）" : ""}。ここで全部の明細で作ると、それらと重なります。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -748,7 +748,7 @@ function EstimateDetail() {
               <span>
                 <span className="block text-sm">初回だけの費用だけで作る（{oneTimeLineIds.length} 行）</span>
                 {!oneTimeLineIds.length ? <span className="block text-[11px] opacity-80">初回だけの費用の明細はありません</span>
-                  : recurringTemplate?.first_note_one_time ? <span className="block text-[11px] opacity-80">初回だけの費用は、開始月の自動の納品書に入ります</span> : null}
+                  : recurringTemplate?.first_note_one_time ? <span className="block text-[11px] opacity-80">初回だけの費用は、初回の納品書に入ります</span> : null}
               </span>
             </Button>
             <Button variant="outline" className="w-full justify-start text-sm" onClick={() => { setNoteChoiceOpen(false); navigate(`/delivery-notes/new?estimate=${estimateId}`); }} data-testid="note-choice-all">
