@@ -46,7 +46,7 @@ export default function FreeeHandover() {
           <TabsTrigger value="docs" className="gap-1.5" data-testid="tab-docs"><FileText className="w-3.5 h-3.5" /> ② 見積書・納品書を登録</TabsTrigger>
         </TabsList>
         <TabsContent value="recurring" className="mt-4">
-          <RecurringHandover clients={clients} />
+          <RecurringHandover clients={clients} projects={projects} />
         </TabsContent>
         <TabsContent value="docs" className="mt-4">
           <DocsHandover clients={clients} projects={projects} />
@@ -59,7 +59,7 @@ export default function FreeeHandover() {
 // ---------------------------------------------------------------------------
 // ① 定期売上を登録
 // ---------------------------------------------------------------------------
-function RecurringHandover({ clients }) {
+function RecurringHandover({ clients, projects }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -67,6 +67,8 @@ function RecurringHandover({ clients }) {
   const [doc, setDoc] = useState(null);
   const [clientName, setClientName] = useState("");
   const [projectName, setProjectName] = useState("");
+  const [mode, setMode] = useState("new"); // existing: すでにある案件に紐づける ／ new: 新しく作る
+  const [projectId, setProjectId] = useState("");
   const [saving, setSaving] = useState(false);
 
   const onRead = (d) => {
@@ -74,7 +76,13 @@ function RecurringHandover({ clients }) {
     const c = matchClient(clients, d.client_name);
     setClientName(c?.name || d.client_name);
     setProjectName(d.title || d.line_items[0]?.name || "");
+    // 宛先・件名の近い案件があれば、最初はそれに紐づける
+    const top = rankProjects(projects, d)[0];
+    const hit = top && top.score >= 0.6 ? top.project : null;
+    setProjectId(hit?.id || "");
+    setMode(hit ? "existing" : "new");
   };
+  const picked = projects.find((p) => p.id === projectId);
   const matched = clients.find((c) => c.name === clientName.trim());
   // 「12ヶ月 × 月額」のように期間分の金額で書いてある明細（定期売上の月額は 1 か月分にする）
   const MONTH_UNIT = /^(ヶ月|か月|カ月|ケ月|ヵ月|月)$/;
@@ -84,6 +92,13 @@ function RecurringHandover({ clients }) {
   const create = async () => {
     setSaving(true);
     try {
+      if (mode === "existing") {
+        await createEstimate({ doc, project: picked, user });
+        qc.invalidateQueries({ queryKey: ["estimates"] });
+        toast.success(`案件 ${picked.project_number} に見積を作りました。毎月請求する明細と期間を選んで「定期売上にする」を押してください`);
+        navigate(`/projects/${picked.id}?recurring=1`);
+        return;
+      }
       const name = clientName.trim();
       let client = matched;
       if (!client && name) client = await db.entities.Client.create({ name, quote_count: 0 });
@@ -128,8 +143,16 @@ function RecurringHandover({ clients }) {
             </div>
           )}
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-sm">案件を作る</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">案件の紐付け・作成</CardTitle></CardHeader>
             <CardContent className="space-y-3">
+              <div className="flex items-center gap-2 text-xs">
+                {[["existing", "すでにある案件に紐づける"], ["new", "新しく案件を作る"]].map(([k, l]) => (
+                  <Button key={k} size="sm" variant={mode === k ? "default" : "outline"} className="h-8 text-xs" onClick={() => setMode(k)} data-testid={`fh-mode-${k}`}>{l}</Button>
+                ))}
+              </div>
+              {mode === "existing" ? (
+                <ProjectPicker projects={projects} doc={doc} value={projectId} onChange={setProjectId} />
+              ) : (
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">クライアント</Label>
@@ -144,12 +167,16 @@ function RecurringHandover({ clients }) {
                   <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="h-9" aria-label="案件名" />
                 </div>
               </div>
+              )}
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                案件（受注確度は定期売上）と、読み取った明細の見積（提出済み）を作ります。そのあと案件の画面で「定期売上にする」が開くので、
-                毎月請求する明細・開始月・終了月を選んで登録してください。{doc.period && <>読み取った期間: <strong>{doc.period}</strong></>}
+                {mode === "existing"
+                  ? "選んだ案件に、読み取った明細の見積（提出済み）を作ります。"
+                  : "案件（受注確度は定期売上）と、読み取った明細の見積（提出済み）を作ります。"}
+                そのあと案件の画面で「定期売上にする」が開くので、毎月請求する明細・開始月・終了月を選んで登録してください。{doc.period && <>読み取った期間: <strong>{doc.period}</strong></>}
               </p>
-              <Button className="gap-2 bg-rose-600 hover:bg-rose-700" disabled={saving || !clientName.trim() || !projectName.trim() || !doc.line_items.length} onClick={create} data-testid="fh-create-recurring">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Repeat className="w-4 h-4" />} 案件と見積を作って、定期売上の設定へ
+              <Button className="gap-2 bg-rose-600 hover:bg-rose-700" disabled={saving || !doc.line_items.length || (mode === "existing" ? !picked : !clientName.trim() || !projectName.trim())} onClick={create} data-testid="fh-create-recurring">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Repeat className="w-4 h-4" />}
+                {mode === "existing" ? (picked ? `案件 ${picked.project_number} に見積を作って、定期売上の設定へ` : "案件を選んでください") : "案件と見積を作って、定期売上の設定へ"}
               </Button>
             </CardContent>
           </Card>
@@ -168,7 +195,6 @@ function DocsHandover({ clients, projects }) {
   const [doc, setDoc] = useState(null);
   const [kind, setKind] = useState("estimate");
   const [projectId, setProjectId] = useState("");
-  const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState([]); // 作った書類（この画面にいる間だけ）
   const readRef = useRef(null);
@@ -178,17 +204,7 @@ function DocsHandover({ clients, projects }) {
     setKind(d.doc_type === "delivery_note" ? "delivery_note" : "estimate");
     const top = rankProjects(projects, d)[0];
     setProjectId(top && top.score >= 0.45 ? top.project.id : "");
-    setQuery("");
   };
-
-  const ranked = useMemo(() => {
-    if (!doc) return [];
-    const q = query.trim();
-    const list = q
-      ? projects.filter((p) => [p.project_number, p.client_name, p.name].filter(Boolean).join(" ").toLowerCase().includes(q.toLowerCase())).map((p) => ({ project: p, score: nameSimilarity(p.client_name, doc.client_name) }))
-      : rankProjects(projects, doc);
-    return list.slice(0, 8);
-  }, [doc, projects, query]);
   const picked = projects.find((p) => p.id === projectId);
 
   const create = async () => {
@@ -242,25 +258,7 @@ function DocsHandover({ clients, projects }) {
                 ))}
                 {doc.doc_type === "invoice" && <span className="text-amber-700 inline-flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> 請求書として読み取りました。見積か納品書を選んでください</span>}
               </div>
-              <div className="space-y-1.5">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                  <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="案件番号・クライアント・案件名で探す（空のときは、宛先・件名の近い順）" className="h-9 pl-8 text-xs" aria-label="案件を探す" />
-                </div>
-                <div className="rounded-md border divide-y" data-testid="fh-projects">
-                  {ranked.length === 0 && <p className="px-3 py-3 text-xs text-muted-foreground">見つかりません</p>}
-                  {ranked.map(({ project: p }) => (
-                    <label key={p.id} className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${projectId === p.id ? "bg-primary/5" : "hover:bg-muted/40"}`}>
-                      <input type="radio" name="fh-project" checked={projectId === p.id} onChange={() => setProjectId(p.id)} />
-                      <span className="font-mono text-muted-foreground shrink-0">{p.project_number}</span>
-                      <span className="shrink-0 max-w-[12rem] truncate">{p.client_name}</span>
-                      <span className="flex-1 truncate font-medium">{p.name}</span>
-                      <span className="text-muted-foreground shrink-0">{p.registered_at}</span>
-                      <span className="tabular-nums shrink-0 w-20 text-right">{yen(p.expected_revenue)}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <ProjectPicker projects={projects} doc={doc} value={projectId} onChange={setProjectId} />
               <Button className="gap-2" disabled={saving || !picked || !doc.line_items.length} onClick={create} data-testid="fh-create-doc">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : kind === "estimate" ? <FileText className="w-4 h-4" /> : <Truck className="w-4 h-4" />}
                 {picked ? `案件 ${picked.project_number} に${kind === "estimate" ? "見積" : "納品書"}を作る` : "案件を選んでください"}
@@ -310,6 +308,40 @@ async function createEstimate({ doc, project, user }) {
 // ---------------------------------------------------------------------------
 // 共通の部品
 // ---------------------------------------------------------------------------
+/** 紐づける案件を選ぶ（空のときは宛先・件名の近い順。番号・クライアント・案件名で探せる） */
+function ProjectPicker({ projects, doc, value, onChange }) {
+  const [query, setQuery] = useState("");
+  const ranked = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q
+      ? projects.filter((p) => [p.project_number, p.client_name, p.name].filter(Boolean).join(" ").toLowerCase().includes(q)).map((p) => ({ project: p, score: nameSimilarity(p.client_name, doc?.client_name) }))
+      : rankProjects(projects, doc);
+    return list.slice(0, 8);
+  }, [doc, projects, query]);
+  return (
+    <div className="space-y-1.5">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="案件番号・クライアント・案件名で探す（空のときは、宛先・件名の近い順）" className="h-9 pl-8 text-xs" aria-label="案件を探す" />
+      </div>
+      <div className="rounded-md border divide-y" data-testid="fh-projects">
+        {ranked.length === 0 && <p className="px-3 py-3 text-xs text-muted-foreground">見つかりません</p>}
+        {ranked.map(({ project: p }) => (
+          <label key={p.id} className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${value === p.id ? "bg-primary/5" : "hover:bg-muted/40"}`}>
+            <input type="radio" checked={value === p.id} onChange={() => onChange(p.id)} />
+            <span className="font-mono text-muted-foreground shrink-0">{p.project_number}</span>
+            <span className="shrink-0 max-w-[12rem] truncate">{p.client_name}</span>
+            <span className="flex-1 truncate font-medium">{p.name}</span>
+            {p.is_recurring && <span className="shrink-0 rounded border border-rose-200 bg-rose-50 px-1 text-[9px] text-rose-700">定期</span>}
+            <span className="text-muted-foreground shrink-0">{p.registered_at}</span>
+            <span className="tabular-nums shrink-0 w-20 text-right">{yen(p.expected_revenue)}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Steps({ items }) {
   return (
     <ol className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
