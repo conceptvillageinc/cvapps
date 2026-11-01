@@ -21,6 +21,8 @@ import MonthEndView from "@/components/projects/MonthEndView";
 import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
 import { projectDelivery, isDeliveryDue, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
 import RecurringMark from "@/components/projects/RecurringMark";
+import CsvExportButton from "@/components/table/CsvExportButton";
+import { exportProjectsCsv } from "@/lib/listCsv";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const ALL_YEARS = "all";
@@ -135,7 +137,7 @@ export default function ProjectList() {
     queryKey: ["projects", fiscalYear, fiscalYearStartMonth],
     queryFn: () => range
       ? db.entities.Project.between("registered_at", range.from, range.to, "-registered_at")
-      : db.entities.Project.list("-registered_at"),
+      : db.entities.Project.listAll("-registered_at"),
   });
 
   // ネクストアクションは期に関係なくすべての案件を読み、タブの中で状態を絞り込む（最初は進行中・完了）
@@ -328,6 +330,7 @@ export default function ProjectList() {
               <SelectItem value={ALL_YEARS} className="text-xs">すべての期</SelectItem>
             </SelectContent>
           </Select>
+          {view === "standard" && <CsvExportButton count={sorted.length} onExport={() => exportProjectsCsv(sorted, { deliveryLabel: columnDefs.delivery.getValue })} />}
           <Button variant="outline" className="gap-2" onClick={() => navigate("/projects/recurring")}>
             <Repeat className="w-4 h-4 text-teal-600" /> 定期売上一覧
           </Button>

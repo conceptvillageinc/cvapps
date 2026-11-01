@@ -12,6 +12,8 @@ import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ClientFormDialog from "@/components/clients/ClientFormDialog";
 import FreeePartnerImport from "@/components/clients/FreeePartnerImport";
 import { isImeEnter } from "@/lib/ime";
+import CsvExportButton from "@/components/table/CsvExportButton";
+import { exportClientsCsv } from "@/lib/listCsv";
 
 
 // クリックしてその場で編集できるセル。フォーカスを外すと自動保存される。
@@ -82,12 +84,12 @@ export default function ClientManagement() {
 
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
-    queryFn: () => db.entities.Client.list("-created_date"),
+    queryFn: () => db.entities.Client.listAll("-created_date"),
   });
   // 並び順の既定「直近で案件を作った順」のために、案件の登録日をクライアントごとに集める
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
-    queryFn: () => db.entities.Project.list("-registered_at"),
+    queryFn: () => db.entities.Project.listAll("-registered_at"),
   });
   const lastProjectAt = useMemo(() => {
     const map = {};
@@ -169,6 +171,7 @@ export default function ClientManagement() {
           <Button variant="outline" size="sm" className="gap-1" onClick={() => setFreeeOpen(true)} title="freee の取引先一覧の CSV から、空の郵便番号・住所を埋めます">
             <MapPin className="w-4 h-4" /> freee の取引先 CSV から郵便番号・住所を補う
           </Button>
+          <CsvExportButton count={filtered.length} onExport={() => exportClientsCsv(filtered, { lastProjectOf })} className="h-8 text-xs" />
           <Button onClick={openNew} size="sm">
             <Plus className="w-4 h-4 mr-1" /> 新規追加
           </Button>

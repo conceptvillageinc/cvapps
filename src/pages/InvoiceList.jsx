@@ -7,9 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Loader2, Receipt, ArrowRight, Plus, Download } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
+import { Search, Loader2, Receipt, ArrowRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { INVOICE_STATUS_MAP } from "@/lib/documents";
 import { useSystemSettings } from "@/lib/useSystemSettings";
@@ -18,76 +16,11 @@ import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
 import RecurringMark, { useRecurringProjectIds, invoiceHasRecurring } from "@/components/projects/RecurringMark";
+import CsvExportButton from "@/components/table/CsvExportButton";
+import { exportInvoicesCsv, exportInvoiceLinesCsv } from "@/lib/listCsv";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
-
-/** CSV（Excel で開ける BOM 付き UTF-8）。期間は請求日で絞る */
-function invoicesToCsv(rows) {
-  const header = ["請求書番号", "請求日", "入金期日", "請求先", "件名", "小計（税抜）", "消費税", "請求金額（税込）", "状態", "入金日", "入金額", "送付方法", "担当者", "備考"];
-  const esc = (v) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const lines = rows.map((inv) => [
-    inv.invoice_number, inv.invoice_date, inv.due_date, inv.client_name, inv.title,
-    Math.round(Number(inv.subtotal) || 0), Math.round(Number(inv.tax) || 0), Math.round(Number(inv.total) || 0),
-    INVOICE_STATUS_MAP[inv.status]?.label || inv.status, inv.paid_at ? String(inv.paid_at).slice(0, 10) : "", inv.paid_amount ?? "",
-    inv.delivery_method || "", inv.person_in_charge || "", (inv.notes || "").replace(/\r?\n/g, " "),
-  ].map(esc).join(","));
-  return "\ufeff" + [header.join(","), ...lines].join("\r\n") + "\r\n";
-}
-
-/** 期間を指定して CSV をダウンロードする */
-function CsvDownload({ defaultFrom, defaultTo }) {
-  const [open, setOpen] = useState(false);
-  const [from, setFrom] = useState(defaultFrom || "");
-  const [to, setTo] = useState(defaultTo || "");
-  const [status, setStatus] = useState("all");
-  const [loading, setLoading] = useState(false);
-
-  const run = async () => {
-    if (!from || !to) { toast.error("期間（開始日・終了日）を入れてください"); return; }
-    setLoading(true);
-    try {
-      let rows = await db.entities.Invoice.between("invoice_date", from, to, "invoice_date");
-      if (status === "unpaid") rows = rows.filter((i) => i.status === "sent" || i.status === "draft");
-      if (status === "paid") rows = rows.filter((i) => i.status === "paid");
-      if (rows.length === 0) { toast.info("その期間の請求書はありません"); return; }
-      const blob = new Blob([invoicesToCsv(rows)], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `請求書一覧_${from}_${to}.csv`; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      toast.success(`${rows.length}件を書き出しました`);
-      setOpen(false);
-    } catch (err) {
-      toast.error("書き出せませんでした: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> CSV</Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-72 space-y-3" align="end">
-        <p className="text-xs font-medium">請求書一覧を CSV で書き出す</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1"><Label className="text-[10px]">請求日 から</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 text-xs" /></div>
-          <div className="space-y-1"><Label className="text-[10px]">まで</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 text-xs" /></div>
-        </div>
-        <div className="flex gap-1">
-          {[["all", "すべて"], ["unpaid", "未入金"], ["paid", "入金済"]].map(([k, l]) => (
-            <Button key={k} size="sm" variant={status === k ? "default" : "outline"} className="text-xs h-7" onClick={() => setStatus(k)}>{l}</Button>
-          ))}
-        </div>
-        <Button size="sm" className="w-full gap-1.5 text-xs" onClick={run} disabled={loading}>
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} ダウンロード
-        </Button>
-        <p className="text-[10px] text-muted-foreground">Excel で開ける形式（UTF-8 BOM）。金額は税抜・税込の両方が入ります</p>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export default function InvoiceList() {
   const cols = useListColumns("invoices"); // 列の並び・表示（全員共通）
@@ -157,7 +90,7 @@ export default function InvoiceList() {
               <SelectItem value={ALL} className="text-xs">すべての期</SelectItem>
             </SelectContent>
           </Select>
-          <CsvDownload defaultFrom={range?.from} defaultTo={range?.to} />
+          <CsvExportButton count={filtered.length} onExport={() => exportInvoicesCsv(filtered)} onExportLines={() => exportInvoiceLinesCsv(filtered)} />
           <ListColumnsButton list="invoices" />
           <Button className="gap-2" onClick={() => navigate("/invoices/new")}><Plus className="w-4 h-4" /> 請求書を作成</Button>
         </div>

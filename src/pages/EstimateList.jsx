@@ -27,6 +27,8 @@ import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submissi
 import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark from "@/components/projects/RecurringMark";
+import CsvExportButton from "@/components/table/CsvExportButton";
+import { exportEstimatesCsv, exportEstimateLinesCsv } from "@/lib/listCsv";
 
 /** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
 function estimateGross(e) {
@@ -75,7 +77,7 @@ export default function EstimateList() {
   // 案件に紐付いた見積は、受注確度・フェーズを案件から表示する
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", "all"],
-    queryFn: () => db.entities.Project.list("-registered_at"),
+    queryFn: () => db.entities.Project.listAll("-registered_at"),
   });
   const projectById = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects]);
   // 納品・請求の状態（提出済の見積だけ。納品書のつながりから自動で決める）
@@ -190,6 +192,8 @@ export default function EstimateList() {
   });
 
   const visibleRows = showAll ? sorted : sorted.slice(0, PAGE_ROWS);
+  // CSV 出力（表示しきれていない行も含めて、絞り込み・並び順のまま全部）
+  const csvCtx = { projectById, probabilityOf, phaseOf, deliveryLabel: columnDefs.delivery.getValue };
 
   const activeFilterCount = Object.values(columnFilters).filter(v => v !== null && v !== undefined).length;
 
@@ -282,6 +286,7 @@ export default function EstimateList() {
               </AlertDialogContent>
             </AlertDialog>
           )}
+          <CsvExportButton count={sorted.length} onExport={() => exportEstimatesCsv(sorted, csvCtx)} onExportLines={() => exportEstimateLinesCsv(sorted, csvCtx)} />
           <ListColumnsButton list="estimates" />
           <Link to="/estimates/new">
             <Button className="gap-2">

@@ -18,6 +18,8 @@ import { DELIVERY_STATUS_MAP } from "@/lib/documents";
 import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark, { useRecurringProjectIds, noteIsRecurring } from "@/components/projects/RecurringMark";
+import CsvExportButton from "@/components/table/CsvExportButton";
+import { exportDeliveryNotesCsv, exportDeliveryNoteLinesCsv } from "@/lib/listCsv";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -112,6 +114,7 @@ export default function DeliveryNoteList() {
               </AlertDialogContent>
             </AlertDialog>
           )}
+          <CsvExportButton count={filtered.length} onExport={() => exportDeliveryNotesCsv(filtered)} onExportLines={() => exportDeliveryNoteLinesCsv(filtered)} />
           <ListColumnsButton list="delivery_notes" />
           <Button className="gap-2" onClick={() => navigate("/delivery-notes/new")}><Plus className="w-4 h-4" /> 納品書を作成</Button>
         </div>
