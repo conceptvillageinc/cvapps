@@ -21,6 +21,7 @@ import {
 } from "@/lib/constants";
 import {
   usePricingRules, markupRateFor, recomputeRuleRows, makeRuleRow, ruleRowHint, outsourcingPrice, OUTSOURCING_KINDS, recomputeSubtotals, withRuleRate, unlockRuleRow,
+  makeCustomDiscountRow, withDiscountAmount, isLockedDiscount, isCustomDiscount,
 } from "@/lib/pricing";
 import { useDesignFeeMaster } from "@/lib/designFees";
 import NumericField from "@/components/estimates/NumericField";
@@ -185,6 +186,12 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     commitItems([...lineItems, { id: uid(), row_type: "item", ...makeRuleRow(rules, rule, discount) }]);
   };
 
+  const [discountOpen, setDiscountOpen] = useState(false); // 割引を選ぶメニュー
+  // カスタムの割引（%か金額を自由に入れる。いくつでも足せる）
+  const addCustomDiscount = () => {
+    commitItems([...lineItems, { id: uid(), row_type: "item", ...makeCustomDiscountRow() }]);
+  };
+
   const addItem = (item) => {
     commitItems([...lineItems, { id: uid(), row_type: "item", ...item }]);
   };
@@ -259,7 +266,8 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
     if (idx < 0) return;
     const src = lineItems[idx];
     const copy = { ...src, id: uid() };
-    if (src.source_type === "rule") Object.assign(copy, unlockRuleRow(src), { id: copy.id });
+    // カスタムの割引はそのまま複製、ほかの自動計算行は普通の行として複製（システム設定の割引は複製できない）
+    if (src.source_type === "rule" && !isCustomDiscount(src)) Object.assign(copy, unlockRuleRow(src), { id: copy.id });
     const items = [...lineItems];
     items.splice(idx + 1, 0, copy);
     commitItems(items);
@@ -673,17 +681,21 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                   ].map(([key, label, title]) => (
                     <AddChip key={key} kind="add" onClick={() => addRuleRow(key)} title={title}>{label}</AddChip>
                   ))}
-                  <Popover>
+                  <Popover open={discountOpen} onOpenChange={setDiscountOpen}>
                     <PopoverTrigger asChild>
                       <AddChip kind="menu" title="割引の種類を選んで追加">割引</AddChip>
                     </PopoverTrigger>
                     <PopoverContent className="w-72 p-1" align="end">
-                      <p className="text-[10px] text-muted-foreground px-2 py-1">デザイン費の合計から値引きする行です。%は追加後に行ごとに変えられます（初期値はシステム設定）</p>
+                      <p className="text-[10px] text-muted-foreground px-2 py-1">デザイン費の合計から値引きする行です。決まった割引は追加後に変えられません。自由に決めるときは「カスタム」を使います</p>
                       {rules.discounts.map(d => (
-                        <button key={d.key} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => addRuleRow("discount", d)}>
+                        <button key={d.key} className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => { addRuleRow("discount", d); setDiscountOpen(false); }}>
                           {d.label} <span className="text-muted-foreground">（デザイン費の{Math.round(d.rate * 100)}%を値引き）</span>
                         </button>
                       ))}
+                      <div className="border-t my-1" />
+                      <button className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted/50" onClick={() => { addCustomDiscount(); setDiscountOpen(false); }} data-testid="discount-custom">
+                        カスタム <span className="text-muted-foreground">（%か金額を自由に入れる）</span>
+                      </button>
                     </PopoverContent>
                   </Popover>
                 </div>
@@ -1103,7 +1115,7 @@ function RowHandle({ onDragStart, onDragEnd, onMove, isFirst, isLast }) {
 function RowActions({ onDuplicate, onRemove }) {
   return (
     <div className="flex items-center justify-end gap-1">
-      <button type="button" onClick={onDuplicate} className="text-muted-foreground hover:text-primary" title="この行を複製して下に追加" aria-label="複製"><Copy className="w-3.5 h-3.5" /></button>
+      {onDuplicate && <button type="button" onClick={onDuplicate} className="text-muted-foreground hover:text-primary" title="この行を複製して下に追加" aria-label="複製"><Copy className="w-3.5 h-3.5" /></button>}
       <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive" title="削除" aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></button>
     </div>
   );
@@ -1185,6 +1197,8 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
   }
 
   const isRule = item.source_type === "rule";
+  const locked = isLockedDiscount(item); // システム設定の割引（CV割引など）は追加したら変えられない
+  const custom = isCustomDiscount(item);
   const hasCost = item.cost_price != null;
   const lineCostTotal = hasCost ? Number(item.cost_price) * (Number(item.quantity) || 1) : 0;
   const lineProfit = hasCost ? (Number(item.amount) || 0) - lineCostTotal : 0;
@@ -1196,7 +1210,9 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
     <tr className={`group ${showInternal ? "" : "border-b"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
       <td className="px-1 py-2 align-top">{handle}</td>
       <td className="px-3 py-2 align-top">
-        <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />
+        {locked
+          ? <p className="text-sm whitespace-pre-wrap break-words px-1.5 py-1" title="決まった割引は名称・%を変えられません。変えるときは削除して「カスタム」で入れてください">{item.name}</p>
+          : <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />}
         {similarFor && <SimilarHint item={item} similarFor={similarFor} priceOf={priceOf} onReplaceWith={onReplaceWith} toItems={toItems} />}
         {(item.category || item.name) && (
           <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex flex-wrap items-center gap-1">
@@ -1217,17 +1233,41 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
           <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">1</td>
           <td className="px-3 py-2 text-right align-top text-xs text-muted-foreground">式</td>
           <td className="px-3 py-2 text-right align-top">
-            <div className="flex items-center justify-end gap-0.5 text-xs">
-              <NumericField
-                value={Math.round((Number(item.rate) || 0) * 1000) / 10}
-                onCommit={(pct) => onChange(withRuleRate(item, (Number(pct) || 0) / 100))}
-                className={`${cellInputClass} text-right w-14`}
-              />
-              <span className="text-muted-foreground">%</span>
-            </div>
-            <button type="button" className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline mt-0.5" title="自動計算をやめて、金額を手入力できる普通の行にします" onClick={() => onChange(unlockRuleRow(item))}>
-              手入力にする
-            </button>
+            {locked ? (
+              // 決まった割引: %は表示だけ
+              <div className="flex items-center justify-end gap-0.5 text-xs text-muted-foreground py-1" data-testid="locked-discount">
+                <Lock className="w-2.5 h-2.5" /> {Math.round((Number(item.rate) || 0) * 1000) / 10}%
+              </div>
+            ) : (
+              <div className="flex items-center justify-end gap-0.5 text-xs">
+                <NumericField
+                  value={Math.round((Number(item.rate) || 0) * 1000) / 10}
+                  onCommit={(pct) => onChange(withRuleRate(item, (Number(pct) || 0) / 100))}
+                  className={`${cellInputClass} text-right w-14 ${custom && item.discount_mode === "amount" ? "text-muted-foreground" : ""}`}
+                  aria-label="割合（%）"
+                  data-testid={custom ? "custom-discount-rate" : undefined}
+                />
+                <span className="text-muted-foreground">%</span>
+              </div>
+            )}
+            {custom && (
+              // カスタムの割引: 金額でも指定できる（入れたほうで決まり、もう一方は自動で出す）
+              <div className="flex items-center justify-end gap-0.5 text-xs mt-0.5">
+                <span className="text-muted-foreground">−¥</span>
+                <NumericField
+                  value={Math.abs(Number(item.amount) || 0)}
+                  onCommit={(v) => onChange(withDiscountAmount(item, v))}
+                  className={`${cellInputClass} text-right w-16 ${item.discount_mode === "amount" ? "" : "text-muted-foreground"}`}
+                  aria-label="割引の金額"
+                  data-testid="custom-discount-amount"
+                />
+              </div>
+            )}
+            {!locked && !custom && (
+              <button type="button" className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline mt-0.5" title="自動計算をやめて、金額を手入力できる普通の行にします" onClick={() => onChange(unlockRuleRow(item))}>
+                手入力にする
+              </button>
+            )}
           </td>
         </>
       ) : (
@@ -1258,7 +1298,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
       <td className="px-2 py-2 text-right align-top font-medium whitespace-nowrap tabular-nums">
         {yen(item.amount)}
       </td>
-      <td className="px-1 py-2 align-top"><RowActions onDuplicate={onDuplicate} onRemove={onRemove} /></td>
+      <td className="px-1 py-2 align-top"><RowActions onDuplicate={locked ? null : onDuplicate} onRemove={onRemove} /></td>
     </tr>
     {showInternal && (
       <tr className="border-b">

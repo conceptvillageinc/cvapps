@@ -137,6 +137,10 @@ export function outsourcingPrice(rules, kind, cost) {
 //   rule: "proofreading_fee" デザイン費合計 × rate
 //   rule: "discount"         デザイン費合計 × rate のマイナス
 // 行の rate は個別の見積で書き換えられる（システム設定の%は追加時の初期値）。
+// ただし割引のうち、システム設定の割引（CV割引など）は追加したら変えられない。
+// 自由に決めたいときは「カスタム」の割引（discount_key: "custom"）を使う。%か金額のどちらでも指定できる
+//   discount_mode: "rate"   … デザイン費合計 × rate のマイナス
+//   discount_mode: "amount" … fixed_amount のマイナス（rate はデザイン費合計に対する割合を表示用に入れる）
 // ----------------------------------------------------------------------------
 const PRINT_CATEGORY = /印刷費/;
 const DESIGN_CATEGORY = "デザイン費";
@@ -154,6 +158,24 @@ export function ruleRowLabel(rule, rate, discountLabel) {
   if (rule === "direction_fee") return `ディレクション費（印刷費を除く合計の${pct}）`;
   if (rule === "proofreading_fee") return `校正費（デザイン費の${pct}）`;
   return discountLabel || `割引（デザイン費の${pct}）`;
+}
+
+export const CUSTOM_DISCOUNT_KEY = "custom";
+
+/** カスタムの割引（%・金額を自由に入れられる）か */
+export const isCustomDiscount = (li) => li?.source_type === "rule" && li.rule === "discount" && li.discount_key === CUSTOM_DISCOUNT_KEY;
+/** システム設定の割引（CV割引など）。追加したら%・金額・名称は変えられない */
+export const isLockedDiscount = (li) => li?.source_type === "rule" && li.rule === "discount" && li.discount_key !== CUSTOM_DISCOUNT_KEY;
+
+/** カスタムの割引の行（最初は 0%。追加してから%か金額を入れる） */
+export function makeCustomDiscountRow() {
+  return { category: "割引", name: "割引", quantity: 1, unit: "式", unit_price: 0, amount: 0, source_type: "rule", rule: "discount", rate: 0, discount_key: CUSTOM_DISCOUNT_KEY, discount_mode: "rate", fixed_amount: null };
+}
+
+/** カスタムの割引を金額で指定する（金額はプラスで渡す。行の金額はマイナスになる） */
+export function withDiscountAmount(li, amount) {
+  const a = Math.abs(Math.round(Number(amount) || 0));
+  return { ...li, discount_mode: "amount", fixed_amount: a };
 }
 
 /** 自動計算行を作る（金額は recomputeRuleRows が入れる） */
@@ -206,7 +228,13 @@ export function recomputeRuleRows(lineItems, rules) {
   }
   // 3) 割引（デザイン費に依存。マイナス）
   for (const li of items) {
-    if (isRuleRow(li) && li.rule === "discount") {
+    if (isRuleRow(li) && li.rule === "discount" && li.discount_key === CUSTOM_DISCOUNT_KEY && li.discount_mode === "amount") {
+      const a = Math.abs(Number(li.fixed_amount) || 0);
+      li.unit_price = -a;
+      li.quantity = 1;
+      li.amount = li.unit_price;
+      li.rate = designBase > 0 ? a / designBase : 0;
+    } else if (isRuleRow(li) && li.rule === "discount") {
       li.unit_price = -Math.round(designBase * (Number(li.rate) || 0));
       li.quantity = 1;
       li.amount = li.unit_price;
@@ -238,7 +266,8 @@ export function ruleRowHint(li) {
   if (li.rule === "concept_fee") return "印刷費を除く合計から自動計算";
   if (li.rule === "direction_fee") return "印刷費を除く合計から自動計算";
   if (li.rule === "proofreading_fee") return "デザイン費の合計から自動計算";
-  if (li.rule === "discount") return "デザイン費の合計から自動計算（値引き）";
+  if (isCustomDiscount(li)) return li.discount_mode === "amount" ? "カスタムの割引（金額で指定）" : "カスタムの割引（デザイン費の%で指定）";
+  if (li.rule === "discount") return "デザイン費の合計から自動計算（値引き・変更不可）";
   return "";
 }
 
@@ -251,7 +280,7 @@ export function withRuleRate(li, rate) {
   if (!Number.isFinite(r) || r < 0) return li;
   const oldLabel = ruleRowLabel(li.rule, li.rate, li.discount_label);
   const newLabel = ruleRowLabel(li.rule, r, li.discount_label);
-  return { ...li, rate: r, name: !li.name || li.name === oldLabel ? newLabel : li.name };
+  return { ...li, rate: r, name: !li.name || li.name === oldLabel ? newLabel : li.name, ...(isCustomDiscount(li) ? { discount_mode: "rate", fixed_amount: null } : {}) };
 }
 
 /** 自動計算行を普通の行に変える（金額は手入力できるようになる） */
