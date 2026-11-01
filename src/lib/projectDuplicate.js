@@ -12,6 +12,7 @@ import { generateProjectNumber } from "@/lib/projectNumber";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { todayString } from "@/lib/fiscal";
 import { submissionOf } from "@/lib/submission";
+import { forecastSources } from "@/lib/projectForecast";
 
 /** 最初にチェックしておく見積（同じ見積の版が複数あるときは一番新しい版だけ。失注の見積は外す） */
 export function defaultDuplicateEstimateIds(estimates) {
@@ -96,10 +97,12 @@ export async function duplicateProject(db, project, { name, registeredAt, dueDat
     copies.push(copy);
     idMap[est.id] = copy;
   }
-  // 見積から見込みを入れていた案件は、その見積も写したときだけ見込みの入り方を付け替える
-  const fs = project.forecast_source;
-  if (fs?.estimate_id && idMap[fs.estimate_id]) {
-    const updated = await db.entities.Project.update(created.id, { forecast_source: { ...fs, estimate_id: idMap[fs.estimate_id].id, estimate_number: idMap[fs.estimate_id].estimate_number || "", applied_at: new Date().toISOString(), dismissed_sig: null } });
+  // 見積から見込みを入れていた案件は、写した見積の分だけ、見込みの入り方を写した見積に付け替える
+  const sources = forecastSources(project.forecast_source).filter((src) => idMap[src.estimate_id])
+    .map((src) => ({ ...src, estimate_id: idMap[src.estimate_id].id, estimate_number: idMap[src.estimate_id].estimate_number || "" }));
+  if (sources.length) {
+    const { estimate_id, estimate_number, line_ids, unchecked_ids, ...rest } = project.forecast_source;
+    const updated = await db.entities.Project.update(created.id, { forecast_source: { ...rest, sources, applied_at: new Date().toISOString(), dismissed_sig: null } });
     return { project: updated || created, estimates: copies };
   }
   return { project: created, estimates: copies };

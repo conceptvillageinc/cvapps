@@ -21,7 +21,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP, STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import ForecastFromEstimateDialog from "@/components/projects/ForecastFromEstimateDialog";
-import { forecastDrift, forecastLines, sumLines } from "@/lib/projectForecast";
+import { forecastDrift, reapplyForecast, forecastSources, forecastSourceNumbers, forecastSourceLineCount } from "@/lib/projectForecast";
 import ScheduleTab from "@/components/schedule/ScheduleTab";
 import { NextActionCell } from "@/components/projects/ProjectViews";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
@@ -163,9 +163,8 @@ export default function ProjectDetail() {
   });
   const [forecastInitial, setForecastInitial] = useState(null);
   const fs = project?.forecast_source || null;
-  const fsEstimate = fs ? estimates.find((e) => e.id === fs.estimate_id) : null;
   // 定期売上の案件は、見込みを定期売上の設定（元にした見積）で決めるので、ふつうの見込みのお知らせは出さない
-  const drift = project && isRecurringParent(project) ? null : forecastDrift(fs, fsEstimate);
+  const drift = project && isRecurringParent(project) ? null : forecastDrift(fs, estimates);
   // 定期売上の元にした見積が変わったときのお知らせ
   const recEstimate = recurringTemplate?.source_estimate_id ? estimates.find((e) => e.id === recurringTemplate.source_estimate_id) : null;
   const recDrift = project && isRecurringParent(project) ? recurringDrift(recurringTemplate, recEstimate) : null;
@@ -188,10 +187,9 @@ export default function ProjectDetail() {
   });
   const reapply = useMutation({
     mutationFn: () => {
-      const now = sumLines(forecastLines(fsEstimate), fs.line_ids || []);
-      const known = new Set([...(fs.line_ids || []), ...(fs.unchecked_ids || [])]);
-      const added = forecastLines(fsEstimate).filter((l) => !known.has(l.id)).map((l) => l.id);
-      return db.entities.Project.update(id, { expected_revenue: now.revenue, expected_cost: now.cost, forecast_source: { ...fs, revenue: now.revenue, cost: now.cost, unchecked_ids: [...(fs.unchecked_ids || []), ...added], applied_at: new Date().toISOString() } });
+      // 入れ元の見積（複数可）の今の金額で、同じチェックのまま入れ直す（増えた明細はチェックしないまま覚える）
+      const next = reapplyForecast(fs, estimates);
+      return db.entities.Project.update(id, { expected_revenue: next.revenue, expected_cost: next.cost, forecast_source: next.source });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["project", id] }); queryClient.invalidateQueries({ queryKey: ["projects"] }); toast.success("見積の今の金額で見込みを入れ直しました"); },
     onError: (err) => toast.error("入れ直せませんでした: " + (err?.message || "不明なエラー")),
@@ -408,14 +406,14 @@ export default function ProjectDetail() {
             )}
             {drift && !drift.dismissed && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="forecast-drift">
-                <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />見積（{fs.estimate_number}）が変わっています。見込みと差があります</p>
+                <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />見積（{forecastSourceNumbers(fs)}）が変わっています。見込みと差があります</p>
                 <p className="mt-1 tabular-nums">
                   受注見込 {yen(fs.revenue)} → <b>{yen(drift.revenue)}</b>（{signedYen(drift.revenue - fs.revenue)}）　発注見込 {yen(fs.cost)} → <b>{yen(drift.cost)}</b>（{signedYen(drift.cost - fs.cost)}）
                 </p>
                 {(drift.newLines.length > 0 || drift.missing > 0) && <p className="mt-0.5 text-[11px]">{drift.newLines.length > 0 && `見積に明細が ${drift.newLines.length} 件増えています（まだ見込みに入っていません）`}{drift.newLines.length > 0 && drift.missing > 0 && "・"}{drift.missing > 0 && `入れた明細のうち ${drift.missing} 件が見積から消えています`}</p>}
                 <div className="mt-1.5 flex flex-wrap gap-2">
                   <Button size="sm" className="h-7 text-xs" disabled={reapply.isPending} onClick={() => reapply.mutate()} data-testid="forecast-reapply">{reapply.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}同じチェックで入れ直す</Button>
-                  <Button size="sm" variant="outline" className="h-7 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { setForecastInitial({ estimateId: fs.estimate_id, lineIds: fs.line_ids }); setForecastOpen(true); }}>チェックを選び直す</Button>
+                  <Button size="sm" variant="outline" className="h-7 bg-white text-xs hover:bg-blue-50 hover:text-blue-800" onClick={() => { setForecastInitial(fs); setForecastOpen(true); }}>チェックを選び直す</Button>
                   <Button size="sm" variant="ghost" className="h-7 text-xs text-amber-900 hover:bg-amber-100" disabled={keepAsIs.isPending} onClick={() => keepAsIs.mutate()} title="見込みは今のままにします。見積がまた変わったら、もう一度お知らせします" data-testid="forecast-keep">このままにする</Button>
                 </div>
               </div>
@@ -738,10 +736,10 @@ function ForecastSourceBadge({ project, fs, template, estimates }) {
     const est = template?.source_estimate_id ? estimates.find((e) => e.id === template.source_estimate_id) : null;
     return pill("border-rose-200 bg-rose-50 text-rose-700", `定期売上の設定から${est ? `（見積 ${est.estimate_number}）` : ""}`, "月額は「定期売上の設定」で決まります（案件の編集で直しても、設定の値に戻ります）");
   }
-  if (fs?.estimate_id) {
+  if (forecastSources(fs).length) {
     const same = Number(fs.revenue) === (Number(project.expected_revenue) || 0) && Number(fs.cost) === (Number(project.expected_cost) || 0);
-    if (same) return pill("border-blue-200 bg-blue-50 text-blue-700", `見積 ${fs.estimate_number || ""} の明細 ${(fs.line_ids || []).length} 件から${fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}`, "「見積から見込みを入れる」で入れた金額です");
-    return pill("border-slate-200 bg-slate-50 text-slate-600", `手入力（見積 ${fs.estimate_number || ""} から入れたあとに直しています）`, "案件の編集で金額を直しています");
+    if (same) return pill("border-blue-200 bg-blue-50 text-blue-700", `見積 ${forecastSourceNumbers(fs)} の明細 ${forecastSourceLineCount(fs)} 件から${fs.applied_at ? `（${format(new Date(fs.applied_at), "M/d")}）` : ""}`, "「見積から見込みを入れる」で入れた金額です");
+    return pill("border-slate-200 bg-slate-50 text-slate-600", `手入力（見積 ${forecastSourceNumbers(fs)} から入れたあとに直しています）`, "案件の編集で金額を直しています");
   }
   return pill("border-slate-200 bg-slate-50 text-slate-600", "手入力", "案件の新規作成・編集で入れた金額です。「見積から見込みを入れる」で見積の明細から入れることもできます");
 }
