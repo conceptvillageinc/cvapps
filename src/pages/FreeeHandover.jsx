@@ -42,8 +42,8 @@ export default function FreeeHandover() {
       </div>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="recurring" className="gap-1.5" data-testid="tab-recurring"><Repeat className="w-3.5 h-3.5" /> ① 定期売上を登録</TabsTrigger>
-          <TabsTrigger value="docs" className="gap-1.5" data-testid="tab-docs"><FileText className="w-3.5 h-3.5" /> ② 見積書・納品書を登録</TabsTrigger>
+          <TabsTrigger value="recurring" className="gap-1.5" data-testid="tab-recurring"><Repeat className="w-3.5 h-3.5" /> 定期売上を登録</TabsTrigger>
+          <TabsTrigger value="docs" className="gap-1.5" data-testid="tab-docs"><FileText className="w-3.5 h-3.5" /> 見積書・納品書を登録</TabsTrigger>
         </TabsList>
         <TabsContent value="recurring" className="mt-4">
           <RecurringHandover clients={clients} projects={projects} />
