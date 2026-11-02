@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic, PackageCheck, ListChecks, AlertTriangle, Copy } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, FileText, Loader2, Repeat, ExternalLink, Truck, Receipt, Mic, PackageCheck, ListChecks, AlertTriangle, Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { MEETING_STATUS } from "@/lib/meetings";
 import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
 import { toast } from "sonner";
@@ -58,6 +58,9 @@ export default function ProjectDetail() {
   const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
   const [editOpen, setEditOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false); // 案件を複製
+  // 定期売上の案件は、納品書・請求書の一覧を最初は折りたたむ（「月ごとの納品・請求」と同じものが並ぶため）
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [invoicesOpen, setInvoicesOpen] = useState(false);
   const [deleteDocs, setDeleteDocs] = useState(false); // 紐づく見積・納品書・請求書も一緒に消す
   const [deleteRecurring, setDeleteRecurring] = useState(true); // 定期売上の案件なら、定期売上一覧（ひな形）からも消す
 
@@ -128,6 +131,7 @@ export default function ProjectDetail() {
 
   // 定期売上の案件（ひな形ごとの 1 件）か
   const recurringParent = !!project?.recurring_template_id && !project?.recurring_month;
+  const docsFolded = !!project && isRecurringParent(project);
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (deleteDocs) {
@@ -580,17 +584,21 @@ export default function ProjectDetail() {
         <CardContent><PrintOrderHistory where={{ project_id: project.id }} /></CardContent>
       </Card>
 
+      {/* 定期売上の案件は「月ごとの納品・請求」を中心に見る（納品書・請求書の一覧は、その下に折りたたんで置く） */}
+      {isRecurringParent(project) && recurringTemplate && <RecurringFirstNote key={recurringTemplate.id} template={recurringTemplate} />}
+      {isRecurringParent(project) && <RecurringMonthsCard project={project} deliveryNotes={deliveryNotes} invoices={invoices} />}
+
       {/* 納品書 */}
-      <Card>
+      <Card data-testid="project-notes-card">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2"><Truck className="w-4 h-4" /> 納品書（{deliveryNotes.length}件）</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><Truck className="w-4 h-4" /> 納品書（{deliveryNotes.length}件）{docsFolded && <FoldToggle open={notesOpen} onClick={() => setNotesOpen((v) => !v)} />}</CardTitle>
             <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/delivery-notes/new?project=${project.id}`)}>
               <Plus className="w-3.5 h-3.5" /> 納品書を作成
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        {(!docsFolded || notesOpen) && <CardContent>
           {deliveryNotes.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">まだ納品書がありません。見積詳細の「納品書を作成」からも作れます</p>
           ) : (
@@ -610,23 +618,20 @@ export default function ProjectDetail() {
               })}
             </div>
           )}
-        </CardContent>
+        </CardContent>}
       </Card>
 
-      {isRecurringParent(project) && recurringTemplate && <RecurringFirstNote key={recurringTemplate.id} template={recurringTemplate} />}
-      {isRecurringParent(project) && <RecurringMonthsCard project={project} deliveryNotes={deliveryNotes} invoices={invoices} />}
-
       {/* 請求書 */}
-      <Card>
+      <Card data-testid="project-invoices-card">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2"><Receipt className="w-4 h-4" /> 請求書（{invoices.length}件）</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><Receipt className="w-4 h-4" /> 請求書（{invoices.length}件）{docsFolded && <FoldToggle open={invoicesOpen} onClick={() => setInvoicesOpen((v) => !v)} />}</CardTitle>
             <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/invoices/new?project=${project.id}`)}>
               <Plus className="w-3.5 h-3.5" /> 請求書を作成
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        {(!docsFolded || invoicesOpen) && <CardContent>
           {invoices.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">まだ請求書がありません。納品書の「請求書を作成」からも作れます</p>
           ) : (
@@ -646,7 +651,7 @@ export default function ProjectDetail() {
               })}
             </div>
           )}
-        </CardContent>
+        </CardContent>}
       </Card>
 
       {/* 取込元 */}
@@ -669,6 +674,15 @@ export default function ProjectDetail() {
       <RecurringSetupDialog open={recurringOpen} onOpenChange={setRecurringOpen} project={project} estimates={estimates} template={project?.recurring_template_id ? recurringTemplate : null} />
       <ForecastFromEstimateDialog open={forecastOpen} onOpenChange={setForecastOpen} project={project} estimates={estimates} initial={forecastInitial} />
     </div>
+  );
+}
+
+/** 折りたたんだ一覧を開く・閉じる（定期売上の案件の納品書・請求書） */
+function FoldToggle({ open, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:bg-muted hover:text-foreground" data-testid="fold-toggle">
+      {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}{open ? "一覧を閉じる" : "一覧を開く（月ごとは上の表で見られます）"}
+    </button>
   );
 }
 
