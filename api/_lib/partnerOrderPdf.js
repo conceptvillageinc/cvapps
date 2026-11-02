@@ -32,7 +32,7 @@ export function renderPartnerOrderPdf({ order, company, stamp, logo = null }) {
     const bandBottom = summaryBottom + 8 + L.headH + 55;
     const tableY = tableTop(bandBottom + 14, { afterBank: true });
     // 最後のページ以外は下まで使い、内訳・備考は最後のページだけ。2 ページ目以降は見出しが 1 行だけ
-    const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY);
+    const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY, undefined, { notes: order.notes, breakdownRows: Array.isArray(order.tax_breakdown) && order.tax_breakdown.length ? order.tax_breakdown.length : 1 });
     const pages = pagedRows.length;
     try {
       for (let p = 0; p < pages; p++) {

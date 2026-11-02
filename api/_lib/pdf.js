@@ -51,7 +51,7 @@ export function renderDocumentPdf({ type, doc, company, stamp, logo = null }) {
       : [['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']];
     // 長い名称は折り返して行を高くするので、ページ分けは高さで行う
     // 最後のページ以外は下まで使い、内訳・備考は最後のページだけ。2 ページ目以降は見出しが 1 行だけ
-    const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY);
+    const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY, undefined, { notes: doc.notes, breakdownRows: Array.isArray(doc.tax_breakdown) && doc.tax_breakdown.length ? doc.tax_breakdown.length : 1 });
     const pages = pagedRows.length;
 
     try {
