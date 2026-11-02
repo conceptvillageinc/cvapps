@@ -6,6 +6,7 @@
 // ============================================================================
 import { lineTaxRate } from "@/lib/estimateTotals";
 import { submissionOf } from "@/lib/submission";
+import { isAutoCost } from "@/lib/lineCost";
 
 /** 見積の明細のうち、見込みに使える行（見出し・小計を除く） */
 export function forecastLines(estimate) {
@@ -17,9 +18,11 @@ export function forecastLines(estimate) {
       const amount = Number(li.amount) || 0;
       const rate = lineTaxRate(li);
       const revenue = inclusive ? Math.round((amount * 100) / (100 + rate)) : Math.round(amount);
-      const hasCost = li.cost_price !== null && li.cost_price !== undefined && li.cost_price !== "" && Number(li.cost_price) !== 0;
-      const cost = hasCost ? Math.round((Number(li.cost_price) || 0) * qty) : 0;
-      return { id: li.id, name: li.name || li.category || "（名称なし）", category: li.category || "", qty, unit: li.unit || "", revenue, cost, hasCost, isDiscount: amount < 0 };
+      // 原価が入っていない送料などは、出し値（税抜）と同じ額を原価にする（そのまま払う費用）
+      const autoCost = isAutoCost(li);
+      const hasCost = autoCost || (li.cost_price !== null && li.cost_price !== undefined && li.cost_price !== "" && Number(li.cost_price) !== 0);
+      const cost = autoCost ? revenue : hasCost ? Math.round((Number(li.cost_price) || 0) * qty) : 0;
+      return { id: li.id, name: li.name || li.category || "（名称なし）", category: li.category || "", qty, unit: li.unit || "", revenue, cost, hasCost, autoCost, isDiscount: amount < 0 };
     });
 }
 

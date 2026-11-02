@@ -39,6 +39,7 @@ import { toHalfWidth } from "@/lib/halfWidth";
 import { toTaxExcluded } from "@/lib/priceTax";
 import { computeEstimateTotals, lineTaxRate } from "@/lib/estimateTotals";
 import { isImeEnter } from "@/lib/ime";
+import { costPriceOf, isAutoCost } from "@/lib/lineCost";
 
 import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 import WebPriceImport from "@/components/estimates/WebPriceImport";
@@ -104,12 +105,13 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 
   // 社内確認用：原価情報を持つ行のみを集計して粗利を計算
   const { totalCost, grossProfit, profitRate } = useMemo(() => {
-    const cost = lineItems
-      .filter(li => li.row_type !== "text" && li.row_type !== "subtotal" && li.cost_price != null)
-      .reduce((sum, li) => sum + (Number(li.cost_price) || 0) * (Number(li.quantity) || 1), 0);
+    // 原価の入っていない送料などは、出し値と同じ額を原価にする
+    const cost = Math.round(lineItems
+      .filter(li => li.row_type !== "text" && li.row_type !== "subtotal")
+      .reduce((sum, li) => { const cp = costPriceOf(li, { taxInclusive }); return cp === null ? sum : sum + cp * (Number(li.quantity) || 1); }, 0));
     const profit = subtotal - cost;
     return { totalCost: cost, grossProfit: profit, profitRate: subtotal > 0 ? ((profit / subtotal) * 100).toFixed(1) : 0 };
-  }, [lineItems, subtotal]);
+  }, [lineItems, subtotal, taxInclusive]);
 
   // 入稿記録（この見積のどの明細で入稿したか）
   const { user } = useAuth();
@@ -1333,9 +1335,10 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
                 <NumericField
                   value={item.cost_price ?? ""}
                   onCommit={(v) => onChange({ cost_price: Number(v) })}
-                  placeholder="—"
+                  placeholder={isAutoCost(item) ? `${Number(item.unit_price || 0).toLocaleString()}（送料）` : "—"}
                   className={`h-6 w-24 text-[10px] px-1.5 bg-white text-right ${noSpinner}`}
                 />
+                {isAutoCost(item) && <span className="text-[10px] text-emerald-700" title="原価が空の送料などは、出し値と同じ額を原価として総原価・発注見込に入れます。違うときは原価を入れてください">送料は出し値と同じ額を原価にしています</span>}
                 {hasCost && (
                   <button type="button" className="text-muted-foreground hover:text-destructive" title="原価を外す" onClick={() => onChange({ cost_price: null, markup_rate: null })}><X className="w-3 h-3" /></button>
                 )}

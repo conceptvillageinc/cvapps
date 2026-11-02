@@ -126,7 +126,7 @@ export default function ForecastFromEstimateDialog({ open, onOpenChange, project
                               <td className="px-2 py-1.5 pl-4"><span className="break-words">{l.name}</span>{l.category && <span className="ml-1.5 text-[10px] text-muted-foreground">{l.category}</span>}</td>
                               <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">{l.qty.toLocaleString("ja-JP")}{l.unit}</td>
                               <td className={`px-2 py-1.5 text-right tabular-nums ${l.isDiscount ? "text-red-600" : ""}`}>{yen(l.revenue)}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums">{l.hasCost ? yen(l.cost) : l.isDiscount ? <span className="text-muted-foreground">—</span> : <span className="rounded bg-amber-50 px-1 text-[10px] text-amber-700 ring-1 ring-amber-200">原価なし</span>}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">{l.hasCost ? <>{yen(l.cost)}{l.autoCost && <span className="ml-1 text-[10px] text-muted-foreground" title="原価が空の送料なので、出し値と同じ額を原価にしています">送料</span>}</> : l.isDiscount ? <span className="text-muted-foreground">—</span> : <span className="rounded bg-amber-50 px-1 text-[10px] text-amber-700 ring-1 ring-amber-200">原価なし</span>}</td>
                             </tr>
                           );
                         })}
