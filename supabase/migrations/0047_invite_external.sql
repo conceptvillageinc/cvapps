@@ -66,3 +66,6 @@ begin
   return new;
 end;
 $$;
+
+-- 項目を足したことを、Supabase（PostgREST）にすぐ読み直させる
+notify pgrst, 'reload schema';
