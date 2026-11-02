@@ -411,13 +411,13 @@ const auth = {
     };
   },
 
-  async loginWithProvider(provider = 'google', redirectTo = '/') {
+  async loginWithProvider(provider = 'google', redirectTo = '/', { external = false } = {}) {
     return unwrap(await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: new URL(redirectTo, window.location.origin).toString(),
-        // 社内ドメインのアカウント選択を促す
-        queryParams: { hd: 'concept-village.co.jp', prompt: 'select_account' },
+        // 社内ドメインのアカウント選択を促す（社外の方の特別招待のときは、ドメインを絞らない）
+        queryParams: external ? { prompt: 'select_account' } : { hd: 'concept-village.co.jp', prompt: 'select_account' },
       },
     }));
   },
@@ -541,8 +541,8 @@ const functions = {
 
 const users = {
   /** 管理者がメンバーを招待する。権限の確認はサーバー側で行う。 */
-  async inviteUser(email, role = 'user') {
-    return callFunction('invite', { email, role });
+  async inviteUser(email, role = 'user', { external = false } = {}) {
+    return callFunction('invite', { email, role, external });
   },
 };
 

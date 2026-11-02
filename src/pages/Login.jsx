@@ -12,11 +12,11 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleGoogle = async () => {
+  const handleGoogle = async (external = false) => {
     setError("");
     setLoading(true);
     try {
-      await db.auth.loginWithProvider("google", "/");
+      await db.auth.loginWithProvider("google", "/", { external });
     } catch (err) {
       setError(err.message || "ログインに失敗しました");
       setLoading(false);
@@ -40,7 +40,7 @@ export default function Login() {
       <Button
         className="w-full h-12 text-sm font-medium"
         variant="outline"
-        onClick={handleGoogle}
+        onClick={() => handleGoogle(false)}
         disabled={loading}
       >
         {loading ? (
@@ -50,6 +50,10 @@ export default function Login() {
         )}
         Googleでログイン
       </Button>
+      {/* 管理者が社外のアドレスとして特別に招待した方（Gmail など）はこちら */}
+      <button type="button" onClick={() => handleGoogle(true)} disabled={loading} className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-foreground hover:underline" data-testid="login-external">
+        社外の方（特別に招待された方）はこちら
+      </button>
     </AuthLayout>
   );
 }

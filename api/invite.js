@@ -14,10 +14,10 @@ import { sendMail, isMailConfigured } from './_lib/gmail.js';
 
 const ALLOWED_DOMAIN = 'concept-village.co.jp';
 
-function inviteBody(appUrl, inviterName) {
+function inviteBody(appUrl, inviterName, { external = false, email = '' } = {}) {
   return `CV AX KIT（CVアプリ）へご招待します。
 
-下記のURLを開き、会社のGoogleアカウント（@${ALLOWED_DOMAIN}）でログインしてください。
+下記のURLを開き、${external ? `このメールアドレス（${email}）のGoogleアカウントで、ログイン画面の「社外の方はこちら」からログインしてください。` : `会社のGoogleアカウント（@${ALLOWED_DOMAIN}）でログインしてください。`}
 ログインした時点で利用開始となります。パスワードの設定は不要です。
 
 ${appUrl}
@@ -41,14 +41,17 @@ export default async function handler(req, res) {
 
   const email = String(req.body?.email || '').trim().toLowerCase();
   const role = req.body?.role === 'admin' ? 'admin' : 'user';
+  // 社外のアドレスの特別招待（管理者がはっきり選んだときだけ。社外のドメインでもログインを許す）
+  const external = req.body?.external === true;
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     res.status(400).json({ error: 'メールアドレスの形式が正しくありません' });
     return;
   }
 
-  if (email.split('@')[1] !== ALLOWED_DOMAIN) {
-    res.status(400).json({ error: `@${ALLOWED_DOMAIN} のアドレスのみ招待できます` });
+  const isCompany = email.split('@')[1] === ALLOWED_DOMAIN;
+  if (!isCompany && !external) {
+    res.status(400).json({ error: `@${ALLOWED_DOMAIN} 以外のアドレスは「社外のアドレスとして特別に招待する」を選んで招待してください` });
     return;
   }
 
@@ -71,7 +74,7 @@ export default async function handler(req, res) {
     const { data, error } = await admin
       .from('invitations')
       .upsert(
-        { email, role, invited_by: user.id, accepted_at: null },
+        { email, role, invited_by: user.id, accepted_at: null, external: !isCompany },
         { onConflict: 'email' },
       )
       .select()
@@ -91,7 +94,7 @@ export default async function handler(req, res) {
           sendAs: user.email,
           to: email,
           subject: 'CV AX KIT（CVアプリ）への招待',
-          body: inviteBody(appUrl, user.email),
+          body: inviteBody(appUrl, user.email, { external: !isCompany, email }),
           fromName: 'CV AX KIT',
         });
         mail = { sent: true };

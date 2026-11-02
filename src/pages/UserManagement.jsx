@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Users, Plus, Loader2, Shield, User, MailPlus, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
@@ -21,6 +22,8 @@ export default function UserManagement() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("user");
+  const [inviteExternal, setInviteExternal] = useState(false); // 社外のアドレスとして特別に招待する（管理者のみ）
+  const isCompanyEmail = /@concept-village\.co\.jp$/i.test(inviteEmail.trim());
   const [inviting, setInviting] = useState(false);
 
   const { data: users = [], isLoading } = useQuery({
@@ -46,7 +49,7 @@ export default function UserManagement() {
     if (!inviteEmail) return;
     setInviting(true);
     try {
-      const result = await db.users.inviteUser(inviteEmail, inviteRole);
+      const result = await db.users.inviteUser(inviteEmail, inviteRole, { external: inviteExternal && !isCompanyEmail });
       queryClient.invalidateQueries({ queryKey: ["invitations"] });
       if (result?.mail?.sent) {
         toast.success(`${inviteEmail} に招待メールを送信しました`);
@@ -60,6 +63,7 @@ export default function UserManagement() {
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("user");
+      setInviteExternal(false);
     } catch (err) {
       toast.error("招待に失敗しました: " + err.message);
     } finally {
@@ -179,6 +183,7 @@ export default function UserManagement() {
                   <Badge variant="secondary" className="text-[10px]">
                     {inv.role === "admin" ? "管理者" : "メンバー"}
                   </Badge>
+                  {inv.external && <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100">社外（特別招待）</Badge>}
                   {isAdmin && (
                     <Button
                       variant="ghost"
@@ -212,9 +217,21 @@ export default function UserManagement() {
                 placeholder="example@concept-village.co.jp"
               />
               <p className="text-[11px] text-muted-foreground">
-                @concept-village.co.jp のアドレスのみ招待できます
+                ふだんは @concept-village.co.jp のアドレスを招待します
               </p>
             </div>
+            {isAdmin && (
+              <label className={`flex items-start gap-2 rounded-md border p-2.5 text-xs cursor-pointer ${inviteExternal ? "border-amber-300 bg-amber-50" : ""}`} data-testid="invite-external">
+                <Checkbox checked={inviteExternal} onCheckedChange={(v) => setInviteExternal(!!v)} className="mt-0.5" />
+                <span>
+                  <span className="font-medium">社外のアドレスとして特別に招待する（管理者のみ）</span>
+                  <span className="block text-[11px] text-muted-foreground mt-0.5">
+                    Gmail など会社以外のアドレスでも、このアドレスだけログインできるようにします。招待された方は、ログイン画面の「社外の方はこちら」から、そのアドレスの Google アカウントでログインします。
+                    社内の情報（見積・案件・クライアントなど）をすべて見られるようになるので、招待する相手に間違いがないか確かめてください
+                  </span>
+                </span>
+              </label>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">権限</Label>
               <Select value={inviteRole} onValueChange={setInviteRole}>
@@ -225,7 +242,10 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full gap-1.5" onClick={handleInvite} disabled={!inviteEmail || inviting}>
+            {!isCompanyEmail && inviteEmail.includes("@") && !inviteExternal && (
+              <p className="text-[11px] text-amber-700">会社以外のアドレスです。招待するには上の「社外のアドレスとして特別に招待する」を選んでください</p>
+            )}
+            <Button className="w-full gap-1.5" onClick={handleInvite} disabled={!inviteEmail || inviting || (!isCompanyEmail && !inviteExternal)} data-testid="invite-submit">
               {inviting && <Loader2 className="w-4 h-4 animate-spin" />}
               招待する
             </Button>
