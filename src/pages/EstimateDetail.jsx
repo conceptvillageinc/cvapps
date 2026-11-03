@@ -39,6 +39,8 @@ import QuoteEditor from "@/components/estimates/QuoteEditor";
 import VendorRequestBar from "@/components/estimates/VendorRequestBar";
 import CarriedPriceCheck from "@/components/estimates/CarriedPriceCheck";
 import InternalMemoCard from "@/components/estimates/InternalMemoCard";
+import { SectionPicker, SectionRoleChips } from "@/components/projects/EstimateSectionsCard";
+import { SECTION_PRESETS, sectionsFromPreset, sectionsOf, sectionOf, usedForBilling } from "@/lib/estimateSections";
 import VendorRequestTool from "@/components/estimates/VendorRequestTool";
 import ReviewStep from "@/components/estimates/ReviewStep";
 import { autoChecks } from "@/components/estimates/ReviewStep";
@@ -375,6 +377,37 @@ function EstimateDetail() {
                     案件 {project.project_number} {project.name}
                   </Link>
                   <button type="button" onClick={() => setLinkOpen(true)} className="ml-1.5 text-muted-foreground hover:text-primary hover:underline" data-testid="project-link-change">変更</button>
+                  {/* 見積の区分（案件の ▼ の見出し）。区分のない案件は、ここからひな形で付けられる */}
+                  <span className="ml-2 inline-flex items-center gap-1 align-middle" data-testid="estimate-section-header">
+                    {sectionsOf(project).length > 0 ? (
+                      <>
+                        <SectionPicker sections={sectionsOf(project)} value={sectionOf(project, formData)?.id || null} onChange={(sid) => handleUpdate({ estimate_section: sid })} testId="estimate-detail-section" />
+                        <SectionRoleChips section={sectionOf(project, formData)} />
+                      </>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-primary hover:underline" data-testid="estimate-section-add">区分を付ける</button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-80">
+                          {Object.entries(SECTION_PRESETS).map(([key, p]) => (
+                            <DropdownMenuItem key={key} className="text-xs flex-col items-start gap-0.5" onClick={async () => {
+                              const secs = sectionsFromPreset(key);
+                              try {
+                                await db.entities.Project.update(project.id, { estimate_sections: secs, ...(p.subsidy ? { uses_subsidy: true } : {}) });
+                                queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+                                queryClient.invalidateQueries({ queryKey: ["projects"] });
+                                toast.success(`案件に区分（${p.label}）を付けました。この見積の区分を選んでください`);
+                              } catch (err) { toast.error("区分を付けられませんでした: " + (err?.message || "")); }
+                            }}>
+                              <span className="font-semibold">{p.label}</span>
+                              <span className="text-[10px] text-muted-foreground">{p.sections.map((s) => `▼${s.name}`).join("／")}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </span>
                 </>
               ) : (
                 // 案件を選ばずに作った見積は、あとから案件に紐づけられる
@@ -420,7 +453,7 @@ function EstimateDetail() {
                   <DropdownMenuItem className="text-xs" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } navigate(`/partner-orders/new?estimate=${estimateId}`); }}>連携先への発注書（宛先：連携先／発行元：CV）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } if (recurringNoteSource) setNoteChoiceOpen(true); else navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs" data-testid="estimate-create-note">
+              <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } if (project && !usedForBilling(project, formData) && !window.confirm(`この見積は「${sectionOf(project, formData)?.name}」の区分で、納品書・請求書の元にしない見積です。\nこの見積から納品書を作りますか？`)) return; if (recurringNoteSource) setNoteChoiceOpen(true); else navigate(`/delivery-notes/new?estimate=${estimateId}`); }} className="gap-1.5 text-xs" data-testid="estimate-create-note">
                 <Truck className="w-3.5 h-3.5" /> 納品書作成
               </Button>
               <Button variant="outline" size="sm" onClick={async () => { try { await saveMutation.mutateAsync(formData); } catch { return; } setRecurringOpen(true); }} className="gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800" disabled={!!project?.recurring_template_id && !recurringTemplate} data-testid="estimate-recurring">

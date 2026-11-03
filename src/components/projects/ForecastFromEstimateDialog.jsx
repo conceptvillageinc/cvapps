@@ -9,6 +9,8 @@ import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { forecastLines, forecastSources, defaultForecastEstimateIds, isOldRevision } from "@/lib/projectForecast";
 import { submissionOf, SUBMISSION_STATUS } from "@/lib/submission";
+import { sectionOf, usedForForecast } from "@/lib/estimateSections";
+import { SectionRoleChips } from "@/components/projects/EstimateSectionsCard";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
 const keyOf = (estimateId, lineId) => `${estimateId}:${lineId}`;
@@ -37,7 +39,8 @@ export default function ForecastFromEstimateDialog({ open, onOpenChange, project
     if (prev.length) {
       setChecked(new Set(prev.flatMap((s) => (s.line_ids || []).map((id) => keyOf(s.estimate_id, id)))));
     } else {
-      const ids = new Set(defaultForecastEstimateIds(candidates));
+      // 区分で「見込みに入れない」にした見積（補助金提出の見積・参考の見積）は、最初はチェックしない
+      const ids = new Set(defaultForecastEstimateIds(candidates).filter((eid) => usedForForecast(project, candidates.find((x) => x.id === eid))));
       setChecked(new Set(candidates.filter((e) => ids.has(e.id)).flatMap((e) => linesOf[e.id].map((l) => keyOf(e.id, l.id)))));
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -115,6 +118,7 @@ export default function ForecastFromEstimateDialog({ open, onOpenChange, project
                             {e.revision_label && e.revision_label !== "初回" && <span className="ml-1.5 text-[10px] text-muted-foreground">{e.revision_label}</span>}
                             {st && <span className={`ml-1.5 rounded px-1 text-[10px] ${lost ? "bg-red-50 text-red-700" : submissionOf(e) === "submitted" ? "bg-emerald-50 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{st}</span>}
                             {old && <span className="ml-1.5 rounded bg-slate-200 px-1 text-[10px] text-slate-600" title="同じ見積の新しい版があります">古い版</span>}
+                            {sectionOf(project, e) && <span className="ml-1.5 text-[10px] text-muted-foreground">▼{sectionOf(project, e).name}<SectionRoleChips section={sectionOf(project, e)} className="ml-1 align-middle" /></span>}
                             <span className="ml-2 text-[10px] text-muted-foreground">{on}/{lines.length} 行</span>
                           </td>
                         </tr>
@@ -142,7 +146,7 @@ export default function ForecastFromEstimateDialog({ open, onOpenChange, project
               <span>発注見込 <b className="text-base tabular-nums">{yen(sums.cost)}</b></span>
               <span className="text-muted-foreground">粗利見込 <b className={`tabular-nums ${gross < 0 ? "text-destructive" : "text-emerald-700"}`}>{yen(gross)}</b>{sums.revenue > 0 && `（${Math.round((gross / sums.revenue) * 100)}%）`}{Number(project.other_cost) > 0 && "　※その他費用を引いた額"}</span>
             </div>
-            {candidates.length > 1 && <p className="text-[11px] text-muted-foreground">最初は、失注の見積と、改訂前の古い版を外してチェックしています（失注の見積は薄く出しています）</p>}
+            {candidates.length > 1 && <p className="text-[11px] text-muted-foreground">最初は、失注の見積・改訂前の古い版・区分で「見込みに入れない」にした見積を外してチェックしています（失注の見積は薄く出しています）</p>}
             {noCost > 0 && <p className="flex items-center gap-1.5 text-[11px] text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />原価の入っていない明細が {noCost} 件あります。発注見込が少なく出ている場合があります（見積の明細で原価を入れると反映できます）</p>}
           </div>
         )}

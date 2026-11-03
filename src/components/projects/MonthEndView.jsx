@@ -11,6 +11,7 @@ import { isRecurringParent, recurringMonths } from "@/lib/projectInvoicing";
 import { submissionOf } from "@/lib/submission";
 import { todayString } from "@/lib/fiscal";
 import RecurringMark from "@/components/projects/RecurringMark";
+import { usedForBilling } from "@/lib/estimateSections";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const md = (s) => (s ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}` : "—");
@@ -32,16 +33,19 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
   const { data: estimates = [] } = useQuery({ queryKey: ["estimates", "all", "monthend"], queryFn: () => db.entities.Estimate.list("-created_date", 2000) });
 
   // 案件 → 担当者と、納品書を作るときの見積（提出済の見積を優先）
+  const projectById = useMemo(() => new Map((projects || []).map((p) => [p.id, p])), [projects]);
   const estByProject = useMemo(() => {
     const m = new Map();
     for (const e of estimates) {
       if (!e.project_id) continue;
+      // 区分で「納品書・請求書の元にしない」見積（実作業・参考の見積）は使わない
+      if (!usedForBilling(projectById.get(e.project_id), e)) continue;
       const cur = m.get(e.project_id);
       const better = !cur || (submissionOf(e) === "submitted" && submissionOf(cur) !== "submitted");
       if (better) m.set(e.project_id, e);
     }
     return m;
-  }, [estimates]);
+  }, [estimates, projectById]);
 
   const monthStart = `${month}-01`;
   const monthEnd = monthEndOf(monthStart);

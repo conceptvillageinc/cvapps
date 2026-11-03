@@ -111,7 +111,7 @@ const WRITABLE_COLUMNS = {
     'confirmed_revenue', 'confirmed_cost', 'registered_at', 'due_date',
     'payment_due_date', 'vendor_payment_date', 'is_recurring', 'notes', 'created_by',
     'next_action', 'next_action_updated_at', 'next_action_updated_by', 'schedule_settings', 'forecast_source',
-    'actual_revenue_manual', 'actual_cost_manual',
+    'actual_revenue_manual', 'actual_cost_manual', 'estimate_sections', 'uses_subsidy',
   ],
   estimates: [
     'estimate_number', 'project_id', 'client_name', 'print_specs', 'client_honorific', 'person_in_charge',
@@ -121,7 +121,7 @@ const WRITABLE_COLUMNS = {
     'deal_probability', 'phase', 'lost_reason', 'is_final_submitted', 'submission_status', 'submitted_at',
     'project_group_id', 'parent_estimate_id', 'revision_label', 'total_amount',
     'reviewer_id', 'reviewer_name', 'approved_date', 'review_comments',
-    'approval_checklist', 'review_requested_to_id', 'review_requested_to_name', 'review_requested_at', 'tax_inclusive', 'finalized_at', 'finalized_by', 'internal_memo',
+    'approval_checklist', 'review_requested_to_id', 'review_requested_to_name', 'review_requested_at', 'tax_inclusive', 'finalized_at', 'finalized_by', 'internal_memo', 'estimate_section',
     'meeting_id', 'meeting_budget',
     // 旧方式（schema_version = 1）のみ使用
     'vendor_prices', 'selected_vendor', 'cost_price', 'selling_price',

@@ -21,6 +21,7 @@ import MonthEndView from "@/components/projects/MonthEndView";
 import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
 import { projectDelivery, isDeliveryDue, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
 import RecurringMark from "@/components/projects/RecurringMark";
+import SubsidyMark from "@/components/projects/SubsidyMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportProjectsCsv } from "@/lib/listCsv";
 
@@ -60,6 +61,7 @@ function ProjectCell({ col, p, delivery, today }) {
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-sm leading-snug line-clamp-2 break-all" title={p.name}>{p.name}</span>
           {p.is_recurring && <RecurringMark />}
+          {p.uses_subsidy && <SubsidyMark />}
         </div>
       </TableCell>
     );
@@ -68,6 +70,7 @@ function ProjectCell({ col, p, delivery, today }) {
         <div className="flex items-center gap-1.5">
           <span className="truncate" title={p.name}>{p.name}</span>
           {p.is_recurring && <RecurringMark />}
+          {p.uses_subsidy && <SubsidyMark />}
         </div>
       </TableCell>
     );
@@ -180,10 +183,11 @@ export default function ProjectList() {
     due_date: { label: "完了予定", getValue: (p) => p.due_date || "" },
     payment_due_date: { label: "入金予定", getValue: (p) => p.payment_due_date || "" },
     registered_at: { label: "登録日", getValue: (p) => p.registered_at || "" },
+    subsidy: { label: "補助金", getValue: (p) => (p.uses_subsidy ? "補助金の案件" : "補助金なし"), master: ["補助金の案件", "補助金なし"] },
     delivery: { label: "納品・請求", getValue: (p) => DELIVERY_STATE[projectDelivery(p, deliveryIndex.byProject).state].label, master: DELIVERY_STATE_ORDER.map((k) => DELIVERY_STATE[k].label) },
   }), [dealProbabilityOptions, phaseOptions, deliveryIndex]);
 
-  const FILTERABLE_KEYS = ["client_name", "deal_probability", "phase", "status", "delivery"];
+  const FILTERABLE_KEYS = ["client_name", "deal_probability", "phase", "status", "delivery", "subsidy"];
 
   const columnOptions = useMemo(() => {
     const result = {};
@@ -192,7 +196,7 @@ export default function ProjectList() {
       const fromData = new Set(projects.map(def.getValue));
       const merged = Array.from(new Set([...(def.master || []), ...fromData]));
       // 状態・納品請求は決まった順、ほかは 50 音順
-      result[key] = key === "status" || key === "delivery" ? merged : merged.sort((a, b) => a.localeCompare(b, "ja"));
+      result[key] = key === "status" || key === "delivery" || key === "subsidy" ? merged : merged.sort((a, b) => a.localeCompare(b, "ja"));
     }
     return result;
      
@@ -395,6 +399,10 @@ export default function ProjectList() {
           <span className="ml-1 flex items-center gap-2">
             {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">状態を進行中・完了に戻す</button>}
             {columnFilters.status && <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>}
+            {/* 補助金の案件だけに絞る（もう一度押すと外す） */}
+            <button type="button" onClick={() => setColumnFilter("subsidy", columnFilters.subsidy ? null : ["補助金の案件"])} className={`inline-flex items-center gap-1 rounded border px-1.5 ${columnFilters.subsidy ? "border-orange-300 bg-orange-50 text-orange-800" : "text-muted-foreground hover:bg-muted/50"}`} data-testid="subsidy-filter">
+              {columnFilters.subsidy ? "補助金の案件だけ表示中（外す）" : "補助金の案件だけ"}
+            </button>
           </span>
         </ConditionsRow>
       )}

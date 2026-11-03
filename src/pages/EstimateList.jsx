@@ -27,6 +27,7 @@ import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submissi
 import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark from "@/components/projects/RecurringMark";
+import { sectionOf } from "@/lib/estimateSections";
 import { clientLines } from "@/lib/estimateTotals";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportEstimatesCsv } from "@/lib/listCsv";
@@ -213,7 +214,7 @@ export default function EstimateList() {
         return (
           <TableCell key={key} className="text-sm">
             {latest}
-            <div className="font-medium flex items-center gap-1.5">{est.client_name}{est.project_id && projectById[est.project_id]?.is_recurring && <RecurringMark title="定期売上の案件の見積" />}</div>
+            <div className="font-medium flex items-center gap-1.5">{est.client_name}{est.project_id && projectById[est.project_id]?.is_recurring && <RecurringMark title="定期売上の案件の見積" />}{(() => { const sec = sectionOf(projectById[est.project_id], est); return sec ? <span className={`rounded px-1 text-[9px] font-normal leading-4 ring-1 ${sec.forecast ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`} title={`案件の区分: ▼${sec.name}`} data-testid="estimate-list-section">{sec.forecast ? sec.name : `参考：${sec.name}`}</span> : null; })()}</div>
             {est.project_id && projectById[est.project_id] && (
               <div className="text-[10px] text-muted-foreground truncate max-w-[220px]">
                 {projectById[est.project_id].project_number} {projectById[est.project_id].name}
