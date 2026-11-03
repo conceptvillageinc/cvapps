@@ -61,7 +61,7 @@ export function docLineRows(docs) {
 }
 
 /** 書類の列 docColumns（各行にくり返す）のあとに、明細の列を足す */
-export function lineColumns(docColumns, { cost = false, extra = [] } = {}) {
+export function lineColumns(docColumns, { cost = false, extra = [], internal = false } = {}) {
   return [
     ...docColumns.map((c) => ({ label: c.label, value: (r) => c.value(r.doc) })),
     { label: "行", value: (r) => r.no },
@@ -77,6 +77,8 @@ export function lineColumns(docColumns, { cost = false, extra = [] } = {}) {
       { label: "明細の原価", value: (r) => (r.li.cost_price === null || r.li.cost_price === undefined || r.li.cost_price === "" ? "" : num(Number(r.li.cost_price) * (Number(r.li.quantity) || 0))) },
     ] : []),
     { label: "売上カテゴリー", value: (r) => r.li.sales_category || "" },
+    // 見積だけ: 「提出」のチェックを外した明細（社内用。見積の金額には入っていない）
+    ...(internal ? [{ label: "提出しない", value: (r) => (r.li.internal_only === true ? "提出しない" : "") }] : []),
     ...extra,
   ];
 }

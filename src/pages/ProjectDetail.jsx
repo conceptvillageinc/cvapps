@@ -557,7 +557,8 @@ export default function ProjectDetail() {
               {estimates.map((e) => {
                 const es = STATUS_MAP[e.status] || STATUS_MAP.draft;
                 return (
-                  <Link key={e.id} to={`/estimates/${e.id}`} className="flex items-center gap-3 py-2.5 hover:bg-muted/40 -mx-2 px-2 rounded">
+                  <Link key={e.id} to={`/estimates/${e.id}`} className="block py-2.5 hover:bg-muted/40 -mx-2 px-2 rounded">
+                  <div className="flex items-center gap-3">
                     <span className="text-xs font-mono text-muted-foreground w-28 shrink-0">{e.estimate_number}</span>
                     <span className="text-sm flex-1 truncate">{e.estimate_title || e.print_type || "（件名なし）"}</span>
                     {e.revision_label && <Badge variant="outline" className="text-[9px] font-normal">{e.revision_label}</Badge>}
@@ -565,6 +566,16 @@ export default function ProjectDetail() {
                     <Badge className={`text-[9px] ${es.color}`}>{es.label}</Badge>
                     <span className="text-sm tabular-nums w-28 text-right">{e.total_amount ? yen(e.total_amount) : "—"}</span>
                     <span className="text-[10px] text-muted-foreground w-12 text-right">{format(new Date(e.created_date), "M/d")}</span>
+                  </div>
+                  {(e.internal_memo || "").trim() && (
+                    // 社内メモ（先頭の数行だけ）
+                    <p className="mt-1 ml-[7.75rem] line-clamp-3 whitespace-pre-line rounded bg-violet-50 px-2 py-1 text-[11px] leading-relaxed text-violet-900" title={e.internal_memo} data-testid="project-estimate-memo">
+                      <span className="mr-1 font-semibold">社内メモ</span>{e.internal_memo.trim()}
+                    </p>
+                  )}
+                  {(e.line_items || []).some((li) => li?.internal_only === true) && (
+                    <p className="mt-0.5 ml-[7.75rem] text-[10px] text-amber-700">提出しない明細 {(e.line_items || []).filter((li) => li?.internal_only === true).length} 行（社内用に残した別案など）</p>
+                  )}
                   </Link>
                 );
               })}

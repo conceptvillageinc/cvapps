@@ -4,14 +4,14 @@
 //   発注見込 = チェックした明細の 原価 × 数量 の合計
 //   入れたときの見積（複数可）・明細・金額を project.forecast_source に残し、見積があとで変わったら差を出す
 // ============================================================================
-import { lineTaxRate } from "@/lib/estimateTotals";
+import { lineTaxRate, clientLines } from "@/lib/estimateTotals";
 import { submissionOf } from "@/lib/submission";
 import { isAutoCost } from "@/lib/lineCost";
 
 /** 見積の明細のうち、見込みに使える行（見出し・小計を除く） */
 export function forecastLines(estimate) {
   const inclusive = !!estimate?.tax_inclusive;
-  return (estimate?.line_items || [])
+  return clientLines(estimate?.line_items) // 提出しない（社内用）の明細は見込みに入れない
     .filter((li) => li.row_type !== "text" && li.row_type !== "subtotal")
     .map((li) => {
       const qty = Number(li.quantity) || 0;

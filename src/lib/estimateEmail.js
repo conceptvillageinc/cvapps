@@ -1,6 +1,7 @@
 import { EMAIL_VENDOR_MAP, COMPANY_INFO } from "@/lib/constants";
 import { specText } from "@/lib/printSpecs";
 import { nextBusinessDay } from "@/lib/jpHolidays";
+import { clientLines } from "@/lib/estimateTotals";
 
 // ============================================================================
 // 見積依頼メールの宛先と、依頼に載せる仕様テキスト。
@@ -57,7 +58,7 @@ export function buildSpecText(estimate, specs = []) {
   }
 
   if (estimate?.schema_version === 2) {
-    const items = (estimate.line_items || []).filter(li => li.row_type !== "text" && li.row_type !== "subtotal");
+    const items = clientLines(estimate.line_items).filter(li => li.row_type !== "text" && li.row_type !== "subtotal");
     const lines = items.length > 0
       ? items.map(lineSummary).join("\n")
       : "（明細が未入力です）";

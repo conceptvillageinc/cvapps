@@ -96,7 +96,7 @@ export function exportEstimatesCsv(rows, ctx) {
     { label: "税込で見積", value: (e) => mark(e.tax_inclusive) },
   ];
   const lines = docLineRows(rows);
-  exportCsv("見積一覧", lineColumns(doc, { cost: true }), lines);
+  exportCsv("見積一覧", lineColumns(doc, { cost: true, internal: true }), lines);
   return lines.length;
 }
 

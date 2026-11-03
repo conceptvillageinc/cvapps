@@ -11,6 +11,14 @@
 
 export const ESTIMATE_TAX_RATES = [10, 8];
 
+/**
+ * 「提出」のチェックを外した明細（社内用）か。見積書・プレビュー・PDF・メール・合計・
+ * 受注見込・納品書への写しには入れない（編集画面と CSV には残す。2500 冊の別案などを残す用）
+ */
+export const isInternalLine = (li) => li?.internal_only === true;
+/** 提出する明細だけ */
+export const clientLines = (items) => (items || []).filter((li) => li && !isInternalLine(li));
+
 export function lineTaxRate(li) {
   return Number(li?.tax_rate) === 8 ? 8 : 10;
 }
@@ -21,7 +29,7 @@ export function lineTaxRate(li) {
  * @returns {{ subtotal:number, tax:number, total:number, breakdown:Array<{rate:number, taxable:number, tax:number, gross:number}> }}
  */
 export function computeEstimateTotals(lineItems, { taxInclusive = false } = {}) {
-  const rows = (lineItems || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal");
+  const rows = clientLines(lineItems).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal");
   const byRate = new Map();
   for (const li of rows) {
     const rate = lineTaxRate(li);

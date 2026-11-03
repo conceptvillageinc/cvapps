@@ -5,7 +5,7 @@ import { CheckCircle2, XCircle, AlertTriangle, Send, FileText } from "lucide-rea
 import { useAuth } from "@/lib/AuthContext";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { APPROVAL_CHECKLIST } from "@/lib/constants";
-import { computeEstimateTotals } from "@/lib/estimateTotals";
+import { computeEstimateTotals, clientLines } from "@/lib/estimateTotals";
 import ReviewPanel from "@/components/estimates/ReviewPanel";
 
 const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`;
@@ -13,7 +13,7 @@ const fmt = (d) => (d ? new Date(d).toLocaleString("ja-JP", { dateStyle: "short"
 
 /** 見積の内容から自動で判定する社内チェック */
 export function autoChecks(estimate, grossMarginTarget) {
-  const items = (estimate.line_items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal");
+  const items = clientLines(estimate.line_items).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal");
   const totals = computeEstimateTotals(items, { taxInclusive: !!estimate.tax_inclusive });
   const costRows = items.filter((li) => li.cost_price != null && li.cost_price !== "");
   const cost = costRows.reduce((s, li) => s + (Number(li.cost_price) || 0) * (Number(li.quantity) || 1), 0);

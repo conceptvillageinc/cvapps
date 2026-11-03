@@ -79,7 +79,8 @@ export function renderEstimatePdf({ estimate, client, company, stamp, logo = nul
 }
 
 function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
-  const items = Array.isArray(estimate.line_items) ? estimate.line_items : [];
+  // 「提出」のチェックを外した明細（社内用）は見積書に出さない・合計にも入れない
+  const items = (Array.isArray(estimate.line_items) ? estimate.line_items : []).filter((li) => li && li.internal_only !== true);
   const taxInclusive = !!estimate.tax_inclusive;
   const totals = estimateTotals(items, taxInclusive);
   const estimateDate = estimate.estimate_date || new Date().toISOString().slice(0, 10);

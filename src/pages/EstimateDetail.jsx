@@ -38,6 +38,7 @@ import EstimatePreview from "@/components/estimates/EstimatePreview";
 import QuoteEditor from "@/components/estimates/QuoteEditor";
 import VendorRequestBar from "@/components/estimates/VendorRequestBar";
 import CarriedPriceCheck from "@/components/estimates/CarriedPriceCheck";
+import InternalMemoCard from "@/components/estimates/InternalMemoCard";
 import VendorRequestTool from "@/components/estimates/VendorRequestTool";
 import ReviewStep from "@/components/estimates/ReviewStep";
 import { autoChecks } from "@/components/estimates/ReviewStep";
@@ -635,6 +636,7 @@ function EstimateDetail() {
               {/* 依頼ツールは右の列ではなく 1 行の帯にして、プレビューと編集欄に横幅を全部使わせる */}
               <VendorRequestBar estimate={formData} emailLogs={emailLogs} onOpen={(n) => { setToolStep(n); setToolOpen(true); }} />
               <CarriedPriceCheck estimate={formData} onUpdate={handleUpdate} onOpenRequestTool={() => { setToolStep(1); setToolOpen(true); }} />
+              <InternalMemoCard estimate={formData} onUpdate={handleUpdate} />
               <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
             </div>
           ) : (

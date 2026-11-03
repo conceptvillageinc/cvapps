@@ -14,6 +14,7 @@
 // ============================================================================
 
 import { useMemo } from "react";
+import { isInternalLine } from "@/lib/estimateTotals";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { DEFAULT_MARKUP, DEFAULT_LABEL_WORDS, DEFAULT_PACKAGE_WORDS, markupKindOf } from "@/lib/markupKinds";
 
@@ -147,7 +148,7 @@ export function outsourcingPrice(rules, kind, cost) {
 const PRINT_CATEGORY = /印刷費/;
 const DESIGN_CATEGORY = "デザイン費";
 
-const isAmountRow = (li) => li.row_type !== "text";
+const isAmountRow = (li) => li.row_type !== "text" && !isInternalLine(li); // 提出しない明細は割合の元に入れない
 const isRuleRow = (li) => li.source_type === "rule";
 
 function sumAmount(items) {
@@ -261,7 +262,7 @@ export function recomputeSubtotals(lineItems) {
       running = 0;
       return out;
     }
-    if (li.row_type !== "text" && li.source_type !== "rule") running += Number(li.amount) || 0;
+    if (li.row_type !== "text" && li.source_type !== "rule" && !isInternalLine(li)) running += Number(li.amount) || 0;
     return li;
   });
 }

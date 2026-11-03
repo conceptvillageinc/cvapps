@@ -27,6 +27,7 @@ import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submissi
 import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark from "@/components/projects/RecurringMark";
+import { clientLines } from "@/lib/estimateTotals";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportEstimatesCsv } from "@/lib/listCsv";
 
@@ -36,7 +37,7 @@ function estimateGross(e) {
     if (e.selling_price > 0 && e.cost_price > 0) return { profit: e.selling_price - e.cost_price, rate: Math.round(((e.selling_price - e.cost_price) / e.selling_price) * 100) };
     return null;
   }
-  const rows = (e.line_items || []).filter(li => li.row_type !== "text" && li.row_type !== "subtotal");
+  const rows = clientLines(e.line_items).filter(li => li.row_type !== "text" && li.row_type !== "subtotal");
   const subtotal = rows.reduce((s, li) => s + (Number(li.amount) || 0), 0);
   if (!rows.some(li => li.cost_price != null) || subtotal <= 0) return null;
   const cost = rows.filter(li => li.cost_price != null).reduce((s, li) => s + (Number(li.cost_price) || 0) * (Number(li.quantity) || 1), 0);

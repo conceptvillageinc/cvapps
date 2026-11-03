@@ -37,7 +37,7 @@ import SalesCategorySelect, { SalesCategoryChip } from "@/components/estimates/S
 import { formatPostalCode } from "@/lib/postalCode";
 import { toHalfWidth } from "@/lib/halfWidth";
 import { toTaxExcluded } from "@/lib/priceTax";
-import { computeEstimateTotals, lineTaxRate } from "@/lib/estimateTotals";
+import { computeEstimateTotals, lineTaxRate, isInternalLine, clientLines } from "@/lib/estimateTotals";
 import { isImeEnter } from "@/lib/ime";
 import { costPriceOf, isAutoCost } from "@/lib/lineCost";
 
@@ -106,7 +106,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
   // 社内確認用：原価情報を持つ行のみを集計して粗利を計算
   const { totalCost, grossProfit, profitRate } = useMemo(() => {
     // 原価の入っていない送料などは、出し値と同じ額を原価にする
-    const cost = Math.round(lineItems
+    const cost = Math.round(clientLines(lineItems)
       .filter(li => li.row_type !== "text" && li.row_type !== "subtotal")
       .reduce((sum, li) => { const cp = costPriceOf(li, { taxInclusive }); return cp === null ? sum : sum + cp * (Number(li.quantity) || 1); }, 0));
     const profit = subtotal - cost;
@@ -475,7 +475,21 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                   </td>
                 </tr>
               )}
-              {lineItems.map(li => (
+              {lineItems.filter(li => showInternal || !isInternalLine(li)).map(li => isInternalLine(li) ? (
+                  // 提出しない明細: 社内確認用のときだけ薄く出す（提出用・印刷・PDF には出ない）
+                  <tr key={li.id} className="border-b border-dashed text-muted-foreground/70 bg-amber-50/40" data-testid="preview-internal-line">
+                    <td className="px-3 py-1.5 align-top text-xs" colSpan={li.row_type === "item" || !li.row_type ? 1 : 5}>
+                      <span className="line-through">{li.row_type === "text" ? li.text : li.name}</span>
+                      <span className="ml-1.5 rounded bg-amber-100 px-1 text-[10px] text-amber-800 no-underline">提出しない</span>
+                    </td>
+                    {(li.row_type === "item" || !li.row_type) && <>
+                      <td className="px-3 py-1.5 text-right align-top text-xs line-through">{li.quantity?.toLocaleString?.() ?? li.quantity}</td>
+                      <td className="px-3 py-1.5 text-right align-top text-xs line-through">{li.unit}</td>
+                      <td className="px-3 py-1.5 text-right align-top text-xs line-through">{yen(li.unit_price)}</td>
+                      <td className="px-3 py-1.5 text-right align-top text-xs line-through">{yen(li.amount)}</td>
+                    </>}
+                  </tr>
+                ) : (
                 li.row_type === "text" ? (
                   <tr key={li.id} className="bg-muted/30">
                     <td colSpan={5} className="px-3 py-1.5 font-medium text-xs">{li.text}</td>
@@ -605,7 +619,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 <col className="w-12" />
                 <col className="w-24" />
                 <col className="w-24" />
-                <col className="w-12" />
+                <col className="w-[5.5rem]" />
               </colgroup>
               <thead>
                 <tr className="bg-slate-800 text-white text-xs">
@@ -745,6 +759,11 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
               onPickLine={(c) => commitItems([...lineItems, itemFromPastLine(c)])}
             />
 
+            {lineItems.some(isInternalLine) && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5" data-testid="internal-lines-note">
+                「提出」のチェックを外した明細が {lineItems.filter(isInternalLine).length} 行あります。見積書・PDF・メールには出さず、合計・総原価・受注見込・納品書にも入れません（この画面と CSV には残ります）
+              </p>
+            )}
             {/* 合計（1 行。左に小計・消費税・見積金額、右に原価・粗利） */}
             <div className="flex flex-col sm:flex-row gap-2" data-testid="quote-totals">
               <div className="flex flex-1 border rounded-lg overflow-hidden divide-x">
@@ -1113,10 +1132,18 @@ function RowHandle({ onDragStart, onDragEnd, onMove, isFirst, isLast }) {
   );
 }
 
-/** 行の右端: 複製と削除 */
-function RowActions({ onDuplicate, onRemove }) {
+/** 行の右端: 提出（チェックを外すと社内用）・複製・削除 */
+function RowActions({ onDuplicate, onRemove, item, onChange }) {
+  const canSubmit = item && onChange && item.row_type !== "subtotal";
+  const on = canSubmit && !isInternalLine(item);
   return (
     <div className="flex items-center justify-end gap-1">
+      {canSubmit && (
+        <label className={`inline-flex items-center gap-0.5 whitespace-nowrap text-[10px] cursor-pointer select-none ${on ? "text-muted-foreground" : "text-amber-800 font-semibold"}`} title="チェックを外すと、この行は見積書・PDF・メールに出さず、合計にも入れません（社内用に残す。別の数量の案など）">
+          <input type="checkbox" checked={on} onChange={(e) => onChange({ internal_only: !e.target.checked })} className="h-3 w-3 accent-primary" data-testid="line-submit" aria-label="提出する" />
+          提出
+        </label>
+      )}
       {onDuplicate && <button type="button" onClick={onDuplicate} className="text-muted-foreground hover:text-primary" title="この行を複製して下に追加" aria-label="複製"><Copy className="w-3.5 h-3.5" /></button>}
       <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive" title="削除" aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></button>
     </div>
@@ -1181,7 +1208,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
   }
   if (item.row_type === "text") {
     return (
-      <tr className={`group bg-muted/30 ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
+      <tr className={`group ${isInternalLine(item) ? "bg-amber-50/70 [&_input]:text-muted-foreground [&_input]:line-through" : "bg-muted/30"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
         <td className="px-1 py-1.5 align-top">{handle}</td>
         <td colSpan={5} className="px-3 py-1.5">
           <Input
@@ -1193,7 +1220,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
             className="h-7 text-xs font-medium bg-transparent border-none px-0 focus-visible:ring-0"
           />
         </td>
-        <td className="px-1 py-1.5 align-top"><RowActions onDuplicate={onDuplicate} onRemove={onRemove} /></td>
+        <td className="px-1 py-1.5 align-top"><RowActions onDuplicate={onDuplicate} onRemove={onRemove} item={item} onChange={onChange} /></td>
       </tr>
     );
   }
@@ -1201,6 +1228,7 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
   const isRule = item.source_type === "rule";
   const locked = isLockedDiscount(item); // システム設定の割引（CV割引など）は追加したら変えられない
   const custom = isCustomDiscount(item);
+  const internal = isInternalLine(item); // 「提出」のチェックを外した行（社内用）
   const hasCost = item.cost_price != null;
   const lineCostTotal = hasCost ? Number(item.cost_price) * (Number(item.quantity) || 1) : 0;
   const lineProfit = hasCost ? (Number(item.amount) || 0) - lineCostTotal : 0;
@@ -1209,15 +1237,16 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
 
   return (
     <>
-    <tr className={`group ${showInternal ? "" : "border-b"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
+    <tr className={`group ${showInternal ? "" : "border-b"} ${internal ? "bg-amber-50/70 text-muted-foreground" : ""} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop} data-internal={internal ? "1" : undefined}>
       <td className="px-1 py-2 align-top">{handle}</td>
       <td className="px-3 py-2 align-top">
         {locked
           ? <p className="text-sm whitespace-pre-wrap break-words px-1.5 py-1" title="決まった割引は名称・%を変えられません。変えるときは削除して「カスタム」で入れてください">{item.name}</p>
           : <InlineTextCell value={item.name} onCommit={(v) => onChange({ name: v })} />}
         {similarFor && <SimilarHint item={item} similarFor={similarFor} priceOf={priceOf} onReplaceWith={onReplaceWith} toItems={toItems} />}
-        {(item.category || item.name) && (
+        {(item.category || item.name || internal) && (
           <div className="text-[10px] text-muted-foreground mt-0.5 px-1.5 flex flex-wrap items-center gap-1">
+            {internal && <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-300 bg-amber-100 px-1.5 leading-4 text-[9.5px] font-semibold text-amber-800" data-testid="internal-chip">提出しない（社内用）</span>}
             {orders.map((o) => (
               <button key={o.id} type="button" onClick={() => onOpenOrder?.(o)} className="inline-flex items-center gap-1 rounded-full border border-teal-300 bg-teal-50 px-1.5 leading-4 text-[9.5px] font-semibold text-teal-800 hover:bg-teal-100" title="入稿記録を開く" data-testid="ordered-chip">
                 <PackageCheck className="w-2.5 h-2.5" /> 入稿済 {fmtOrderDate(o.ordered_on).slice(5)}
@@ -1300,10 +1329,10 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
       <td className="px-2 py-2 text-right align-top font-medium whitespace-nowrap tabular-nums">
         {yen(item.amount)}
       </td>
-      <td className="px-1 py-2 align-top"><RowActions onDuplicate={locked ? null : onDuplicate} onRemove={onRemove} /></td>
+      <td className="px-1 py-2 align-top"><RowActions onDuplicate={locked ? null : onDuplicate} onRemove={onRemove} item={item} onChange={onChange} /></td>
     </tr>
     {showInternal && (
-      <tr className="border-b">
+      <tr className={`border-b ${internal ? "bg-amber-50/70" : ""}`}>
         <td></td>
         <td colSpan={6} className="px-3 pb-2 pt-0 space-y-1">
           {/* 税率・入稿先URL・スクショ・メモ（社内用。見積書には出ない） */}

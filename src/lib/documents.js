@@ -4,7 +4,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { nextMonthEnd } from "@/lib/fiscal";
-import { toTaxExclusiveUnitPrice, lineTaxRate } from "@/lib/estimateTotals";
+import { toTaxExclusiveUnitPrice, lineTaxRate, clientLines } from "@/lib/estimateTotals";
 import { salesCategoryOf } from "@/lib/salesCategory";
 import { lineAmount } from "@/lib/constants";
 
@@ -33,7 +33,7 @@ export function newDocItem(defaults = {}) {
 export function docItemsFromEstimate(estimate) {
   // 税込見積の明細は税抜に直して写す（納品書・請求書は税抜で持つ）
   const inclusive = !!estimate?.tax_inclusive;
-  return (estimate?.line_items || [])
+  return clientLines(estimate?.line_items) // 提出しない（社内用）の明細は写さない
     .filter((li) => li.row_type !== "text" && li.row_type !== "subtotal")
     .map((li) => {
       const rate = lineTaxRate(li);

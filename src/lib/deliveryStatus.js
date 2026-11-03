@@ -7,6 +7,7 @@
 //     invoiced    請求済            … 納品書がすべて請求書になった
 //   見積は、その見積から作った納品書の明細の合計が見積の合計に届いていなければ「一部納品 ○%」も付ける（分納）。
 // ============================================================================
+import { clientLines } from "@/lib/estimateTotals";
 /** その日の月末（YYYY-MM-DD） */
 export function monthEndOf(ymd) {
   const d = new Date(`${String(ymd).slice(0, 7)}-01T00:00:00`);
@@ -35,7 +36,7 @@ export function stateOfNotes(notes) {
 
 /** 見積の税抜の明細合計（納品書と同じ数え方: テキスト行・小計行は除く） */
 function estimateBase(estimate) {
-  return sumItems((estimate?.line_items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal"));
+  return sumItems(clientLines(estimate?.line_items).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal"));
 }
 
 /**
@@ -49,7 +50,7 @@ export function estimateDelivery(estimate, notesByEstimate, { submitted }) {
   let partial = null;
   if (notes.length) {
     const delivered = new Set(notes.flatMap((n) => (n.line_items || []).map((li) => li.source_line_id).filter(Boolean)));
-    const lines = (estimate.line_items || []).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" && Number(li.amount) > 0);
+    const lines = clientLines(estimate.line_items).filter((li) => li.row_type !== "text" && li.row_type !== "subtotal" && li.source_type !== "rule" && Number(li.amount) > 0);
     const base = estimateBase({ line_items: lines });
     const done = sumItems(lines.filter((li) => delivered.has(li.id)));
     // 見積の行が納品書に全部入っていなくても、金額が届いていれば（行をまとめた等）全部とみなす
