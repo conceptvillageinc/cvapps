@@ -46,7 +46,8 @@ export default function ScheduleTab({ project, fullPage = false, backTo = null }
     queryKey: key,
     queryFn: () => db.entities.ProjectTask.filter({ project_id: project.id }, "sort_order"),
   });
-  const tasks = useMemo(() => sortTasks(rows), [rows]);
+  // サブタスク（タスク管理で足した細かい作業・校正のピン）は工程表に出さない
+  const tasks = useMemo(() => sortTasks(rows.filter((t) => !t.parent_task_id)), [rows]);
   const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => db.entities.User.list("full_name") });
   const userMap = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const memberName = (id) => memberShortName(userMap.get(id));

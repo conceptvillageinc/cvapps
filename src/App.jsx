@@ -36,6 +36,8 @@ import UserManagement from '@/pages/UserManagement';
 import ClientManagement from '@/pages/ClientManagement';
 import FaqPage from '@/pages/FaqPage';
 import ProjectList from '@/pages/ProjectList';
+import Tasks from '@/pages/Tasks';
+import Inbox from '@/pages/Inbox';
 import ProjectDetail from '@/pages/ProjectDetail';
 import RecurringProjects from '@/pages/RecurringProjects';
 import FreeeHandover from '@/pages/FreeeHandover';
@@ -79,6 +81,8 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/inbox" element={<Inbox />} />
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/recurring" element={<RecurringProjects />} />
           <Route path="/freee-handover" element={<FreeeHandover />} />

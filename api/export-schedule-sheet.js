@@ -74,7 +74,7 @@ export default async function handler(req, res) {
     const admin = adminClient();
     const { data: project } = await admin.from('projects').select('*').eq('id', projectId).maybeSingle();
     if (!project) { res.status(404).json({ error: '案件が見つかりません' }); return; }
-    const { data: tasks } = await admin.from('project_tasks').select('*').eq('project_id', projectId).order('sort_order').order('created_at');
+    const { data: tasks } = await admin.from('project_tasks').select('*').eq('project_id', projectId).is('parent_task_id', null).order('sort_order').order('created_at');
     const { data: users } = await admin.from('users').select('id, full_name, short_name');
     const { data: holidayRow } = await admin.from('system_settings').select('setting_value').eq('setting_key', 'company_holidays').maybeSingle();
     let holidayLines = [];

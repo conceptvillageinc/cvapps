@@ -48,7 +48,7 @@ async function view(req, res, body) {
   }
   const { data: project } = await admin.from('projects').select('id, name, client_name, schedule_settings').eq('id', share.project_id).maybeSingle();
   if (!project) { res.status(404).json({ error: 'not_found' }); return; }
-  const { data: tasks } = await admin.from('project_tasks').select('*').eq('project_id', project.id).order('sort_order').order('created_at');
+  const { data: tasks } = await admin.from('project_tasks').select('*').eq('project_id', project.id).is('parent_task_id', null).order('sort_order').order('created_at');
   const { data: users } = await admin.from('users').select('id, full_name, short_name, avatar_url');
   const { data: holidayRow } = await admin.from('system_settings').select('setting_value').eq('setting_key', 'company_holidays').maybeSingle();
   let holidays = [];

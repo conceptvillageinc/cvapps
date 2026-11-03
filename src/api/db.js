@@ -46,6 +46,10 @@ const TABLES = {
   PrintOrder: 'print_orders',
   ProjectTask: 'project_tasks',
   ScheduleTemplate: 'schedule_templates',
+  TaskProject: 'task_projects',
+  TaskComment: 'task_comments',
+  TaskAttachment: 'task_attachments',
+  Notification: 'notifications',
 };
 
 // 書き込みを許可するカラム。
@@ -55,7 +59,12 @@ const WRITABLE_COLUMNS = {
   // 招待の作成はサーバー側（/api/invite）が行う。画面からは取り消し（削除）だけ。
   invitations: ['email', 'role'],
   schedule_templates: ['name', 'keywords', 'steps', 'notes', 'sort_order', 'created_by'],
-  project_tasks: ['project_id', 'name', 'owner', 'start_date', 'end_date', 'status', 'notes', 'sort_order', 'category', 'phase', 'parties', 'member_ids', 'show_members', 'completed', 'completed_at', 'is_milestone', 'on_schedule', 'estimated_hours', 'actual_hours', 'depends_on'],
+  project_tasks: ['project_id', 'name', 'owner', 'start_date', 'end_date', 'status', 'notes', 'sort_order', 'category', 'phase', 'parties', 'member_ids', 'show_members', 'completed', 'completed_at', 'is_milestone', 'on_schedule', 'estimated_hours', 'actual_hours', 'depends_on',
+    'internal_project_id', 'assignee_id', 'priority', 'review_status', 'description', 'parent_task_id', 'pin'],
+  task_projects: ['name', 'color', 'description', 'archived', 'sort_order'],
+  task_comments: ['task_id', 'body', 'mentions', 'attachment_ids', 'pin_task_id'],
+  task_attachments: ['task_id', 'path', 'file_name', 'mime_type', 'size', 'page_count'],
+  notifications: ['read_at'],
   fiscal_targets: [
     'fiscal_year', 'sales', 'purchase', 'gross_jump', 'gross_must',
     'actual_purchase', 'actual_other_cost', 'notes', 'simulation',
@@ -165,7 +174,7 @@ const WRITABLE_COLUMNS = {
   ],
   system_settings: ['setting_key', 'setting_value', 'description'],
   faq_items: ['question', 'answer', 'sort_order'],
-  users: ['full_name', 'role', 'department', 'short_name', 'email_signature', 'avatar_url'],
+  users: ['full_name', 'role', 'department', 'short_name', 'email_signature', 'avatar_url', 'daily_hours'],
 };
 
 // 日付系カラムは空文字を渡すと Postgres がエラーになるため null に寄せる

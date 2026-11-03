@@ -40,7 +40,7 @@ export default async function handler(req, res) {
   }
 
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const role = req.body?.role === 'admin' ? 'admin' : 'user';
+  const role = req.body?.role === 'admin' ? 'admin' : req.body?.role === 'guest' ? 'guest' : 'user';
   // 社外のアドレスの特別招待（管理者がはっきり選んだときだけ。社外のドメインでもログインを許す）
   const external = req.body?.external === true;
 

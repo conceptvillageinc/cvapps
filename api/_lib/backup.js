@@ -14,7 +14,7 @@ import JSZip from 'jszip';
 /** 復元するときの順番（親になる表が先）。restore-backup.mjs も同じ順で入れる */
 export const TABLES = [
   'users', 'system_settings', 'clients', 'print_vendors', 'price_masters', 'design_fee_masters', 'faq_items',
-  'invitations', 'recurring_project_templates', 'projects', 'project_tasks', 'estimates',
+  'invitations', 'recurring_project_templates', 'projects', 'task_projects', 'project_tasks', 'task_attachments', 'task_comments', 'notifications', 'estimates',
   'invoices', 'delivery_notes', 'receipts', 'meetings', 'meeting_segments', 'meeting_checklists',
   'email_logs', 'bank_transactions', 'fiscal_targets', 'payees', 'payables', 'card_charges', 'cash_plan_items',
 ];

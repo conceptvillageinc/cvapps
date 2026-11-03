@@ -45,6 +45,12 @@ export default function UserManagement() {
     },
   });
 
+  const updateHoursMutation = useMutation({
+    mutationFn: ({ id, daily_hours }) => db.entities.User.update(id, { daily_hours }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["users"] }); toast.success("1 日の稼働時間を変えました"); },
+    onError: (e) => toast.error("変えられませんでした: " + (e?.message || "")),
+  });
+
   const handleInvite = async () => {
     if (!inviteEmail) return;
     setInviting(true);
@@ -119,6 +125,7 @@ export default function UserManagement() {
                   <TableHead className="text-xs">名前</TableHead>
                   <TableHead className="text-xs">メール</TableHead>
                   <TableHead className="text-xs">権限</TableHead>
+                  <TableHead className="text-xs" title="ワークロードで、この時間を超えた日を薄い赤にします">1 日の稼働時間</TableHead>
                   <TableHead className="text-xs w-32">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -130,8 +137,17 @@ export default function UserManagement() {
                     <TableCell>
                       <Badge variant={u.role === "admin" ? "default" : "secondary"} className="gap-1 text-[10px]">
                         {u.role === "admin" ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                        {u.role === "admin" ? "管理者" : "メンバー"}
+                        {u.role === "admin" ? "管理者" : u.role === "guest" ? "ゲスト（タスクだけ）" : "メンバー"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {isAdmin || u.id === currentUser?.id ? (
+                        <span className="inline-flex items-center gap-1 text-xs">
+                          <input type="number" min="0" max="24" step="0.5" defaultValue={u.daily_hours ?? 8} key={`dh-${u.id}-${u.daily_hours}`} data-testid="daily-hours"
+                            onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0 && v <= 24 && v !== Number(u.daily_hours ?? 8)) updateHoursMutation.mutate({ id: u.id, daily_hours: v }); }}
+                            className="h-7 w-16 rounded border px-1.5 text-right" />時間
+                        </span>
+                      ) : <span className="text-xs text-muted-foreground">{u.daily_hours ?? 8} 時間</span>}
                     </TableCell>
                     <TableCell>
                       {isAdmin ? (
@@ -145,6 +161,7 @@ export default function UserManagement() {
                           <SelectContent>
                             <SelectItem value="admin">管理者</SelectItem>
                             <SelectItem value="user">メンバー</SelectItem>
+                            <SelectItem value="guest">ゲスト</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : (
@@ -181,7 +198,7 @@ export default function UserManagement() {
                 <div key={inv.id} className="flex items-center gap-3 rounded-lg bg-muted/30 px-3 py-2 text-sm">
                   <span className="font-medium">{inv.email}</span>
                   <Badge variant="secondary" className="text-[10px]">
-                    {inv.role === "admin" ? "管理者" : "メンバー"}
+                    {inv.role === "admin" ? "管理者" : inv.role === "guest" ? "ゲスト" : "メンバー"}
                   </Badge>
                   {inv.external && <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100">社外（特別招待）</Badge>}
                   {isAdmin && (
@@ -239,6 +256,7 @@ export default function UserManagement() {
                 <SelectContent>
                   <SelectItem value="admin">管理者</SelectItem>
                   <SelectItem value="user">メンバー</SelectItem>
+                  <SelectItem value="guest">ゲスト（社外の方。担当のタスクと、その案件だけ見られます）</SelectItem>
                 </SelectContent>
               </Select>
             </div>

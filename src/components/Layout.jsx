@@ -1,9 +1,10 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
+import { useInbox } from "@/lib/useInbox";
 import { useAuth } from "@/lib/AuthContext";
 import { useRecurringAlerts } from "@/lib/recurringStatus";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users, Layers, LayoutTemplate,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft, ListTodo, Inbox
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { db } from "@/api/db";
@@ -23,6 +24,8 @@ import {
 
 const navItems = [
   { path: "/", label: "ダッシュボード", icon: LayoutDashboard },
+  { path: "/tasks", label: "タスク", icon: ListTodo, guest: true },
+  { path: "/inbox", label: "受信トレイ", icon: Inbox, guest: true },
   { path: "/meetings", label: "議事録", icon: Mic },
   { path: "/projects", label: "案件一覧", icon: FolderKanban },
   { path: "/clients", label: "クライアント一覧", icon: UserSquare },
@@ -76,8 +79,13 @@ export default function Layout() {
   const { canViewPayables } = usePayablesAccess();
   // 定期売上の要対応（まもなく終了・終了月を過ぎた・見直しの時期）の件数を「定期売上一覧」に出す
   const { count: recurringAlertCount } = useRecurringAlerts();
-  const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : 0);
-  const visibleNav = navItems.filter((item) => !item.restricted || (item.restricted === "cashflow" && canSeeCashflow) || (item.restricted === "payables" && canViewPayables));
+  // 受信トレイの未読（メンション・担当になった・コメント）
+  const { unread: inboxUnread } = useInbox();
+  const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : item.path === "/inbox" ? inboxUnread : 0);
+  // ゲスト（社外の方）は、タスクと受信トレイだけ
+  const isGuest = user?.role === "guest";
+  const visibleNav = navItems.filter((item) => (isGuest ? item.guest : !item.restricted || (item.restricted === "cashflow" && canSeeCashflow) || (item.restricted === "payables" && canViewPayables)));
+  const guestAllowed = ["/tasks", "/inbox", "/profile"].some((p) => location.pathname.startsWith(p));
 
   const handleLogout = () => {
     db.auth.logout("/login");
@@ -105,7 +113,7 @@ export default function Layout() {
         </span>
         <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
         {badgeOf(item) > 0 && (
-          <span className={`ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white ${collapsed ? "lg:hidden" : ""}`} title={`対応が必要な定期売上が ${badgeOf(item)} 件あります`} data-testid="recurring-badge">
+          <span className={`ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white ${collapsed ? "lg:hidden" : ""}`} title={item.path === "/inbox" ? `未読のお知らせが ${badgeOf(item)} 件あります` : `対応が必要な定期売上が ${badgeOf(item)} 件あります`} data-testid={item.path === "/inbox" ? "inbox-badge" : "recurring-badge"}>
             {badgeOf(item)}
           </span>
         )}
@@ -175,8 +183,8 @@ export default function Layout() {
             </>
           )}
 
-          <div className="my-4 border-t border-sidebar-border" />
-          <NavLink item={faqItem} onClick={() => setSidebarOpen(false)} />
+          {!isGuest && <div className="my-4 border-t border-sidebar-border" />}
+          {!isGuest && <NavLink item={faqItem} onClick={() => setSidebarOpen(false)} />}
         </nav>
 
         {/* User section */}
@@ -190,7 +198,7 @@ export default function Layout() {
                 <div className={`flex-1 text-left min-w-0 ${collapsed ? "lg:hidden" : ""}`}>
                   <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.full_name || "ユーザー"}</p>
                   <p className="text-[10px] text-sidebar-foreground/50">
-                    {isAdmin ? "管理者" : "メンバー"}
+                    {isAdmin ? "管理者" : isGuest ? "ゲスト" : "メンバー"}
                     <span className="ml-1.5 opacity-60" title="いま表示されているビルド">
                       build {__BUILD_ID__}
                     </span>
@@ -233,7 +241,7 @@ export default function Layout() {
         {/* Page content */}
         <main ref={mainRef} className="flex-1 overflow-y-auto p-4 lg:p-6">
           <ScrollHoverShield shieldRef={shieldRef} />
-          <PageErrorBoundary resetKey={location.pathname}><Outlet /></PageErrorBoundary>
+          <PageErrorBoundary resetKey={location.pathname}>{isGuest && !guestAllowed ? <Navigate to="/tasks" replace /> : <Outlet />}</PageErrorBoundary>
         </main>
       </div>
     </div>
