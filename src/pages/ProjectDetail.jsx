@@ -568,8 +568,8 @@ export default function ProjectDetail() {
                     <span className="text-[10px] text-muted-foreground w-12 text-right">{format(new Date(e.created_date), "M/d")}</span>
                   </div>
                   {(e.internal_memo || "").trim() && (
-                    // 社内メモ（先頭の数行だけ）
-                    <p className="mt-1 ml-[7.75rem] line-clamp-3 whitespace-pre-line rounded bg-violet-50 px-2 py-1 text-[11px] leading-relaxed text-violet-900" title={e.internal_memo} data-testid="project-estimate-memo">
+                    // 社内メモ（全文）
+                    <p className="mt-1 ml-[7.75rem] whitespace-pre-line break-words rounded bg-violet-50 px-2 py-1 text-[11px] leading-relaxed text-violet-900" data-testid="project-estimate-memo">
                       <span className="mr-1 font-semibold">社内メモ</span>{e.internal_memo.trim()}
                     </p>
                   )}

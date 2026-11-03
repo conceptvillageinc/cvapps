@@ -4,7 +4,7 @@ import { Lock } from "lucide-react";
 /**
  * 見積ごとの社内メモ（大きめの欄）。見積書・プレビュー・PDF・メール・納品書には一切出ない。
  *   例: 社内見積（スプレッドシート）で入れた内容の説明、実際は 2500 冊で印刷したが 3000 冊で請求する、など
- *   案件詳細の見積の欄にも先頭の数行を出す
+ *   案件詳細の見積の欄にも全文を出す
  */
 export default function InternalMemoCard({ estimate, onUpdate }) {
   const ref = useRef(null);
@@ -20,7 +20,7 @@ export default function InternalMemoCard({ estimate, onUpdate }) {
     <div className="rounded-xl border border-violet-200 bg-violet-50/40 px-4 py-3 space-y-2" data-testid="internal-memo">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="flex items-center gap-1.5 text-sm font-semibold text-violet-900"><Lock className="w-4 h-4" /> 社内メモ</span>
-        <span className="text-[11px] text-violet-700">提出物（見積書・プレビュー・PDF・メール・納品書）には出ません。案件詳細の見積の欄にも先頭が出ます</span>
+        <span className="text-[11px] text-violet-700">提出物（見積書・プレビュー・PDF・メール・納品書）には出ません。案件詳細の見積の欄にも全文が出ます</span>
       </div>
       <textarea
         ref={ref}
