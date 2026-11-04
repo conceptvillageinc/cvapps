@@ -18,7 +18,12 @@ import { PROJECT_STATUS_MAP } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { DailyView, NextActionView } from "@/components/projects/ProjectViews";
 import MonthEndView from "@/components/projects/MonthEndView";
-import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
+import { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
+import ProjectDeliveryCell from "@/components/projects/ProjectDeliveryCell";
+import PeriodFilter, { emptyPeriod, inPeriod, periodActive, periodLabel } from "@/components/table/PeriodFilter";
+
+// 期間で絞り込める日付
+const PERIOD_FIELDS = [{ value: "registered_at", label: "登録日" }, { value: "due_date", label: "完了予定" }, { value: "payment_due_date", label: "入金予定" }];
 import { projectDelivery, isDeliveryDue, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
 import RecurringMark from "@/components/projects/RecurringMark";
 import SubsidyMark from "@/components/projects/SubsidyMark";
@@ -47,7 +52,8 @@ const HEAD_LABEL = { client_name: "クライアント／案件名", due_date: "�
 function ProjectCell({ col, p, delivery, today }) {
   switch (col) {
     // 納品・請求（納品書・請求書のつながりから自動。完了予定が今月中か過ぎた未納品は赤）
-    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><DeliveryBadge info={delivery} due={isDeliveryDue(p, today)} /></TableCell>;
+    // 納品・請求: 札を押すと、その場で状態を変えられる（自動／未納品／納品済・未請求／請求済／対象外）
+    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><ProjectDeliveryCell project={p} info={delivery} due={isDeliveryDue(p, today)} /></TableCell>;
     case "project_number": return (
       <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
     );
@@ -126,6 +132,7 @@ export default function ProjectList() {
   // 期の絞り込みは最初「すべての期」（標準・速報デイリーで共通。期を選ぶとその期だけ）
   const [fiscalYear, setFiscalYear] = useState(ALL_YEARS);
   const [search, setSearch] = useState(searchParams.get("q") || "");
+  const [period, setPeriod] = useState(() => emptyPeriod("registered_at")); // 期間（登録日・完了予定・入金予定のどれかで）
   // 既定では進行中・完了の案件を表示する（失注・取消は隠す）
   const [columnFilters, setColumnFilters] = useState({ status: DEFAULT_STATUS_FILTER });
   const [sortConfig, setSortConfig] = useState({ key: "registered_at", direction: "desc" });
@@ -207,6 +214,7 @@ export default function ProjectList() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return projects.filter((p) => {
+      if (!inPeriod(p[period.field], period)) return false;
       if (q) {
         const hay = [p.project_number, p.client_name, p.name, p.notes].filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
@@ -219,7 +227,7 @@ export default function ProjectList() {
       return true;
     });
      
-  }, [projects, search, columnFilters, columnDefs]);
+  }, [projects, search, columnFilters, columnDefs, period]);
 
   // 状態の絞り込みで隠れている案件の数（状態ごと。検索・ほかの列の絞り込みは効かせたうえで数える）
   const hiddenByStatus = useMemo(() => {
@@ -230,12 +238,13 @@ export default function ProjectList() {
     for (const p of projects) {
       const label = columnDefs.status.getValue(p);
       if (selected.includes(label)) continue;
+      if (!inPeriod(p[period.field], period)) continue;
       if (q && ![p.project_number, p.client_name, p.name, p.notes].filter(Boolean).join(" ").toLowerCase().includes(q)) continue;
       if (FILTERABLE_KEYS.some((key) => key !== "status" && columnFilters[key] && !columnFilters[key].includes(columnDefs[key].getValue(p)))) continue;
       counts.set(label, (counts.get(label) || 0) + 1);
     }
     return [...counts.entries()];
-  }, [projects, search, columnFilters, columnDefs]);
+  }, [projects, search, columnFilters, columnDefs, period]);
   const statusIsDefault = sameSet(columnFilters.status, DEFAULT_STATUS_FILTER);
 
   const sorted = useMemo(() => {
@@ -369,12 +378,14 @@ export default function ProjectList() {
           className="pl-9"
         />
       </div>
+      {view === "standard" && <PeriodFilter value={period} onChange={setPeriod} fields={PERIOD_FIELDS} className="-mt-1 shrink-0" />}
 
       {view === "standard" && (
         // 今の条件（期・検索・列の絞り込み・並び順）を 1 行で。色は付けず、× で個別に外せる
         <ConditionsRow className="-mt-2">
           <span>{fiscalYear === ALL_YEARS ? "すべての期" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}</span>
           {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={() => setSearch("")} />}
+          {periodActive(period) && <CondChip label="期間" value={periodLabel(period, PERIOD_FIELDS)} onClear={() => setPeriod(emptyPeriod(period.field))} />}
           {/* 並び順 → 受注確度 → 状態 の順（そのほかの列の絞り込みは間に入る）。札をクリックするとその場で変えられる */}
           <CondChip
             label="並び順"
