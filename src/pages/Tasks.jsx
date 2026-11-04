@@ -228,7 +228,13 @@ function ProjectsView({ data, me, today, onOpen }) {
     const row = await writes.create({ name, internal_project_id: cur.id, project_id: null, assignee_id: me.id, on_schedule: false, parties: [], status: "todo", start_date, end_date, ...movePatch("internal", sectionId, orderAt(g.tasks, g.tasks.length, "internal")) });
     onOpen(row.id);
   };
-  const createProject = async ({ name, color, client_id }) => {
+  const createProject = async ({ name, color, client_id, newClientName }) => {
+    // クライアント一覧に無いクライアントは、ここで登録してから結びつける
+    if (newClientName) {
+      const c = await db.entities.Client.create({ name: newClientName });
+      client_id = c.id;
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    }
     const r = await db.entities.TaskProject.create({ name, color, client_id, sort_order: data.internalProjects.length + 1 });
     qc.setQueryData(["taskProjects"], (old) => [...(old || []), r]);
     qc.invalidateQueries({ queryKey: ["taskProjects"] }); setSel(r.id);

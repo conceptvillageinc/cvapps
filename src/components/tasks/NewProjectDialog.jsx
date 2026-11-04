@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Building2, Layers, Search, Check, Loader2, FolderKanban } from "lucide-react";
+import { Building2, Layers, Search, Check, Loader2, FolderKanban, Plus } from "lucide-react";
 
 export const PROJECT_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#64748b"];
 
@@ -28,6 +28,7 @@ export default function NewProjectDialog({ open, onOpenChange, clients, projects
     return m;
   }, [projects]);
   const existing = useMemo(() => new Map((taskProjects || []).filter((p) => p.client_id && !p.archived).map((p) => [p.client_id, p])), [taskProjects]);
+  const sameName = (n) => (taskProjects || []).some((p) => !p.archived && p.client_id === client?.id && p.name.trim() === n.trim());
   const list = useMemo(() => {
     const k = q.trim().toLowerCase();
     return (clients || [])
@@ -38,11 +39,13 @@ export default function NewProjectDialog({ open, onOpenChange, clients, projects
 
   const pick = (c) => { setClient(c); setName(c.name || ""); };
   const dup = client ? existing.get(client.id) : null;
-  const canCreate = kind === "client" ? !!client && !!name.trim() && !dup : !!name.trim();
+  // 同じクライアントのプロジェクトがすでにあっても、名前を変えれば 2 つめを作れる（同じ名前は作らない）
+  const newClient = client?._new; // クライアント一覧に無い名前（作るときにクライアントも登録する）
+  const canCreate = kind === "client" ? !!client && !!name.trim() && !sameName(name) : !!name.trim();
   const submit = async () => {
     if (!canCreate || busy) return;
     setBusy(true);
-    try { await onCreate({ name: name.trim(), color, client_id: kind === "client" ? client.id : null }); onOpenChange(false); }
+    try { await onCreate({ name: name.trim(), color, client_id: kind === "client" && !newClient ? client.id : null, newClientName: kind === "client" && newClient ? client.name : null }); onOpenChange(false); }
     catch (e) { toast.error("作れませんでした: " + (e?.message || "")); }
     finally { setBusy(false); }
   };
@@ -56,7 +59,7 @@ export default function NewProjectDialog({ open, onOpenChange, clients, projects
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg" data-testid="new-project-dialog">
+      <DialogContent className="max-w-lg [&>*]:min-w-0" data-testid="new-project-dialog">
         <DialogHeader>
           <DialogTitle>新規プロジェクト</DialogTitle>
           <DialogDescription>プロジェクトはメンバー全員に共有されます</DialogDescription>
@@ -64,7 +67,7 @@ export default function NewProjectDialog({ open, onOpenChange, clients, projects
         <div className="space-y-3">
           <div className="flex gap-2">
             <Tab value="client" icon={Building2} label="クライアントで作る" sub="そのクライアントの案件とタスクがまとまります" />
-            <Tab value="internal" icon={Layers} label="社内で作る" sub="校正・入稿・発注・請求・売上 など" />
+            <Tab value="internal" icon={Layers} label="社内プロジェクトを作る" sub="校正・入稿・発注・請求・売上 など" />
           </div>
 
           {kind === "client" ? (
@@ -74,28 +77,37 @@ export default function NewProjectDialog({ open, onOpenChange, clients, projects
                 <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="クライアント名・ふりがなで探す" className="h-9 w-full rounded-lg border pl-8 pr-2 text-sm" data-testid="np-search" />
               </div>
               <div className="max-h-56 overflow-y-auto rounded-lg border divide-y">
-                {list.length === 0 && <p className="px-3 py-4 text-center text-xs text-slate-400">見つかりません（クライアント一覧に登録してから作れます）</p>}
+                {list.length === 0 && !q.trim() && <p className="px-3 py-4 text-center text-xs text-slate-400">クライアントがまだありません</p>}
+                {/* クライアント一覧に無いときは、その名前でクライアントも登録して作れる */}
+                {q.trim() && !(clients || []).some((c) => c.name === q.trim()) && (
+                  <button type="button" onClick={() => { setClient({ id: "__new__", name: q.trim(), _new: true }); setName(q.trim()); }} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${newClient ? "bg-primary/5" : "hover:bg-slate-50"}`} data-testid="np-new-client">
+                    <span className="w-4">{newClient ? <Check className="w-4 h-4 text-primary" /> : <Plus className="w-4 h-4 text-primary" />}</span>
+                    <span className="min-w-0 flex-1 truncate">「{q.trim()}」を新しいクライアントとして登録して作る</span>
+                  </button>
+                )}
                 {list.map((c) => {
                   const n = openCount.get(c.id) || 0; const ex = existing.get(c.id);
                   return (
                     <button key={c.id} type="button" onClick={() => pick(c)} className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${client?.id === c.id ? "bg-primary/5" : "hover:bg-slate-50"}`} data-testid="np-client">
                       <span className="w-4">{client?.id === c.id && <Check className="w-4 h-4 text-primary" />}</span>
-                      <span className="flex-1 truncate">{c.name}</span>
+                      <span className="min-w-0 flex-1 truncate">{c.name}</span>
                       {ex ? <span className="text-[10px] text-slate-400">プロジェクトあり</span> : n > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-700"><FolderKanban className="w-3 h-3" />進行中の案件 {n}</span>}
                     </button>
                   );
                 })}
               </div>
               {dup && (
-                <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  「{client.name}」のプロジェクトはもうあります
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="np-dup">
+                  「{client.name}」のプロジェクト（{dup.name}）はもうあります。別のプロジェクトにするときは、下で名前を変えてください
                   <Button size="sm" variant="outline" className="ml-auto h-7 text-xs bg-white" onClick={() => { onOpenExisting(dup); onOpenChange(false); }}>そのプロジェクトを開く</Button>
                 </div>
               )}
-              {client && !dup && (
+              {client && (
                 <label className="block space-y-1">
-                  <span className="block text-xs text-slate-500">プロジェクト名（最初はクライアント名。あとで変えられます）</span>
+                  <span className="block text-xs text-slate-500">プロジェクト名（最初はクライアント名。「{client.name} 2026年リニューアル」のように自由に変えられます）</span>
                   <input value={name} onChange={(e) => setName(e.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm" data-testid="np-name" />
+                  {sameName(name) && <span className="block text-[11px] text-rose-600">同じ名前のプロジェクトがあります。名前を変えてください</span>}
+                  {newClient && <span className="block text-[11px] text-slate-500">作ると「{client.name}」をクライアント一覧にも登録します（住所などはあとからクライアント一覧で入れられます）</span>}
                 </label>
               )}
             </div>
