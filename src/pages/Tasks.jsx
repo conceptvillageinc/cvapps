@@ -204,7 +204,8 @@ function InternalProjectsView({ data, me, today, onOpen }) {
 const TABS = [
   { key: "my", label: "マイタスク", icon: ListTodo, path: "/tasks" },
   { key: "internal", label: "社内プロジェクト", icon: Layers, path: "/tasks?tab=internal" },
-  { key: "workload", label: "ワークロード", icon: BarChart3, path: "/workload" },
+  // タブからはこの画面の中で切り替える（サイドバーの「ワークロード」は /workload を開く）
+  { key: "workload", label: "ワークロード", icon: BarChart3, path: "/tasks?tab=workload" },
 ];
 
 /**
@@ -218,7 +219,7 @@ export default function Tasks() {
   const data = useTaskData();
   const today = todayYmd();
   const isGuest = user?.role === "guest";
-  const tab = isGuest ? "my" : location.pathname.startsWith("/workload") ? "workload" : params.get("tab") === "internal" ? "internal" : "my";
+  const tab = isGuest ? "my" : location.pathname.startsWith("/workload") || params.get("tab") === "workload" ? "workload" : params.get("tab") === "internal" ? "internal" : "my";
   const taskId = params.get("task");
   const openTask = (id) => { const n = new URLSearchParams(params); if (id) n.set("task", id); else n.delete("task"); setParams(n); };
   const me = useMemo(() => data.byId.users.get(user?.id) || user || {}, [data.byId, user]);

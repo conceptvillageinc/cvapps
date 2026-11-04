@@ -96,8 +96,9 @@ export function myGroupOf(t, today) {
 
 /** 自分のタスク（担当が自分。完了を出すかは showDone） */
 export function myTasks(tasks, uid, { showDone = false } = {}) {
+  // 担当者が入っていない工程表の工程は、担当の CV メンバー（member_ids）のタスクとして出す
   return (tasks || [])
-    .filter((t) => t.assignee_id === uid && (showDone || !t.completed))
+    .filter((t) => assigneesOf(t).includes(uid) && (showDone || !t.completed))
     .sort((a, b) => String(dueOf(a) || "9999").localeCompare(String(dueOf(b) || "9999")) || String(a.created_at || "").localeCompare(String(b.created_at || "")));
 }
 
