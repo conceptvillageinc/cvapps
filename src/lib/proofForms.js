@@ -28,8 +28,11 @@ export const PROOF_QUESTIONS = [
   { id: "note", type: "paragraph", label: "修正内容・ご連絡事項", required: false, help: "修正をご希望の場合は、該当箇所と修正内容をご記入ください。" },
 ];
 
-/** 送信後のメッセージ（電話番号は会社の電話番号を入れる） */
-export const proofConfirmMessage = (tel = "000-000-0000") => [
+/** 校了フォームの問い合わせ先の電話番号 */
+export const PROOF_TEL = "070-2011-0831";
+
+/** 送信後のメッセージ */
+export const proofConfirmMessage = (tel = PROOF_TEL) => [
   "ご確認ありがとうございました。",
   "「校了します」をご選択いただいた場合は、こちらの内容をもって印刷・製造へ進行いたします。",
   `修正がございましたら大変お手数ではございますが、TEL:${tel}までお電話をいただけますと幸いです。`,

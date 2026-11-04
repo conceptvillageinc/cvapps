@@ -5,7 +5,6 @@ import { db } from "@/api/db";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Search, Check, Loader2, FolderKanban, FileText, Copy, ExternalLink, ChevronLeft } from "lucide-react";
-import { COMPANY_INFO } from "@/lib/constants";
 import { PROOF_TITLE, PROOF_DESCRIPTION, PROOF_QUESTIONS, proofConfirmMessage, QUESTION_TYPE_LABEL, newProofToken } from "@/lib/proofForms";
 import { submissionOf, SUBMISSION_STATUS } from "@/lib/submission";
 
@@ -31,7 +30,7 @@ export default function NewProofFormDialog({ open, onOpenChange }) {
   const [picked, setPicked] = useState(new Set());
   const [title, setTitle] = useState(PROOF_TITLE);
   const [description, setDescription] = useState(PROOF_DESCRIPTION);
-  const [confirm, setConfirm] = useState(proofConfirmMessage(COMPANY_INFO.tel));
+  const [confirm, setConfirm] = useState(proofConfirmMessage());
   const [created, setCreated] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -41,7 +40,7 @@ export default function NewProofFormDialog({ open, onOpenChange }) {
   useEffect(() => {
     if (!open) return;
     setStep(0); setQ(""); setEstimate(null); setPicked(new Set()); setCreated(null);
-    setTitle(PROOF_TITLE); setDescription(PROOF_DESCRIPTION); setConfirm(proofConfirmMessage(COMPANY_INFO.tel));
+    setTitle(PROOF_TITLE); setDescription(PROOF_DESCRIPTION); setConfirm(proofConfirmMessage());
     setProject(null);
   }, [open]);
 
