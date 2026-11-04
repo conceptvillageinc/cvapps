@@ -83,7 +83,7 @@ export default function Layout() {
   const { count: recurringAlertCount } = useRecurringAlerts();
   // 受信トレイの未読（メンション・担当になった・コメント）
   const { unread: inboxUnread } = useInbox();
-  // 未入金の請求書（請求書一覧の「未入金」と同じ。送付済・下書き）の件数を「入金確認」に出す
+  // 未入金の請求書（送付済でまだ入金されていないもの。下書きは数えない）の件数を「入金確認」に出す
   const unpaidInvoiceCount = useUnpaidInvoiceCount({ enabled: user?.role !== "guest" });
   const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : item.path === "/inbox" ? inboxUnread : item.path === "/payments" ? unpaidInvoiceCount : 0);
   const badgeTitle = (item) => (item.path === "/inbox" ? `未読のお知らせが ${badgeOf(item)} 件あります` : item.path === "/payments" ? `未入金の請求書が ${badgeOf(item)} 件あります` : `対応が必要な定期売上が ${badgeOf(item)} 件あります`);
