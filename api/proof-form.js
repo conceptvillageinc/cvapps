@@ -1,5 +1,5 @@
 import { requirePost, adminClient } from './_lib/guard.js';
-import { validateAnswers, resultOf } from '../src/lib/proofForms.js';
+import { validateAnswers, resultOf, PROOF_BADGE_KIND, PROOF_BADGE_EXCLUDED_EMAILS } from '../src/lib/proofForms.js';
 
 // ============================================================================
 // POST /api/proof-form（ログイン不要。クライアントが校了フォームを開いて回答する）
@@ -59,17 +59,26 @@ async function submit(req, res, body) {
   }).select('id').single();
   if (error) throw error;
 
-  // 作った人の受信トレイに知らせる（失敗しても回答は受け付ける）
-  if (form.created_by) {
-    const who = [textOf('company'), textOf('person')].filter(Boolean).join(' ');
-    await admin.from('notifications').insert({
-      user_id: form.created_by,
-      kind: 'proof_form',
-      title: `${form.project_name || form.title}（${result === 'approved' ? '校了' : result === 'revise' ? '修正希望' : '回答'}）`,
-      body: `${who ? `${who} 様から` : ''}校了フォームに回答がありました${textOf('note') ? `\n${textOf('note').slice(0, 200)}` : ''}`,
-      link: `/proof-forms?form=${form.id}`,
-    }).then(() => null, (e) => console.warn('[api/proof-form] notify', e));
-  }
+  // お知らせ（失敗しても回答は受け付ける）
+  //   作った人 … 受信トレイ（kind: proof_form）
+  //   ほかのメンバー（ゲストと PROOF_BADGE_EXCLUDED_EMAILS の人を除く）… サイドバーの件数だけ（kind: proof_form_badge）
+  const who = [textOf('company'), textOf('person')].filter(Boolean).join(' ');
+  const notice = {
+    title: `${form.project_name || form.title}（${result === 'approved' ? '校了' : result === 'revise' ? '修正希望' : '回答'}）`,
+    body: `${who ? `${who} 様から` : ''}校了フォームに回答がありました${textOf('note') ? `\n${textOf('note').slice(0, 200)}` : ''}`,
+    link: `/proof-forms?form=${form.id}`,
+  };
+  try {
+    const { data: members } = await admin.from('users').select('id, email, role');
+    const excluded = new Set(PROOF_BADGE_EXCLUDED_EMAILS.map((e) => e.toLowerCase()));
+    const rows = [];
+    if (form.created_by) rows.push({ ...notice, user_id: form.created_by, kind: 'proof_form' });
+    for (const m of members || []) {
+      if (m.id === form.created_by || m.role === 'guest' || excluded.has(String(m.email || '').toLowerCase())) continue;
+      rows.push({ ...notice, user_id: m.id, kind: PROOF_BADGE_KIND });
+    }
+    if (rows.length) { const { error: nErr } = await admin.from('notifications').insert(rows); if (nErr) throw nErr; }
+  } catch (e) { console.warn('[api/proof-form] notify', e); }
   res.status(200).json({ ok: true, id: saved.id, result, confirm_message: form.confirm_message || '' });
 }
 

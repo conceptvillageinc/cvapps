@@ -80,6 +80,15 @@ export function resultOf(questions, answers) {
 
 export const RESULT_LABEL = { approved: "校了", revise: "修正希望" };
 
+/**
+ * 回答のお知らせ
+ *   作った人 … 受信トレイ＋サイドバーの件数（kind: proof_form）
+ *   ほかのメンバー … サイドバー「校了フォーム登録」の件数だけ（kind: proof_form_badge。受信トレイには出さない）
+ *   ここに並べたアドレスの人には、サイドバーの件数を出さない
+ */
+export const PROOF_BADGE_KIND = "proof_form_badge";
+export const PROOF_BADGE_EXCLUDED_EMAILS = ["ryota.y@concept-village.co.jp"]; // 山根さん
+
 /** 推測できない URL 用の文字（24 文字） */
 export function newProofToken() {
   const bytes = new Uint8Array(18);

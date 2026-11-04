@@ -40,7 +40,7 @@ export default function ProofForms() {
   }, [forms, q]);
   const openId = params.get("form");
   const openForm = forms.find((f) => f.id === openId) || null;
-  const { items: notices } = useInbox();
+  const { all: notices } = useInbox();
   // 回答を開いたら、そのフォームの回答のお知らせを既読にする（受信トレイとサイドバーの件数が減る）
   useEffect(() => {
     if (!openForm) return;

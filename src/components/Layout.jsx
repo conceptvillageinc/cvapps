@@ -13,6 +13,7 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { usePayablesAccess } from "@/lib/usePayablesAccess";
 import { useSalesCategories } from "@/lib/salesCategory";
 import { APP_NAME, APP_SUBTITLE } from "@/lib/constants";
+import { PROOF_BADGE_EXCLUDED_EMAILS } from "@/lib/proofForms";
 import RecordingBar from "@/components/meetings/RecordingBar";
 import { useScrollHoverPause, ScrollHoverShield } from "@/hooks/use-smooth-scroll";
 import PageErrorBoundary from "@/components/PageErrorBoundary";
@@ -86,7 +87,8 @@ export default function Layout() {
   const { unread: inboxUnread, proofUnread } = useInbox();
   // 未入金の請求書（送付済でまだ入金されていないもの。下書きは数えない）の件数を「入金確認」に出す
   const unpaidInvoiceCount = useUnpaidInvoiceCount({ enabled: user?.role !== "guest" });
-  const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : item.path === "/inbox" ? inboxUnread : item.path === "/payments" ? unpaidInvoiceCount : item.path === "/proof-forms" ? proofUnread : 0);
+  const proofBadge = PROOF_BADGE_EXCLUDED_EMAILS.includes(String(user?.email || "").toLowerCase()) ? 0 : proofUnread;
+  const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : item.path === "/inbox" ? inboxUnread : item.path === "/payments" ? unpaidInvoiceCount : item.path === "/proof-forms" ? proofBadge : 0);
   const badgeTitle = (item) => (item.path === "/inbox" ? `未読のお知らせが ${badgeOf(item)} 件あります` : item.path === "/proof-forms" ? `まだ見ていない校了フォームの回答が ${badgeOf(item)} 件あります` : item.path === "/payments" ? `未入金の請求書が ${badgeOf(item)} 件あります` : `対応が必要な定期売上が ${badgeOf(item)} 件あります`);
   // ゲスト（社外の方）は、タスクと受信トレイだけ
   const isGuest = user?.role === "guest";
