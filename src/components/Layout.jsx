@@ -25,6 +25,7 @@ import {
 const navItems = [
   { path: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { path: "/tasks", label: "タスク", icon: ListTodo, guest: true },
+  { path: "/workload", label: "ワークロード", icon: BarChart3 },
   { path: "/inbox", label: "受信トレイ", icon: Inbox, guest: true },
   { path: "/meetings", label: "議事録", icon: Mic },
   { path: "/projects", label: "案件一覧", icon: FolderKanban },

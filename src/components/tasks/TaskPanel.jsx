@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Layers, ChevronDown, Send, FileImage, ScanEye } from "lucide-react";
+import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Layers, ChevronDown, Send, FileImage, ScanEye, UserRound, CalendarDays, Flag, CircleDot, Timer, AlignLeft, ListChecks, MessageSquare } from "lucide-react";
 import { PRIORITY, REVIEW_STATUS, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel } from "@/lib/tasks";
 import { useTaskWrites, TASK_TEMPLATES } from "@/lib/useTaskData";
 import { UserAvatar, TaskCheck, TaskPlaceChip, PinBadge, DueLabel } from "@/components/tasks/parts";
@@ -14,10 +14,12 @@ import ProofViewer, { useAttachmentImage } from "@/components/tasks/ProofViewer"
 
 const fmtAt = (s) => { if (!s) return ""; const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
+const FIELD_ICONS = { 担当者: UserRound, 期日: CalendarDays, 紐づけ先: FolderKanban, 優先度: Flag, 確認の状態: CircleDot, 作業時間数: Timer };
 function Field({ label, children }) {
+  const Icon = FIELD_ICONS[label];
   return (
-    <div className="grid grid-cols-[6.5rem_1fr] items-center gap-2 min-h-8">
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="grid grid-cols-[7.5rem_1fr] items-center gap-2 min-h-9 rounded-lg px-1 -mx-1 hover:bg-slate-50">
+      <span className="flex items-center gap-1.5 text-xs text-slate-500">{Icon && <Icon className="w-3.5 h-3.5 text-slate-400" />}{label}</span>
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -211,15 +213,16 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-          {parent && <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => onOpenTask(parent.id)}>← {parent.name}（親タスク）</button>}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {/* 紐づけ先（パンくず） */}
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-500"><TaskPlaceChip task={parent || task} byId={byId} />{parent && <><span>›</span><button type="button" className="hover:underline" onClick={() => onOpenTask(parent.id)}>{parent.name}</button></>}</div>
           <textarea value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== task.name && save({ name: name.trim() })} rows={1}
             className={`w-full resize-none text-xl font-bold leading-snug focus:outline-none rounded px-1 -mx-1 hover:bg-muted/40 ${task.completed ? "line-through text-muted-foreground" : ""}`} data-testid="task-name" />
 
           <div className="space-y-1.5">
             <Field label="担当者">
               <div className="flex items-center gap-2">
-              <select value={task.assignee_id || ""} onChange={(e) => save({ assignee_id: e.target.value || null })} className="h-8 rounded border px-2 text-sm" data-testid="task-assignee">
+              <select value={task.assignee_id || ""} onChange={(e) => save({ assignee_id: e.target.value || null, my_section_id: null, my_sort_order: null })} /* 担当が変わったら、新しい担当者の「新しく割り当てられたタスク」に入る */ className="h-8 rounded border px-2 text-sm" data-testid="task-assignee">
                 <option value="">（担当者なし）</option>
                 {users.map((u) => <option key={u.id} value={u.id}>{userLabel(u)}{u.role === "guest" ? "（ゲスト）" : ""}</option>)}
               </select>
@@ -257,7 +260,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
 
           <section className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">説明</h3>
+              <h3 className="flex items-center gap-1.5 text-sm font-bold text-slate-800"><AlignLeft className="w-4 h-4 text-slate-400" />説明</h3>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><button type="button" className="text-[11px] text-primary hover:underline" data-testid="task-template">ひな形を使う</button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -271,7 +274,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
 
           <section className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">添付（{attachments.length}）</h3>
+              <h3 className="flex items-center gap-1.5 text-sm font-bold text-slate-800"><Paperclip className="w-4 h-4 text-slate-400" />添付<span className="text-xs font-normal text-slate-400">{attachments.length}</span></h3>
               <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}ファイルを添付</Button>
               <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,application/pdf" className="hidden" onChange={(e) => { upload([...e.target.files]); e.target.value = ""; }} />
             </div>
@@ -281,7 +284,9 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
           </section>
 
           <section className="space-y-1">
-            <h3 className="text-sm font-semibold">サブタスク（{subs.filter((s) => s.completed).length}/{subs.length}）</h3>
+            <h3 className="flex items-center gap-1.5 text-sm font-bold text-slate-800"><ListChecks className="w-4 h-4 text-slate-400" />サブタスク<span className="text-xs font-normal text-slate-400">{subs.filter((s) => s.completed).length}/{subs.length}</span>
+              {subs.length > 0 && <span className="ml-2 h-1.5 w-24 rounded-full bg-slate-100 overflow-hidden"><span className="block h-full bg-emerald-500" style={{ width: `${Math.round((subs.filter((s) => s.completed).length / subs.length) * 100)}%` }} /></span>}
+            </h3>
             <ul className="divide-y rounded-lg border">
               {subs.map((s) => (
                 <li key={s.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/40" data-testid="subtask-row">
@@ -301,7 +306,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
           </section>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold">コメント（{comments.length}）</h3>
+            <h3 className="flex items-center gap-1.5 text-sm font-bold text-slate-800"><MessageSquare className="w-4 h-4 text-slate-400" />コメント<span className="text-xs font-normal text-slate-400">{comments.length}</span></h3>
             <ul className="space-y-3">
               {comments.map((c) => {
                 const a = byId.users.get(c.author_id);

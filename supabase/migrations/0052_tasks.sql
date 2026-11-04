@@ -14,13 +14,16 @@
 --     description（説明）、parent_task_id（サブタスクの親）、pin（校正のピン {attachment_id, page, x, y, no}）
 --     project_id は空でもよくする（社内プロジェクト・マイタスクのため）
 --   task_projects     … 社内プロジェクト（校正・入稿・発注・請求・売上、新規案件対応、CV_topics など）
+--   task_sections     … リストの見出し（セクション）。マイタスクは利用者ごと（本人だけが見る）、社内プロジェクトはプロジェクトごと
+--                       タスクは my_section_id / my_sort_order（担当者のマイタスクでの場所）と
+--                       section_id / section_sort_order（社内プロジェクトでの場所）を持つ
 --   task_comments     … タスクのコメント（@メンションは mentions に利用者の id）
 --   task_attachments  … タスクの添付（画像・PDF。ファイルは Storage の uploads/tasks/<タスクid>/…）
 --   notifications     … 受信トレイ（メンション・担当になった・コメント）。トリガーで入れる
 --   users.daily_hours … 1 日の稼働時間（ワークロードで超えた日を薄い赤にする。既定 8 時間）
 --   users.role に guest（社外の方）を足す。is_app_member() は guest を含めない（ほかの表は今までどおり CV のメンバーだけ）
 --
--- 冪等。Supabase の SQL Editor に貼り付けて実行する。最後の SELECT で 6 行出れば完了。
+-- 冪等。Supabase の SQL Editor に貼り付けて実行する。最後の SELECT で 7 行出れば完了。
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -158,6 +161,41 @@ create policy task_projects_guest_select on public.task_projects
 drop policy if exists projects_guest_select on public.projects;
 create policy projects_guest_select on public.projects
   for select to authenticated using (public.is_guest() and exists (select 1 from public.project_tasks t where t.project_id = projects.id));
+
+-- ----------------------------------------------------------------------------
+-- セクション（リストの見出し。名前・並び順は自由に変えられる）
+-- ----------------------------------------------------------------------------
+create table if not exists public.task_sections (
+  id                  uuid primary key default gen_random_uuid(),
+  kind                text not null check (kind in ('my', 'internal')),
+  user_id             uuid references public.users (id) on delete cascade,
+  internal_project_id uuid references public.task_projects (id) on delete cascade,
+  name                text not null,
+  sort_order          numeric not null default 0,
+  collapsed           boolean not null default false,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now(),
+  constraint task_sections_owner check ((kind = 'my' and user_id is not null) or (kind = 'internal' and internal_project_id is not null))
+);
+create index if not exists task_sections_user_idx on public.task_sections (user_id, sort_order) where kind = 'my';
+create index if not exists task_sections_project_idx on public.task_sections (internal_project_id, sort_order) where kind = 'internal';
+drop trigger if exists task_sections_set_updated_at on public.task_sections;
+create trigger task_sections_set_updated_at before update on public.task_sections
+  for each row execute function public.set_updated_at();
+
+alter table public.project_tasks add column if not exists my_section_id      uuid references public.task_sections (id) on delete set null;
+alter table public.project_tasks add column if not exists my_sort_order      numeric;
+alter table public.project_tasks add column if not exists section_id         uuid references public.task_sections (id) on delete set null;
+alter table public.project_tasks add column if not exists section_sort_order numeric;
+
+alter table public.task_sections enable row level security;
+-- マイタスクの見出しは本人だけ（ゲストも自分の見出しは持てる）。社内プロジェクトの見出しは CV のメンバー
+drop policy if exists task_sections_my on public.task_sections;
+create policy task_sections_my on public.task_sections
+  for all to authenticated using (kind = 'my' and user_id = auth.uid()) with check (kind = 'my' and user_id = auth.uid());
+drop policy if exists task_sections_internal on public.task_sections;
+create policy task_sections_internal on public.task_sections
+  for all to authenticated using (kind = 'internal' and public.is_app_member()) with check (kind = 'internal' and public.is_app_member());
 
 -- ----------------------------------------------------------------------------
 -- 添付・コメント
@@ -305,8 +343,9 @@ create trigger project_tasks_notify_assigned after insert or update of assignee_
 -- 項目を足したことを、Supabase（PostgREST）にすぐ読み直させる
 notify pgrst, 'reload schema';
 
--- 確認: 次の 6 行（足した表・項目）が出れば完了
+-- 確認: 次の 7 行（足した表・項目）が出れば完了
 select 'task_projects' as name, count(*)::text as info from information_schema.tables where table_schema = 'public' and table_name = 'task_projects'
+union all select 'task_sections', count(*)::text from information_schema.tables where table_schema = 'public' and table_name = 'task_sections'
 union all select 'task_comments', count(*)::text from information_schema.tables where table_schema = 'public' and table_name = 'task_comments'
 union all select 'task_attachments', count(*)::text from information_schema.tables where table_schema = 'public' and table_name = 'task_attachments'
 union all select 'notifications', count(*)::text from information_schema.tables where table_schema = 'public' and table_name = 'notifications'

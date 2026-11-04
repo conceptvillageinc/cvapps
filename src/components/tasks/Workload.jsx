@@ -37,11 +37,16 @@ export default function Workload({ data, today, onOpenTask }) {
         <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setFrom(addDays(from, 7))}><ChevronRight className="w-3.5 h-3.5" /></Button>
         <span className="text-muted-foreground">{md(from)}〜{md(to)}　数字は 1 日の作業時間の合計（期間の営業日に均等に割り振り）。1 日の稼働時間を超えた日は<span className="mx-1 rounded bg-rose-100 px-1 text-rose-700">薄い赤</span>。自分だけのタスクは数えません</span>
       </div>
-      <div className="overflow-x-auto rounded-lg border bg-white">
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-5 rounded bg-sky-50 ring-1 ring-sky-100" />作業あり</span>
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-5 rounded bg-amber-50 ring-1 ring-amber-100" />稼働時間の 75% 以上</span>
+        <span className="inline-flex items-center gap-1"><span className="h-3 w-5 rounded bg-rose-100 ring-1 ring-rose-200" />稼働時間を超えた</span>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="text-xs border-collapse" style={{ minWidth: 220 + days.length * DAY_W }}>
           <thead>
             <tr className="bg-muted/40">
-              <th className="sticky left-0 z-10 bg-slate-50 w-56 min-w-56 px-3 py-1.5 text-left font-medium">メンバー（1 日の稼働時間）</th>
+              <th className="sticky left-0 z-10 bg-slate-50 w-64 min-w-64 px-3 py-1.5 text-left font-medium">メンバー（この期間の稼働率）</th>
               {days.map((d) => { const i = dayInfo(d, companyHolidays); return (
                 <th key={d} style={{ width: DAY_W, minWidth: DAY_W }} className={`py-1 font-normal border-l ${i.off ? "bg-slate-100 text-slate-400" : ""} ${d === today ? "text-primary font-bold" : ""}`}>
                   {(i.day === 1 || d === from) && <div className="text-[9px] text-muted-foreground">{i.month}月</div>}{i.day}<div className="text-[9px]">{i.weekday}</div>
@@ -58,16 +63,25 @@ export default function Workload({ data, today, onOpenTask }) {
               return (
                 <Fragment key={u.id}>
                   <tr className="border-t" data-testid="workload-member">
-                    <td className="sticky left-0 z-10 bg-white px-2 py-1.5">
+                    <td className="sticky left-0 z-10 bg-white px-2 py-2 w-64 min-w-64">
                       <button type="button" className="flex items-center gap-1.5 w-full text-left" onClick={() => toggle(u.id)}>
                         {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <Caret className="w-3.5 h-3.5 text-muted-foreground" />}
-                        <UserAvatar user={u} size={22} /><span className="font-medium truncate">{userLabel(u)}</span>
-                        <span className="ml-auto text-[10px] text-muted-foreground">{cap}h</span>
+                        <UserAvatar user={u} size={26} />
+                        <span className="flex-1 min-w-0">
+                          <span className="flex items-center gap-1"><span className="font-semibold truncate">{userLabel(u)}</span><span className="ml-auto text-[10px] text-muted-foreground">1日 {cap}h</span></span>
+                          {/* 表示している期間の合計と、稼働できる時間（営業日 × 1 日の稼働時間）に対する割合 */}
+                          {(() => { const total = Object.values(row?.total || {}).reduce((a, b) => a + b, 0); const capTotal = cap * days.filter((d) => !dayInfo(d, companyHolidays).off).length; const ratio = capTotal ? total / capTotal : 0; return (
+                            <span className="mt-0.5 flex items-center gap-1.5" title={`この期間 ${fmtH(total) || 0}h／稼働できる時間 ${capTotal}h`}>
+                              <span className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden"><span className={`block h-full rounded-full ${ratio > 1 ? "bg-rose-500" : ratio > 0.75 ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }} /></span>
+                              <span className="text-[10px] tabular-nums text-slate-500">{Math.round(ratio * 100)}%</span>
+                            </span>); })()}
+                        </span>
                       </button>
                     </td>
                     {days.map((d) => {
                       const h = row?.total[d] || 0; const over = h > cap + 1e-9; const off = dayInfo(d, companyHolidays).off;
-                      return <td key={d} className={`border-l text-center tabular-nums ${over ? "bg-rose-100 text-rose-700 font-semibold" : off ? "bg-slate-50" : ""}`} data-over={over ? "1" : undefined}>{fmtH(h)}</td>;
+                      const busy = !over && h > 0 && h >= cap * 0.75;
+                      return <td key={d} className={`border-l text-center tabular-nums ${over ? "bg-rose-100 text-rose-700 font-semibold" : busy ? "bg-amber-50 text-amber-800" : h > 0 ? "bg-sky-50/60 text-slate-700" : off ? "bg-slate-50" : ""}`} data-over={over ? "1" : undefined}>{fmtH(h)}</td>;
                     })}
                   </tr>
                   {isOpen && [...groups.entries()].map(([k, items]) => (
