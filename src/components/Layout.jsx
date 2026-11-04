@@ -25,9 +25,9 @@ import {
 
 const navItems = [
   { path: "/", label: "ダッシュボード", icon: LayoutDashboard },
-  { path: "/tasks", label: "タスク", icon: ListTodo, guest: true },
-  { path: "/workload", label: "ワークロード", icon: BarChart3 },
-  { path: "/inbox", label: "受信トレイ", icon: Inbox, guest: true },
+  { path: "/tasks", label: "タスク", icon: ListTodo, guest: true, trial: true },
+  { path: "/workload", label: "ワークロード", icon: BarChart3, trial: true },
+  { path: "/inbox", label: "受信トレイ", icon: Inbox, guest: true, trial: true },
   { path: "/meetings", label: "議事録", icon: Mic },
   { path: "/projects", label: "案件一覧", icon: FolderKanban },
   { path: "/clients", label: "クライアント一覧", icon: UserSquare },
@@ -117,6 +117,10 @@ export default function Layout() {
           {badgeOf(item) > 0 && collapsed && <span className="absolute -top-1 -right-1 hidden lg:block h-2 w-2 rounded-full bg-red-500" />}
         </span>
         <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
+        {/* 試しに使っている機能（trial: true）に「試用版」の印 */}
+        {item.trial && (
+          <span className={`shrink-0 rounded border px-1 py-px text-[9px] font-semibold leading-tight ${isActive ? "border-white/50 text-white/90" : "border-amber-400/50 bg-amber-400/10 text-amber-300"} ${collapsed ? "lg:hidden" : ""}`} data-testid="trial-badge">試用版</span>
+        )}
         {badgeOf(item) > 0 && (
           <span className={`ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white ${collapsed ? "lg:hidden" : ""}`} title={badgeTitle(item)} data-testid={item.path === "/inbox" ? "inbox-badge" : item.path === "/payments" ? "payments-badge" : "recurring-badge"}>
             {badgeOf(item)}
