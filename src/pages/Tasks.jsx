@@ -248,6 +248,18 @@ function ProjectsView({ data, me, today, onOpen }) {
       <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: p.color || "#8b5cf6" }} /><span className="flex-1 truncate">{p.name}</span><span className="text-[10px] text-slate-400">{countOf(p)}</span>
     </button>
   );
+  // まだ 1 つも無いときは、画面のまん中に「新規プロジェクト」を出す
+  if (active.length === 0) return (
+    <div className="flex justify-center pt-10" data-testid="projects-empty">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <span className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Layers className="w-6 h-6" /></span>
+        <p className="text-base font-bold text-slate-800">プロジェクトはまだありません</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">クライアントで作ると、そのクライアントの案件とタスクがまとまります。<br />校正・入稿・発注・請求・売上 などは「社内プロジェクト」で作れます</p>
+        <Button className="mt-5 w-full gap-1" onClick={() => setNpOpen(true)} data-testid="internal-project-add"><Plus className="w-4 h-4" />新規プロジェクト</Button>
+      </div>
+      <NewProjectDialog open={npOpen} onOpenChange={setNpOpen} clients={data.clients} projects={data.projects} taskProjects={data.internalProjects} onCreate={createProject} onOpenExisting={(p) => setSel(p.id)} />
+    </div>
+  );
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[15rem_1fr] gap-4">
       <aside className="rounded-xl border border-slate-200 bg-white p-2 h-fit shadow-sm">
