@@ -1,17 +1,18 @@
 import { useMemo, useState } from "react";
-import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { useSearchParams, useLocation, useNavigate, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Plus, ListTodo, Layers, BarChart3, Lock, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil } from "lucide-react";
+import { Plus, ListTodo, Layers, BarChart3, Lock, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight } from "lucide-react";
 import { useTaskData, useTaskWrites } from "@/lib/useTaskData";
-import { MY_GROUPS, myGroupOf, myTasks, userLabel, todayYmd, dueOf, isPrivateTask } from "@/lib/tasks";
+import { MY_GROUPS, myGroupOf, myTasks, userLabel, todayYmd, dueOf, isPrivateTask, assigneesOf } from "@/lib/tasks";
 import { movePatch, nextSectionOrder, MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
 import { addDays, weekStart } from "@/lib/schedule";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
-import TaskSectionList from "@/components/tasks/TaskSectionList";
+import TaskSectionList, { AddLine } from "@/components/tasks/TaskSectionList";
+import NewProjectDialog from "@/components/tasks/NewProjectDialog";
 import NewTaskDialog from "@/components/tasks/NewTaskDialog";
 import TaskPanel from "@/components/tasks/TaskPanel";
 import Workload from "@/components/tasks/Workload";
@@ -154,82 +155,151 @@ function MyTasksView({ data, me, today, onOpen }) {
             onMove={(t, sid, order) => writes.update(t, movePatch("my", sid, order))}
             onAdd={(sid, name, order) => writes.create({ name, assignee_id: me.id, project_id: null, internal_project_id: null, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("my", sid, order) })} />}
       <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} today={today} sections={[...sections].sort((a, b) => Number(a.sort_order) - Number(b.sort_order))} noneLabel={MODES.my.noneLabel}
-        hint="最初は「自分だけ」のタスクです。詳細で案件・社内プロジェクトに紐づけると、メンバーに共有されます" onCreate={createTask} />
-      {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクはドラッグで並べ替え・ほかの見出しへ移せます。足したタスクは最初「自分だけ」です（案件・社内プロジェクトに紐づけると共有されます）</p>}
+        hint="最初は「自分だけ」のタスクです。詳細で案件・プロジェクトに紐づけると、メンバーに共有されます" onCreate={createTask} />
+      {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクはドラッグで並べ替え・ほかの見出しへ移せます。足したタスクは最初「自分だけ」です（案件・プロジェクトに紐づけると共有されます）</p>}
     </div>
   );
 }
 
-const PROJECT_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899", "#64748b"];
+/** クライアントの案件 1 件ぶん（案件のタスクを並べ、ここからタスクを足せる） */
+function CaseGroup({ p, data, today, me, onOpen, showDone }) {
+  const writes = useTaskWrites();
+  const [open, setOpen] = useState(p.status === "open");
+  const rows = data.tasks.filter((t) => t.project_id === p.id && !t.parent_task_id && (showDone || !t.completed))
+    .sort((a, b) => String(dueOf(a) || "9999").localeCompare(String(dueOf(b) || "9999")) || (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const st = { open: ["進行中", "bg-blue-50 text-blue-700"], completed: ["完了", "bg-emerald-50 text-emerald-700"], lost: ["失注", "bg-slate-100 text-slate-500"], cancelled: ["取消", "bg-slate-100 text-slate-500"] }[p.status] || ["", ""];
+  return (
+    <section className="border-t border-slate-100 first:border-t-0" data-testid="case-group">
+      <div className="flex items-center gap-2 px-3 pt-3 pb-1.5">
+        <button type="button" onClick={() => setOpen((v) => !v)} className="rounded p-0.5 text-slate-500 hover:bg-slate-100">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</button>
+        <FolderKanban className="w-4 h-4 text-blue-600 shrink-0" />
+        <Link to={`/projects/${p.id}`} className="min-w-0 truncate text-sm font-bold text-slate-800 hover:underline" title="案件を開く">{p.name}</Link>
+        <span className="font-mono text-[10px] text-slate-400 shrink-0">{p.project_number}</span>
+        {st[0] && <span className={`rounded px-1.5 text-[10px] leading-5 ${st[1]}`}>{st[0]}</span>}
+        {p.due_date && <span className="text-[10px] text-slate-400">完了予定 {p.due_date.slice(5).replace("-", "/")}</span>}
+        <span className="ml-auto text-[11px] text-slate-400">{rows.length}件</span>
+      </div>
+      {open && (
+        <div className="border-t border-slate-100">
+          {rows.map((t) => (
+            <div key={t.id} onClick={() => onOpen(t.id)} className="group/row flex items-center gap-1.5 border-b border-slate-100 px-2 py-2 hover:bg-slate-50 cursor-pointer" data-testid="case-task-row">
+              <span className="w-3.5 shrink-0" />
+              <TaskCheck done={t.completed} onToggle={(v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null })} size={17} />
+              <span className={`flex-1 truncate text-sm ${t.completed ? "line-through text-slate-400" : "text-slate-800"}`}>{t.name}</span>
+              {t.on_schedule !== false && <span className="shrink-0 rounded bg-slate-100 px-1.5 text-[10px] text-slate-500" title="案件の工程表の工程">工程表</span>}
+              <DueLabel task={t} today={today} className="w-24 text-right" />
+              {Number(t.estimated_hours) > 0 && <span className="w-10 text-right text-xs tabular-nums text-slate-500">{Number(t.estimated_hours)}h</span>}
+              <UserAvatar user={data.byId.users.get(assigneesOf(t)[0])} size={20} />
+            </div>
+          ))}
+          {rows.length === 0 && <p className="pl-14 py-2 text-[11px] text-slate-400">タスクはまだありません</p>}
+          <AddLine testId="case-add" onAdd={(name) => writes.create({ name, project_id: p.id, internal_project_id: null, assignee_id: me.id, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today })} />
+        </div>
+      )}
+    </section>
+  );
+}
 
-function InternalProjectsView({ data, me, today, onOpen }) {
+/**
+ * プロジェクト（メンバー全員で共有）。クライアントで作ったプロジェクトは、そのクライアントの案件とタスクも並ぶ
+ */
+function ProjectsView({ data, me, today, onOpen }) {
   const qc = useQueryClient();
   const writes = useTaskWrites();
   const active = data.internalProjects.filter((p) => !p.archived);
   const [sel, setSel] = useState(active[0]?.id || null);
   const [showDone, setShowDone] = useState(false);
+  const [showClosedCases, setShowClosedCases] = useState(false);
   const [view, setView] = useState("list");
+  const [npOpen, setNpOpen] = useState(false);
   const cur = data.byId.internal.get(sel) || active[0];
   const { sections, ops, editId } = useSections("internal", cur?.id);
+  const rows = data.tasks.filter((t) => cur && t.internal_project_id === cur.id && !t.parent_task_id && (showDone || !t.completed));
+  const client = cur?.client_id ? data.byId.clients.get(cur.client_id) : null;
+  // そのクライアントの案件（client_id で。古い案件は名前でも拾う）
+  const casesOf = (tp) => (tp?.client_id ? data.projects.filter((p) => p.client_id === tp.client_id || (!p.client_id && p.client_name && p.client_name === data.byId.clients.get(tp.client_id)?.name)) : []);
+  const cases = casesOf(cur).filter((p) => showClosedCases || p.status === "open")
+    .sort((a, b) => String(b.registered_at || "").localeCompare(String(a.registered_at || "")));
+  const hiddenCases = casesOf(cur).length - cases.length;
+  const countOf = (tp) => data.tasks.filter((t) => !t.completed && !t.parent_task_id && (t.internal_project_id === tp.id || casesOf(tp).some((p) => p.id === t.project_id))).length;
   const [newOpen, setNewOpen] = useState(false);
   const createTask = async ({ name, start_date, end_date, sectionId }) => {
     const g = groupIntoSections(rows, sections, "internal").find((x) => (x.section?.id || null) === sectionId) || { tasks: [] };
     const row = await writes.create({ name, internal_project_id: cur.id, project_id: null, assignee_id: me.id, on_schedule: false, parties: [], status: "todo", start_date, end_date, ...movePatch("internal", sectionId, orderAt(g.tasks, g.tasks.length, "internal")) });
     onOpen(row.id);
   };
-  const rows = data.tasks.filter((t) => cur && t.internal_project_id === cur.id && !t.parent_task_id && (showDone || !t.completed));
-  const addProject = async () => {
-    const name = window.prompt("社内プロジェクトの名前（例: 校正・入稿・発注・請求・売上）");
-    if (!name?.trim()) return;
-    const r = await db.entities.TaskProject.create({ name: name.trim(), color: PROJECT_COLORS[data.internalProjects.length % PROJECT_COLORS.length], sort_order: data.internalProjects.length + 1 });
+  const createProject = async ({ name, color, client_id }) => {
+    const r = await db.entities.TaskProject.create({ name, color, client_id, sort_order: data.internalProjects.length + 1 });
+    qc.setQueryData(["taskProjects"], (old) => [...(old || []), r]);
     qc.invalidateQueries({ queryKey: ["taskProjects"] }); setSel(r.id);
+    toast.success(client_id ? `「${name}」のプロジェクトを作りました（${name}の案件も並びます）` : `「${name}」を作りました`);
   };
   const patchProject = async (patch) => { await db.entities.TaskProject.update(cur.id, patch); qc.invalidateQueries({ queryKey: ["taskProjects"] }); };
+  const clientProjects = active.filter((p) => p.client_id);
+  const internalOnes = active.filter((p) => !p.client_id);
+  const Item = ({ p }) => (
+    <button type="button" onClick={() => setSel(p.id)} className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-left ${cur?.id === p.id ? "bg-slate-100 font-semibold" : "hover:bg-slate-50"}`} data-testid="internal-project">
+      <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: p.color || "#8b5cf6" }} /><span className="flex-1 truncate">{p.name}</span><span className="text-[10px] text-slate-400">{countOf(p)}</span>
+    </button>
+  );
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[15rem_1fr] gap-4">
-      <aside className="rounded-xl border border-slate-200 bg-white p-2 space-y-0.5 h-fit shadow-sm">
-        <p className="px-2 py-1 text-[11px] text-slate-500">CV のメンバー全員に共有されます</p>
-        {active.map((p) => {
-          const n = data.tasks.filter((t) => t.internal_project_id === p.id && !t.parent_task_id && !t.completed).length;
-          return (
-            <button key={p.id} type="button" onClick={() => setSel(p.id)} className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-left ${cur?.id === p.id ? "bg-slate-100 font-semibold" : "hover:bg-slate-50"}`} data-testid="internal-project">
-              <span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: p.color || "#8b5cf6" }} /><span className="flex-1 truncate">{p.name}</span><span className="text-[10px] text-slate-400">{n}</span>
-            </button>
-          );
-        })}
-        <Button size="sm" variant="ghost" className="w-full justify-start gap-1 text-xs" onClick={addProject} data-testid="internal-project-add"><Plus className="w-3.5 h-3.5" />社内プロジェクトを作る</Button>
+      <aside className="rounded-xl border border-slate-200 bg-white p-2 h-fit shadow-sm">
+        <Button size="sm" className="w-full gap-1 text-xs mb-2" onClick={() => setNpOpen(true)} data-testid="internal-project-add"><Plus className="w-3.5 h-3.5" />新規プロジェクト</Button>
+        {clientProjects.length > 0 && <p className="flex items-center gap-1 px-2 pt-1 pb-0.5 text-[10px] font-semibold text-slate-400"><Building2 className="w-3 h-3" />クライアント</p>}
+        {clientProjects.map((p) => <Item key={p.id} p={p} />)}
+        {internalOnes.length > 0 && <p className="flex items-center gap-1 px-2 pt-2 pb-0.5 text-[10px] font-semibold text-slate-400"><Layers className="w-3 h-3" />社内</p>}
+        {internalOnes.map((p) => <Item key={p.id} p={p} />)}
+        {active.length === 0 && <p className="px-2 py-3 text-[11px] text-slate-400">まだありません</p>}
       </aside>
+      <NewProjectDialog open={npOpen} onOpenChange={setNpOpen} clients={data.clients} projects={data.projects} taskProjects={data.internalProjects} onCreate={createProject} onOpenExisting={(p) => setSel(p.id)} />
       {cur ? (
-        <div className="space-y-3 min-w-0">
+        <div className="space-y-4 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="h-3 w-3 rounded" style={{ background: cur.color || "#8b5cf6" }} />
             <h2 className="text-lg font-bold">{cur.name}</h2>
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { const n = window.prompt("名前を変える", cur.name); if (n?.trim()) patchProject({ name: n.trim() }); }} title="名前を変える"><Pencil className="w-3.5 h-3.5" /></Button>
+            {client && <Link to={`/clients/${client.id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-200" title="クライアントカルテを開く"><Building2 className="w-3 h-3" />{client.name}</Link>}
             <ViewSwitch value={view} onChange={setView} options={["list", "board"]} />
             <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />完了も出す</label>
             <Button size="sm" className="h-8 gap-1 text-xs" onClick={() => setNewOpen(true)} data-testid="new-task-open"><Plus className="w-3.5 h-3.5" />タスクを作成</Button>
+            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs text-slate-500" onClick={() => window.confirm(`「${cur.name}」をしまいますか？（タスクと案件は残ります）`) && patchProject({ archived: true })}><Archive className="w-3.5 h-3.5" />しまう</Button>
             <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} today={today} sections={[...sections].sort((a, b) => Number(a.sort_order) - Number(b.sort_order))} noneLabel={MODES.internal.noneLabel}
               hint={`「${cur.name}」のタスクです（メンバー全員に共有されます）`} onCreate={createTask} />
-            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs text-slate-500" onClick={() => window.confirm(`「${cur.name}」をしまいますか？（タスクは残ります）`) && patchProject({ archived: true })}><Archive className="w-3.5 h-3.5" />しまう</Button>
           </div>
-          <TaskSectionList key={`${cur.id}-${editId || "x"}`} mode="internal" view={view} tasks={rows} sections={sections.map((s) => (s.id === editId ? { ...s, _edit: true } : s))} data={data} today={today} onOpen={onOpen} ops={ops} showAssignee
-            onMove={(t, sid, order) => writes.update(t, movePatch("internal", sid, order))}
-            onAdd={(sid, name, order) => writes.create({ name, internal_project_id: cur.id, project_id: null, assignee_id: me.id, on_schedule: false, parties: [], status: "todo", ...movePatch("internal", sid, order) })} />
+          <div className="space-y-1.5">
+            {client && <p className="text-xs font-semibold text-slate-500">このプロジェクトのタスク（案件に入らない、{client.name}まわりの作業）</p>}
+            <TaskSectionList key={`${cur.id}-${editId || "x"}`} mode="internal" view={view} tasks={rows} sections={sections.map((s) => (s.id === editId ? { ...s, _edit: true } : s))} data={data} today={today} onOpen={onOpen} ops={ops} showAssignee
+              onMove={(t, sid, order) => writes.update(t, movePatch("internal", sid, order))}
+              onAdd={(sid, name, order) => writes.create({ name, internal_project_id: cur.id, project_id: null, assignee_id: me.id, on_schedule: false, parties: [], status: "todo", ...movePatch("internal", sid, order) })} />
+          </div>
+          {client && (
+            <div className="space-y-1.5" data-testid="client-cases">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-slate-500">{client.name}の案件（案件のタスク・工程表の工程）</p>
+                <label className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-500"><input type="checkbox" checked={showClosedCases} onChange={(e) => setShowClosedCases(e.target.checked)} />完了・失注の案件も出す{hiddenCases > 0 && !showClosedCases && `（${hiddenCases}件）`}</label>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                {cases.map((p) => <CaseGroup key={p.id} p={p} data={data} today={today} me={me} onOpen={onOpen} showDone={showDone} />)}
+                {cases.length === 0 && <p className="px-4 py-6 text-center text-xs text-slate-400">進行中の案件はありません</p>}
+              </div>
+            </div>
+          )}
         </div>
-      ) : <p className="text-sm text-slate-500 py-10 text-center">左の「社内プロジェクトを作る」から作ってください（例: 校正・入稿・発注・請求・売上／新規案件対応／CV_topics）</p>}
+      ) : <p className="text-sm text-slate-500 py-10 text-center">左の「新規プロジェクト」から作ってください。クライアントで作ると、そのクライアントの案件とタスクがまとまります</p>}
     </div>
   );
 }
 
 const TABS = [
   { key: "my", label: "マイタスク", icon: ListTodo, path: "/tasks" },
-  { key: "internal", label: "社内プロジェクト", icon: Layers, path: "/tasks?tab=internal" },
+  { key: "internal", label: "プロジェクト", icon: Layers, path: "/tasks?tab=internal" },
   // タブからはこの画面の中で切り替える（サイドバーの「ワークロード」は /workload を開く）
   { key: "workload", label: "ワークロード", icon: BarChart3, path: "/tasks?tab=workload" },
 ];
 
 /**
- * タスク（マイタスク・社内プロジェクト）とワークロード（/workload）。?task=ID でタスクの詳細を右に開く
+ * タスク（マイタスク・プロジェクト）とワークロード（/workload）。?task=ID でタスクの詳細を右に開く
  */
 export default function Tasks() {
   const { user } = useAuth();
@@ -253,7 +323,7 @@ export default function Tasks() {
           {tab === "my" ? <UserAvatar user={me} size={36} /> : <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><T.icon className="w-5 h-5" /></span>}
           <div>
             <h1 className="text-xl font-bold tracking-tight leading-tight">{T.label}</h1>
-            <p className="text-[11px] text-slate-500">{tab === "my" ? "担当のタスク（案件の工程表の工程も、担当者のタスクとしてここに出ます）" : tab === "internal" ? "クライアントの案件ではない、社内の共有の箱" : `共有のタスク ${sharedOpen} 件の作業時間を、メンバーごと・日ごとに`}</p>
+            <p className="text-[11px] text-slate-500">{tab === "my" ? "担当のタスク（案件の工程表の工程も、担当者のタスクとしてここに出ます）" : tab === "internal" ? "クライアントごと・社内の共有のプロジェクト（クライアントで作ると、その案件のタスクもまとまります）" : `共有のタスク ${sharedOpen} 件の作業時間を、メンバーごと・日ごとに`}</p>
           </div>
         </div>
         {!isGuest && (
@@ -269,7 +339,7 @@ export default function Tasks() {
       {data.isLoading ? <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto mt-10" /> : (
         <>
           {tab === "my" && <MyTasksView data={data} me={me} today={today} onOpen={openTask} />}
-          {tab === "internal" && <InternalProjectsView data={data} me={me} today={today} onOpen={openTask} />}
+          {tab === "internal" && <ProjectsView data={data} me={me} today={today} onOpen={openTask} />}
           {tab === "workload" && <Workload data={data} today={today} onOpenTask={openTask} />}
         </>
       )}

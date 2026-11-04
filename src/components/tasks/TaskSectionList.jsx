@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2 } from "lucide-react";
 import { MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
 import { subtasksOf, isPrivateTask, PRIORITY, REVIEW_STATUS } from "@/lib/tasks";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
@@ -57,7 +57,7 @@ function SectionHeader({ group, count, hours, mode, collapsed, onToggle, ops, is
  * 「タスクを追加」。名前を入れて Enter（または「追加」・枠の外をクリック）で 1 件追加して閉じる。
  *   続けて入力の欄は出さない（足したタスクは一覧の中で少しのあいだ色が付く）。Esc・「やめる」で何も足さずに閉じる
  */
-function AddLine({ onAdd, board = false, testId }) {
+export function AddLine({ onAdd, board = false, testId }) {
   const [open, setOpen] = useState(false);
   const [v, setV] = useState("");
   const [busy, setBusy] = useState(false);
@@ -99,7 +99,7 @@ function AddLine({ onAdd, board = false, testId }) {
  * @param {"my"|"internal"} mode
  */
 export default function TaskSectionList({ mode, tasks, sections, data, today, view = "list", onOpen, onAdd, onMove, ops, showAssignee = false }) {
-  const showPlace = mode === "my"; // 社内プロジェクトの中では、紐づけ先はいつも同じなので出さない
+  const showPlace = mode === "my"; // プロジェクトの中では、紐づけ先はいつも同じなので出さない
   const writes = useTaskWrites();
   const [drag, setDrag] = useState(null); // 動かしているタスクの id
   const [over, setOver] = useState(null); // { key, index }
@@ -143,9 +143,10 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                     {isOver(g, i) && <div className="h-1 rounded-full bg-primary mb-2" />}
                     <div draggable onDragStart={() => setDrag(t.id)} onDragEnd={() => { setDrag(null); setOver(null); }} onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => onOpen(t.id)}
                       className={`cursor-pointer rounded-lg p-2.5 shadow-sm ring-1 hover:ring-primary/40 hover:shadow transition-colors duration-700 ${added === t.id ? "bg-emerald-50 ring-emerald-300" : "bg-white ring-slate-200"} ${drag === t.id ? "opacity-40" : ""}`} data-testid="board-card">
-                      <div className="flex items-start gap-2">
+                      <div className="group/card flex items-start gap-2">
                         <span className="pt-0.5"><TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={16} /></span>
                         <p className={`flex-1 text-sm leading-snug ${t.completed ? "line-through text-slate-400" : "text-slate-800"}`}>{t.name}</p>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); writes.removeWithUndo(t, data.tasks); }} className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 group-hover/card:opacity-100 hover:bg-rose-50 hover:text-rose-600" title="このタスクを削除" aria-label="削除" data-testid="card-delete"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-6">
                         <Pill map={PRIORITY} value={t.priority} />
@@ -203,6 +204,8 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                             <TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={17} />
                             <span className={`truncate text-sm ${t.completed ? "line-through text-slate-400" : "text-slate-800"}`}>{t.name}</span>
                             {subs.length > 0 && <span className="shrink-0 rounded bg-slate-100 px-1 text-[10px] text-slate-500 tabular-nums" title="サブタスク">{subs.filter((s) => s.completed).length}/{subs.length}</span>}
+                            {/* ボタン一つで削除（すぐ消して、少しのあいだ「元に戻す」を出す） */}
+                            <button type="button" onClick={(e) => { e.stopPropagation(); writes.removeWithUndo(t, data.tasks); }} className="ml-auto mr-1 shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-rose-50 hover:text-rose-600 focus:opacity-100" title="このタスクを削除" aria-label="削除" data-testid="task-delete"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                           <span><Pill map={PRIORITY} value={t.priority} /></span>
                           <span><Pill map={REVIEW_STATUS} value={t.review_status} /></span>

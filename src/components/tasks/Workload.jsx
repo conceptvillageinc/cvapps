@@ -61,7 +61,7 @@ function lanesOf(items, minSpan) {
 /**
  * ワークロード（Asana のワークロードに近い形）
  *   メンバーの行: 日ごとの作業時間の合計と、負荷の曲線。1 日の稼働時間を超えた日は薄い赤
- *   メンバーを開く: 案件・社内プロジェクトごとに、タスクを日付の位置にカードで並べる（ドラッグで日付を動かせる）
+ *   メンバーを開く: 案件・プロジェクトごとに、タスクを日付の位置にカードで並べる（ドラッグで日付を動かせる）
  *   自分だけ（非公開）のタスクは数えない
  */
 export default function Workload({ data, today, onOpenTask }) {
@@ -114,7 +114,7 @@ export default function Workload({ data, today, onOpenTask }) {
   const placeKey = (t) => (t.project_id ? `p:${t.project_id}` : `i:${t.internal_project_id}`);
   const place = (key) => {
     if (key.startsWith("p:")) { const p = byId.projects.get(key.slice(2)); return { label: p ? `${p.client_name ? `${p.client_name}／` : ""}${p.name}` : "案件", color: hashColor(key), Icon: FolderKanban }; }
-    const ip = byId.internal.get(key.slice(2)); return { label: ip?.name || "社内プロジェクト", color: ip?.color || "#8b5cf6", Icon: Layers };
+    const ip = byId.internal.get(key.slice(2)); return { label: ip?.name || "プロジェクト", color: ip?.color || "#8b5cf6", Icon: Layers };
   };
   const months = [];
   days.forEach((d, i) => { if (i === 0 || info[i].day === 1) months.push({ i, label: `${info[i].month}月` }); });

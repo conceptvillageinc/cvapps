@@ -25,7 +25,7 @@ export function TaskCheck({ done, onToggle, size = 18, testId }) {
   );
 }
 
-/** タスクの紐づけ先（案件・社内プロジェクト・自分だけ） */
+/** タスクの紐づけ先（案件・プロジェクト・自分だけ） */
 export function TaskPlaceChip({ task, byId, className = "" }) {
   if (isPrivateTask(task)) return <span className={`inline-flex items-center gap-0.5 rounded px-1.5 text-[10px] leading-5 bg-slate-100 text-slate-500 ${className}`} title="どこにも紐づけていないタスク（作った人と担当者だけが見られます）"><Lock className="w-2.5 h-2.5" />自分だけ</span>;
   if (task.project_id) {
@@ -33,7 +33,7 @@ export function TaskPlaceChip({ task, byId, className = "" }) {
     return <span className={`inline-flex items-center gap-0.5 rounded px-1.5 text-[10px] leading-5 bg-blue-50 text-blue-700 max-w-[14rem] ${className}`} title={p ? `${p.project_number} ${p.client_name} ${p.name}` : "案件"}><FolderKanban className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{p ? `${p.client_name ? `${p.client_name}／` : ""}${p.name}` : "案件"}</span></span>;
   }
   const ip = byId.internal.get(task.internal_project_id);
-  return <span className={`inline-flex items-center gap-0.5 rounded px-1.5 text-[10px] leading-5 max-w-[14rem] ${className}`} style={{ background: `${ip?.color || "#8b5cf6"}1a`, color: ip?.color || "#6d28d9" }} title="社内プロジェクト"><Layers className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{ip?.name || "社内プロジェクト"}</span></span>;
+  return <span className={`inline-flex items-center gap-0.5 rounded px-1.5 text-[10px] leading-5 max-w-[14rem] ${className}`} style={{ background: `${ip?.color || "#8b5cf6"}1a`, color: ip?.color || "#6d28d9" }} title="プロジェクト"><Layers className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{ip?.name || "プロジェクト"}</span></span>;
 }
 
 export function PriorityChip({ value }) {

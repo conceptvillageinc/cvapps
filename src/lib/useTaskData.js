@@ -5,6 +5,7 @@
 import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
+import { toast } from "sonner";
 
 export const TASKS_KEY = ["tasks", "all"];
 
@@ -13,13 +14,15 @@ export function useTaskData() {
   const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: () => db.entities.User.list("full_name") });
   const { data: projects = [] } = useQuery({ queryKey: ["projects", "forTasks"], queryFn: () => db.entities.Project.listAll("-registered_at"), staleTime: 60_000 });
   const { data: internalProjects = [] } = useQuery({ queryKey: ["taskProjects"], queryFn: () => db.entities.TaskProject.list("sort_order") });
+  const { data: clients = [] } = useQuery({ queryKey: ["clients"], queryFn: () => db.entities.Client.list("-name"), staleTime: 60_000 });
   const byId = useMemo(() => ({
     users: new Map(users.map((u) => [u.id, u])),
     projects: new Map(projects.map((p) => [p.id, p])),
     internal: new Map(internalProjects.map((p) => [p.id, p])),
+    clients: new Map(clients.map((c) => [c.id, c])),
     tasks: new Map(tasks.map((t) => [t.id, t])),
-  }), [users, projects, internalProjects, tasks]);
-  return { tasks, users, projects, internalProjects, byId, isLoading };
+  }), [users, projects, internalProjects, tasks, clients]);
+  return { tasks, users, projects, internalProjects, clients, byId, isLoading };
 }
 
 /** タスクの書き込み（画面はすぐ変え、保存できなければ読み直す） */
@@ -43,6 +46,31 @@ export function useTaskWrites() {
       setLocal((list) => list.filter((x) => x.id !== task.id && x.parent_task_id !== task.id));
       await db.entities.ProjectTask.delete(task.id);
       done(task);
+    },
+    /**
+     * ボタン一つで削除する。少しのあいだ「元に戻す」を出し、押すとタスクとサブタスクを作り直す
+     *   （コメント・添付は戻らない）。案件の工程表の工程は、工程表からも消えるので確かめてから消す
+     */
+    async removeWithUndo(task, allTasks = []) {
+      if (task.project_id && !task.parent_task_id && task.on_schedule !== false && !window.confirm(`「${task.name}」は案件の工程表の工程です。削除すると工程表からも消えます。削除しますか？`)) return false;
+      const subs = (allTasks || []).filter((x) => x.parent_task_id === task.id);
+      await this.remove(task);
+      const strip = ({ id, created_at, updated_at, created_date, updated_date, ...rest }) => rest; // eslint-disable-line no-unused-vars
+      toast.success(`「${task.name}」を削除しました`, {
+        description: "コメント・添付は元に戻りません",
+        duration: 8000,
+        action: {
+          label: "元に戻す",
+          onClick: async () => {
+            try {
+              const r = await this.create(strip(task));
+              for (const sub of subs) await this.create({ ...strip(sub), parent_task_id: r.id, pin: null });
+              toast.success("元に戻しました");
+            } catch (e) { toast.error("元に戻せませんでした: " + (e?.message || "")); }
+          },
+        },
+      });
+      return true;
     },
   };
 }

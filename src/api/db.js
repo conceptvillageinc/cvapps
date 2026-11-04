@@ -64,7 +64,7 @@ const WRITABLE_COLUMNS = {
     'internal_project_id', 'assignee_id', 'priority', 'review_status', 'description', 'parent_task_id', 'pin',
     'my_section_id', 'my_sort_order', 'section_id', 'section_sort_order'],
   task_sections: ['kind', 'user_id', 'internal_project_id', 'name', 'sort_order', 'collapsed'],
-  task_projects: ['name', 'color', 'description', 'archived', 'sort_order'],
+  task_projects: ['name', 'color', 'description', 'archived', 'sort_order', 'client_id'],
   task_comments: ['task_id', 'body', 'mentions', 'attachment_ids', 'pin_task_id'],
   task_attachments: ['task_id', 'path', 'file_name', 'mime_type', 'size', 'page_count'],
   notifications: ['read_at'],

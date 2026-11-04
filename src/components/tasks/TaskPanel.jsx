@@ -25,7 +25,7 @@ function Field({ label, children }) {
   );
 }
 
-/** 紐づけ先を選ぶ（案件・社内プロジェクト・自分だけ） */
+/** 紐づけ先を選ぶ（案件・プロジェクト・自分だけ） */
 function PlacePicker({ task, projects, internalProjects, byId, onChange }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -45,7 +45,7 @@ function PlacePicker({ task, projects, internalProjects, byId, onChange }) {
         <button type="button" className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted text-left" onClick={() => pick({ project_id: null, internal_project_id: null })}>
           <Lock className="w-3.5 h-3.5 text-muted-foreground" />自分だけ（どこにも紐づけない。ほかのメンバーには見えません）
         </button>
-        <p className="mt-2 px-2 text-[10px] font-semibold text-muted-foreground">社内プロジェクト</p>
+        <p className="mt-2 px-2 text-[10px] font-semibold text-muted-foreground">プロジェクト</p>
         {internalProjects.filter((p) => !p.archived).map((p) => (
           <button key={p.id} type="button" className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted text-left" onClick={() => pick({ project_id: null, internal_project_id: p.id })}>
             <Layers className="w-3.5 h-3.5" style={{ color: p.color || "#8b5cf6" }} />{p.name}
@@ -204,10 +204,12 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
           {isPrivateTask(task) && <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><Lock className="w-3 h-3" />自分だけ（作った人と担当者だけが見られます）</span>}
           <div className="ml-auto flex items-center gap-1">
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={copyLink} title="タスクのリンクをコピー"><Link2 className="w-4 h-4" /></Button>
+            {/* ボタン一つで削除（少しのあいだ「元に戻す」を出す） */}
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-500 hover:bg-rose-50 hover:text-rose-600" onClick={async () => { if (await writes.removeWithUndo(task, tasks)) onClose(); }} title="このタスクを削除" data-testid="panel-delete"><Trash2 className="w-4 h-4" /></Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem className="text-xs text-destructive gap-2" onClick={async () => { if (!window.confirm(`「${task.name}」を削除しますか？（サブタスク・コメント・添付も消えます）`)) return; await writes.remove(task); onClose(); }}><Trash2 className="w-3.5 h-3.5" />タスクを削除</DropdownMenuItem>
+                <DropdownMenuItem className="text-xs text-destructive gap-2" onClick={async () => { if (await writes.removeWithUndo(task, tasks)) onClose(); }}><Trash2 className="w-3.5 h-3.5" />タスクを削除</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onClose} aria-label="閉じる"><X className="w-4 h-4" /></Button>
