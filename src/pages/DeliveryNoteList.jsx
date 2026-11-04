@@ -19,6 +19,10 @@ import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark, { useRecurringProjectIds, noteIsRecurring } from "@/components/projects/RecurringMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
+import PeriodFilter, { emptyPeriod, inPeriod } from "@/components/table/PeriodFilter";
+
+// 期間で絞り込める日付
+const PERIOD_FIELDS = [{ value: "delivery_date", label: "納品日" }, { value: "created_date", label: "作成日" }];
 import { exportDeliveryNotesCsv } from "@/lib/listCsv";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
@@ -29,6 +33,7 @@ export default function DeliveryNoteList() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all"); // all | uninvoiced | draft
+  const [period, setPeriod] = useState(() => emptyPeriod("delivery_date")); // 期間（納品日・作成日）
   const [picked, setPicked] = useState(() => new Set());
   const recurringIds = useRecurringProjectIds();
   const [deleting, setDeleting] = useState(false);
@@ -41,12 +46,13 @@ export default function DeliveryNoteList() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return notes.filter((n) => {
+      if (!inPeriod(n[period.field], period)) return false;
       if (filter === "uninvoiced" && n.invoice_id) return false;
       if (filter === "draft" && n.status !== "draft") return false;
       if (!q) return true;
       return [n.delivery_number, n.client_name, n.title].filter(Boolean).join(" ").toLowerCase().includes(q);
     });
-  }, [notes, search, filter]);
+  }, [notes, search, filter, period]);
 
   const total = filtered.reduce((s, n) => s + Number(n.total || 0), 0);
 
@@ -131,6 +137,7 @@ export default function DeliveryNoteList() {
           ))}
         </div>
       </div>
+      <PeriodFilter value={period} onChange={setPeriod} fields={PERIOD_FIELDS} className="-mt-1" />
 
       {/* 選んでいないときも出して、選ぶと請求書にまとめられることが分かるようにする */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="picked-bar">
