@@ -20,8 +20,11 @@ export const DELIVERY_STATE = {
   draft: { label: "納品書 下書き", cls: "bg-slate-50 text-slate-600 border-dashed border-slate-400" },
   uninvoiced: { label: "納品済・未請求", cls: "bg-amber-50 text-amber-800 border-amber-300" },
   invoiced: { label: "請求済", cls: "bg-sky-50 text-sky-800 border-sky-300" },
+  na: { label: "対象外", cls: "bg-white text-slate-400 border-slate-200" },
 };
-export const DELIVERY_STATE_ORDER = ["none", "draft", "uninvoiced", "invoiced"];
+export const DELIVERY_STATE_ORDER = ["none", "draft", "uninvoiced", "invoiced", "na"];
+/** 案件で手で決められる状態（projects.delivery_state_manual。空なら納品書から自動） */
+export const MANUAL_DELIVERY_STATES = ["none", "uninvoiced", "invoiced", "na"];
 
 const sumItems = (items) => (items || []).reduce((s, li) => s + (Number(li.amount) || 0), 0);
 
@@ -63,7 +66,10 @@ export function estimateDelivery(estimate, notesByEstimate, { submitted }) {
 /** 案件の納品・請求の状態（案件の納品書すべてで判定） */
 export function projectDelivery(project, notesByProject) {
   const notes = notesByProject.get(project.id) || [];
-  return { state: stateOfNotes(notes), notes, partial: null };
+  const auto = stateOfNotes(notes);
+  // 手で決めた状態（freee販売で請求した案件・納品書の要らない案件など）があれば、それを使う
+  const manual = MANUAL_DELIVERY_STATES.includes(project?.delivery_state_manual) ? project.delivery_state_manual : null;
+  return { state: manual || auto, auto, manual: !!manual, notes, partial: null };
 }
 
 /** 未納品を目立たせるか: 進行中で、完了予定日が今月中か過ぎている */

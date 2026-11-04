@@ -18,7 +18,8 @@ import { PROJECT_STATUS_MAP } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { DailyView, NextActionView } from "@/components/projects/ProjectViews";
 import MonthEndView from "@/components/projects/MonthEndView";
-import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
+import { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
+import ProjectDeliveryCell from "@/components/projects/ProjectDeliveryCell";
 import { projectDelivery, isDeliveryDue, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
 import RecurringMark from "@/components/projects/RecurringMark";
 import SubsidyMark from "@/components/projects/SubsidyMark";
@@ -47,7 +48,8 @@ const HEAD_LABEL = { client_name: "クライアント／案件名", due_date: "�
 function ProjectCell({ col, p, delivery, today }) {
   switch (col) {
     // 納品・請求（納品書・請求書のつながりから自動。完了予定が今月中か過ぎた未納品は赤）
-    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><DeliveryBadge info={delivery} due={isDeliveryDue(p, today)} /></TableCell>;
+    // 納品・請求: 札を押すと、その場で状態を変えられる（自動／未納品／納品済・未請求／請求済／対象外）
+    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><ProjectDeliveryCell project={p} info={delivery} due={isDeliveryDue(p, today)} /></TableCell>;
     case "project_number": return (
       <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
     );

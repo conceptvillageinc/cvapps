@@ -67,6 +67,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
       return { p, d: { ...d, partial }, est };
     })
     .filter(({ p, d }) => {
+      if (d.state === "na") return false; // 納品・請求を「対象外」にした案件は出さない
       const due = String(p.due_date);
       if (due >= monthStart && due <= monthEnd) return true; // その月の完了予定
       return due < monthStart && d.state !== "invoiced"; // 前の月までで、請求がまだ
@@ -99,7 +100,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
         {month !== today.slice(0, 7) && <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setMonth(today.slice(0, 7))}>今月に戻る</Button>}
         <div className="flex flex-wrap items-center gap-1.5 ml-auto text-xs" data-testid="monthend-summary">
           <button type="button" onClick={() => setStateFilter(null)} className={`rounded-full border px-2.5 py-1 ${!stateFilter ? "bg-slate-800 text-white border-slate-800" : "bg-white hover:bg-muted/50"}`}>すべて {rows.length}件</button>
-          {DELIVERY_STATE_ORDER.map((st) => (
+          {DELIVERY_STATE_ORDER.filter((st) => st !== "na").map((st) => (
             <button key={st} type="button" onClick={() => setStateFilter(stateFilter === st ? null : st)} className={`rounded-full border px-2.5 py-1 ${stateFilter === st ? "ring-2 ring-primary/40" : ""} ${DELIVERY_STATE[st].cls}`}>
               {DELIVERY_STATE[st].label} <b className="tabular-nums">{count(st)}</b>
             </button>
