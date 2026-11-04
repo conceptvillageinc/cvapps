@@ -1,8 +1,10 @@
 import { Fragment, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { db } from "@/api/db";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronLeft, ChevronRight, ChevronDown, CalendarOff, ZoomIn, ZoomOut, Check, FolderKanban, Layers } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarOff, ZoomIn, ZoomOut, Check, FolderKanban, Layers, GripVertical } from "lucide-react";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { addDays, weekStart, daysBetween, dayInfo, diffDays, md } from "@/lib/schedule";
 import { workload, dailyHoursOf, userLabel, assigneesOf, isPrivateTask } from "@/lib/tasks";
@@ -10,6 +12,7 @@ import { useTaskWrites } from "@/lib/useTaskData";
 import { UserAvatar } from "@/components/tasks/parts";
 
 const fmtH = (h) => (h ? (Math.round(h * 10) / 10).toString() : "");
+const ORDER_KEY = "workload_member_order";
 const LEFT_W = 264;
 const MEMBER_H = 64;
 const LANE_H = 46;
@@ -63,7 +66,13 @@ function lanesOf(items, minSpan) {
  */
 export default function Workload({ data, today, onOpenTask }) {
   const { tasks, users, byId } = data;
-  const { companyHolidays } = useSystemSettings();
+  const { companyHolidays, settings } = useSystemSettings();
+  const qc = useQueryClient();
+  // メンバーの並び順（全員で同じ。システム設定の workload_member_order に利用者の id の順で持つ）
+  const orderRow = settings.find((x) => x.setting_key === ORDER_KEY);
+  const order = useMemo(() => { try { const v = JSON.parse(orderRow?.setting_value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [orderRow]);
+  const [dragMember, setDragMember] = useState(null);
+  const [overMember, setOverMember] = useState(null); // { id, after }
   const writes = useTaskWrites();
   const [from, setFrom] = useState(() => addDays(weekStart(today), -7));
   const [zoom, setZoom] = useState("small"); // small | large
@@ -75,7 +84,30 @@ export default function Workload({ data, today, onOpenTask }) {
   const days = daysBetween(from, to);
   const info = useMemo(() => days.map((d) => dayInfo(d, companyHolidays)), [days, companyHolidays]);
   const load = useMemo(() => workload(tasks, { from, to, holidays: companyHolidays }), [tasks, from, to, companyHolidays]);
-  const members = users.filter((u) => u.role !== "guest" || load.has(u.id));
+  const rank = (u) => { const i = order.indexOf(u.id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
+  // 並べた順（並べていない人は、そのあとに名前の順）
+  const members = users.filter((u) => u.role !== "guest" || load.has(u.id))
+    .sort((a, b) => rank(a) - rank(b) || String(a.full_name || "").localeCompare(String(b.full_name || ""), "ja"));
+  const saveOrder = async (ids) => {
+    const value = JSON.stringify(ids);
+    qc.setQueryData(["settings"], (old) => {
+      const list = old || [];
+      return list.some((x) => x.setting_key === ORDER_KEY) ? list.map((x) => (x.setting_key === ORDER_KEY ? { ...x, setting_value: value } : x)) : [...list, { id: "tmp-order", setting_key: ORDER_KEY, setting_value: value }];
+    });
+    try {
+      const data = { setting_key: ORDER_KEY, setting_value: value, description: "ワークロードのメンバーの並び順（利用者の id）" };
+      if (orderRow) await db.entities.SystemSettings.update(orderRow.id, data); else await db.entities.SystemSettings.create(data);
+      toast.success("メンバーの並び順を変えました（全員の画面で同じ順になります）");
+    } catch (err) { toast.error("並び順を保存できませんでした: " + (err?.message || "")); }
+    qc.invalidateQueries({ queryKey: ["settings"] });
+  };
+  const dropMember = (targetId, after) => {
+    const ids = members.map((m) => m.id).filter((id) => id !== dragMember);
+    let i = ids.indexOf(targetId); if (after) i += 1;
+    ids.splice(i < 0 ? ids.length : i, 0, dragMember);
+    setDragMember(null); setOverMember(null);
+    if (ids.join() !== members.map((m) => m.id).join()) saveOrder(ids);
+  };
   const undated = tasks.filter((t) => !t.completed && !isPrivateTask(t) && !t.start_date && !t.end_date && assigneesOf(t).length && !t.parent_task_id);
   const toggle = (id) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const todayIdx = days.indexOf(today);
@@ -171,8 +203,14 @@ export default function Workload({ data, today, onOpenTask }) {
             const capSum = cap * info.filter((d) => !d.off).length;
             return (
               <Fragment key={u.id}>
-                <div className="flex border-b border-slate-200" data-testid="workload-member">
-                  <button type="button" onClick={() => toggle(u.id)} className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-slate-200 bg-white px-3 text-left hover:bg-slate-50" style={{ width: LEFT_W, height: MEMBER_H }}>
+                <div className={`relative flex border-b border-slate-200 ${dragMember === u.id ? "opacity-40" : ""}`} data-testid="workload-member"
+                  onDragOver={(e) => { if (!dragMember || dragMember === u.id) return; e.preventDefault(); const r0 = e.currentTarget.getBoundingClientRect(); const after = e.clientY > r0.top + r0.height / 2; if (overMember?.id !== u.id || overMember?.after !== after) setOverMember({ id: u.id, after }); }}
+                  onDrop={(e) => { e.preventDefault(); if (dragMember && overMember) dropMember(overMember.id, overMember.after); }}>
+                  {overMember?.id === u.id && <div className={`absolute inset-x-0 z-40 h-0.5 bg-primary ${overMember.after ? "-bottom-px" : "-top-px"}`} />}
+                  <button type="button" onClick={() => toggle(u.id)} draggable onDragStart={(e) => { setDragMember(u.id); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => { setDragMember(null); setOverMember(null); }}
+                    title="押すと開く・閉じる。つかんで上下にドラッグすると並び順を変えられます（全員で同じ順）"
+                    className="group/m sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-slate-200 bg-white px-3 text-left hover:bg-slate-50" style={{ width: LEFT_W, height: MEMBER_H }}>
+                    <GripVertical className="w-3.5 h-3.5 -ml-2 text-slate-300 opacity-0 group-hover/m:opacity-100 cursor-grab" data-testid="workload-member-grip" />
                     <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
                     <UserAvatar user={u} size={30} />
                     <span className="min-w-0 flex-1">
@@ -248,7 +286,7 @@ export default function Workload({ data, today, onOpenTask }) {
           })}
         </div>
       </div>
-      <p className="text-[11px] text-slate-400">数字は 1 日の作業時間の合計（作業時間数を期間の営業日に均等に割り振り）。カード・バーは押すとタスクを開き、横にドラッグすると日付を動かせます。自分だけのタスクは数えません</p>
+      <p className="text-[11px] text-slate-400">メンバーの名前をつかんで上下にドラッグすると、並び順を変えられます（全員の画面で同じ順）。数字は 1 日の作業時間の合計（作業時間数を期間の営業日に均等に割り振り）。カード・バーは押すとタスクを開き、横にドラッグすると日付を動かせます。自分だけのタスクは数えません</p>
     </div>
   );
 }
