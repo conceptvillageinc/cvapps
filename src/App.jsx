@@ -38,6 +38,8 @@ import FaqPage from '@/pages/FaqPage';
 import ProjectList from '@/pages/ProjectList';
 import Tasks from '@/pages/Tasks';
 import Inbox from '@/pages/Inbox';
+import ProofForms from '@/pages/ProofForms';
+import ProofFormPublic from '@/pages/ProofFormPublic';
 import ProjectDetail from '@/pages/ProjectDetail';
 import RecurringProjects from '@/pages/RecurringProjects';
 import FreeeHandover from '@/pages/FreeeHandover';
@@ -77,6 +79,8 @@ const AuthenticatedApp = () => {
       />
       {/* クライアント向けの工程表（ログイン不要・見るだけ） */}
       <Route path="/s/:token" element={<SharedSchedule />} />
+      {/* クライアント向けの校了フォーム（ログイン不要） */}
+      <Route path="/f/:token" element={<ProofFormPublic />} />
 
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
@@ -113,6 +117,7 @@ const AuthenticatedApp = () => {
           <Route path="/e/:number" element={<EstimateShortLink />} />
           <Route path="/estimates" element={<EstimateList />} />
           <Route path="/history" element={<EstimateHistory />} />
+          <Route path="/proof-forms" element={<ProofForms />} />
           <Route path="/vendors" element={<VendorManagement />} />
           <Route path="/price-master" element={<PriceMasterList />} />
           <Route path="/design-fee-master" element={<DesignFeeMasterList />} />

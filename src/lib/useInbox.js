@@ -15,4 +15,5 @@ export const NOTIFICATION_KIND = {
   mention: "あなたをメンションしました",
   assigned: "あなたを担当者にしました",
   comment: "担当のタスクにコメントしました",
+  proof_form: "校了フォームに回答がありました",
 };

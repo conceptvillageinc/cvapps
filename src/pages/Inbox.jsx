@@ -2,14 +2,14 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
-import { Inbox as InboxIcon, Loader2, CheckCheck, AtSign, UserPlus, MessageSquare } from "lucide-react";
+import { Inbox as InboxIcon, Loader2, CheckCheck, AtSign, UserPlus, MessageSquare, FileCheck2 } from "lucide-react";
 import { useInbox, INBOX_KEY, NOTIFICATION_KIND } from "@/lib/useInbox";
 import { useTaskData } from "@/lib/useTaskData";
 import { userLabel, todayYmd, dueOf } from "@/lib/tasks";
 import { UserAvatar, TaskPlaceChip } from "@/components/tasks/parts";
 import { useAuth } from "@/lib/AuthContext";
 
-const ICON = { mention: AtSign, assigned: UserPlus, comment: MessageSquare };
+const ICON = { mention: AtSign, assigned: UserPlus, comment: MessageSquare, proof_form: FileCheck2 };
 const fmtAt = (s) => { const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
 /** 受信トレイ: メンション・担当になった・担当のタスクへのコメント。期限が今日・明日の自分のタスクも上に出す */
@@ -42,10 +42,10 @@ export default function Inbox() {
         {items.map((n) => {
           const actor = data.byId.users.get(n.actor_id); const Icon = ICON[n.kind] || MessageSquare; const t = data.byId.tasks.get(n.task_id);
           return (
-            <Link key={n.id} to={`/tasks?task=${n.task_id}`} onClick={() => markRead(n)} className={`flex gap-3 px-4 py-3 hover:bg-muted/40 ${n.read_at ? "" : "bg-blue-50/50"}`} data-testid="inbox-item">
-              <div className="relative"><UserAvatar user={actor} size={30} /><Icon className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-white p-0.5 text-primary ring-1 ring-slate-200" /></div>
+            <Link key={n.id} to={n.link || `/tasks?task=${n.task_id}`} onClick={() => markRead(n)} className={`flex gap-3 px-4 py-3 hover:bg-muted/40 ${n.read_at ? "" : "bg-blue-50/50"}`} data-testid="inbox-item">
+              <div className="relative">{!actor && n.kind === "proof_form" ? <span className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full bg-violet-100 text-violet-700"><FileCheck2 className="w-4 h-4" /></span> : <UserAvatar user={actor} size={30} />}{actor && <Icon className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-white p-0.5 text-primary ring-1 ring-slate-200" />}</div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs"><span className="font-semibold">{userLabel(actor)}</span> さんが{NOTIFICATION_KIND[n.kind] || "お知らせ"}<span className="ml-2 text-muted-foreground">{fmtAt(n.created_at)}</span></p>
+                <p className="text-xs">{actor ? <><span className="font-semibold">{userLabel(actor)}</span> さんが</> : null}{NOTIFICATION_KIND[n.kind] || "お知らせ"}<span className="ml-2 text-muted-foreground">{fmtAt(n.created_at)}</span></p>
                 <p className="text-sm font-medium truncate">{n.title}</p>
                 {n.body && <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">{n.body}</p>}
                 {t && <TaskPlaceChip task={t} byId={data.byId} className="mt-1" />}

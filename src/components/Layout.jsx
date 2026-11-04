@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useRecurringAlerts } from "@/lib/recurringStatus";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users, Layers, LayoutTemplate,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft, ListTodo, Inbox
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft, ListTodo, Inbox, FileCheck2
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { db } from "@/api/db";
@@ -51,6 +51,7 @@ const navItems = [
 ];
 
 const adminItems = [
+  { path: "/proof-forms", label: "校了フォーム登録", icon: FileCheck2 },
   { path: "/vendors", label: "印刷所情報", icon: Building2 },
   { path: "/print-types", label: "印刷種別マスタ", icon: Printer },
   { path: "/price-master", label: "価格マスタ", icon: Tag },
