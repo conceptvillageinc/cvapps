@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2 } from "lucide-react";
@@ -53,24 +53,41 @@ function SectionHeader({ group, count, hours, mode, collapsed, onToggle, ops, is
   );
 }
 
+/**
+ * 「タスクを追加」。名前を入れて Enter（または「追加」・枠の外をクリック）で 1 件追加して閉じる。
+ *   続けて入力の欄は出さない（足したタスクは一覧の中で少しのあいだ色が付く）。Esc・「やめる」で何も足さずに閉じる
+ */
 function AddLine({ onAdd, board = false, testId }) {
   const [open, setOpen] = useState(false);
   const [v, setV] = useState("");
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
+  const close = () => { setV(""); setOpen(false); };
+  const submit = async () => {
+    const name = v.trim();
+    if (!name) { close(); return; }
+    if (sending.current) return;
+    sending.current = true; setBusy(true);
+    try { await onAdd(name); close(); } catch (err) { toast.error("追加できませんでした: " + (err?.message || "")); } finally { sending.current = false; setBusy(false); }
+  };
   if (!open) return (
     <button type="button" onClick={() => setOpen(true)} className={`flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 ${board ? "w-full rounded-lg px-2 py-2 hover:bg-white/70" : "pl-9 py-2"}`} data-testid={testId}>
       <Plus className="w-3.5 h-3.5" />タスクを追加
     </button>
   );
+  const keep = (e) => e.preventDefault(); // ボタンを押したときに入力欄の blur で先に保存しないように
   return (
-    <div className={`flex items-center gap-2 ${board ? "rounded-lg bg-white px-2 py-2 shadow-sm ring-1 ring-slate-200" : "pl-9 pr-2 py-1.5 border-b border-slate-100"}`}>
+    <div className={`flex items-center gap-2 ${board ? "flex-wrap rounded-lg bg-white px-2 py-2 shadow-sm ring-2 ring-primary/30" : "pl-9 pr-2 py-1.5 border-b border-slate-100 bg-blue-50/40"}`} data-testid={`${testId}-editor`}>
       {busy ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <TaskCheck done={false} size={16} />}
-      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} placeholder="タスク名を入れて Enter（Esc でやめる）" className="flex-1 text-sm bg-transparent focus:outline-none" data-testid={`${testId}-input`}
-        onBlur={() => !v.trim() && setOpen(false)}
-        onKeyDown={async (e) => {
-          if (e.key === "Escape") { setV(""); setOpen(false); }
-          if (e.key === "Enter" && !e.nativeEvent.isComposing && v.trim()) { setBusy(true); try { await onAdd(v.trim()); setV(""); } catch (err) { toast.error("追加できませんでした: " + (err?.message || "")); } finally { setBusy(false); } }
+      <input autoFocus value={v} disabled={busy} onChange={(e) => setV(e.target.value)} placeholder="タスク名" className="flex-1 min-w-[8rem] text-sm bg-transparent focus:outline-none" data-testid={`${testId}-input`}
+        onBlur={submit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") { e.preventDefault(); close(); }
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
         }} />
+      <span className="hidden sm:inline text-[10px] text-slate-400">Enter で追加・Esc でやめる</span>
+      <button type="button" onMouseDown={keep} onClick={submit} disabled={!v.trim() || busy} className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-40" data-testid={`${testId}-save`}>追加</button>
+      <button type="button" onMouseDown={keep} onClick={close} className="rounded-md px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100">やめる</button>
     </div>
   );
 }
@@ -86,6 +103,12 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   const [drag, setDrag] = useState(null); // 動かしているタスクの id
   const [over, setOver] = useState(null); // { key, index }
   const [noneCollapsed, setNoneCollapsed] = useState(false);
+  const [added, setAdded] = useState(null); // 足したばかりのタスク（少しのあいだ色を付ける）
+  const addTo = async (g, name) => {
+    const row = await onAdd(g.section?.id || null, name, orderAt(g.tasks, g.tasks.length, mode));
+    if (row?.id) { setAdded(row.id); setTimeout(() => setAdded((x) => (x === row.id ? null : x)), 2500); }
+    return row;
+  };
   const groups = groupIntoSections(tasks, sections, mode);
   const keyOf = (g) => g.section?.id || "none";
   const hoursOf = (list) => list.reduce((s, t) => s + (Number(t.estimated_hours) || 0), 0);
@@ -118,7 +141,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                   <div key={t.id}>
                     {isOver(g, i) && <div className="h-1 rounded-full bg-primary mb-2" />}
                     <div draggable onDragStart={() => setDrag(t.id)} onDragEnd={() => { setDrag(null); setOver(null); }} onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => onOpen(t.id)}
-                      className={`cursor-pointer rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-slate-200 hover:ring-primary/40 hover:shadow transition ${drag === t.id ? "opacity-40" : ""}`} data-testid="board-card">
+                      className={`cursor-pointer rounded-lg p-2.5 shadow-sm ring-1 hover:ring-primary/40 hover:shadow transition-colors duration-700 ${added === t.id ? "bg-emerald-50 ring-emerald-300" : "bg-white ring-slate-200"} ${drag === t.id ? "opacity-40" : ""}`} data-testid="board-card">
                       <div className="flex items-start gap-2">
                         <span className="pt-0.5"><TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={16} /></span>
                         <p className={`flex-1 text-sm leading-snug ${t.completed ? "line-through text-slate-400" : "text-slate-800"}`}>{t.name}</p>
@@ -140,7 +163,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
               })}
               {isOver(g, g.tasks.length) && <div className="h-1 rounded-full bg-primary" />}
             </div>
-            <AddLine board onAdd={(name) => onAdd(g.section?.id || null, name, orderAt(g.tasks, g.tasks.length, mode))} testId="board-add" />
+            <AddLine board onAdd={(name) => addTo(g, name)} testId="board-add" />
           </div>
         ))}
         <button type="button" onClick={() => ops.add()} className="w-60 shrink-0 rounded-xl border-2 border-dashed border-slate-200 py-6 text-sm text-slate-400 hover:border-slate-300 hover:text-slate-600" data-testid="section-add">
@@ -173,7 +196,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                       <div key={t.id} className="relative">
                         {isOver(g, i) && <div className="absolute inset-x-2 -top-px h-0.5 bg-primary z-10" />}
                         <div draggable onDragStart={() => setDrag(t.id)} onDragEnd={() => { setDrag(null); setOver(null); }} onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => onOpen(t.id)}
-                          style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 hover:bg-slate-50 cursor-pointer ${drag === t.id ? "opacity-40" : ""}`} data-testid="task-row">
+                          style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 hover:bg-slate-50 cursor-pointer transition-colors duration-700 ${added === t.id ? "bg-emerald-50" : ""} ${drag === t.id ? "opacity-40" : ""}`} data-testid="task-row">
                           <div className="flex items-center gap-1.5 min-w-0 py-2">
                             <GripVertical className="w-3.5 h-3.5 shrink-0 text-slate-300 opacity-0 group-hover/row:opacity-100 cursor-grab" />
                             <TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={17} />
@@ -192,7 +215,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                     );
                   })}
                   {isOver(g, g.tasks.length) && <div className="mx-2 h-0.5 bg-primary" />}
-                  <AddLine onAdd={(name) => onAdd(g.section?.id || null, name, orderAt(g.tasks, g.tasks.length, mode))} testId="list-add" />
+                  <AddLine onAdd={(name) => addTo(g, name)} testId="list-add" />
                 </div>
               )}
             </section>

@@ -139,6 +139,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
   const [name, setName] = useState(task?.name || "");
   const [desc, setDesc] = useState(task?.description || "");
   const [newSub, setNewSub] = useState("");
+  const [subOpen, setSubOpen] = useState(false); // サブタスクの入力欄を開いているか
   const [proof, setProof] = useState(null); // 開いている添付の id
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
@@ -297,11 +298,24 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
                   <UserAvatar user={byId.users.get(s.assignee_id)} size={18} />
                 </li>
               ))}
-              <li className="flex items-center gap-2 px-3 py-1.5">
-                <Plus className="w-4 h-4 text-muted-foreground" />
-                <input value={newSub} onChange={(e) => setNewSub(e.target.value)} onKeyDown={async (e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && newSub.trim()) { const v = newSub.trim(); setNewSub(""); await addSubtask(v); } }}
-                  placeholder="サブタスクを追加（Enter）" className="flex-1 text-sm focus:outline-none" data-testid="subtask-input" />
+              {/* サブタスクの追加: 名前を入れて Enter（または「追加」）で 1 件足して閉じる。続けて入力の欄は出さない */}
+              {subOpen ? (
+              <li className="flex items-center gap-2 px-3 py-1.5 bg-blue-50/40">
+                <TaskCheck done={false} size={16} />
+                <input autoFocus value={newSub} onChange={(e) => setNewSub(e.target.value)} placeholder="サブタスク名" className="flex-1 text-sm bg-transparent focus:outline-none" data-testid="subtask-input"
+                  onBlur={() => { if (!newSub.trim()) setSubOpen(false); }}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Escape") { setNewSub(""); setSubOpen(false); }
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing && newSub.trim()) { e.preventDefault(); const v = newSub.trim(); setNewSub(""); setSubOpen(false); await addSubtask(v); }
+                  }} />
+                <button type="button" onMouseDown={(e) => e.preventDefault()} disabled={!newSub.trim()} onClick={async () => { const v = newSub.trim(); if (!v) return; setNewSub(""); setSubOpen(false); await addSubtask(v); }} className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-40" data-testid="subtask-save">追加</button>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setNewSub(""); setSubOpen(false); }} className="rounded-md px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100">やめる</button>
               </li>
+              ) : (
+              <li>
+                <button type="button" onClick={() => setSubOpen(true)} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:bg-slate-50 hover:text-slate-700" data-testid="subtask-add"><Plus className="w-4 h-4" />サブタスクを追加</button>
+              </li>
+              )}
             </ul>
           </section>
 
