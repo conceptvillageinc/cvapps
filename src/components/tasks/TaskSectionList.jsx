@@ -71,14 +71,15 @@ function AddLine({ onAdd, board = false, testId }) {
     try { await onAdd(name); close(); } catch (err) { toast.error("追加できませんでした: " + (err?.message || "")); } finally { sending.current = false; setBusy(false); }
   };
   if (!open) return (
-    <button type="button" onClick={() => setOpen(true)} className={`flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 ${board ? "w-full rounded-lg px-2 py-2 hover:bg-white/70" : "pl-9 py-2"}`} data-testid={testId}>
-      <Plus className="w-3.5 h-3.5" />タスクを追加
+    // ＋ は、上の行の ◯（完了のチェック）と同じ位置・同じ幅にそろえる（下に紐づくタスクに見えないように）
+    <button type="button" onClick={() => setOpen(true)} className={`flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 ${board ? "w-full rounded-lg px-2.5 py-2 hover:bg-white/70" : "pl-7 py-2"}`} data-testid={testId}>
+      <span className={`inline-flex shrink-0 items-center justify-center ${board ? "w-4" : "w-[17px]"}`}><Plus className="w-3.5 h-3.5" /></span>タスクを追加
     </button>
   );
   const keep = (e) => e.preventDefault(); // ボタンを押したときに入力欄の blur で先に保存しないように
   return (
-    <div className={`flex items-center gap-2 ${board ? "flex-wrap rounded-lg bg-white px-2 py-2 shadow-sm ring-2 ring-primary/30" : "pl-9 pr-2 py-1.5 border-b border-slate-100 bg-blue-50/40"}`} data-testid={`${testId}-editor`}>
-      {busy ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <TaskCheck done={false} size={16} />}
+    <div className={`flex items-center gap-1.5 ${board ? "flex-wrap rounded-lg bg-white px-2.5 py-2 shadow-sm ring-2 ring-primary/30" : "pl-7 pr-2 py-1.5 border-b border-slate-100 bg-blue-50/40"}`} data-testid={`${testId}-editor`}>
+      {busy ? <span className={`inline-flex shrink-0 justify-center ${board ? "w-4" : "w-[17px]"}`}><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></span> : <TaskCheck done={false} size={board ? 16 : 17} />}
       <input autoFocus value={v} disabled={busy} onChange={(e) => setV(e.target.value)} placeholder="タスク名" className="flex-1 min-w-[8rem] text-sm bg-transparent focus:outline-none" data-testid={`${testId}-input`}
         onBlur={submit}
         onKeyDown={(e) => {
