@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { FileCheck2, Plus, Copy, ExternalLink, Trash2, Loader2, Search, MessageSquareText } from "lucide-react";
 import NewProofFormDialog, { proofUrl } from "@/components/proofForms/NewProofFormDialog";
 import { RESULT_LABEL } from "@/lib/proofForms";
+import { useInbox, unreadProofNotices, INBOX_KEY } from "@/lib/useInbox";
 
 const fmtDate = (s) => { if (!s) return ""; const d = new Date(s); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
 const fmtAt = (s) => { const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
@@ -39,6 +40,15 @@ export default function ProofForms() {
   }, [forms, q]);
   const openId = params.get("form");
   const openForm = forms.find((f) => f.id === openId) || null;
+  const { items: notices } = useInbox();
+  // 回答を開いたら、そのフォームの回答のお知らせを既読にする（受信トレイとサイドバーの件数が減る）
+  useEffect(() => {
+    if (!openForm) return;
+    const unread = unreadProofNotices(notices, openForm.id);
+    if (!unread.length) return;
+    const at = new Date().toISOString();
+    Promise.all(unread.map((n) => db.entities.Notification.update(n.id, { read_at: at }))).then(() => qc.invalidateQueries({ queryKey: INBOX_KEY }), () => null);
+  }, [openForm, notices, qc]);
   const setOpen = (id) => setParams((p) => { const n = new URLSearchParams(p); if (id) n.set("form", id); else n.delete("form"); return n; }, { replace: true });
 
   const copy = (f) => { navigator.clipboard?.writeText(proofUrl(f.token)); toast.success("URL をコピーしました"); };
@@ -101,6 +111,7 @@ export default function ProofForms() {
                   <td className="px-3 py-2.5 text-right text-xs tabular-nums">{(f.items || []).length}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <button type="button" onClick={() => setOpen(f.id)} className="inline-flex items-center gap-1.5 hover:underline" data-testid="proof-answers-open">
+                      {unreadProofNotices(notices, f.id).length > 0 && <span className="h-2 w-2 rounded-full bg-red-500" title="まだ見ていない回答があります" data-testid="proof-row-new" />}
                       <ResultBadge result={rs[0]?.result} />
                       <span className="text-[11px] text-slate-500">{rs.length ? `${rs.length} 件` : "未回答"}</span>
                     </button>

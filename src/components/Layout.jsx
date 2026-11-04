@@ -83,11 +83,11 @@ export default function Layout() {
   // 定期売上の要対応（まもなく終了・終了月を過ぎた・見直しの時期）の件数を「定期売上一覧」に出す
   const { count: recurringAlertCount } = useRecurringAlerts();
   // 受信トレイの未読（メンション・担当になった・コメント）
-  const { unread: inboxUnread } = useInbox();
+  const { unread: inboxUnread, proofUnread } = useInbox();
   // 未入金の請求書（送付済でまだ入金されていないもの。下書きは数えない）の件数を「入金確認」に出す
   const unpaidInvoiceCount = useUnpaidInvoiceCount({ enabled: user?.role !== "guest" });
-  const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : item.path === "/inbox" ? inboxUnread : item.path === "/payments" ? unpaidInvoiceCount : 0);
-  const badgeTitle = (item) => (item.path === "/inbox" ? `未読のお知らせが ${badgeOf(item)} 件あります` : item.path === "/payments" ? `未入金の請求書が ${badgeOf(item)} 件あります` : `対応が必要な定期売上が ${badgeOf(item)} 件あります`);
+  const badgeOf = (item) => (item.path === "/projects/recurring" ? recurringAlertCount : item.path === "/inbox" ? inboxUnread : item.path === "/payments" ? unpaidInvoiceCount : item.path === "/proof-forms" ? proofUnread : 0);
+  const badgeTitle = (item) => (item.path === "/inbox" ? `未読のお知らせが ${badgeOf(item)} 件あります` : item.path === "/proof-forms" ? `まだ見ていない校了フォームの回答が ${badgeOf(item)} 件あります` : item.path === "/payments" ? `未入金の請求書が ${badgeOf(item)} 件あります` : `対応が必要な定期売上が ${badgeOf(item)} 件あります`);
   // ゲスト（社外の方）は、タスクと受信トレイだけ
   const isGuest = user?.role === "guest";
   const visibleNav = navItems.filter((item) => (isGuest ? item.guest : !item.restricted || (item.restricted === "cashflow" && canSeeCashflow) || (item.restricted === "payables" && canViewPayables)));
@@ -123,7 +123,7 @@ export default function Layout() {
           <span className={`shrink-0 rounded border px-1 py-px text-[9px] font-semibold leading-tight ${isActive ? "border-white/50 text-white/90" : "border-amber-400/50 bg-amber-400/10 text-amber-300"} ${collapsed ? "lg:hidden" : ""}`} data-testid="trial-badge">試用版</span>
         )}
         {badgeOf(item) > 0 && (
-          <span className={`ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white ${collapsed ? "lg:hidden" : ""}`} title={badgeTitle(item)} data-testid={item.path === "/inbox" ? "inbox-badge" : item.path === "/payments" ? "payments-badge" : "recurring-badge"}>
+          <span className={`ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white ${collapsed ? "lg:hidden" : ""}`} title={badgeTitle(item)} data-testid={item.path === "/inbox" ? "inbox-badge" : item.path === "/payments" ? "payments-badge" : item.path === "/proof-forms" ? "proof-forms-badge" : "recurring-badge"}>
             {badgeOf(item)}
           </span>
         )}

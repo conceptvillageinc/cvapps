@@ -8,8 +8,13 @@ export function useInbox({ enabled = true } = {}) {
     queryKey: INBOX_KEY, enabled, refetchInterval: 60_000, retry: false,
     queryFn: () => db.entities.Notification.list("-created_at", 200),
   });
-  return { items, unread: items.filter((n) => !n.read_at).length, isLoading };
+  const unreadItems = items.filter((n) => !n.read_at);
+  return { items, unread: unreadItems.length, proofUnread: unreadItems.filter((n) => n.kind === "proof_form").length, isLoading };
 }
+
+/** 校了フォームの回答のお知らせのうち、まだ読んでいないもの（formId を渡すとそのフォームの分だけ） */
+export const unreadProofNotices = (items, formId = null) =>
+  items.filter((n) => n.kind === "proof_form" && !n.read_at && (!formId || String(n.link || "").endsWith(`form=${formId}`)));
 
 export const NOTIFICATION_KIND = {
   mention: "あなたをメンションしました",
