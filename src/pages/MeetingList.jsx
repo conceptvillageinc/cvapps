@@ -10,6 +10,7 @@ import { Mic, Plus, Search, Loader2, Smartphone } from "lucide-react";
 import { MEETING_STATUS, PROCESSING, useMeetingSettings, fmtClock } from "@/lib/meetings";
 import { isLiveRecording } from "@/lib/liveRecordings";
 import LiveRecordingBanner from "@/components/meetings/LiveRecordingBanner";
+import SearchClear from "@/components/ui/search-clear";
 
 /** 議事録一覧 */
 export default function MeetingList() {
@@ -71,7 +72,8 @@ export default function MeetingList() {
 
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="タイトル・クライアント・案件・本文で検索" className="pl-9" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="タイトル・クライアント・案件・本文で検索" className="pl-9 pr-8" />
+        <SearchClear value={search} onClear={() => setSearch("")} />
       </div>
 
       <Card>

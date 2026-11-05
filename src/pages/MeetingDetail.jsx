@@ -30,6 +30,7 @@ import MeetingPrintSpecs from "@/components/meetings/MeetingPrintSpecs";
 import { useAuth } from "@/lib/AuthContext";
 import { useRecording } from "@/lib/recording";
 import { isImeEnter } from "@/lib/ime";
+import SearchClear from "@/components/ui/search-clear";
 
 // useQuery の既定値に毎回新しい配列を渡すと、effect が無限に走るので固定の空配列を使う
 const EMPTY = [];
@@ -466,7 +467,8 @@ export default function MeetingDetail() {
                   <p className="text-sm font-bold">文字起こし <span className="text-xs font-normal text-muted-foreground">{transcript.length} 発話</span></p>
                   <div className="relative w-56">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="文字起こしを検索" className="h-8 pl-8 text-xs" />
+                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="文字起こしを検索" className="h-8 pl-8 text-xs pr-8" />
+                    <SearchClear value={search} onClear={() => setSearch("")} />
                   </div>
                 </div>
                 {(audioUrl || segmentUrls.length > 0) ? (

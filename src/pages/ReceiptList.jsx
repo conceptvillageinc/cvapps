@@ -11,6 +11,7 @@ import { RECEIPT_STATUS_MAP, paymentMethodLabel } from "@/lib/documents";
 import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import { useSessionState } from "@/hooks/use-session-state";
+import SearchClear from "@/components/ui/search-clear";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -40,7 +41,8 @@ export default function ReceiptList() {
       </div>
       <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="番号・宛名・但し書きで検索" className="pl-9 h-9" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="番号・宛名・但し書きで検索" className="pl-9 h-9 pr-8" />
+        <SearchClear value={search} onClear={() => setSearch("")} />
       </div>
       <Card>
         <CardContent className="p-0">

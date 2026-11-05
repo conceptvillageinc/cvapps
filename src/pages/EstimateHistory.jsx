@@ -11,6 +11,7 @@ import { Search, ArrowRight, Loader2, History, Copy } from "lucide-react";
 import { PRINT_TYPES } from "@/lib/constants";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import SearchClear from "@/components/ui/search-clear";
 
 export default function EstimateHistory() {
   const navigate = useNavigate();
@@ -71,8 +72,9 @@ export default function EstimateHistory() {
             placeholder="クライアント名・印刷物名で検索"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 pr-8"
           />
+          <SearchClear value={search} onClear={() => setSearch("")} />
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-44">

@@ -14,6 +14,7 @@ import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { specLabel } from "@/lib/printSpecs";
 import { openBlob } from "@/lib/documents";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
+import SearchClear from "@/components/ui/search-clear";
 
 const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`;
 // 原価は1枚あたりで小数になることがある（例: 8.5円）
@@ -200,7 +201,8 @@ export default function PastEstimateImport({ estimate, onAdd, onClose }) {
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="見積番号・件名・仕様・明細名で絞り込み" className="h-9 pl-8 text-xs" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="見積番号・件名・仕様・明細名で絞り込み" className="h-9 pl-8 text-xs pr-8" />
+          <SearchClear value={search} onClear={() => setSearch("")} />
         </div>
         <label className="flex items-center gap-1.5 text-xs cursor-pointer shrink-0">
           <Checkbox checked={allClients} onCheckedChange={(v) => { setAllClients(!!v); setPicked(new Set()); }} />

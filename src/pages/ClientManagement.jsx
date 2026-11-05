@@ -15,6 +15,7 @@ import { isImeEnter } from "@/lib/ime";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportClientsCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
+import SearchClear from "@/components/ui/search-clear";
 
 
 // クリックしてその場で編集できるセル。フォーカスを外すと自動保存される。
@@ -180,12 +181,15 @@ export default function ClientManagement() {
       </div>
       <FreeePartnerImport open={freeeOpen} onOpenChange={setFreeeOpen} clients={clients} />
 
-      <Input
-        placeholder="クライアント名・担当者・メールで検索..."
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        className="max-w-sm"
-      />
+      <div className="relative max-w-sm">
+        <Input
+          placeholder="クライアント名・担当者・メールで検索..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pr-8"
+        />
+        <SearchClear value={search} onClear={() => setSearch("")} />
+      </div>
 
       <Card>
         <CardContent className="p-0">

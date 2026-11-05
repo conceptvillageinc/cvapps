@@ -21,6 +21,7 @@ import { exportInvoicesCsv } from "@/lib/listCsv";
 import ConditionFilter, { matchConditions, conditionActive } from "@/components/table/ConditionFilter";
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import { useSessionState } from "@/hooks/use-session-state";
+import SearchClear from "@/components/ui/search-clear";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
@@ -132,7 +133,8 @@ export default function InvoiceList() {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="番号・請求先・件名で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="番号・請求先・件名で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 pr-8" />
+          <SearchClear value={search} onClear={() => setSearch("")} />
         </div>
         <div className="flex gap-1">
           {[["unpaid", "未入金"], ["overdue", "期日超過"], ["paid", "入金済"], ["all", "すべて"]].map(([k, label]) => (

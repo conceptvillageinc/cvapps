@@ -15,6 +15,7 @@ import CutoverDialog, { CUTOVER_KEY } from "@/components/payments/CutoverDialog"
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { toast } from "sonner";
 import { suggestInvoices, isConfident, BANK_LABELS } from "@/lib/bankImport";
+import SearchClear from "@/components/ui/search-clear";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -164,7 +165,8 @@ export default function Payments() {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="振込名義・日付・金額で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="振込名義・日付・金額で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 pr-8" />
+          <SearchClear value={search} onClear={() => setSearch("")} />
         </div>
         <div className="flex gap-1">
           {[["unmatched", `未照合 ${listFor("unmatched").length}`], ["matched", `照合済 ${listFor("matched").length}`], ["ignored", `対象外 ${listFor("ignored").length}`]].map(([k, label]) => (

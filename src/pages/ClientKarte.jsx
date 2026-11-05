@@ -29,6 +29,7 @@ import { SUBMISSION_STATUS, submissionOf } from "@/lib/submission";
 import PrintOrderHistory from "@/components/printOrders/PrintOrderHistory";
 import { orderItems } from "@/lib/printOrders";
 import { lineShots } from "@/lib/lineShots";
+import SearchClear from "@/components/ui/search-clear";
 
 const yen = (n) => `¥${(Number(n) || 0).toLocaleString("ja-JP", { maximumFractionDigits: 1 })}`;
 const yenCost = (n) => `¥${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString()}`;
@@ -341,7 +342,8 @@ export default function ClientKarte() {
           <div className="p-2 border-b">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === "estimates" ? "件名・番号・仕様・明細名で絞り込み" : tab === "costSheets" ? "件名・明細名・仕入先・記入者で絞り込み" : "件名・番号で絞り込み"} className="h-8 pl-8 text-xs" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === "estimates" ? "件名・番号・仕様・明細名で絞り込み" : tab === "costSheets" ? "件名・明細名・仕入先・記入者で絞り込み" : "件名・番号で絞り込み"} className="h-8 pl-8 text-xs pr-8" />
+              <SearchClear value={search} onClear={() => setSearch("")} />
             </div>
           </div>
           <div className="overflow-y-auto flex-1">

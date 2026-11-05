@@ -29,6 +29,8 @@ import { recurringStatus, RECURRING_STATUS, addMonths, ymLabel } from "@/lib/rec
 import { catchUpRecurringNotes } from "@/lib/projectNumber";
 
 const yen = (n) => `¥${Math.round(Number(n || 0)).toLocaleString()}`;
+/** 月を短く（2026-10-01 → 2026/10） */
+const shortYm = (d) => (d ? `${String(d).slice(0, 4)}/${String(d).slice(5, 7)}` : "");
 const toNumber = (v) => {
   const n = Number(String(v ?? "").replace(/,/g, ""));
   return Number.isFinite(n) ? n : 0;
@@ -496,32 +498,36 @@ export default function RecurringProjects() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="[&_th]:px-2.5 [&_td]:px-2.5">
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
-                    <TableHead className="text-xs text-white">クライアント</TableHead>
-                    <TableHead className="text-xs text-white">案件名</TableHead>
+                    {/* 折り返さずに見られるよう、クライアントと案件名は 1 つの列に（クライアントは上に小さく） */}
+                    <TableHead className="text-xs text-white whitespace-nowrap">クライアント／案件名</TableHead>
                     <TableHead className="text-xs text-white text-right whitespace-nowrap">受注見込/月（税別）</TableHead>
                     <TableHead className="text-xs text-white text-right whitespace-nowrap">粗利見込/月（税別）</TableHead>
-                    <TableHead className="text-xs text-white">期間</TableHead>
-                    <TableHead className="text-xs text-white">終了・更新</TableHead>
-                    <TableHead className="text-xs text-white">案件・最新の納品書</TableHead>
-                    <TableHead className="text-xs text-white">状態</TableHead>
+                    <TableHead className="text-xs text-white whitespace-nowrap">期間</TableHead>
+                    <TableHead className="text-xs text-white whitespace-nowrap">終了・更新</TableHead>
+                    <TableHead className="text-xs text-white whitespace-nowrap">案件・最新の納品書</TableHead>
+                    <TableHead className="text-xs text-white whitespace-nowrap">状態</TableHead>
                     <TableHead className="w-20"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {shown.map((t) => (
                     <TableRow key={t.id} className={t.is_active ? "" : "opacity-60"}>
-                      <TableCell className="text-sm font-medium">{t.client_name}</TableCell>
-                      <TableCell className="text-sm">
-                        {t.name}
-                        {t.auto_delivery_note && (t.line_items || []).length > 0 && <Badge className="ml-1.5 text-[9px] font-normal bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-50" title={(t.line_items || []).map((l) => l.name).join(" / ")}><Truck className="w-2.5 h-2.5 mr-0.5" />納品書も作る（{t.line_items.length}行）</Badge>}
-                        {t.notes && <div className="text-[10px] text-muted-foreground truncate max-w-[280px]">{t.notes}</div>}
+                      <TableCell className="py-2 max-w-[15rem]" title={`${t.client_name || ""}　${t.name || ""}${t.notes ? `\n${t.notes}` : ""}`}>
+                        <span className="block truncate text-[11px] text-muted-foreground">{t.client_name}</span>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate text-sm font-medium">{t.name}</span>
+                          {t.auto_delivery_note && (t.line_items || []).length > 0 && (
+                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded border border-teal-200 bg-teal-50 px-1 text-[9px] leading-4 text-teal-800" title={`毎月の納品書も作ります：${(t.line_items || []).map((l) => l.name).join(" / ")}`}><Truck className="w-2.5 h-2.5" />{t.line_items.length}行</span>
+                          )}
+                        </span>
+                        {t.notes && <span className="block truncate text-[10px] text-muted-foreground">{t.notes}</span>}
                       </TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{yen(t.expected_revenue)}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{yen(Number(t.expected_revenue || 0) - Number(t.expected_cost || 0) - Number(t.other_cost || 0))}</TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">{monthLabel(t.start_month)} 〜 {t.end_month ? monthLabel(t.end_month) : "無期限"}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums whitespace-nowrap">{yen(t.expected_revenue)}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums whitespace-nowrap">{yen(Number(t.expected_revenue || 0) - Number(t.expected_cost || 0) - Number(t.other_cost || 0))}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap tabular-nums">{shortYm(t.start_month)}〜{t.end_month ? shortYm(t.end_month) : "無期限"}</TableCell>
                       <TableCell className="text-xs" data-testid="recurring-status">
                         {(() => {
                           const st = statusOf(t);
@@ -530,7 +536,7 @@ export default function RecurringProjects() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-1.5 whitespace-nowrap">
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${def.cls}`}>{def.label}</span>
-                                {st.note && <span className="text-[10px] text-muted-foreground">{st.note}</span>}
+                                {st.note && <span className="truncate max-w-[9rem] text-[10px] text-muted-foreground" title={st.note}>{st.note}</span>}
                               </div>
                               {def.action && (
                                 <div className="flex flex-wrap gap-1">
@@ -566,7 +572,7 @@ export default function RecurringProjects() {
                           </Badge>
                         </button>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { if (projectByTemplate[t.id]) navigate(`/projects/${projectByTemplate[t.id].id}?recurring=1`); else { setEditing(t); setDialogOpen(true); } }} title="案件の画面で定期売上の設定を開きます">
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
@@ -584,7 +590,7 @@ export default function RecurringProjects() {
                     const hasStopped = active.length !== shown.length;
                     return (
                       <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium" data-testid="list-total">
-                        <TableCell colSpan={2} className="text-xs text-muted-foreground whitespace-nowrap">
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           表示中の合計（{shown.length}件）
                           {hasStopped && <span className="block text-[10px] font-normal">うち有効 {active.length}件</span>}
                         </TableCell>

@@ -31,6 +31,7 @@ import { clientLines, estimateSubtotal } from "@/lib/estimateTotals";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportEstimatesCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
+import SearchClear from "@/components/ui/search-clear";
 
 /** 一覧の金額は税別（明細の無い古い見積は合計金額のまま） */
 const exTaxOf = (e) => estimateSubtotal(e) ?? (Number(e.total_amount) || 0);
@@ -308,8 +309,9 @@ export default function EstimateList() {
           placeholder="クライアント名・見積番号・商品名で検索"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="pl-9"
+          className="pl-9 pr-8"
         />
+        <SearchClear value={search} onClear={() => setSearch("")} />
       </div>
       <div className="flex flex-wrap items-center gap-1.5 -mt-2" data-testid="submission-filter">
         <span className="text-xs text-muted-foreground mr-1">提出ステータス</span>

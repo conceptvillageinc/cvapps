@@ -29,6 +29,7 @@ import SubsidyMark from "@/components/projects/SubsidyMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportProjectsCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
+import SearchClear from "@/components/ui/search-clear";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const ALL_YEARS = "all";
@@ -382,8 +383,9 @@ export default function ProjectList() {
           placeholder="案件番号・クライアント名・案件名・メモで検索"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
+          className="pl-9 pr-8"
         />
+        <SearchClear value={search} onClear={() => setSearch("")} />
       </div>
       {view === "standard" && <PeriodFilter value={period} onChange={setPeriod} fields={PERIOD_FIELDS} className="-mt-1 shrink-0" />}
 

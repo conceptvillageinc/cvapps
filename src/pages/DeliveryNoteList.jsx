@@ -26,6 +26,7 @@ import PeriodFilter, { emptyPeriod, inPeriod } from "@/components/table/PeriodFi
 const PERIOD_FIELDS = [{ value: "delivery_date", label: "納品日" }, { value: "created_date", label: "作成日" }];
 import { exportDeliveryNotesCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
+import SearchClear from "@/components/ui/search-clear";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -162,7 +163,8 @@ export default function DeliveryNoteList() {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="番号・クライアント名・件名で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="番号・クライアント名・件名で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 pr-8" />
+          <SearchClear value={search} onClear={() => setSearch("")} />
         </div>
         <div className="flex gap-1">
           {[["all", "すべて"], ["uninvoiced", "請求書作成：未処理"], ["draft", "下書き"]].map(([k, label]) => (
