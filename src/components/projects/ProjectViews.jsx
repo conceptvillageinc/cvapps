@@ -29,6 +29,14 @@ const withWeekday = (d) => {
   const dt = new Date(`${d}T00:00:00`);
   return Number.isNaN(dt.getTime()) ? d : `${d}（${WEEKDAYS[dt.getDay()]}）`;
 };
+/** 日付を短く（今年なら「11/30(月)」、ほかの年は「2025/11/30(金)」） */
+const shortWithWeekday = (d) => {
+  if (!d) return "—";
+  const dt = new Date(`${d}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return d;
+  const md = `${dt.getMonth() + 1}/${dt.getDate()}(${WEEKDAYS[dt.getDay()]})`;
+  return dt.getFullYear() === new Date().getFullYear() ? md : `${dt.getFullYear()}/${md}`;
+};
 const shortDate = (d) => (d ? `${d.slice(5, 7)}-${d.slice(8, 10)}` : "");
 const fmtStamp = (iso) => {
   if (!iso) return "";
@@ -136,7 +144,7 @@ function useScrollToRowOnce(ready, selector, headerSelector = "thead") {
 const STICKY_HEAD = "sticky top-0 z-10 bg-slate-800 shadow-[0_1px_0_0_rgba(255,255,255,0.15)]"; // 表のカードの中で固定する
 
 /** 見出しを画面上部に固定するための素の table（共通の Table はスクロール枠で包むため固定が効かない） */
-const PlainTable = ({ children }) => <table className="w-full caption-bottom text-sm">{children}</table>;
+const PlainTable = ({ children, className = "" }) => <table className={`w-full caption-bottom text-sm ${className}`}>{children}</table>;
 
 /** 絞り込みに使う値の候補: システム設定の選択肢 + 実際に入っている値 + 空欄 */
 function filterCandidates(key, projects, settings) {
@@ -163,14 +171,14 @@ function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter
   return (
     <TableHead className={`text-xs text-white whitespace-nowrap ${col.num ? "text-right" : ""} ${className}`}>
       {sortable ? (
-        <span className="inline-flex items-center gap-1">
+        <span className="inline-flex items-center gap-0.5">
           <button type="button" onClick={() => onToggle(col.key)} className="inline-flex items-center gap-1 hover:underline" title="クリックで並べ替え（昇順 → 降順 → 解除）">
-            {col.label}
+            <span className={col.head ? "inline-block whitespace-nowrap leading-tight text-left" : ""}>{col.head || col.label}</span>
             {active ? (sort.dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3 opacity-50" />}
           </button>
           <Popover>
             <PopoverTrigger asChild>
-              <button type="button" className={`inline-flex items-center rounded px-1 py-0.5 ${selected ? "bg-amber-400 text-slate-900" : "opacity-60 hover:opacity-100"}`} title="表示する値を選ぶ（複数可）" aria-label={`${col.label}で絞り込み`}>
+              <button type="button" className={`inline-flex items-center rounded px-0.5 py-0.5 ${selected ? "bg-amber-400 text-slate-900" : "opacity-60 hover:opacity-100"}`} title="表示する値を選ぶ（複数可）" aria-label={`${col.label}で絞り込み`}>
                 <Filter className="w-3 h-3" />{selected && <span className="ml-0.5 text-[10px] font-bold">{selected.length}</span>}
               </button>
             </PopoverTrigger>
@@ -197,7 +205,7 @@ function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter
           </Popover>
         </span>
       ) : (
-        <>{col.label}{!sort && defaultMark === col.key ? " ↑" : ""}</>
+        <span className={col.head ? "inline-block whitespace-nowrap leading-tight" : ""}>{col.head || col.label}{!sort && defaultMark === col.key ? " ↑" : ""}</span>
       )}
     </TableHead>
   );
@@ -554,16 +562,16 @@ function GroupRows({ group: g, target, isToday, isYesterday }) {
 /* ------------------------------------------------------------------------ */
 
 const NEXT_COLS = [
-  { key: "due_date", label: "完了予定日" },
-  { key: "confirmed_revenue", label: "納品確定金額(税抜)", num: true },
+  { key: "due_date", label: "完了予定日", head: <>完了<br />予定日</> },
+  { key: "confirmed_revenue", label: "納品確定金額(税抜)", head: <>納品確定<br />(税抜)</>, num: true },
   { key: "name", label: "案件名称" },
-  { key: "deal_probability", label: "受注確度" },
+  { key: "deal_probability", label: "受注確度", head: <>受注<br />確度</> },
   { key: "phase", label: "フェーズ" },
   { key: "status", label: "状態" },
-  { key: "expected_revenue", label: "受注見込", num: true },
-  { key: "expected_cost", label: "発注見込", num: true },
-  { key: "confirmed_cost", label: "仕入合計(税抜)", num: true },
-  { key: "other_cost", label: "その他費用", num: true },
+  { key: "expected_revenue", label: "受注見込", head: <>受注<br />見込</>, num: true },
+  { key: "expected_cost", label: "発注見込", head: <>発注<br />見込</>, num: true },
+  { key: "confirmed_cost", label: "仕入合計(税抜)", head: <>仕入合計<br />(税抜)</>, num: true },
+  { key: "other_cost", label: "その他費用", head: <>その他<br />費用</>, num: true },
   { key: "next_action", label: "ネクストアクション" },
 ];
 
@@ -678,11 +686,12 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
             <Empty text="表示する案件がありません（状態の絞り込みを確認してください）" />
           ) : (
             <div>
-              <PlainTable>
+              {/* ネクストアクションまで横スクロールなしで見えるよう、余白を詰める */}
+              <PlainTable className="[&_th]:px-2 [&_td]:px-2">
                 <TableHeader className={STICKY_HEAD}>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {NEXT_COLS.map((c) => (
-                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="due_date" className={c.key === "next_action" ? "min-w-[260px]" : ""}
+                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="due_date" className={c.key === "next_action" ? "min-w-[170px] w-[26%]" : ""}
                         filter={filters[c.key]} onFilter={setFilter} candidates={c.key in SORTABLE ? filterCandidates(c.key, projects, settings) : []} />
                     ))}
                   </TableRow>
@@ -717,9 +726,9 @@ function NextGroupRows({ group: g }) {
       )}
       {g.rows.map((p) => (
         <TableRow key={p.id} className="hover:bg-muted/40">
-          <TableCell className="text-xs whitespace-nowrap">{p.due_date ? withWeekday(p.due_date) : <span className="text-muted-foreground">—</span>}</TableCell>
-          <TableCell className="text-right text-sm tabular-nums">{yen(p.confirmed_revenue)}</TableCell>
-          <TableCell className="text-sm max-w-[320px]">
+          <TableCell className="text-xs whitespace-nowrap">{p.due_date ? shortWithWeekday(p.due_date) : <span className="text-muted-foreground">—</span>}</TableCell>
+          <TableCell className="text-right text-[13px] tabular-nums whitespace-nowrap">{yen(p.confirmed_revenue)}</TableCell>
+          <TableCell className="text-[13px] min-w-[140px] max-w-[210px]">
             {/* クライアント名（小さく）を上、案件名を下に */}
             <span className="block text-[10px] text-muted-foreground truncate">{p.client_name}</span>
             <Link to={`/projects/${p.id}?from=next`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>{p.is_recurring && <RecurringMark className="ml-1.5 align-middle" />}
@@ -728,10 +737,10 @@ function NextGroupRows({ group: g }) {
           <TableCell><InlineBadgeSelect project={p} field="deal_probability" /></TableCell>
           <TableCell><InlineBadgeSelect project={p} field="phase" /></TableCell>
           <TableCell><InlineBadgeSelect project={p} field="status" /></TableCell>
-          <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
-          <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_cost)}</TableCell>
-          <TableCell className="text-right text-sm tabular-nums">{yen(p.confirmed_cost)}</TableCell>
-          <TableCell className="text-right text-sm tabular-nums">{yen(p.other_cost)}</TableCell>
+          <TableCell className="text-right text-[13px] tabular-nums whitespace-nowrap">{yen(p.expected_revenue)}</TableCell>
+          <TableCell className="text-right text-[13px] tabular-nums whitespace-nowrap">{yen(p.expected_cost)}</TableCell>
+          <TableCell className="text-right text-[13px] tabular-nums whitespace-nowrap">{yen(p.confirmed_cost)}</TableCell>
+          <TableCell className="text-right text-[13px] tabular-nums whitespace-nowrap">{yen(p.other_cost)}</TableCell>
           <TableCell className="py-1.5"><NextActionCell project={p} /></TableCell>
         </TableRow>
       ))}
