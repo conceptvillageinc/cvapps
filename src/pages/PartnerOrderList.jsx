@@ -79,7 +79,7 @@ export default function PartnerOrderList() {
                 <TableRow className="bg-muted/30 font-medium">
                   {cols.map((k, i) => (k === "total"
                     ? <TableCell key={k} className="text-right tabular-nums">{yen(total)}</TableCell>
-                    : <TableCell key={k} className="text-xs whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `合計（${filtered.length} 件）` : ""}</TableCell>))}
+                    : <TableCell key={k} className="text-xs whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `表示中の合計（${filtered.length}件）` : ""}</TableCell>))}
                 </TableRow>
               </TableBody>
             </Table>

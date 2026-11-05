@@ -168,6 +168,14 @@ export default function EstimateHistory() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {/* 表示中（検索・期間のあと）の合計 */}
+                  <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium" data-testid="list-total">
+                    <TableCell colSpan={4} className="text-xs text-muted-foreground">表示中の合計（{filtered.length}件）</TableCell>
+                    {["cost_price", "selling_price", "gross_profit"].map((k) => (
+                      <TableCell key={k} className={`text-right text-sm tabular-nums ${k === "gross_profit" ? "text-emerald-600" : ""}`}>¥{filtered.reduce((t, e) => t + (Number(e[k]) || 0), 0).toLocaleString()}</TableCell>
+                    ))}
+                    <TableCell colSpan={3} />
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>

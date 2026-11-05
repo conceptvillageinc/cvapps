@@ -287,6 +287,14 @@ export default function DeliveryNoteList() {
                       </TableRow>
                     );
                   })}
+                  {/* 表示中（検索・期間・絞り込みのあと）の合計 */}
+                  <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium" data-testid="list-total">
+                    <TableCell />
+                    {cols.map((k, i) => (k === "total"
+                      ? <TableCell key={k} className="text-right text-sm tabular-nums whitespace-nowrap">{yen(total)}<span className="block text-[10px] font-normal text-muted-foreground">税抜 {yen(filtered.reduce((s, n) => s + Number(n.subtotal || 0), 0))}</span></TableCell>
+                      : <TableCell key={k} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `表示中の合計（${filtered.length}件）` : ""}</TableCell>))}
+                    <TableCell />
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>

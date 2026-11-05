@@ -422,6 +422,14 @@ export default function EstimateList() {
                       </TableRow>
                     );
                   })}
+                  {/* 表示中（検索・絞り込みのあと。「すべて表示」を押す前でも、絞り込んだ全件）の合計 */}
+                  <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium" data-testid="list-total">
+                    <TableCell />
+                    {cols.map((key, i) => (key === "total_amount"
+                      ? <TableCell key={key} className="text-right text-sm tabular-nums whitespace-nowrap">¥{sorted.reduce((t, e) => t + (Number(e.total_amount) || 0), 0).toLocaleString()}</TableCell>
+                      : <TableCell key={key} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total_amount") ? `表示中の合計（${sorted.length}件${!showAll && sorted.length > PAGE_ROWS ? `・下の「すべて表示」を押す前の分も含む` : ""}）` : ""}</TableCell>))}
+                    <TableCell />
+                  </TableRow>
                 </TableBody>
               </Table>
               {!showAll && sorted.length > PAGE_ROWS && (
