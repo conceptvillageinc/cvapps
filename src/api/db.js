@@ -94,7 +94,7 @@ const WRITABLE_COLUMNS = {
     'delivery_number', 'project_id', 'estimate_id', 'client_id', 'client_name', 'client_honorific',
     'client_postal_code', 'client_address', 'title', 'delivery_date', 'line_items',
     'subtotal', 'tax', 'total', 'tax_breakdown', 'notes', 'status', 'invoice_id',
-    'person_in_charge', 'created_by',
+    'person_in_charge', 'created_by', 'invoiced_manual',
   ],
   partner_orders: [
     'po_number', 'estimate_id', 'project_id', 'partner_type', 'partner_id', 'partner_name', 'partner_honorific',

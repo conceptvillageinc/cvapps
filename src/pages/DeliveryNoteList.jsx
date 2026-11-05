@@ -15,6 +15,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { DELIVERY_STATUS_MAP } from "@/lib/documents";
+import { isNoteInvoiced } from "@/lib/deliveryStatus";
 import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark, { useRecurringProjectIds, noteIsRecurring } from "@/components/projects/RecurringMark";
@@ -47,7 +48,7 @@ export default function DeliveryNoteList() {
     const q = search.trim().toLowerCase();
     return notes.filter((n) => {
       if (!inPeriod(n[period.field], period)) return false;
-      if (filter === "uninvoiced" && n.invoice_id) return false;
+      if (filter === "uninvoiced" && isNoteInvoiced(n)) return false;
       if (filter === "draft" && n.status !== "draft") return false;
       if (!q) return true;
       return [n.delivery_number, n.client_name, n.title].filter(Boolean).join(" ").toLowerCase().includes(q);
@@ -56,19 +57,32 @@ export default function DeliveryNoteList() {
 
   const total = filtered.reduce((s, n) => s + Number(n.total || 0), 0);
 
+  // 請求書作成の 未処理／処理済 を一覧から変える（請求書とつながっていない納品書だけ）
+  const setInvoicedManual = async (n, done) => {
+    queryClient.setQueryData(["deliveryNotes"], (old) => (old || []).map((x) => (x.id === n.id ? { ...x, invoiced_manual: done } : x)));
+    try {
+      await db.entities.DeliveryNote.update(n.id, { invoiced_manual: done });
+      toast.success(`請求書作成を「${done ? "処理済" : "未処理"}」にしました`);
+    } catch (e) {
+      toast.error("変えられませんでした: " + (e?.message || ""));
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
+    }
+  };
+
   // 選んだ納品書から請求書を作る（同じクライアントの未請求分だけ。1 枚の請求書にまとめる）
   const pickedNotes = notes.filter((n) => picked.has(n.id));
   const pickedClients = [...new Set(pickedNotes.map((n) => (n.client_name || "").trim()))];
-  const pickedInvoiced = pickedNotes.filter((n) => n.invoice_id);
+  const pickedInvoiced = pickedNotes.filter(isNoteInvoiced);
   const invoiceBlock = pickedInvoiced.length > 0
-    ? `請求済の納品書が ${pickedInvoiced.length} 件入っています（外すと作れます）`
+    ? `請求書作成が「処理済」の納品書が ${pickedInvoiced.length} 件入っています（外すと作れます）`
     : pickedClients.length > 1 ? `クライアントが違う納品書が入っています（${pickedClients.slice(0, 3).join("・")}${pickedClients.length > 3 ? " ほか" : ""}）` : "";
   const sameClientRest = !invoiceBlock && pickedClients.length === 1
-    ? notes.filter((n) => !n.invoice_id && (n.client_name || "").trim() === pickedClients[0] && !picked.has(n.id))
+    ? notes.filter((n) => !isNoteInvoiced(n) && (n.client_name || "").trim() === pickedClients[0] && !picked.has(n.id))
     : [];
   // 同じクライアントの未請求の納品書（選んだものも含む）。選んだ 1 件から、ほかの分をその場で足せるように並べる
   const sameClientAll = !invoiceBlock && pickedClients.length === 1
-    ? notes.filter((n) => !n.invoice_id && (n.client_name || "").trim() === pickedClients[0])
+    ? notes.filter((n) => !isNoteInvoiced(n) && (n.client_name || "").trim() === pickedClients[0])
     : [];
   const pickedTotal = pickedNotes.reduce((s, n) => s + Number(n.total || 0), 0);
   const invoicePicked = () => {
@@ -243,8 +257,16 @@ export default function DeliveryNoteList() {
                             case "invoice": return (
                               <TableCell key={k}>
                                 {n.invoice_id
-                                  ? <Link to={`/invoices/${n.invoice_id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline" title="この納品書から作った請求書を開く">処理済</Link>
-                                  : <span className="text-xs text-amber-700">未処理</span>}
+                                  ? <Link to={`/invoices/${n.invoice_id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline" title="この納品書から作った請求書を開く（請求書とつながっているので、ここでは変えられません）">処理済</Link>
+                                  : (
+                                    // 請求書とつながっていない納品書は、一覧から 未処理／処理済 を切り替えられる
+                                    <select value={n.invoiced_manual ? "done" : "todo"} onClick={(e) => e.stopPropagation()} onChange={(e) => setInvoicedManual(n, e.target.value === "done")}
+                                      title="請求書作成の処理を一覧から変えられます（freee販売で請求した分など）"
+                                      className={`h-7 rounded-md border px-1.5 text-[11px] font-medium cursor-pointer border-transparent ${n.invoiced_manual ? "bg-sky-50 text-sky-700" : "bg-amber-50 text-amber-800"}`} data-testid="note-invoiced-select">
+                                      <option value="todo">未処理</option>
+                                      <option value="done">処理済</option>
+                                    </select>
+                                  )}
                               </TableCell>
                             );
                             default: return <TableCell key={k} />;

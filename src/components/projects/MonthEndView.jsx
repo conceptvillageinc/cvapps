@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronLeft, ChevronRight, FileText, Receipt, UserRound } from "lucide-react";
 import DeliveryBadge from "@/components/documents/DeliveryBadge";
-import { projectDelivery, estimateDelivery, stateOfNotes, DELIVERY_STATE, DELIVERY_STATE_ORDER, monthEndOf, isBilledState } from "@/lib/deliveryStatus";
+import { projectDelivery, estimateDelivery, stateOfNotes, DELIVERY_STATE, DELIVERY_STATE_ORDER, monthEndOf, isBilledState, isNoteInvoiced } from "@/lib/deliveryStatus";
 import { isRecurringParent, recurringMonths } from "@/lib/projectInvoicing";
 import { submissionOf } from "@/lib/submission";
 import { todayString } from "@/lib/fiscal";
@@ -124,7 +124,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
             <div className="divide-y">
               {list.map(({ p, d, est }) => {
                 const overdue = String(p.due_date) < today && d.state === "none";
-                const firstUninvoiced = d.notes.find((n) => !n.invoice_id);
+                const firstUninvoiced = d.notes.find((n) => !isNoteInvoiced(n));
                 return (
                   <div key={p.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm ${d.state === "none" && String(p.due_date) <= monthEnd ? "bg-red-50/40" : ""}`} data-testid="monthend-row">
                     <span className={`w-14 shrink-0 tabular-nums text-xs ${overdue ? "text-red-700 font-semibold" : "text-muted-foreground"}`} title="完了予定">{md(p.due_date)}</span>

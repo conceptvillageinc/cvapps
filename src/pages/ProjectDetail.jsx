@@ -580,7 +580,7 @@ export default function ProjectDetail() {
                     <span className="text-xs text-muted-foreground w-20 shrink-0">{n.delivery_date}</span>
                     <span className="text-sm flex-1 truncate">{n.title || "（件名なし）"}</span>
                     <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
-                    {n.invoice_id ? <Badge className="text-[9px] bg-blue-100 text-blue-700 hover:bg-blue-100">請求済</Badge> : <Badge variant="outline" className="text-[9px] font-normal text-amber-700">未請求</Badge>}
+                    {n.invoice_id ? <Badge className="text-[9px] bg-blue-100 text-blue-700 hover:bg-blue-100">請求済</Badge> : n.invoiced_manual ? <Badge className="text-[9px] bg-sky-50 text-sky-700 hover:bg-sky-50" title="納品書一覧で手で「処理済」にした納品書">処理済（手動）</Badge> : <Badge variant="outline" className="text-[9px] font-normal text-amber-700">未請求</Badge>}
                     <span className="text-sm tabular-nums w-32 text-right whitespace-nowrap" title={`税込 ${yen(n.total)}`}>{yen(n.subtotal)}<span className="ml-1 text-[10px] text-muted-foreground">税別</span></span>
                   </Link>
                 );

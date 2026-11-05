@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Repeat, FileText, Receipt } from "lucide-react";
 import { todayString } from "@/lib/fiscal";
 import { addMonthsYm, invoiceProjectShares, recurringMonths } from "@/lib/projectInvoicing";
-import { stateOfNotes, DELIVERY_STATE } from "@/lib/deliveryStatus";
+import { stateOfNotes, DELIVERY_STATE, isNoteInvoiced } from "@/lib/deliveryStatus";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const label = (ym) => `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月`;
@@ -29,7 +29,7 @@ export default function RecurringMonthsCard({ project, deliveryNotes, invoices }
         const s = invoiceProjectShares(inv).filter((x) => x.project_id === project.id && x.month === m).reduce((a, x) => a + x.subtotal, 0);
         if (s) { billed += s; invs.push(inv); }
       }
-      const state = billed > 0 && notes.every((n) => n.invoice_id) ? "invoiced" : stateOfNotes(notes);
+      const state = billed > 0 && notes.every(isNoteInvoiced) ? "invoiced" : stateOfNotes(notes);
       return { m, notes, invs, billed, state };
     });
   }, [project, deliveryNotes, invoices, thisMonth]);
@@ -54,7 +54,7 @@ export default function RecurringMonthsCard({ project, deliveryNotes, invoices }
               <span className="w-36 text-right tabular-nums text-xs whitespace-nowrap">{billed ? <>請求 {yen(billed)}<span className="ml-1 text-[10px] text-muted-foreground">税別</span></> : <span className="text-muted-foreground">—</span>}</span>
               <span className="w-28 shrink-0 text-right">
                 {notes.length === 0 && <Link to={`/delivery-notes/new?project=${project.id}`} className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50"><FileText className="w-3 h-3" /> 納品書を作る</Link>}
-                {notes.some((n) => !n.invoice_id) && <Link to={`/invoices/new?delivery=${notes.filter((n) => !n.invoice_id).map((n) => n.id).join(",")}`} className="inline-flex items-center gap-1 rounded border border-amber-400 px-2 py-0.5 text-[11px] text-amber-800 hover:bg-amber-50"><Receipt className="w-3 h-3" /> 請求書を作る</Link>}
+                {notes.some((n) => !isNoteInvoiced(n)) && <Link to={`/invoices/new?delivery=${notes.filter((n) => !isNoteInvoiced(n)).map((n) => n.id).join(",")}`} className="inline-flex items-center gap-1 rounded border border-amber-400 px-2 py-0.5 text-[11px] text-amber-800 hover:bg-amber-50"><Receipt className="w-3 h-3" /> 請求書を作る</Link>}
               </span>
             </div>
           ))}

@@ -32,12 +32,18 @@ export const MANUAL_DELIVERY_STATES = ["none", "uninvoiced", "invoiced", "sent",
 const sumItems = (items) => (items || []).reduce((s, li) => s + (Number(li.amount) || 0), 0);
 
 /** 納品書の一覧から状態を決める */
+/**
+ * 納品書の「請求書作成」が処理済か（この納品書から請求書を作った、または一覧で手で「処理済」にした）
+ *   手で処理済にするのは、freee販売で請求した分・請求の要らない分など（delivery_notes.invoiced_manual）
+ */
+export const isNoteInvoiced = (n) => !!n?.invoice_id || n?.invoiced_manual === true;
+
 export function stateOfNotes(notes) {
   const list = notes || [];
   if (list.length === 0) return "none";
   // 「納品書 下書き」の状態は使わない（下書きの納品書も、納品済・未請求として数える）
   // 「請求書送付済」は手で決める（請求書の状態からは自動で決めない）
-  return list.some((n) => !n.invoice_id) ? "uninvoiced" : "invoiced";
+  return list.some((n) => !isNoteInvoiced(n)) ? "uninvoiced" : "invoiced";
 }
 
 /** 見積の税抜の明細合計（納品書と同じ数え方: テキスト行・小計行は除く） */

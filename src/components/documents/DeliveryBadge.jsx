@@ -13,7 +13,7 @@ export function useDeliveryIndex(enabled = true) {
 
 /** 納品書 1 枚の請求の印（未請求／請求書作成済） */
 export function NoteInvoiceLabel({ note }) {
-  if (!note.invoice_id) return <span className="text-amber-700">未請求</span>;
+  if (!note.invoice_id) return note.invoiced_manual ? <span className="text-sky-700" title="納品書一覧で手で「処理済」にした納品書">処理済（手動）</span> : <span className="text-amber-700">未請求</span>;
   return <Link to={`/invoices/${note.invoice_id}`} className="text-sky-700 hover:underline">請求書作成済</Link>;
 }
 
