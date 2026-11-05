@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Layers, ChevronDown, Send, FileImage, ScanEye, UserRound, CalendarDays, Flag, CircleDot, Timer, AlignLeft, ListChecks, MessageSquare } from "lucide-react";
+import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Send, FileImage, ScanEye, UserRound, CalendarDays, Flag, CircleDot, Timer, AlignLeft, ListChecks, MessageSquare } from "lucide-react";
 import { PRIORITY, REVIEW_STATUS, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel } from "@/lib/tasks";
 import { useTaskWrites, TASK_TEMPLATES } from "@/lib/useTaskData";
 import { UserAvatar, TaskCheck, TaskPlaceChip, PinBadge, DueLabel } from "@/components/tasks/parts";
 import ProofViewer, { useAttachmentImage } from "@/components/tasks/ProofViewer";
+import PlacePicker, { moveTaskPlace } from "@/components/tasks/PlacePicker";
 
 const fmtAt = (s) => { if (!s) return ""; const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
@@ -22,46 +22,6 @@ function Field({ label, children }) {
       <span className="flex items-center gap-1.5 text-xs text-slate-500">{Icon && <Icon className="w-3.5 h-3.5 text-slate-400" />}{label}</span>
       <div className="min-w-0">{children}</div>
     </div>
-  );
-}
-
-/** 紐づけ先を選ぶ（案件・プロジェクト・自分だけ） */
-function PlacePicker({ task, projects, internalProjects, byId, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const list = useMemo(() => {
-    const k = q.trim().toLowerCase();
-    return projects.filter((p) => p.status !== "cancelled" && (!k || [p.project_number, p.client_name, p.name].join(" ").toLowerCase().includes(k))).slice(0, 30);
-  }, [projects, q]);
-  const pick = (patch) => { setOpen(false); onChange(patch); };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="inline-flex items-center gap-1 rounded hover:bg-muted px-1 -mx-1 py-0.5" data-testid="task-place">
-          <TaskPlaceChip task={task} byId={byId} /><ChevronDown className="w-3 h-3 text-muted-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-96 p-2" align="start">
-        <button type="button" className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted text-left" onClick={() => pick({ project_id: null, internal_project_id: null })}>
-          <Lock className="w-3.5 h-3.5 text-muted-foreground" />自分だけ（どこにも紐づけない。ほかのメンバーには見えません）
-        </button>
-        <p className="mt-2 px-2 text-[10px] font-semibold text-muted-foreground">プロジェクト</p>
-        {internalProjects.filter((p) => !p.archived).map((p) => (
-          <button key={p.id} type="button" className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted text-left" onClick={() => pick({ project_id: null, internal_project_id: p.id })}>
-            <Layers className="w-3.5 h-3.5" style={{ color: p.color || "#8b5cf6" }} />{p.name}
-          </button>
-        ))}
-        <p className="mt-2 px-2 text-[10px] font-semibold text-muted-foreground">案件</p>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="案件番号・クライアント・案件名で探す" className="mx-2 mb-1 h-7 w-[calc(100%-1rem)] rounded border px-2 text-xs" />
-        <div className="max-h-56 overflow-y-auto">
-          {list.map((p) => (
-            <button key={p.id} type="button" className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted text-left" onClick={() => pick({ project_id: p.id, internal_project_id: null })}>
-              <FolderKanban className="w-3.5 h-3.5 text-blue-600 shrink-0" /><span className="font-mono text-[10px] text-muted-foreground shrink-0">{p.project_number}</span><span className="truncate">{p.client_name}／{p.name}</span>
-            </button>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -143,7 +103,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
   const [proof, setProof] = useState(null); // 開いている添付の id
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
-  useEffect(() => { setName(task?.name || ""); setDesc(task?.description || ""); }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setName(task?.name || ""); setDesc(task?.description || ""); }, [taskId]);  
   useEffect(() => { const h = (e) => { if (e.key === "Escape" && !proof) onClose(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose, proof]);
 
   const { data: attachments = [] } = useQuery({ queryKey: ["taskAttachments", taskId], enabled: !!taskId, queryFn: () => db.entities.TaskAttachment.filter({ task_id: taskId }, "-created_at") });
@@ -154,12 +114,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
   const assignee = byId.users.get(task.assignee_id);
   const save = (patch) => writes.update(task, patch).catch((e) => toast.error("保存できませんでした: " + (e?.message || "")));
   const place = { project_id: task.project_id || null, internal_project_id: task.internal_project_id || null };
-  const setPlace = async (patch) => {
-    await save(patch);
-    // サブタスクも同じ紐づけ先にする（見える範囲をそろえる）
-    await Promise.all(subs.map((s) => writes.update(s, patch)));
-    toast.success(isPrivateTask(patch) ? "自分だけのタスクにしました（ほかのメンバーには見えません）" : "紐づけ先を変えました（CV のメンバーに共有されます）");
-  };
+  const setPlace = (patch) => moveTaskPlace(writes, task, tasks, patch);
   const addSubtask = async (text, extra = {}) => writes.create({
     ...place, parent_task_id: task.id, name: text, assignee_id: extra.assignee_id ?? task.assignee_id ?? null,
     on_schedule: false, parties: [], status: "todo", sort_order: subs.length + 1, ...extra,

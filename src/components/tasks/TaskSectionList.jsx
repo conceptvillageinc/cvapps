@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2, PanelRightOpen } from "lucide-react";
 import { MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
 import { subtasksOf, isPrivateTask, PRIORITY, REVIEW_STATUS } from "@/lib/tasks";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
 import { useTaskWrites } from "@/lib/useTaskData";
+import PlacePicker, { moveTaskPlace } from "@/components/tasks/PlacePicker";
 
 // 表の列（タスク名・優先度・確認・期日・紐づけ先・公開範囲・予定時間・担当）
 const gridOf = ({ place, assignee }) => ({ gridTemplateColumns: ["minmax(18rem,1fr)", "4.5rem", "5rem", "6.5rem", place && "minmax(8rem,13rem)", "6rem", "4.5rem", assignee && "3rem"].filter(Boolean).join(" ") });
@@ -19,6 +20,31 @@ function Visibility({ task }) {
   return isPrivateTask(task)
     ? <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><Lock className="w-3 h-3" />自分だけ</span>
     : <span className="inline-flex items-center gap-1 text-[11px] text-slate-500"><Users className="w-3 h-3" />共有</span>;
+}
+
+/**
+ * タスク名（押すとその場で直せる。Enter か外を押すと保存、Esc でやめる）
+ *   行のほかの場所を押すと、これまでどおり詳細が開く
+ */
+function InlineTaskName({ task, onSave, onEditing }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(task.name || "");
+  const start = (e) => { e.stopPropagation(); setV(task.name || ""); setEditing(true); onEditing?.(true); };
+  const end = (save) => {
+    setEditing(false); onEditing?.(false);
+    const name = v.trim();
+    if (save && name && name !== task.name) onSave(name);
+  };
+  if (editing) {
+    return (
+      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onFocus={(e) => e.target.select()}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); end(true); } if (e.key === "Escape") end(false); }}
+        onBlur={() => end(true)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="タスク名" data-testid="task-name-inline" />
+    );
+  }
+  return (
+    <span onClick={start} title="押すと名前を直せます" className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text hover:ring-1 hover:ring-slate-300 hover:bg-white ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
+  );
 }
 
 /** 見出し（名前はその場で直す・メニューで並べ替え・消す） */
@@ -127,6 +153,8 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   };
   const isOver = (g, i) => drag && over && over.key === keyOf(g) && over.index === i;
   const toggleDone = (t, v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null });
+  const [renaming, setRenaming] = useState(null); // 名前を直しているタスク（そのあいだは行をドラッグさせない）
+  const rename = (t, name) => writes.update(t, { name }).catch((e) => toast.error("名前を変えられませんでした: " + (e?.message || "")));
 
   if (view === "board") {
     return (
@@ -197,20 +225,28 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                     return (
                       <div key={t.id} className="relative">
                         {isOver(g, i) && <div className="absolute inset-x-2 -top-px h-0.5 bg-primary z-10" />}
-                        <div draggable onDragStart={() => setDrag(t.id)} onDragEnd={() => { setDrag(null); setOver(null); }} onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => onOpen(t.id)}
+                        <div draggable={renaming !== t.id} onDragStart={() => setDrag(t.id)} onDragEnd={() => { setDrag(null); setOver(null); }} onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => renaming !== t.id && onOpen(t.id)}
                           style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 hover:bg-slate-50 cursor-pointer transition-colors duration-700 ${added === t.id ? "bg-emerald-50" : ""} ${drag === t.id ? "opacity-40" : ""}`} data-testid="task-row">
                           <div className="flex items-center gap-1.5 min-w-0 py-2">
                             <GripVertical className="w-3.5 h-3.5 shrink-0 text-slate-300 opacity-0 group-hover/row:opacity-100 cursor-grab" />
                             <TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={17} />
-                            <span className={`truncate text-sm ${t.completed ? "line-through text-slate-400" : "text-slate-800"}`}>{t.name}</span>
+                            <InlineTaskName task={t} onSave={(name) => rename(t, name)} onEditing={(on) => setRenaming(on ? t.id : null)} />
                             {subs.length > 0 && <span className="shrink-0 rounded bg-slate-100 px-1 text-[10px] text-slate-500 tabular-nums" title="サブタスク">{subs.filter((s) => s.completed).length}/{subs.length}</span>}
                             {/* ボタン一つで削除（すぐ消して、少しのあいだ「元に戻す」を出す） */}
-                            <button type="button" onClick={(e) => { e.stopPropagation(); writes.removeWithUndo(t, data.tasks); }} className="ml-auto mr-1 shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-rose-50 hover:text-rose-600 focus:opacity-100" title="このタスクを削除" aria-label="削除" data-testid="task-delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(t.id); }} className="ml-auto shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-slate-100 hover:text-slate-700 focus:opacity-100" title="詳細を開く" aria-label="詳細を開く" data-testid="task-open"><PanelRightOpen className="w-3.5 h-3.5" /></button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); writes.removeWithUndo(t, data.tasks); }} className="mr-1 shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-rose-50 hover:text-rose-600 focus:opacity-100" title="このタスクを削除" aria-label="削除" data-testid="task-delete"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                           <span><Pill map={PRIORITY} value={t.priority} /></span>
                           <span><Pill map={REVIEW_STATUS} value={t.review_status} /></span>
                           <DueLabel task={t} today={today} />
-                          {showPlace && <span className="min-w-0 pr-2 overflow-hidden">{isPrivateTask(t) && !t.parent_task_id ? <span className="text-[11px] text-slate-300">—</span> : <TaskPlaceChip task={t.parent_task_id ? data.byId.tasks.get(t.parent_task_id) || t : t} byId={data.byId} className="!max-w-full" />}</span>}
+                          {showPlace && (
+                            // 一覧から紐づけ先を選べる（サブタスクは親と同じなので、親の紐づけ先を出すだけ）
+                            <span className="min-w-0 pr-2 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                              {t.parent_task_id
+                                ? <TaskPlaceChip task={data.byId.tasks.get(t.parent_task_id) || t} byId={data.byId} className="!max-w-full" />
+                                : <PlacePicker compact task={t} projects={data.projects} internalProjects={data.internalProjects} byId={data.byId} onChange={(patch) => moveTaskPlace(writes, t, data.tasks, patch)} />}
+                            </span>
+                          )}
                           <Visibility task={t} />
                           <span className="text-right pr-2 text-xs tabular-nums text-slate-600">{Number(t.estimated_hours) > 0 ? `${Number(t.estimated_hours)}h` : ""}</span>
                           {showAssignee && <span><UserAvatar user={data.byId.users.get(t.assignee_id)} size={22} /></span>}
