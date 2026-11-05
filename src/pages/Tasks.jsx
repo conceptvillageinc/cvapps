@@ -6,7 +6,7 @@ import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, ListTodo, Layers, BarChart3, Lock, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { Plus, ListTodo, Layers, BarChart3, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { useTaskData, useTaskWrites } from "@/lib/useTaskData";
 import { MY_GROUPS, myGroupOf, myTasks, userLabel, todayYmd, dueOf, isPrivateTask, assigneesOf } from "@/lib/tasks";
 import { movePatch, nextSectionOrder, MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
@@ -134,7 +134,6 @@ function MyTasksView({ data, me, today, onOpen }) {
     const row = await writes.create({ name, assignee_id: me.id, project_id: null, internal_project_id: null, on_schedule: false, parties: [], status: "todo", start_date, end_date, ...movePatch("my", sectionId, orderAt(g.tasks, g.tasks.length, "my")) });
     onOpen(row.id);
   };
-  const person = data.byId.users.get(who);
   const effective = isMe ? view : "due"; // 見出しは本人だけのものなので、ほかの人は期限順
   return (
     <div className="space-y-4">
@@ -144,7 +143,7 @@ function MyTasksView({ data, me, today, onOpen }) {
         {me.role !== "guest" && (
           <WhoPicker users={data.users.filter((u) => u.role !== "guest" || u.id === me.id)} me={me} value={who} onChange={setWho} />
         )}
-        {!isMe && <span className="text-[11px] text-slate-500"><Lock className="inline w-3 h-3 mr-0.5" />{userLabel(person)}さんの「自分だけ」のタスクと見出しは出ません</span>}
+        {!isMe && <span className="text-[11px] text-slate-500">こちらは、プロジェクトに紐づいた公開タスクを確認できます。</span>}
         <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />完了したタスクも出す</label>
         {isMe && me.role !== "guest" && <Button size="sm" className="h-8 gap-1 text-xs" onClick={() => setNewOpen(true)} data-testid="new-task-open"><Plus className="w-3.5 h-3.5" />タスクを作成</Button>}
       </div>
