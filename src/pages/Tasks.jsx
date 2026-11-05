@@ -6,7 +6,7 @@ import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, ListTodo, Layers, BarChart3, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { Plus, ListTodo, Layers, BarChart3, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight, Check, Search, X, Lock } from "lucide-react";
 import { useTaskData, useTaskWrites } from "@/lib/useTaskData";
 import { MY_GROUPS, myGroupOf, myTasks, userLabel, todayYmd, dueOf, isPrivateTask, assigneesOf } from "@/lib/tasks";
 import { movePatch, nextSectionOrder, MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
@@ -17,6 +17,7 @@ import NewProjectDialog from "@/components/tasks/NewProjectDialog";
 import NewTaskDialog from "@/components/tasks/NewTaskDialog";
 import TaskPanel from "@/components/tasks/TaskPanel";
 import Workload from "@/components/tasks/Workload";
+import { useSessionState } from "@/hooks/use-session-state";
 
 /** 見出し（セクション）の読み書き */
 function useSections(mode, ownerId) {
@@ -125,13 +126,23 @@ function MyTasksView({ data, me, today, onOpen }) {
   const [view, setView] = useState(() => { try { return localStorage.getItem("cv.tasks.view") || "list"; } catch { return "list"; } });
   const changeView = (v) => { setView(v); try { localStorage.setItem("cv.tasks.view", v); } catch { /* noop */ } };
   const isMe = who === me.id;
-  const list = myTasks(data.tasks, who, { showDone });
+  const all = myTasks(data.tasks, who, { showDone });
+  // 紐づけ先（案件・プロジェクト）と文字で絞り込む（打ち合わせで 1 つの案件のタスクだけを見るため。このタブのあいだ残す）
+  const [placeKey, setPlaceKey] = useSessionState("tasks.place", "");
+  const [q, setQ] = useSessionState("tasks.q", "");
+  const placeOptions = useMemo(() => placeOptionsOf(all, data), [all, data]);
+  const list = useMemo(() => {
+    const k = q.trim().toLowerCase();
+    return all.filter((t) => (!placeKey || placeKeyOf(t, data) === placeKey) && (!k || `${t.name || ""} ${placeLabelOf(placeKeyOf(t, data), data)}`.toLowerCase().includes(k)));
+  }, [all, placeKey, q, data]);
+  // 紐づけ先で絞り込んでいるときに足したタスクは、その紐づけ先に入れる（絞り込みから消えないように）
+  const placePatch = placeKey.startsWith("p:") ? { project_id: placeKey.slice(2), internal_project_id: null } : placeKey.startsWith("i:") ? { project_id: null, internal_project_id: placeKey.slice(2) } : { project_id: null, internal_project_id: null };
   const { sections, ops, editId } = useSections("my", me.id);
   const [newOpen, setNewOpen] = useState(false);
   // 右上の「タスクを作成」: 選んだ見出しのいちばん下に入れて、タスクの詳細を開く
   const createTask = async ({ name, start_date, end_date, sectionId }) => {
     const g = groupIntoSections(list, sections, "my").find((x) => (x.section?.id || null) === sectionId) || { tasks: [] };
-    const row = await writes.create({ name, assignee_id: me.id, project_id: null, internal_project_id: null, on_schedule: false, parties: [], status: "todo", start_date, end_date, ...movePatch("my", sectionId, orderAt(g.tasks, g.tasks.length, "my")) });
+    const row = await writes.create({ name, assignee_id: me.id, ...placePatch, on_schedule: false, parties: [], status: "todo", start_date, end_date, ...movePatch("my", sectionId, orderAt(g.tasks, g.tasks.length, "my")) });
     onOpen(row.id);
   };
   const effective = isMe ? view : "due"; // 見出しは本人だけのものなので、ほかの人は期限順
@@ -140,6 +151,12 @@ function MyTasksView({ data, me, today, onOpen }) {
       <Summary list={list} today={today} />
       <div className="flex flex-wrap items-center gap-2">
         {isMe && <ViewSwitch value={view} onChange={changeView} />}
+        <PlaceFilter options={placeOptions} value={placeKey} onChange={setPlaceKey} data={data} />
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="タスク名・案件名で探す" className="h-8 w-48 rounded-lg border border-slate-200 bg-white pl-7 pr-6 text-sm" data-testid="tasks-search" />
+          {q && <button type="button" onClick={() => setQ("")} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" aria-label="検索を消す"><X className="w-3.5 h-3.5" /></button>}
+        </div>
         {me.role !== "guest" && (
           <WhoPicker users={data.users.filter((u) => u.role !== "guest" || u.id === me.id)} me={me} value={who} onChange={setWho} />
         )}
@@ -151,7 +168,7 @@ function MyTasksView({ data, me, today, onOpen }) {
         ? <DueList list={list} data={data} today={today} onOpen={onOpen} />
         : <TaskSectionList key={editId || "x"} mode="my" view={effective} tasks={list} sections={sections.map((s) => (s.id === editId ? { ...s, _edit: true } : s))} data={data} today={today} onOpen={onOpen} ops={ops}
             onMove={(t, sid, order) => writes.update(t, movePatch("my", sid, order))}
-            onAdd={(sid, name, order) => writes.create({ name, assignee_id: me.id, project_id: null, internal_project_id: null, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("my", sid, order) })} />}
+            onAdd={(sid, name, order) => writes.create({ name, assignee_id: me.id, ...placePatch, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("my", sid, order) })} />}
       <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} today={today} sections={[...sections].sort((a, b) => Number(a.sort_order) - Number(b.sort_order))} noneLabel={MODES.my.noneLabel}
         hint="最初は「自分だけ」のタスクです。詳細で案件・プロジェクトに紐づけると、メンバーに共有されます" onCreate={createTask} />
       {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクはドラッグで並べ替え・ほかの見出しへ移せます。足したタスクは最初「自分だけ」です（案件・プロジェクトに紐づけると共有されます）</p>}
@@ -317,6 +334,69 @@ const TABS = [
 /**
  * タスク（マイタスク・プロジェクト）とワークロード（/workload）。?task=ID でタスクの詳細を右に開く
  */
+// ---- 紐づけ先での絞り込み ----
+/** タスクの紐づけ先のキー（サブタスクは親の紐づけ先）: "p:案件id" / "i:プロジェクトid" / "private" */
+function placeKeyOf(t, data) {
+  const base = t.parent_task_id ? data.byId.tasks.get(t.parent_task_id) || t : t;
+  if (base.project_id) return `p:${base.project_id}`;
+  if (base.internal_project_id) return `i:${base.internal_project_id}`;
+  return "private";
+}
+function placeLabelOf(key, data) {
+  if (key === "private") return "自分だけ（紐づけなし）";
+  const [kind, id] = [key.slice(0, 1), key.slice(2)];
+  if (kind === "p") { const p = data.byId.projects.get(id); return p ? `${p.client_name ? `${p.client_name}／` : ""}${p.name}` : "案件"; }
+  return data.byId.internal.get(id)?.name || "プロジェクト";
+}
+function placeOptionsOf(list, data) {
+  const count = new Map();
+  for (const t of list) { const k = placeKeyOf(t, data); count.set(k, (count.get(k) || 0) + 1); }
+  return [...count.entries()].map(([key, n]) => ({ key, n, label: placeLabelOf(key, data) }))
+    .sort((a, b) => (a.key === "private") - (b.key === "private") || a.label.localeCompare(b.label, "ja"));
+}
+
+/** 紐づけ先で絞り込む（今の一覧に出ている案件・プロジェクトから選ぶ。文字で探せる） */
+function PlaceFilter({ options, value, onChange, data }) {
+  const [open, setOpen] = useState(false);
+  const [k, setK] = useState("");
+  const shown = options.filter((o) => !k.trim() || o.label.toLowerCase().includes(k.trim().toLowerCase()));
+  const pick = (v) => { onChange(v); setOpen(false); setK(""); };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <div className={`inline-flex h-8 items-center rounded-lg border text-sm ${value ? "border-primary/40 bg-primary/5" : "border-slate-200 bg-white"}`}>
+        <PopoverTrigger asChild>
+          <button type="button" className="inline-flex h-full max-w-[18rem] items-center gap-1.5 px-2.5 hover:bg-slate-50 rounded-lg" data-testid="tasks-place-filter">
+            <FolderKanban className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+            <span className="truncate">{value ? placeLabelOf(value, data) : "紐づけ先で絞り込む"}</span>
+            <ChevronDown className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+          </button>
+        </PopoverTrigger>
+        {value && <button type="button" onClick={() => onChange("")} className="h-full border-l px-1.5 text-slate-400 hover:text-rose-600" aria-label="紐づけ先の絞り込みを外す" title="絞り込みを外す"><X className="w-3.5 h-3.5" /></button>}
+      </div>
+      <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-80 p-1.5" data-testid="tasks-place-list">
+        <div className="relative mb-1">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input autoFocus value={k} onChange={(e) => setK(e.target.value)} placeholder="案件名・クライアント名で探す" className="h-8 w-full rounded border pl-7 pr-2 text-xs" />
+        </div>
+        <div className="max-h-[min(22rem,55vh)] overflow-y-auto">
+          <button type="button" onClick={() => pick("")} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted">
+            <span className="w-4">{!value && <Check className="w-3.5 h-3.5 text-primary" />}</span>すべての紐づけ先
+          </button>
+          {shown.map((o) => (
+            <button key={o.key} type="button" onClick={() => pick(o.key)} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted" data-testid="tasks-place-option">
+              <span className="w-4 shrink-0">{value === o.key && <Check className="w-3.5 h-3.5 text-primary" />}</span>
+              {o.key === "private" ? <Lock className="w-3.5 h-3.5 shrink-0 text-slate-400" /> : o.key.startsWith("p:") ? <FolderKanban className="w-3.5 h-3.5 shrink-0 text-blue-600" /> : <Layers className="w-3.5 h-3.5 shrink-0 text-violet-600" />}
+              <span className="min-w-0 flex-1 truncate">{o.label}</span>
+              <span className="shrink-0 tabular-nums text-[10px] text-slate-400">{o.n}件</span>
+            </button>
+          ))}
+          {shown.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">見つかりません</p>}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // 誰のタスクを見るかの並び: 自分がいちばん上、共用のアカウント（info@）はいちばん下
 const WHO_LAST_EMAILS = ["info@concept-village.co.jp"];
 const whoRank = (u, me) => (u.id === me.id && !WHO_LAST_EMAILS.includes(String(u.email || "").toLowerCase()) ? 0 : WHO_LAST_EMAILS.includes(String(u.email || "").toLowerCase()) ? 2 : 1);
