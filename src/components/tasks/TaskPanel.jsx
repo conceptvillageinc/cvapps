@@ -128,7 +128,7 @@ const highlight = (body, users) => {
 };
 
 /**
- * タスクの詳細（右から開く）。担当者・期日・紐づけ先・優先度・確認の状態・作業時間・説明・サブタスク・添付・コメント
+ * タスクの詳細（右から開く）。紐づけ先・担当者・期日・優先度・確認の状態・作業時間・説明・サブタスク・添付・コメント
  */
 export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
   const { tasks, users, projects, internalProjects, byId } = data;
@@ -223,6 +223,9 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
             className={`w-full resize-none text-xl font-bold leading-snug focus:outline-none rounded px-1 -mx-1 hover:bg-muted/40 ${task.completed ? "line-through text-muted-foreground" : ""}`} data-testid="task-name" />
 
           <div className="space-y-1.5">
+            <Field label="紐づけ先">
+              <PlacePicker task={task} projects={projects} internalProjects={internalProjects} byId={byId} onChange={setPlace} />
+            </Field>
             <Field label="担当者">
               <div className="flex items-center gap-2">
               <select value={task.assignee_id || ""} onChange={(e) => save({ assignee_id: e.target.value || null, my_section_id: null, my_sort_order: null })} /* 担当が変わったら、新しい担当者の「新しく割り当てられたタスク」に入る */ className="h-8 rounded border px-2 text-sm" data-testid="task-assignee">
@@ -238,9 +241,6 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
                 <span className="text-muted-foreground">〜</span>
                 <input type="date" value={task.end_date || ""} onChange={(e) => save({ end_date: e.target.value || null })} className="h-8 rounded border px-2 text-sm" aria-label="期限" />
               </div>
-            </Field>
-            <Field label="紐づけ先">
-              <PlacePicker task={task} projects={projects} internalProjects={internalProjects} byId={byId} onChange={setPlace} />
             </Field>
             <Field label="優先度">
               <div className="flex gap-1">
