@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2, PanelRightOpen } from "lucide-react";
 import { MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
 import { subtasksOf, isPrivateTask, PRIORITY, REVIEW_STATUS } from "@/lib/tasks";
@@ -44,6 +45,54 @@ function InlineTaskName({ task, onSave, onEditing }) {
   }
   return (
     <span onClick={start} title="押すと名前を直せます" className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text hover:ring-1 hover:ring-slate-300 hover:bg-white ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
+  );
+}
+
+/** 優先度・確認の札（押すと選べる。同じものをもう一度押すと外す） */
+function PillPicker({ map, value, label, onChange, testId }) {
+  const [open, setOpen] = useState(false);
+  const pick = (k) => { setOpen(false); onChange(value === k ? null : k); };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="rounded-full px-0.5 hover:ring-1 hover:ring-slate-300" title={`${label}を変える`} data-testid={testId}><Pill map={map} value={value} /></button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-1.5">
+        <p className="px-1 pb-1 text-[10px] font-semibold text-muted-foreground">{label}</p>
+        <div className="flex gap-1">
+          {Object.entries(map).map(([k, v]) => (
+            <button key={k} type="button" onClick={() => pick(k)} className={`rounded px-2 text-xs leading-6 ring-1 ${value === k ? v.cls : "ring-slate-200 text-slate-600 hover:bg-muted"}`}>{v.label}</button>
+          ))}
+          {value && <button type="button" onClick={() => pick(value)} className="rounded px-2 text-xs leading-6 text-muted-foreground hover:bg-muted">外す</button>}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** 期日（押すと 開始日〜期限 を選べる） */
+function DuePicker({ task, today, onChange }) {
+  const [open, setOpen] = useState(false);
+  const setStart = (v) => onChange({ start_date: v || null, ...(task.end_date && v && v > task.end_date ? { end_date: v } : {}) });
+  const setEnd = (v) => onChange({ end_date: v || null, ...(task.start_date && v && v < task.start_date ? { start_date: v } : {}) });
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="rounded px-0.5 -mx-0.5 text-left hover:bg-white hover:ring-1 hover:ring-slate-300" title="期日を変える" data-testid="task-due"><DueLabel task={task} today={today} /></button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-2 space-y-2">
+        <p className="text-[10px] font-semibold text-muted-foreground">期日（開始日〜期限）</p>
+        <div className="flex items-center gap-1.5">
+          <input type="date" value={task.start_date || ""} onChange={(e) => setStart(e.target.value)} className="h-8 rounded border px-2 text-sm" aria-label="開始日" data-testid="task-due-start" />
+          <span className="text-muted-foreground">〜</span>
+          <input type="date" value={task.end_date || ""} onChange={(e) => setEnd(e.target.value)} className="h-8 rounded border px-2 text-sm" aria-label="期限" data-testid="task-due-end" />
+        </div>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => onChange({ start_date: today, end_date: today })} className="rounded border px-2 py-0.5 text-[11px] hover:bg-muted">今日</button>
+          {(task.start_date || task.end_date) && <button type="button" onClick={() => { onChange({ start_date: null, end_date: null }); setOpen(false); }} className="ml-auto text-[11px] text-muted-foreground hover:underline">期日を外す</button>}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -188,6 +237,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   const toggleDone = (t, v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null });
   const [renaming, setRenaming] = useState(null); // 名前を直しているタスク（そのあいだは行をドラッグさせない）
   const rename = (t, name) => writes.update(t, { name }).catch((e) => toast.error("名前を変えられませんでした: " + (e?.message || "")));
+  const save = (t, patch) => writes.update(t, patch).catch((e) => toast.error("保存できませんでした: " + (e?.message || "")));
 
   if (view === "board") {
     return (
@@ -279,9 +329,10 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                             </span>
                           )}
                           <Visibility task={t} />
-                          <span><Pill map={PRIORITY} value={t.priority} /></span>
-                          <span><Pill map={REVIEW_STATUS} value={t.review_status} /></span>
-                          <DueLabel task={t} today={today} />
+                          {/* 優先度・確認・期日は、一覧から押して変えられる */}
+                          <span onClick={(e) => e.stopPropagation()}><PillPicker map={PRIORITY} value={t.priority} label="優先度" onChange={(v) => save(t, { priority: v })} testId="task-priority" /></span>
+                          <span onClick={(e) => e.stopPropagation()}><PillPicker map={REVIEW_STATUS} value={t.review_status} label="確認の状態" onChange={(v) => save(t, { review_status: v })} testId="task-review" /></span>
+                          <span onClick={(e) => e.stopPropagation()}><DuePicker task={t} today={today} onChange={(patch) => save(t, patch)} /></span>
                           {showAssignee && <span><UserAvatar user={data.byId.users.get(t.assignee_id)} size={22} /></span>}
                         </div>
                       </div>
