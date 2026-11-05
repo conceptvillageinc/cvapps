@@ -14,7 +14,6 @@ import { addDays, weekStart } from "@/lib/schedule";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
 import TaskSectionList, { AddLine } from "@/components/tasks/TaskSectionList";
 import NewProjectDialog from "@/components/tasks/NewProjectDialog";
-import NewTaskDialog from "@/components/tasks/NewTaskDialog";
 import TaskPanel from "@/components/tasks/TaskPanel";
 import Workload from "@/components/tasks/Workload";
 import { useSessionState } from "@/hooks/use-session-state";
@@ -119,7 +118,7 @@ function Summary({ list, today }) {
   );
 }
 
-function MyTasksView({ data, me, today, onOpen }) {
+function MyTasksView({ data, me, today, onOpen, onOpenNew }) {
   const writes = useTaskWrites();
   const [who, setWho] = useState(me.id);
   const [showDone, setShowDone] = useState(false);
@@ -138,13 +137,6 @@ function MyTasksView({ data, me, today, onOpen }) {
   // 紐づけ先で絞り込んでいるときに足したタスクは、その紐づけ先に入れる（絞り込みから消えないように）
   const placePatch = placeKey.startsWith("p:") ? { project_id: placeKey.slice(2), internal_project_id: null } : placeKey.startsWith("i:") ? { project_id: null, internal_project_id: placeKey.slice(2) } : { project_id: null, internal_project_id: null };
   const { sections, ops, editId } = useSections("my", me.id);
-  const [newOpen, setNewOpen] = useState(false);
-  // 右上の「タスクを作成」: 選んだ見出しのいちばん下に入れて、タスクの詳細を開く
-  const createTask = async ({ name, start_date, end_date, sectionId }) => {
-    const g = groupIntoSections(list, sections, "my").find((x) => (x.section?.id || null) === sectionId) || { tasks: [] };
-    const row = await writes.create({ name, assignee_id: me.id, ...placePatch, on_schedule: false, parties: [], status: "todo", start_date, end_date, ...movePatch("my", sectionId, orderAt(g.tasks, g.tasks.length, "my")) });
-    onOpen(row.id);
-  };
   const effective = isMe ? view : "due"; // 見出しは本人だけのものなので、ほかの人は期限順
   return (
     <div className="space-y-4">
@@ -162,15 +154,17 @@ function MyTasksView({ data, me, today, onOpen }) {
         </div>
         {!isMe && <span className="text-[11px] text-slate-500">こちらは、プロジェクトに紐づいた公開タスクを確認できます。</span>}
         <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />完了したタスクも出す</label>
-        {isMe && me.role !== "guest" && <Button size="sm" className="h-8 gap-1 text-xs" onClick={() => setNewOpen(true)} data-testid="new-task-open"><Plus className="w-3.5 h-3.5" />タスクを作成</Button>}
+        {isMe && me.role !== "guest" && <Button size="sm" className="h-8 gap-1 text-xs" onClick={async () => {
+          // 空のタスクを作って、詳細を真ん中に開く（名前を入れずに閉じると消える）
+          const row = await writes.create({ name: "", assignee_id: me.id, ...placePatch, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("my", null, orderAt(groupIntoSections(list, sections, "my").find((x) => !x.section)?.tasks || [], 0, "my")) });
+          onOpenNew(row.id);
+        }} data-testid="new-task-open"><Plus className="w-3.5 h-3.5" />タスクを作成</Button>}
       </div>
       {effective === "due"
         ? <DueList list={list} data={data} today={today} onOpen={onOpen} />
         : <TaskSectionList key={editId || "x"} mode="my" view={effective} tasks={list} sections={sections.map((s) => (s.id === editId ? { ...s, _edit: true } : s))} data={data} today={today} onOpen={onOpen} ops={ops}
             onMove={(t, sid, order) => writes.update(t, movePatch("my", sid, order))}
             onAdd={(sid, name, order) => writes.create({ name, assignee_id: me.id, ...placePatch, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("my", sid, order) })} />}
-      <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} today={today} sections={[...sections].sort((a, b) => Number(a.sort_order) - Number(b.sort_order))} noneLabel={MODES.my.noneLabel}
-        hint="最初は「自分だけ」のタスクです。詳細で案件・プロジェクトに紐づけると、メンバーに共有されます" onCreate={createTask} />
       {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクはドラッグで並べ替え・ほかの見出しへ移せます。足したタスクは最初「自分だけ」です（案件・プロジェクトに紐づけると共有されます）</p>}
     </div>
   );
@@ -218,7 +212,7 @@ function CaseGroup({ p, data, today, me, onOpen, showDone }) {
 /**
  * プロジェクト（メンバー全員で共有）。クライアントで作ったプロジェクトは、そのクライアントの案件とタスクも並ぶ
  */
-function ProjectsView({ data, me, today, onOpen }) {
+function ProjectsView({ data, me, today, onOpen, onOpenNew }) {
   const qc = useQueryClient();
   const writes = useTaskWrites();
   const active = data.internalProjects.filter((p) => !p.archived);
@@ -237,12 +231,6 @@ function ProjectsView({ data, me, today, onOpen }) {
     .sort((a, b) => String(b.registered_at || "").localeCompare(String(a.registered_at || "")));
   const hiddenCases = casesOf(cur).length - cases.length;
   const countOf = (tp) => data.tasks.filter((t) => !t.completed && !t.parent_task_id && (t.internal_project_id === tp.id || casesOf(tp).some((p) => p.id === t.project_id))).length;
-  const [newOpen, setNewOpen] = useState(false);
-  const createTask = async ({ name, start_date, end_date, sectionId }) => {
-    const g = groupIntoSections(rows, sections, "internal").find((x) => (x.section?.id || null) === sectionId) || { tasks: [] };
-    const row = await writes.create({ name, internal_project_id: cur.id, project_id: null, assignee_id: me.id, on_schedule: false, parties: [], status: "todo", start_date, end_date, ...movePatch("internal", sectionId, orderAt(g.tasks, g.tasks.length, "internal")) });
-    onOpen(row.id);
-  };
   const createProject = async ({ name, color, client_id, newClientName }) => {
     // クライアント一覧に無いクライアントは、ここで登録してから結びつける
     if (newClientName) {
@@ -295,10 +283,11 @@ function ProjectsView({ data, me, today, onOpen }) {
             {client && <Link to={`/clients/${client.id}`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 hover:bg-slate-200" title="クライアントカルテを開く"><Building2 className="w-3 h-3" />{client.name}</Link>}
             <ViewSwitch value={view} onChange={setView} options={["list", "board"]} />
             <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />完了も出す</label>
-            <Button size="sm" className="h-8 gap-1 text-xs" onClick={() => setNewOpen(true)} data-testid="new-task-open"><Plus className="w-3.5 h-3.5" />タスクを作成</Button>
+            <Button size="sm" className="h-8 gap-1 text-xs" onClick={async () => {
+              const row = await writes.create({ name: "", internal_project_id: cur.id, project_id: null, assignee_id: me.id, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("internal", null, orderAt(groupIntoSections(rows, sections, "internal").find((x) => !x.section)?.tasks || [], 0, "internal")) });
+              onOpenNew(row.id);
+            }} data-testid="new-task-open"><Plus className="w-3.5 h-3.5" />タスクを作成</Button>
             <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs text-slate-500" onClick={() => window.confirm(`「${cur.name}」をしまいますか？（タスクと案件は残ります）`) && patchProject({ archived: true })}><Archive className="w-3.5 h-3.5" />しまう</Button>
-            <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} today={today} sections={[...sections].sort((a, b) => Number(a.sort_order) - Number(b.sort_order))} noneLabel={MODES.internal.noneLabel}
-              hint={`「${cur.name}」のタスクです（メンバー全員に共有されます）`} onCreate={createTask} />
           </div>
           <div className="space-y-1.5">
             {client && <p className="text-xs font-semibold text-slate-500">このプロジェクトのタスク（案件に入らない、{client.name}まわりの作業）</p>}
@@ -436,6 +425,9 @@ export default function Tasks() {
   const isGuest = user?.role === "guest";
   const tab = isGuest ? "my" : location.pathname.startsWith("/workload") || params.get("tab") === "workload" ? "workload" : params.get("tab") === "internal" ? "internal" : "my";
   const taskId = params.get("task");
+  // 「タスクを作成」で作ったばかりのタスク（詳細を真ん中に開く）
+  const [newId, setNewId] = useState(null);
+  const openNew = (id) => { setNewId(id); openTask(id); };
   const openTask = (id) => { const n = new URLSearchParams(params); if (id) n.set("task", id); else n.delete("task"); setParams(n); };
   const me = useMemo(() => data.byId.users.get(user?.id) || user || {}, [data.byId, user]);
   const T = TABS.find((t) => t.key === tab);
@@ -463,12 +455,15 @@ export default function Tasks() {
       </div>
       {data.isLoading ? <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto mt-10" /> : (
         <>
-          {tab === "my" && <MyTasksView data={data} me={me} today={today} onOpen={openTask} />}
-          {tab === "internal" && <ProjectsView data={data} me={me} today={today} onOpen={openTask} />}
+          {tab === "my" && <MyTasksView data={data} me={me} today={today} onOpen={openTask} onOpenNew={openNew} />}
+          {tab === "internal" && <ProjectsView data={data} me={me} today={today} onOpen={openTask} onOpenNew={openNew} />}
           {tab === "workload" && <Workload data={data} today={today} onOpenTask={openTask} />}
         </>
       )}
-      {taskId && data.byId.tasks.get(taskId) && <TaskPanel key={taskId} taskId={taskId} data={data} onClose={() => openTask(null)} onOpenTask={openTask} />}
+      {taskId && data.byId.tasks.get(taskId) && (
+        <TaskPanel key={taskId} taskId={taskId} data={data} variant={taskId === newId ? "modal" : "side"} isNew={taskId === newId}
+          onClose={() => { setNewId(null); openTask(null); }} onOpenTask={(id) => { setNewId(null); openTask(id); }} />
+      )}
     </div>
   );
 }

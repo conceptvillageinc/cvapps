@@ -89,9 +89,11 @@ const highlight = (body, users) => {
 };
 
 /**
- * タスクの詳細（右から開く）。紐づけ先（先頭）・担当者・期日・優先度・確認の状態・作業時間・説明・サブタスク・添付・コメント
+ * タスクの詳細（右から開く。variant="modal" は画面の真ん中に開く＝「タスクを作成」のとき）。
+ *   紐づけ先（先頭）・担当者・期日・優先度・確認の状態・作業時間・説明・サブタスク・添付・コメント
+ *   isNew: 作ったばかりの空のタスク。名前を入れずに閉じたら消す
  */
-export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
+export default function TaskPanel({ taskId, data, onClose: close, onOpenTask, variant = "side", isNew = false }) {
   const { tasks, users, projects, internalProjects, byId } = data;
   const task = byId.tasks.get(taskId);
   const { user } = useAuth();
@@ -105,10 +107,20 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
   useEffect(() => { setName(task?.name || ""); setDesc(task?.description || ""); }, [taskId]);  
-  useEffect(() => { const h = (e) => { if (e.key === "Escape" && !proof) onClose(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose, proof]);
 
   const { data: attachments = [] } = useQuery({ queryKey: ["taskAttachments", taskId], enabled: !!taskId, queryFn: () => db.entities.TaskAttachment.filter({ task_id: taskId }, "-created_at") });
   const { data: comments = [] } = useQuery({ queryKey: ["taskComments", taskId], enabled: !!taskId, queryFn: () => db.entities.TaskComment.filter({ task_id: taskId }, "created_at") });
+  // 閉じる: 作ったばかりで名前も中身も無ければ消す。名前を入れていれば保存してから閉じる
+  const onClose = async () => {
+    const t = byId.tasks.get(taskId);
+    if (t && isNew) {
+      const empty = !name.trim() && !(t.description || desc).trim() && !subtasksOf(tasks, t.id).length && !attachments.length && !comments.length;
+      if (empty) { await writes.remove(t).catch(() => null); close(); return; }
+      if (name.trim() && name.trim() !== t.name) await writes.update(t, { name: name.trim() }).catch(() => null);
+    }
+    close();
+  };
+  useEffect(() => { const h = (e) => { if (e.key === "Escape" && !proof) onClose(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose, proof]);
   if (!task) return null;
   const subs = subtasksOf(tasks, task.id);
   const parent = task.parent_task_id ? byId.tasks.get(task.parent_task_id) : null;
@@ -151,8 +163,10 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/10" onClick={onClose} />
-      <aside className="fixed inset-y-0 right-0 z-40 w-[min(680px,100vw)] bg-white shadow-2xl border-l flex flex-col" data-testid="task-panel">
+      <div className={`fixed inset-0 z-40 ${variant === "modal" ? "bg-black/40" : "bg-black/10"}`} onClick={onClose} />
+      <aside className={variant === "modal"
+        ? "fixed left-1/2 top-1/2 z-50 w-[min(720px,96vw)] max-h-[92vh] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white shadow-2xl border flex flex-col"
+        : "fixed inset-y-0 right-0 z-40 w-[min(680px,100vw)] bg-white shadow-2xl border-l flex flex-col"} data-testid="task-panel" data-variant={variant}>
         <div className="flex items-center gap-2 border-b px-4 py-2.5">
           <Button size="sm" variant={task.completed ? "default" : "outline"} className={`h-8 gap-1.5 text-xs ${task.completed ? "bg-emerald-600 hover:bg-emerald-700" : ""}`} onClick={() => save({ completed: !task.completed, completed_at: task.completed ? null : new Date().toISOString() })} data-testid="task-complete">
             <TaskCheck done={task.completed} size={14} />{task.completed ? "完了済み" : "完了にする"}
@@ -184,6 +198,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
             </Field>
           </div>
           <textarea value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== task.name && save({ name: name.trim() })} rows={1}
+            autoFocus={isNew} placeholder="タスク名を入力"
             className={`w-full resize-none text-xl font-bold leading-snug focus:outline-none rounded px-1 -mx-1 hover:bg-muted/40 ${task.completed ? "line-through text-muted-foreground" : ""}`} data-testid="task-name" />
 
           <div className="space-y-1.5">
@@ -307,6 +322,13 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
             <CommentComposer users={users.filter((u) => u.id !== user?.id)} onSend={sendComment} />
           </section>
         </div>
+        {/* 「タスクを作成」のときは、下に作成のボタン（中身は入れたそばから保存されている） */}
+        {isNew && (
+          <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
+            <span className="mr-auto text-[11px] text-muted-foreground">入れた内容はその場で保存されます。タスク名を入れずに閉じると、作らずに閉じます</span>
+            <Button onClick={onClose} disabled={!name.trim()} data-testid="task-create-done">作成して閉じる</Button>
+          </div>
+        )}
       </aside>
       {proof && (
         <ProofViewer open={!!proof} onOpenChange={(v) => !v && setProof(null)} attachments={attachments} initialId={proof} subtasks={subs} byId={byId}
