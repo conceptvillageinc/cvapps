@@ -342,11 +342,16 @@ function DailyTargetCard({ dt }) {
 /**
  * 粗利目標に計上する案件: 受注確度が A／要注意（A）／A（定期売上）のいずれか、かつ フェーズが「着手中」
  */
-export function countsTowardTarget(p) {
+/** 受注確度が A・要注意（A）・A（定期売上）のどれか（速報デイリーの売上見込・粗利見込に入れる案件。売上粗利管理表の着地見込と同じ） */
+export function isForecastProb(p) {
   const prob = String(p.deal_probability || "");
-  const probOk = prob === "A" || prob.includes("要注意") || prob.includes("定期");
-  return probOk && String(p.phase || "") === "着手中";
+  return prob === "A" || prob.includes("要注意") || prob.includes("定期");
 }
+export function countsTowardTarget(p) {
+  return isForecastProb(p) && String(p.phase || "") === "着手中";
+}
+const sumBy = (rows, key) => rows.reduce((s, p) => s + (isForecastProb(p) ? Number(p[key] || 0) : 0), 0);
+const FORECAST_RULE = "売上見込・粗利見込: 受注確度が A・要注意（A）・A（定期売上）の案件だけを合計";
 const TARGET_RULE = "計上: 受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）";
 
 /** 粗利（見込）が目標に届いているか */
@@ -393,8 +398,8 @@ export function DailyView({ projects, isLoading }) {
       const counted = rows.filter(countsTowardTarget);
       return {
         count: rows.length,
-        revenue: rows.reduce((s, p) => s + Number(p.expected_revenue || 0), 0),
-        gross: rows.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
+        revenue: sumBy(rows, "expected_revenue"),
+        gross: sumBy(rows, "expected_gross_profit"),
         counted: counted.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
         countedCount: counted.length,
       };
@@ -404,8 +409,8 @@ export function DailyView({ projects, isLoading }) {
     const yCounted = yRows.filter(countsTowardTarget);
     const yesterdayAgg = {
       count: yRows.length,
-      revenue: yRows.reduce((s, p) => s + Number(p.expected_revenue || 0), 0),
-      gross: yRows.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
+      revenue: sumBy(yRows, "expected_revenue"),
+      gross: sumBy(yRows, "expected_gross_profit"),
       counted: yCounted.reduce((s, p) => s + Number(p.expected_gross_profit || 0), 0),
       countedCount: yCounted.length,
     };
@@ -421,8 +426,7 @@ export function DailyView({ projects, isLoading }) {
       let g = out[out.length - 1];
       if (!g || g.date !== key) { g = { date: key, rows: [], revenue: 0, gross: 0, actual: 0, counted: 0, countedCount: 0 }; out.push(g); }
       g.rows.push(p);
-      g.revenue += Number(p.expected_revenue || 0);
-      g.gross += Number(p.expected_gross_profit || 0);
+      if (isForecastProb(p)) { g.revenue += Number(p.expected_revenue || 0); g.gross += Number(p.expected_gross_profit || 0); }
       if (countsTowardTarget(p)) { g.counted += Number(p.expected_gross_profit || 0); g.countedCount += 1; }
       g.actual += Number(p.actual_gross_profit || 0);
     }
@@ -470,8 +474,8 @@ export function DailyView({ projects, isLoading }) {
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-1">
                 <span className="text-2xl font-bold tabular-nums">{c.v.count}<span className="text-sm font-medium ml-0.5">件</span></span>
                 {/* 5 枚並ぶと幅が狭いので、項目ごとに折り返す（「粗利見込」と金額が離れないように） */}
-                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">受注見込 {yen(c.v.revenue)}</span>
-                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">粗利見込 {yen(c.v.gross)}</span>
+                <span title={FORECAST_RULE} className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">受注見込 {yen(c.v.revenue)}</span>
+                <span title={FORECAST_RULE} className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">粗利見込 {yen(c.v.gross)}</span>
                 <span className="text-xs tabular-nums font-medium" title={TARGET_RULE}>計上 {yen(c.v.counted)}（{c.countedCount ?? c.v.countedCount}件）</span>
               </div>
             </CardContent>
@@ -521,7 +525,7 @@ function GroupRows({ group: g, target, isToday, isYesterday }) {
       <TableRow className={`${isToday ? "bg-blue-100/70 hover:bg-blue-100/70" : "bg-slate-100 hover:bg-slate-100"}`} data-day={g.date}>
         <TableCell colSpan={DAILY_COLS.length} className="py-1.5 text-[11px] font-semibold text-slate-700">
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span>{withWeekday(g.date)}{isToday && "（今日）"}{isYesterday && "（昨日）"}　新規 {g.rows.length}件　売上見込 {yen(g.revenue)}　粗利見込 {yen(g.gross)}　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
+            <span>{withWeekday(g.date)}{isToday && "（今日）"}{isYesterday && "（昨日）"}　新規 {g.rows.length}件　<span title={FORECAST_RULE}>売上見込 {yen(g.revenue)}　粗利見込 {yen(g.gross)}</span>　<span title={TARGET_RULE}>計上 {yen(g.counted)}（{g.countedCount}件）</span></span>
             <TargetBadge gross={g.counted} target={target} />
           </span>
         </TableCell>
