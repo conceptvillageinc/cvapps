@@ -4,7 +4,7 @@ import { todayString } from "@/lib/fiscal";
 const pad = (n) => String(n).padStart(2, "0");
 const lastDay = (y, m) => new Date(y, m, 0).getDate();
 /** 今月・先月・来月・今年など、よく使う期間 */
-function presets(today = todayString()) {
+export function periodPresets(today = todayString()) {
   const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));
   const month = (yy, mm) => { const d = new Date(yy, mm - 1, 1); const Y = d.getFullYear(); const M = d.getMonth() + 1; return { from: `${Y}-${pad(M)}-01`, to: `${Y}-${pad(M)}-${pad(lastDay(Y, M))}` }; };
   return [
@@ -40,7 +40,7 @@ export function periodLabel(p, fields) {
  */
 export default function PeriodFilter({ value, onChange, fields, className = "" }) {
   const set = (patch) => onChange({ ...value, ...patch });
-  const ps = presets();
+  const ps = periodPresets();
   return (
     <div className={`flex flex-wrap items-center gap-1.5 text-xs ${className}`} data-testid="period-filter">
       <CalendarRange className="w-4 h-4 text-muted-foreground" />

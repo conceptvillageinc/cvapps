@@ -18,6 +18,8 @@ import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals
 import RecurringMark, { useRecurringProjectIds, invoiceHasRecurring } from "@/components/projects/RecurringMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportInvoicesCsv } from "@/lib/listCsv";
+import ConditionFilter, { matchConditions, conditionActive } from "@/components/table/ConditionFilter";
+import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
@@ -32,11 +34,34 @@ export default function InvoiceList() {
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("unpaid"); // all | unpaid | overdue | paid
+  const [conditions, setConditions] = useState([]);
   const today = todayString();
 
-  const range = fiscalYear === ALL ? null : fiscalYearRange(Number(fiscalYear), fiscalYearStartMonth);
+  // 条件で絞る項目（freee の「条件追加」のように、いくつでも重ねられる）
+  const condFields = useMemo(() => [
+    { key: "invoice_number", label: "請求No.", type: "text" },
+    { key: "client_name", label: "請求先", type: "text" },
+    { key: "title", label: "請求書名（件名）", type: "text" },
+    { key: "items", label: "明細の品目", type: "text", get: (i) => (i.line_items || []).map((li) => li.name || li.text || "") },
+    { key: "invoice_date", label: "請求日", type: "date" },
+    { key: "due_date", label: "入金期日", type: "date" },
+    { key: "sent_at", label: "送付日", type: "date" },
+    { key: "paid_at", label: "入金日", type: "date" },
+    { key: "subtotal", label: "請求金額（税抜）", type: "amount" },
+    { key: "total", label: "請求金額（税込）", type: "amount" },
+    { key: "status", label: "状態", type: "select", get: (i) => (i.status === "sent" && i.due_date && i.due_date < today ? ["sent", "overdue"] : [i.status || "draft"]),
+      options: [...Object.entries(INVOICE_STATUS_MAP).map(([value, v]) => ({ value, label: v.label })), { value: "overdue", label: "期日超過" }] },
+    { key: "delivery_method", label: "送付方法", type: "select", get: (i) => i.delivery_method || "",
+      options: [...Object.entries(INVOICE_DELIVERY_METHODS).map(([value, label]) => ({ value, label })), { value: "", label: "未設定" }] },
+    { key: "person_in_charge", label: "担当者", type: "select", get: (i) => i.person_in_charge || "", options: [] },
+    { key: "recurring", label: "定期売上", type: "select", get: (i) => (invoiceHasRecurring(i, recurringIds) ? "yes" : "no"), options: [{ value: "yes", label: "定期売上の請求" }, { value: "no", label: "定期売上以外" }] },
+  ], [today, recurringIds]);
+  // 請求日で絞るときは、期（年度）にかかわらず探す
+  const byInvoiceDate = conditions.some((c) => c.key === "invoice_date" && conditionActive(c, condFields.find((f) => f.key === "invoice_date")));
+
+  const range = fiscalYear === ALL || byInvoiceDate ? null : fiscalYearRange(Number(fiscalYear), fiscalYearStartMonth);
   const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ["invoices", fiscalYear, fiscalYearStartMonth],
+    queryKey: ["invoices", byInvoiceDate ? ALL : fiscalYear, fiscalYearStartMonth],
     queryFn: () => range
       ? db.entities.Invoice.between("invoice_date", range.from, range.to, "-invoice_date")
       : db.entities.Invoice.list("-invoice_date"),
@@ -52,6 +77,11 @@ export default function InvoiceList() {
       return [inv.invoice_number, inv.client_name, inv.title].filter(Boolean).join(" ").toLowerCase().includes(q);
     });
   }, [invoices, search, filter, today]);
+  // 担当者の選択肢は、読み込んだ請求書から
+  const fieldsWithPeople = useMemo(() => condFields.map((f) => (f.key !== "person_in_charge" ? f : {
+    ...f, options: [...new Set(invoices.map((i) => i.person_in_charge || ""))].sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b, "ja"))).map((v) => ({ value: v, label: v || "未設定" })),
+  })), [condFields, invoices]);
+  const shown = useMemo(() => filtered.filter((inv) => matchConditions(inv, conditions, fieldsWithPeople)), [filtered, conditions, fieldsWithPeople]);
 
   // 一覧から状態を変える（下書き→送付済、送付済→入金済 など）
   const statusMutation = useMutation({
@@ -90,7 +120,7 @@ export default function InvoiceList() {
               <SelectItem value={ALL} className="text-xs">すべての期</SelectItem>
             </SelectContent>
           </Select>
-          <CsvExportButton count={filtered.length} onExport={() => exportInvoicesCsv(filtered)} />
+          <CsvExportButton count={shown.length} onExport={() => exportInvoicesCsv(shown)} />
           <ListColumnsButton list="invoices" />
           <Button className="gap-2" onClick={() => navigate("/invoices/new")}><Plus className="w-4 h-4" /> 請求書を作成</Button>
         </div>
@@ -107,12 +137,19 @@ export default function InvoiceList() {
           ))}
         </div>
       </div>
+      <ConditionFilter fields={fieldsWithPeople} value={conditions} className="-mt-2"
+        onChange={(next) => {
+          // 「状態」の条件を足したら、上の「未入金」などのボタンは「すべて」にする（両方で絞って 0 件にならないように）
+          if (next.some((c) => c.key === "status") && !conditions.some((c) => c.key === "status")) setFilter("all");
+          setConditions(next);
+        }} />
+      {byInvoiceDate && <p className="-mt-2 text-[11px] text-muted-foreground">請求日の条件で探しているので、期（{fiscalYear === ALL ? "すべての期" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}）にかかわらず表示しています</p>}
 
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-          ) : filtered.length === 0 ? (
+          ) : shown.length === 0 ? (
             <div className="text-center py-16">
               <Receipt className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">該当する請求書がありません</p>
@@ -129,7 +166,7 @@ export default function InvoiceList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((inv) => {
+                  {shown.map((inv) => {
                     const st = INVOICE_STATUS_MAP[inv.status] || INVOICE_STATUS_MAP.draft;
                     const late = inv.status === "sent" && inv.due_date && inv.due_date < today;
                     return (
@@ -163,8 +200,8 @@ export default function InvoiceList() {
                   })}
                   <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium">
                     {cols.map((k, i) => (k === "total"
-                      ? <TableCell key={k} className="text-right text-sm tabular-nums">{yen(sum(filtered))}</TableCell>
-                      : <TableCell key={k} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `表示中の合計（${filtered.length}件）` : ""}</TableCell>))}
+                      ? <TableCell key={k} className="text-right text-sm tabular-nums">{yen(sum(shown))}</TableCell>
+                      : <TableCell key={k} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `表示中の合計（${shown.length}件）` : ""}</TableCell>))}
                     <TableCell />
                   </TableRow>
                 </TableBody>
