@@ -34,6 +34,7 @@ export default function DeliveryNoteList() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all"); // all | uninvoiced | draft
+  const [showRecurring, setShowRecurring] = useState(false); // 定期売上の納品書（案件の「月ごとの納品・請求」で見る）は、ふだんは出さない
   const [period, setPeriod] = useState(() => emptyPeriod("delivery_date")); // 期間（納品日・作成日）
   const [picked, setPicked] = useState(() => new Set());
   const recurringIds = useRecurringProjectIds();
@@ -47,13 +48,15 @@ export default function DeliveryNoteList() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return notes.filter((n) => {
+      if (!showRecurring && noteIsRecurring(n, recurringIds)) return false;
       if (!inPeriod(n[period.field], period)) return false;
       if (filter === "uninvoiced" && isNoteInvoiced(n)) return false;
       if (filter === "draft" && n.status !== "draft") return false;
       if (!q) return true;
       return [n.delivery_number, n.client_name, n.title].filter(Boolean).join(" ").toLowerCase().includes(q);
     });
-  }, [notes, search, filter, period]);
+  }, [notes, search, filter, period, showRecurring, recurringIds]);
+  const recurringCount = useMemo(() => notes.filter((n) => noteIsRecurring(n, recurringIds)).length, [notes, recurringIds]);
 
   const total = filtered.reduce((s, n) => s + Number(n.total || 0), 0);
 
@@ -78,11 +81,11 @@ export default function DeliveryNoteList() {
     ? `請求書作成が「処理済」の納品書が ${pickedInvoiced.length} 件入っています（外すと作れます）`
     : pickedClients.length > 1 ? `クライアントが違う納品書が入っています（${pickedClients.slice(0, 3).join("・")}${pickedClients.length > 3 ? " ほか" : ""}）` : "";
   const sameClientRest = !invoiceBlock && pickedClients.length === 1
-    ? notes.filter((n) => !isNoteInvoiced(n) && (n.client_name || "").trim() === pickedClients[0] && !picked.has(n.id))
+    ? notes.filter((n) => !isNoteInvoiced(n) && (showRecurring || !noteIsRecurring(n, recurringIds)) && (n.client_name || "").trim() === pickedClients[0] && !picked.has(n.id))
     : [];
   // 同じクライアントの未請求の納品書（選んだものも含む）。選んだ 1 件から、ほかの分をその場で足せるように並べる
   const sameClientAll = !invoiceBlock && pickedClients.length === 1
-    ? notes.filter((n) => !isNoteInvoiced(n) && (n.client_name || "").trim() === pickedClients[0])
+    ? notes.filter((n) => !isNoteInvoiced(n) && (showRecurring || !noteIsRecurring(n, recurringIds) || picked.has(n.id)) && (n.client_name || "").trim() === pickedClients[0])
     : [];
   const pickedTotal = pickedNotes.reduce((s, n) => s + Number(n.total || 0), 0);
   const invoicePicked = () => {
@@ -149,6 +152,12 @@ export default function DeliveryNoteList() {
           {[["all", "すべて"], ["uninvoiced", "請求書作成：未処理"], ["draft", "下書き"]].map(([k, label]) => (
             <Button key={k} size="sm" variant={filter === k ? "default" : "outline"} className="text-xs" onClick={() => setFilter(k)}>{label}</Button>
           ))}
+          {recurringCount > 0 && (
+            <Button size="sm" variant={showRecurring ? "default" : "outline"} className="text-xs gap-1" onClick={() => setShowRecurring((v) => !v)}
+              title="定期売上の納品書は、案件の画面の「月ごとの納品・請求」で見られます。ここでは、ふだんは出しません" data-testid="show-recurring-notes">
+              {showRecurring ? "定期売上の分も表示中" : `定期売上の分も表示（${recurringCount}件）`}
+            </Button>
+          )}
         </div>
       </div>
       <PeriodFilter value={period} onChange={setPeriod} fields={PERIOD_FIELDS} className="-mt-1" />

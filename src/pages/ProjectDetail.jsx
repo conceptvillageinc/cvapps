@@ -557,7 +557,8 @@ export default function ProjectDetail() {
       {isRecurringParent(project) && recurringTemplate && <RecurringFirstNote key={recurringTemplate.id} template={recurringTemplate} />}
       {isRecurringParent(project) && <RecurringMonthsCard project={project} deliveryNotes={deliveryNotes} invoices={invoices} />}
 
-      {/* 納品書 */}
+      {/* 納品書（定期売上の案件は、上の「月ごとの納品・請求」に同じ納品書が出るので、一覧は出さない） */}
+      {!isRecurringParent(project) && (
       <Card data-testid="project-notes-card">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -589,6 +590,7 @@ export default function ProjectDetail() {
           )}
         </CardContent>}
       </Card>
+      )}
 
       {/* 請求書 */}
       <Card data-testid="project-invoices-card">
