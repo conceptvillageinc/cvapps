@@ -151,15 +151,15 @@ function MyTasksView({ data, me, today, onOpen }) {
       <Summary list={list} today={today} />
       <div className="flex flex-wrap items-center gap-2">
         {isMe && <ViewSwitch value={view} onChange={changeView} />}
+        {me.role !== "guest" && (
+          <WhoPicker users={data.users.filter((u) => u.role !== "guest" || u.id === me.id)} me={me} value={who} onChange={setWho} />
+        )}
         <PlaceFilter options={placeOptions} value={placeKey} onChange={setPlaceKey} data={data} />
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="タスク名・案件名で探す" className="h-8 w-48 rounded-lg border border-slate-200 bg-white pl-7 pr-6 text-sm" data-testid="tasks-search" />
           {q && <button type="button" onClick={() => setQ("")} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" aria-label="検索を消す"><X className="w-3.5 h-3.5" /></button>}
         </div>
-        {me.role !== "guest" && (
-          <WhoPicker users={data.users.filter((u) => u.role !== "guest" || u.id === me.id)} me={me} value={who} onChange={setWho} />
-        )}
         {!isMe && <span className="text-[11px] text-slate-500">こちらは、プロジェクトに紐づいた公開タスクを確認できます。</span>}
         <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />完了したタスクも出す</label>
         {isMe && me.role !== "guest" && <Button size="sm" className="h-8 gap-1 text-xs" onClick={() => setNewOpen(true)} data-testid="new-task-open"><Plus className="w-3.5 h-3.5" />タスクを作成</Button>}
