@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 const pad = (n) => String(n).padStart(2, "0");
@@ -53,5 +54,26 @@ export default function RangeCalendar({ start, end, today, onChange }) {
       </div>
       <p className="pt-1 text-[10px] text-muted-foreground">{picking ? "期限の日を押してください（同じ日ならそのままで OK）" : "開始日を押し、続けて期限の日を押します"}</p>
     </div>
+  );
+}
+
+/** カレンダーのボタン（押すとカレンダーが開く。日付の入力欄の横に置く） */
+export function RangeCalendarButton({ start, end, today, onChange, className = "h-8 w-8", testId = "range-calendar-open" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className={`inline-flex shrink-0 items-center justify-center rounded border bg-white text-slate-600 hover:bg-muted ${className}`} title="カレンダーで選ぶ" aria-label="カレンダーで選ぶ" data-testid={testId}>
+          <CalendarDays className="w-4 h-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-2 space-y-2">
+        <RangeCalendar start={start} end={end} today={today} onChange={onChange} />
+        <div className="flex justify-between border-t pt-2">
+          <button type="button" onClick={() => onChange({ start_date: today, end_date: today })} className="rounded border px-2 py-0.5 text-[11px] hover:bg-muted">今日</button>
+          <button type="button" onClick={() => setOpen(false)} className="rounded bg-primary px-3 py-0.5 text-[11px] font-semibold text-primary-foreground">決定</button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

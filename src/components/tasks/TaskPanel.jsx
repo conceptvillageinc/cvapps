@@ -6,11 +6,12 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Send, FileImage, ScanEye, UserRound, CalendarDays, Flag, CircleDot, Timer, AlignLeft, ListChecks, MessageSquare } from "lucide-react";
-import { PRIORITY, REVIEW_STATUS, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel } from "@/lib/tasks";
+import { PRIORITY, REVIEW_STATUS, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel, todayYmd } from "@/lib/tasks";
 import { useTaskWrites, TASK_TEMPLATES } from "@/lib/useTaskData";
 import { UserAvatar, TaskCheck, TaskPlaceChip, PinBadge, DueLabel } from "@/components/tasks/parts";
 import ProofViewer, { useAttachmentImage } from "@/components/tasks/ProofViewer";
 import PlacePicker, { moveTaskPlace } from "@/components/tasks/PlacePicker";
+import { RangeCalendarButton } from "@/components/tasks/RangeCalendar";
 
 const fmtAt = (s) => { if (!s) return ""; const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
@@ -200,6 +201,8 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
                 <input type="date" value={task.start_date || ""} onChange={(e) => save({ start_date: e.target.value || null, ...(task.end_date && e.target.value > task.end_date ? { end_date: e.target.value } : {}) })} className="h-8 rounded border px-2 text-sm" aria-label="開始日" />
                 <span className="text-muted-foreground">〜</span>
                 <input type="date" value={task.end_date || ""} onChange={(e) => save({ end_date: e.target.value || null })} className="h-8 rounded border px-2 text-sm" aria-label="期限" />
+                {/* カレンダーで 開始日〜期限 を選ぶ */}
+                <RangeCalendarButton start={task.start_date} end={task.end_date} today={todayYmd()} onChange={(patch) => save(patch)} testId="task-panel-calendar" />
               </div>
             </Field>
             <Field label="優先度">
