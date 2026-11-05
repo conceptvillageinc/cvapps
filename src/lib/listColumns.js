@@ -15,32 +15,32 @@ export const LIST_DEFS = {
   estimates: {
     label: "見積書", columns: [
       ["estimate_number", "見積番号"], ["submission", "提出"], ["delivery", "納品・請求"], ["client_name", "クライアント"], ["print_type", "印刷物種別"],
-      ["deal_probability", "受注確度"], ["phase", "フェーズ"], ["total_amount", "合計金額"], ["desired_delivery_date", "希望納期"],
+      ["deal_probability", "受注確度"], ["phase", "フェーズ"], ["total_amount", "合計金額（税別）"], ["desired_delivery_date", "希望納期"],
       ["created_date", "作成日"], ["person_in_charge", "作成担当者"],
     ],
   },
   delivery_notes: {
     label: "納品書", columns: [
       ["delivery_number", "番号"], ["delivery_date", "納品日"], ["client_name", "クライアント"], ["title", "件名"],
-      ["total", "合計（税込）"], ["status", "状態"], ["invoice", "請求書作成"],
+      ["total", "合計（税別）"], ["status", "状態"], ["invoice", "請求書作成"],
     ],
   },
   invoices: {
     label: "請求書", columns: [
       ["invoice_number", "番号"], ["invoice_date", "請求日"], ["due_date", "入金期日"], ["client_name", "請求先"],
-      ["title", "件名"], ["total", "請求金額"], ["status", "送付"],
+      ["title", "件名"], ["total", "請求金額（税別）"], ["status", "送付"],
     ],
   },
   receipts: {
     label: "領収書", columns: [
       ["receipt_number", "番号"], ["issue_date", "発行日"], ["client_name", "宛名"], ["proviso", "但し書き"],
-      ["total", "金額（税込）"], ["payment_method", "受領"], ["status", "状態"],
+      ["total", "金額（税別）"], ["payment_method", "受領"], ["status", "状態"],
     ],
   },
   partner_orders: {
     label: "発注書", columns: [
       ["po_number", "番号"], ["order_date", "発注日"], ["partner_name", "連携先"], ["title", "件名"],
-      ["due_date", "納期"], ["total", "発注金額（税込）"], ["status", "状態"],
+      ["due_date", "納期"], ["total", "発注金額（税別）"], ["status", "状態"],
     ],
   },
 };

@@ -25,7 +25,8 @@ export default function PartnerOrderList() {
     if (!q) return orders;
     return orders.filter((o) => [o.po_number, o.partner_name, o.title].filter(Boolean).join(" ").toLowerCase().includes(q));
   }, [orders, search]);
-  const total = filtered.reduce((s, o) => s + Number(o.total || 0), 0);
+  // 一覧の金額は税別（小計）で出す
+  const total = filtered.reduce((s, o) => s + Number(o.subtotal || 0), 0);
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -68,7 +69,7 @@ export default function PartnerOrderList() {
                           case "partner_name": return <TableCell key={k} className="text-sm">{o.partner_name} {o.partner_honorific}</TableCell>;
                           case "title": return <TableCell key={k} className="text-xs text-muted-foreground truncate max-w-[280px]">{o.title}</TableCell>;
                           case "due_date": return <TableCell key={k} className="text-xs tabular-nums">{o.due_date || "—"}</TableCell>;
-                          case "total": return <TableCell key={k} className="text-right tabular-nums font-medium">{yen(o.total)}</TableCell>;
+                          case "total": return <TableCell key={k} className="text-right tabular-nums font-medium" title={`税込 ${yen(o.total)}`}>{yen(o.subtotal)}</TableCell>;
                           case "status": return <TableCell key={k}><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>;
                           default: return <TableCell key={k} />;
                         }

@@ -98,7 +98,8 @@ export default function InvoiceList() {
     onError: (err) => toast.error("変更できませんでした: " + err.message),
   });
 
-  const sum = (rows) => rows.reduce((s, i) => s + Number(i.total || 0), 0);
+  // 一覧の金額は税別（小計）で出す
+  const sum = (rows) => rows.reduce((s, i) => s + Number(i.subtotal || 0), 0);
   const unpaid = invoices.filter((i) => i.status === "sent" || i.status === "draft");
   const overdue = unpaid.filter((i) => i.status === "sent" && i.due_date && i.due_date < today);
   const years = [];
@@ -110,8 +111,8 @@ export default function InvoiceList() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">請求書</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            未入金 {unpaid.length}件 {yen(sum(unpaid))}
-            {overdue.length > 0 && <span className="text-red-700">　期日超過 {overdue.length}件 {yen(sum(overdue))}</span>}
+            未入金 {unpaid.length}件 {yen(sum(unpaid))}（税別）
+            {overdue.length > 0 && <span className="text-red-700">　期日超過 {overdue.length}件 {yen(sum(overdue))}（税別）</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -180,7 +181,7 @@ export default function InvoiceList() {
                             case "due_date": return <TableCell key={k} className={`text-xs whitespace-nowrap ${late ? "text-red-700 font-medium" : ""}`}>{inv.due_date || "—"}</TableCell>;
                             case "client_name": return <TableCell key={k} className="text-sm font-medium max-w-[220px] truncate">{inv.client_name}</TableCell>;
                             case "title": return <TableCell key={k} className="text-sm max-w-[300px] truncate">{invoiceHasRecurring(inv, recurringIds) && <RecurringMark className="mr-1.5 align-middle" title="定期売上の分が入っている請求書" />}{inv.title || "—"}</TableCell>;
-                            case "total": return <TableCell key={k} className="text-right text-sm tabular-nums">{yen(inv.total)}</TableCell>;
+                            case "total": return <TableCell key={k} className="text-right text-sm tabular-nums" title={`税込 ${yen(inv.total)}`}>{yen(inv.subtotal)}</TableCell>;
                             case "status": return (
                         <TableCell key={k} onClick={(e) => e.stopPropagation()}>
                           <select

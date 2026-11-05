@@ -60,7 +60,8 @@ export default function DeliveryNoteList() {
   }, [notes, search, filter, period, showRecurring, recurringIds]);
   const recurringCount = useMemo(() => notes.filter((n) => noteIsRecurring(n, recurringIds)).length, [notes, recurringIds]);
 
-  const total = filtered.reduce((s, n) => s + Number(n.total || 0), 0);
+  // 一覧の金額は税別（小計）で出す
+  const total = filtered.reduce((s, n) => s + Number(n.subtotal || 0), 0);
 
   // 請求書作成の 未処理／処理済 を一覧から変える（請求書とつながっていない納品書だけ）
   const setInvoicedManual = async (n, done) => {
@@ -89,7 +90,7 @@ export default function DeliveryNoteList() {
   const sameClientAll = !invoiceBlock && pickedClients.length === 1
     ? notes.filter((n) => !isNoteInvoiced(n) && (showRecurring || !noteIsRecurring(n, recurringIds) || picked.has(n.id)) && (n.client_name || "").trim() === pickedClients[0])
     : [];
-  const pickedTotal = pickedNotes.reduce((s, n) => s + Number(n.total || 0), 0);
+  const pickedTotal = pickedNotes.reduce((s, n) => s + Number(n.subtotal || 0), 0);
   const invoicePicked = () => {
     const ids = [...pickedNotes].sort((a, b) => String(a.delivery_date || "").localeCompare(String(b.delivery_date || ""))).map((n) => n.id);
     navigate(`/invoices/new?delivery=${ids.join(",")}`);
@@ -117,7 +118,7 @@ export default function DeliveryNoteList() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">納品書</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{filtered.length}件 / 全{notes.length}件　合計 {yen(total)}（税込）</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{filtered.length}件 / 全{notes.length}件　合計 {yen(total)}（税別）</p>
         </div>
         <div className="flex items-center gap-2">
           {picked.size > 0 && (
@@ -177,7 +178,7 @@ export default function DeliveryNoteList() {
           </>
         ) : (
           <>
-            <span>選択中 <strong>{picked.size} 件</strong>　合計 {yen(pickedTotal)}（税込）{pickedClients.length === 1 && <>　<span className="font-medium">{pickedClients[0]}</span></>}</span>
+            <span>選択中 <strong>{picked.size} 件</strong>　合計 {yen(pickedTotal)}（税別）{pickedClients.length === 1 && <>　<span className="font-medium">{pickedClients[0]}</span></>}</span>
             {invoiceBlock && <span className="inline-flex items-center gap-1 text-amber-800"><AlertTriangle className="w-3.5 h-3.5" /> {invoiceBlock}</span>}
             <span className="flex-1" />
             {sameClientRest.length > 0 && (
@@ -204,7 +205,7 @@ export default function DeliveryNoteList() {
                         {n.status === "draft" && <Badge variant="outline" className="mr-1.5 text-[9px] font-normal text-muted-foreground">下書き</Badge>}
                         {n.title || "（件名なし）"}
                       </span>
-                      <span className="tabular-nums w-24 text-right">{yen(n.total)}</span>
+                      <span className="tabular-nums w-24 text-right">{yen(n.subtotal)}</span>
                       <a href={`/delivery-notes/${n.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[11px] text-primary hover:underline shrink-0">開く</a>
                     </label>
                   ))}
@@ -263,7 +264,7 @@ export default function DeliveryNoteList() {
                                 {n.title || "—"}
                               </TableCell>
                             );
-                            case "total": return <TableCell key={k} className="text-right text-sm tabular-nums">{yen(n.total)}</TableCell>;
+                            case "total": return <TableCell key={k} className="text-right text-sm tabular-nums" title={`税込 ${yen(n.total)}`}>{yen(n.subtotal)}</TableCell>;
                             case "status": return <TableCell key={k}><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>;
                             case "invoice": return (
                               <TableCell key={k}>
@@ -291,7 +292,7 @@ export default function DeliveryNoteList() {
                   <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium" data-testid="list-total">
                     <TableCell />
                     {cols.map((k, i) => (k === "total"
-                      ? <TableCell key={k} className="text-right text-sm tabular-nums whitespace-nowrap">{yen(total)}<span className="block text-[10px] font-normal text-muted-foreground">税抜 {yen(filtered.reduce((s, n) => s + Number(n.subtotal || 0), 0))}</span></TableCell>
+                      ? <TableCell key={k} className="text-right text-sm tabular-nums whitespace-nowrap">{yen(total)}</TableCell>
                       : <TableCell key={k} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `表示中の合計（${filtered.length}件）` : ""}</TableCell>))}
                     <TableCell />
                   </TableRow>

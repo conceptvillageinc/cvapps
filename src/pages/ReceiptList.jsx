@@ -26,7 +26,8 @@ export default function ReceiptList() {
     if (!q) return receipts;
     return receipts.filter((r) => [r.receipt_number, r.client_name, r.title, r.proviso].filter(Boolean).join(" ").toLowerCase().includes(q));
   }, [receipts, search]);
-  const total = filtered.reduce((s, r) => s + Number(r.total || 0), 0);
+  // 一覧の金額は税別（小計）で出す
+  const total = filtered.reduce((s, r) => s + Number(r.subtotal || 0), 0);
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -68,7 +69,7 @@ export default function ReceiptList() {
                           case "issue_date": return <TableCell key={k} className="text-xs tabular-nums">{r.issue_date}</TableCell>;
                           case "client_name": return <TableCell key={k} className="text-sm">{r.client_name} {r.client_honorific}</TableCell>;
                           case "proviso": return <TableCell key={k} className="text-xs text-muted-foreground truncate max-w-[280px]">{r.proviso}</TableCell>;
-                          case "total": return <TableCell key={k} className="text-right tabular-nums font-medium">{yen(r.total)}</TableCell>;
+                          case "total": return <TableCell key={k} className="text-right tabular-nums font-medium" title={`税込 ${yen(r.total)}`}>{yen(r.subtotal)}</TableCell>;
                           case "payment_method": return <TableCell key={k} className="text-xs">{paymentMethodLabel(r.payment_method)}</TableCell>;
                           case "status": return <TableCell key={k}><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>;
                           default: return <TableCell key={k} />;

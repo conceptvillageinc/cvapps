@@ -366,7 +366,7 @@ function TargetBadge({ gross, target }) {
 
 const DAILY_COLS = [
   { key: "registered_at", label: "案件登録日" },
-  { key: "confirmed_revenue", label: "納品確定金額(税抜)", num: true },
+  { key: "confirmed_revenue", label: "納品確定金額(税別)", num: true },
   { key: "client_name", label: "顧客名称" },
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度" },
@@ -564,14 +564,14 @@ function GroupRows({ group: g, target, isToday, isYesterday }) {
 
 const NEXT_COLS = [
   { key: "due_date", label: "完了予定日", head: <>完了<br />予定日</> },
-  { key: "confirmed_revenue", label: "納品確定金額(税抜)", head: <>納品確定<br />(税抜)</>, num: true },
+  { key: "confirmed_revenue", label: "納品確定金額(税別)", head: <>納品確定<br />(税別)</>, num: true },
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度", head: <>受注<br />確度</> },
   { key: "phase", label: "フェーズ" },
   { key: "status", label: "状態" },
   { key: "expected_revenue", label: "受注見込", head: <>受注<br />見込</>, num: true },
   { key: "expected_cost", label: "発注見込", head: <>発注<br />見込</>, num: true },
-  { key: "confirmed_cost", label: "仕入合計(税抜)", head: <>仕入合計<br />(税抜)</>, num: true },
+  { key: "confirmed_cost", label: "仕入合計(税別)", head: <>仕入合計<br />(税別)</>, num: true },
   { key: "other_cost", label: "その他費用", head: <>その他<br />費用</>, num: true },
   { key: "next_action", label: "ネクストアクション" },
 ];

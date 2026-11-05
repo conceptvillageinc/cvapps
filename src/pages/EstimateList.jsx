@@ -27,10 +27,13 @@ import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
 import RecurringMark from "@/components/projects/RecurringMark";
 import { sectionOf } from "@/lib/estimateSections";
-import { clientLines } from "@/lib/estimateTotals";
+import { clientLines, estimateSubtotal } from "@/lib/estimateTotals";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportEstimatesCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
+
+/** 一覧の金額は税別（明細の無い古い見積は合計金額のまま） */
+const exTaxOf = (e) => estimateSubtotal(e) ?? (Number(e.total_amount) || 0);
 
 /** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
 function estimateGross(e) {
@@ -115,7 +118,7 @@ export default function EstimateList() {
     print_type: { label: "印刷物種別", getValue: e => e.print_type || "", master: PRINT_TYPES },
     deal_probability: { label: "受注確度", getValue: probabilityOf, master: dealProbabilityMaster },
     phase: { label: "フェーズ", getValue: phaseOf, master: phaseMaster },
-    total_amount: { label: "合計金額", getValue: e => e.total_amount ? `¥${e.total_amount.toLocaleString()}` : "—" },
+    total_amount: { label: "合計金額（税別）", getValue: e => exTaxOf(e) ? `¥${exTaxOf(e).toLocaleString()}` : "—" },
     desired_delivery_date: { label: "希望納期", getValue: e => e.desired_delivery_date || "—" },
     created_date: { label: "作成日", getValue: e => format(new Date(e.created_date), "yyyy-MM-dd") },
     person_in_charge: { label: "作成担当者", getValue: e => e.person_in_charge || "" },
@@ -171,7 +174,7 @@ export default function EstimateList() {
         const bk = clientKanaMap[b.client_name] || stripCorpAffix(b.client_name || "");
         cmp = ak.localeCompare(bk, "ja");
       } else if (sortConfig.key === "total_amount") {
-        cmp = (a.total_amount || 0) - (b.total_amount || 0);
+        cmp = exTaxOf(a) - exTaxOf(b);
       } else if (sortConfig.key === "created_date") {
         cmp = new Date(a.created_date) - new Date(b.created_date);
       }
@@ -238,7 +241,7 @@ export default function EstimateList() {
         return (
           <TableCell key={key} className="text-right text-sm font-medium tabular-nums">
             {latest}
-            {est.total_amount ? `¥${est.total_amount.toLocaleString()}` : "—"}
+            {exTaxOf(est) ? `¥${exTaxOf(est).toLocaleString()}` : "—"}
             {g ? <span className={`block text-[10px] font-normal ${g.rate < 50 ? "text-amber-700" : "text-muted-foreground"}`} title={`粗利 ¥${g.profit.toLocaleString()}（原価入力済みの明細から）`}>粗利率 {g.rate}%</span> : null}
           </TableCell>
         );
@@ -426,7 +429,7 @@ export default function EstimateList() {
                   <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium" data-testid="list-total">
                     <TableCell />
                     {cols.map((key, i) => (key === "total_amount"
-                      ? <TableCell key={key} className="text-right text-sm tabular-nums whitespace-nowrap">¥{sorted.reduce((t, e) => t + (Number(e.total_amount) || 0), 0).toLocaleString()}</TableCell>
+                      ? <TableCell key={key} className="text-right text-sm tabular-nums whitespace-nowrap">¥{sorted.reduce((t, e) => t + exTaxOf(e), 0).toLocaleString()}</TableCell>
                       : <TableCell key={key} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total_amount") ? `表示中の合計（${sorted.length}件${!showAll && sorted.length > PAGE_ROWS ? `・下の「すべて表示」を押す前の分も含む` : ""}）` : ""}</TableCell>))}
                     <TableCell />
                   </TableRow>
