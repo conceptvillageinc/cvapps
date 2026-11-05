@@ -19,7 +19,7 @@ const HINT = {
  * 案件一覧の「納品・請求」。札を押すと、その場で状態を変えられる。
  *   「自動」… 納品書・請求書から決める（これまでどおり）／ほかを選ぶと、その状態に固定する（札に「手動」と出る）
  */
-export default function ProjectDeliveryCell({ project, info, due = false }) {
+export default function ProjectDeliveryCell({ project, info }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const save = useMutation({
@@ -34,7 +34,6 @@ export default function ProjectDeliveryCell({ project, info, due = false }) {
   });
   if (!info) return <span className="text-muted-foreground text-xs">—</span>;
   const st = DELIVERY_STATE[info.state];
-  const urgent = due && info.state === "none";
   const stop = (e) => e.stopPropagation();
   const current = info.manual ? info.state : null;
   return (
@@ -42,8 +41,8 @@ export default function ProjectDeliveryCell({ project, info, due = false }) {
       <PopoverTrigger asChild>
         <button type="button" onClick={stop} className="inline-flex items-center rounded hover:ring-2 hover:ring-primary/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" title="納品・請求の状態を変更（クリック）" data-testid="inline-delivery">
           {save.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : (
-            <span className={`inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[10.5px] font-medium ${urgent ? "bg-red-50 text-red-700 border-red-400 ring-1 ring-red-300" : st.cls}`} data-testid="delivery-badge" data-state={info.state}>
-              {urgent ? `${st.label}（期限）` : st.label}{info.manual && <span className="ml-1 text-[9px] opacity-70">手動</span>}
+            <span className={`inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[10.5px] font-medium ${st.cls}`} data-testid="delivery-badge" data-state={info.state}>
+              {st.label}{info.manual && <span className="ml-1 text-[9px] opacity-70">手動</span>}
             </span>
           )}
         </button>

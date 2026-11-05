@@ -72,12 +72,6 @@ export function projectDelivery(project, notesByProject) {
   return { state: manual || auto, auto, manual: !!manual, notes, partial: null };
 }
 
-/** 未納品を目立たせるか: 進行中で、完了予定日が今月中か過ぎている */
-export function isDeliveryDue(project, today) {
-  if (!project || project.status !== "open" || !project.due_date) return false;
-  return String(project.due_date) <= monthEndOf(today);
-}
-
 /** 納品書を見積・案件ごとに引けるようにする */
 export function indexNotes(notes) {
   const byEstimate = new Map();

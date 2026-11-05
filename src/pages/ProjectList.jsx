@@ -24,7 +24,7 @@ import PeriodFilter, { emptyPeriod, inPeriod, periodActive, periodLabel } from "
 
 // 期間で絞り込める日付
 const PERIOD_FIELDS = [{ value: "registered_at", label: "登録日" }, { value: "due_date", label: "完了予定" }, { value: "payment_due_date", label: "入金予定" }];
-import { projectDelivery, isDeliveryDue, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
+import { projectDelivery, DELIVERY_STATE, DELIVERY_STATE_ORDER } from "@/lib/deliveryStatus";
 import RecurringMark from "@/components/projects/RecurringMark";
 import SubsidyMark from "@/components/projects/SubsidyMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
@@ -49,11 +49,11 @@ const COLUMN_ORDER = ["registered_at", "due_date", "client_name", "expected_reve
 const HEAD_LABEL = { client_name: "クライアント／案件名", due_date: "完了予定／入金予定" };
 
 /** 案件一覧（標準）の 1 マス */
-function ProjectCell({ col, p, delivery, today }) {
+function ProjectCell({ col, p, delivery }) {
   switch (col) {
     // 納品・請求（納品書・請求書のつながりから自動。完了予定が今月中か過ぎた未納品は赤）
     // 納品・請求: 札を押すと、その場で状態を変えられる（自動／未納品／納品済・未請求／請求済／対象外）
-    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><ProjectDeliveryCell project={p} info={delivery} due={isDeliveryDue(p, today)} /></TableCell>;
+    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><ProjectDeliveryCell project={p} info={delivery} /></TableCell>;
     case "project_number": return (
       <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
     );
@@ -176,7 +176,6 @@ export default function ProjectList() {
 
   // 納品・請求の状態（納品書から自動で決める）
   const deliveryIndex = useDeliveryIndex();
-  const today = todayString();
 
   const columnDefs = useMemo(() => ({
     project_number: { label: "案件番号", getValue: (p) => p.project_number || "" },
@@ -472,7 +471,7 @@ export default function ProjectList() {
                   {sorted.map((p) => {
                     return (
                       <TableRow key={p.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => window.open(`/projects/${p.id}`, "_blank", "noopener")}>
-                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} delivery={key === "delivery" ? projectDelivery(p, deliveryIndex.byProject) : null} today={today} />)}
+                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} delivery={key === "delivery" ? projectDelivery(p, deliveryIndex.byProject) : null} />)}
                         <TableCell>
                           <Link to={`/projects/${p.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                             <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />

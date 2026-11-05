@@ -15,15 +15,14 @@ const ymd = (s) => String(s || "").slice(5, 10).replace("-", "/");
 
 /**
  * 納品・請求の印。押すと納品書・請求書へ（1 件ならそのまま、複数なら一覧）。
- * @param {{ info: { state, notes, partial } | null, due?: boolean }} p  due: 未納品を赤く目立たせる
+ * @param {{ info: { state, notes, partial } | null }} p
  */
-export default function DeliveryBadge({ info, due = false }) {
+export default function DeliveryBadge({ info }) {
   if (!info) return <span className="text-muted-foreground text-xs">—</span>;
   const st = DELIVERY_STATE[info.state];
-  const urgent = due && info.state === "none";
   const label = info.partial != null && info.state !== "none" ? `一部納品 ${Math.round(info.partial * 100)}%・${st.label.replace("納品済・", "")}` : st.label;
-  const cls = `inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[10.5px] font-medium ${urgent ? "bg-red-50 text-red-700 border-red-400 ring-1 ring-red-300" : st.cls}`;
-  const chip = <span className={cls} data-testid="delivery-badge" data-state={info.state} title={info.manual ? "手で決めた状態です（納品書からの自動ではありません）" : undefined}>{urgent ? `${label}（期限）` : label}{info.manual && <span className="ml-1 text-[9px] opacity-70">手動</span>}</span>;
+  const cls = `inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[10.5px] font-medium ${st.cls}`;
+  const chip = <span className={cls} data-testid="delivery-badge" data-state={info.state} title={info.manual ? "手で決めた状態です（納品書からの自動ではありません）" : undefined}>{label}{info.manual && <span className="ml-1 text-[9px] opacity-70">手動</span>}</span>;
   if (info.notes.length === 0) return chip;
   if (info.notes.length === 1) {
     const n = info.notes[0];

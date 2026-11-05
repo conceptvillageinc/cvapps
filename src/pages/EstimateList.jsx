@@ -21,8 +21,7 @@ import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import DeliveryBadge, { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
-import { estimateDelivery, isDeliveryDue, DELIVERY_STATE } from "@/lib/deliveryStatus";
-import { todayString } from "@/lib/fiscal";
+import { estimateDelivery, DELIVERY_STATE } from "@/lib/deliveryStatus";
 import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf } from "@/lib/submission";
 import { useListColumns } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
@@ -84,7 +83,6 @@ export default function EstimateList() {
   const projectById = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects]);
   // 納品・請求の状態（提出済の見積だけ。納品書のつながりから自動で決める）
   const deliveryIndex = useDeliveryIndex();
-  const today = todayString();
   const deliveryOf = (e) => estimateDelivery(e, deliveryIndex.byEstimate, { submitted: submissionOf(e) === "submitted" });
   const probabilityOf = (e) => (e.project_id && projectById[e.project_id]?.deal_probability) || e.deal_probability || "";
   const phaseOf = (e) => (e.project_id && projectById[e.project_id]?.phase) || e.phase || "";
@@ -209,7 +207,7 @@ export default function EstimateList() {
       case "submission":
         return <TableCell key={key} className="w-[76px]">{latest}<SubmissionBadge estimate={est} className="w-[64px] justify-center" /></TableCell>;
       case "delivery":
-        return <TableCell key={key}>{latest}<DeliveryBadge info={deliveryOf(est)} due={isDeliveryDue(est.project_id ? projectById[est.project_id] : null, today)} /></TableCell>;
+        return <TableCell key={key}>{latest}<DeliveryBadge info={deliveryOf(est)} /></TableCell>;
       case "client_name":
         return (
           <TableCell key={key} className="text-sm">
