@@ -17,9 +17,9 @@ export const PRIORITY = {
   low: { label: "低", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
 };
 /**
- * 優先度・確認の選択肢のボタン（いつも色付き。選んでいるものは濃い枠と ✓ で分かるように）
+ * 優先度・確認の選択肢のボタン（いつも色付き。選んでいるものは濃い色・太字・✓ で分かるように）
  */
-export const choiceCls = (v, selected) => `rounded px-2 text-xs leading-6 ring-1 transition ${v.cls} ${selected ? "font-bold outline outline-2 outline-offset-1 outline-current shadow-sm" : "opacity-60 hover:opacity-100"}`;
+export const choiceCls = (v, selected) => `rounded px-2 text-xs leading-6 ring-1 transition ${v.cls} ${selected ? "font-bold shadow-sm" : "opacity-60 hover:opacity-100"}`;
 
 export const REVIEW_STATUS = {
   todo: { label: "要対応", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
