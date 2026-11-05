@@ -663,6 +663,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                     onDrop={(e) => { e.preventDefault(); setDragId(null); }}
                     onDragEnd={() => setDragId(null)}
                     onChange={patch => updateItem(li.id, patch)}
+                    masterUrl={li.source_type === "price_master" && !li.source_url ? priceMasterEntries.find((m) => m.id === li.source_ref)?.source_url || "" : ""}
                     onRemove={() => removeItem(li.id)}
                     onDuplicate={() => duplicateItem(li.id)}
                     onMove={(dir) => moveItem(li.id, dir)}
@@ -1188,7 +1189,7 @@ function SimilarHint({ item, similarFor, priceOf, onReplaceWith, toItems }) {
   );
 }
 
-function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragStart, onDragOver, onDrop, onDragEnd, onChange, onRemove, onDuplicate, onMove, orders = [], onRecordOrder, onOpenOrder, similarFor, priceOf, onReplaceWith, toItems }) {
+function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragStart, onDragOver, onDrop, onDragEnd, onChange, masterUrl = "", onRemove, onDuplicate, onMove, orders = [], onRecordOrder, onOpenOrder, similarFor, priceOf, onReplaceWith, toItems }) {
   const handle = <RowHandle onDragStart={onDragStart} onDragEnd={onDragEnd} onMove={onMove} isFirst={isFirst} isLast={isLast} />;
   if (item.row_type === "subtotal") {
     return (
@@ -1375,15 +1376,17 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
             )}
             <label className="flex items-center gap-1 min-w-[220px] flex-1">
               <Link2 className="w-3 h-3 shrink-0" />
+              {/* 価格マスタから持ってきた行で URL が空なら、価格マスタの入稿先URLを出す（前に持ってきた行も） */}
               <Input
-                value={item.source_url || ""}
+                value={item.source_url || masterUrl || ""}
                 onChange={(e) => onChange({ source_url: e.target.value })}
                 placeholder="入稿先URL（ネット印刷の注文ページなど）"
                 className="h-6 text-[10px] px-1.5 bg-white"
               />
-              {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0">開く</a>}
+              {(item.source_url || masterUrl) && <a href={item.source_url || masterUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0">開く</a>}
+              {!item.source_url && masterUrl && <span className="shrink-0 rounded bg-slate-100 px-1 text-[9px] text-muted-foreground" title="価格マスタに登録した入稿先URLです（書き換えると、この行だけの URL になります）">価格マスタ</span>}
             </label>
-            <LineScreenshot paths={lineShots(item)} sourceUrl={item.source_url} onChange={(paths) => onChange(shotsPatch(paths))} />
+            <LineScreenshot paths={lineShots(item)} sourceUrl={item.source_url || masterUrl} onChange={(paths) => onChange(shotsPatch(paths))} />
             <label className="flex items-center gap-1 min-w-[200px] flex-1">
               <span className="shrink-0">メモ</span>
               <Input

@@ -38,6 +38,8 @@ export function masterCellToItem(entry, cell, rules) {
     markup_rate: markupRate,
     source_type: "price_master",
     source_ref: entry.id,
+    // 価格マスタに登録した入稿先（ネット印刷のページなど）も持ってくる
+    source_url: entry.source_url || null,
   };
 }
 
