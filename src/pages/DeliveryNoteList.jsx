@@ -63,6 +63,19 @@ export default function DeliveryNoteList() {
   // 一覧の金額は税別（小計）で出す
   const total = filtered.reduce((s, n) => s + Number(n.subtotal || 0), 0);
 
+  // 状態（下書き／発行済）を一覧から変える
+  const setNoteStatus = async (n, status) => {
+    queryClient.setQueryData(["deliveryNotes"], (old) => (old || []).map((x) => (x.id === n.id ? { ...x, status } : x)));
+    try {
+      await db.entities.DeliveryNote.update(n.id, { status });
+      toast.success(`状態を「${DELIVERY_STATUS_MAP[status]?.label || status}」にしました`);
+    } catch (e) {
+      toast.error("変えられませんでした: " + (e?.message || ""));
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["deliveryNotes"] });
+    }
+  };
+
   // 請求書作成の 未処理／処理済 を一覧から変える（請求書とつながっていない納品書だけ）
   const setInvoicedManual = async (n, done) => {
     queryClient.setQueryData(["deliveryNotes"], (old) => (old || []).map((x) => (x.id === n.id ? { ...x, invoiced_manual: done } : x)));
@@ -265,7 +278,15 @@ export default function DeliveryNoteList() {
                               </TableCell>
                             );
                             case "total": return <TableCell key={k} className="text-right text-sm tabular-nums" title={`税込 ${yen(n.total)}`}>{yen(n.subtotal)}</TableCell>;
-                            case "status": return <TableCell key={k}><Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge></TableCell>;
+                            case "status": return (
+                              // 一覧から 下書き／発行済 を変えられる
+                              <TableCell key={k} onClick={(e) => e.stopPropagation()}>
+                                <select value={n.status || "draft"} onChange={(e) => setNoteStatus(n, e.target.value)} title="一覧から状態を変えられます"
+                                  className={`h-7 rounded-md border border-transparent px-1.5 text-[11px] font-medium cursor-pointer ${st.color}`} data-testid="note-status-select">
+                                  {Object.entries(DELIVERY_STATUS_MAP).map(([sk, v]) => <option key={sk} value={sk}>{v.label}</option>)}
+                                </select>
+                              </TableCell>
+                            );
                             case "invoice": return (
                               <TableCell key={k}>
                                 {n.invoice_id

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/api/db";
@@ -203,10 +203,14 @@ export default function DeliveryNoteEdit() {
       .map((li) => orderFromLine(est, li, { project, user }));
   };
 
+  // 状態を画面で「下書き」に選び直したか（選び直していなければ、保存で「発行済」にする）
+  const statusTouched = useRef(false);
   const save = useMutation({
     mutationFn: async () => {
       const payload = {
         ...form,
+        // 保存したら発行済（下書きのままにしたいときは、状態で「下書き」を選んでから保存）
+        status: form.status === "draft" && !statusTouched.current ? "issued" : form.status,
         client_name: (form.client_name || "").trim(),
         line_items: form.line_items.filter((li) => li.name || li.amount).map((li) => ({ ...li, unit_price: roundUnitPrice(li.unit_price) })),
         ...totals,
@@ -421,7 +425,7 @@ export default function DeliveryNoteEdit() {
             {!isNew && (
               <div className="space-y-1.5">
                 <Label className="text-xs">状態</Label>
-                <Select value={form.status} onValueChange={(v) => set("status", v)}>
+                <Select value={form.status} onValueChange={(v) => { statusTouched.current = true; set("status", v); }}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>{Object.entries(DELIVERY_STATUS_MAP).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v.label}</SelectItem>)}</SelectContent>
                 </Select>
