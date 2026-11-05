@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2, PanelRightOpen } from "lucide-react";
 import { MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
-import { subtasksOf, isPrivateTask, PRIORITY, REVIEW_STATUS } from "@/lib/tasks";
+import { subtasksOf, isPrivateTask, PRIORITY, REVIEW_STATUS, choiceCls } from "@/lib/tasks";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
 import { useTaskWrites } from "@/lib/useTaskData";
 import RangeCalendar from "@/components/tasks/RangeCalendar";
@@ -63,7 +63,7 @@ function PillPicker({ map, value, label, onChange, testId }) {
         {/* 選択肢は縦に並べる */}
         <div className="flex flex-col gap-1">
           {Object.entries(map).map(([k, v]) => (
-            <button key={k} type="button" onClick={() => pick(k)} className={`rounded px-2 text-left text-xs leading-7 ring-1 ${value === k ? v.cls : "ring-slate-200 text-slate-600 hover:bg-muted"}`}>{v.label}</button>
+            <button key={k} type="button" onClick={() => pick(k)} aria-pressed={value === k} className={`${choiceCls(v, value === k)} text-left !leading-7`}>{value === k && "✓ "}{v.label}</button>
           ))}
           {value && <button type="button" onClick={() => pick(value)} className="rounded px-2 text-left text-xs leading-7 text-muted-foreground hover:bg-muted">外す</button>}
         </div>

@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Send, FileImage, ScanEye, UserRound, CalendarDays, Flag, CircleDot, Timer, AlignLeft, ListChecks, MessageSquare } from "lucide-react";
-import { PRIORITY, REVIEW_STATUS, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel, todayYmd } from "@/lib/tasks";
+import { PRIORITY, REVIEW_STATUS, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel, todayYmd, choiceCls } from "@/lib/tasks";
 import { useTaskWrites, TASK_TEMPLATES } from "@/lib/useTaskData";
 import { UserAvatar, TaskCheck, TaskPlaceChip, PinBadge, DueLabel } from "@/components/tasks/parts";
 import ProofViewer, { useAttachmentImage } from "@/components/tasks/ProofViewer";
@@ -222,12 +222,12 @@ export default function TaskPanel({ taskId, data, onClose: close, onOpenTask, va
             </Field>
             <Field label="優先度">
               <div className="flex gap-1">
-                {Object.entries(PRIORITY).map(([k, v]) => <button key={k} type="button" onClick={() => save({ priority: task.priority === k ? null : k })} className={`rounded px-2 text-xs leading-6 ring-1 ${task.priority === k ? v.cls : "ring-slate-200 text-muted-foreground hover:bg-muted"}`}>{v.label}</button>)}
+                {Object.entries(PRIORITY).map(([k, v]) => <button key={k} type="button" onClick={() => save({ priority: task.priority === k ? null : k })} aria-pressed={task.priority === k} className={choiceCls(v, task.priority === k)}>{task.priority === k && "✓ "}{v.label}</button>)}
               </div>
             </Field>
             <Field label="確認の状態">
               <div className="flex gap-1">
-                {Object.entries(REVIEW_STATUS).map(([k, v]) => <button key={k} type="button" onClick={() => save({ review_status: task.review_status === k ? null : k })} className={`rounded px-2 text-xs leading-6 ring-1 ${task.review_status === k ? v.cls : "ring-slate-200 text-muted-foreground hover:bg-muted"}`}>{v.label}</button>)}
+                {Object.entries(REVIEW_STATUS).map(([k, v]) => <button key={k} type="button" onClick={() => save({ review_status: task.review_status === k ? null : k })} aria-pressed={task.review_status === k} className={choiceCls(v, task.review_status === k)}>{task.review_status === k && "✓ "}{v.label}</button>)}
               </div>
             </Field>
             <Field label="作業時間数">
