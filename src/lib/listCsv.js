@@ -7,7 +7,7 @@ import { exportCsv, docLineRows, lineColumns, rowsById, num, day, oneLine, mark 
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { forecastLines } from "@/lib/projectForecast";
 import { PROJECT_STATUS_MAP, STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
-import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
+import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP, INVOICE_SEND_LABEL } from "@/lib/documents";
 import { SUBMISSION_STATUS, submissionOf } from "@/lib/submission";
 
 const list = (v) => (Array.isArray(v) ? v.filter(Boolean).join(" / ") : oneLine(v));
@@ -156,7 +156,7 @@ function invoiceHead(projects) {
     { label: "案件名", value: (i) => oneLine(projects[i.project_id]?.name) },
     { label: "クライアント", value: (i) => i.client_name || "" },
     { label: "件名", value: (i) => oneLine(i.title) },
-    { label: "状態", value: (i) => INVOICE_STATUS_MAP[i.status]?.label || i.status || "" },
+    { label: "送付", value: (i) => INVOICE_SEND_LABEL[i.status] || i.status || "" },
   ];
 }
 

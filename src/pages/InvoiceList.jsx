@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Loader2, Receipt, ArrowRight, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { INVOICE_STATUS_MAP } from "@/lib/documents";
+import { INVOICE_STATUS_MAP, INVOICE_SEND_LABEL, INVOICE_SEND_KEYS } from "@/lib/documents";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { fiscalYearOf, fiscalYearRange, fiscalYearLabel, todayString } from "@/lib/fiscal";
 import { useListColumns, columnLabel } from "@/lib/listColumns";
@@ -49,8 +49,8 @@ export default function InvoiceList() {
     { key: "paid_at", label: "入金日", type: "date" },
     { key: "subtotal", label: "請求金額（税抜）", type: "amount" },
     { key: "total", label: "請求金額（税込）", type: "amount" },
-    { key: "status", label: "状態", type: "select", get: (i) => (i.status === "sent" && i.due_date && i.due_date < today ? ["sent", "overdue"] : [i.status || "draft"]),
-      options: [...Object.entries(INVOICE_STATUS_MAP).map(([value, v]) => ({ value, label: v.label })), { value: "overdue", label: "期日超過" }] },
+    { key: "status", label: "送付", type: "select", get: (i) => (i.status === "sent" && i.due_date && i.due_date < today ? ["sent", "overdue"] : [i.status || "draft"]),
+      options: [...INVOICE_SEND_KEYS.map((value) => ({ value, label: INVOICE_SEND_LABEL[value] })), { value: "overdue", label: "期日超過" }, { value: "cancelled", label: INVOICE_SEND_LABEL.cancelled }] },
     { key: "delivery_method", label: "送付方法", type: "select", get: (i) => i.delivery_method || "",
       options: [...Object.entries(INVOICE_DELIVERY_METHODS).map(([value, label]) => ({ value, label })), { value: "", label: "未設定" }] },
     { key: "person_in_charge", label: "担当者", type: "select", get: (i) => i.person_in_charge || "", options: [] },
@@ -92,7 +92,7 @@ export default function InvoiceList() {
       if (status === "draft") { patch.sent_at = null; patch.paid_at = null; patch.paid_amount = null; }
       return db.entities.Invoice.update(id, patch);
     },
-    onSuccess: (row, v) => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); refreshProjectActuals(projectIdsOfInvoice(row)).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] })); toast.success(`状態を「${INVOICE_STATUS_MAP[v.status]?.label || v.status}」にしました`); },
+    onSuccess: (row, v) => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); refreshProjectActuals(projectIdsOfInvoice(row)).then(() => queryClient.invalidateQueries({ queryKey: ["projects"] })); toast.success(`送付を「${INVOICE_SEND_LABEL[v.status] || v.status}」にしました`); },
     onError: (err) => toast.error("変更できませんでした: " + err.message),
   });
 
@@ -184,10 +184,10 @@ export default function InvoiceList() {
                           <select
                             value={inv.status}
                             onChange={(e) => statusMutation.mutate({ id: inv.id, status: e.target.value })}
-                            title="一覧から状態を変えられます（入金額まで記録するときは請求書を開いて「入金を記録」）"
+                            title="一覧から送付を変えられます（未＝まだ送っていない・済＝送った。入金額まで記録するときは請求書を開いて「入金を記録」）"
                             className={`h-7 rounded-md border px-1.5 text-[11px] font-medium cursor-pointer ${late ? "bg-red-100 text-red-700 border-red-200" : `${st.color} border-transparent`}`}
                           >
-                            {Object.entries(INVOICE_STATUS_MAP).map(([sk, v]) => <option key={sk} value={sk}>{sk === inv.status && late ? "期日超過" : v.label}</option>)}
+                            {[...INVOICE_SEND_KEYS, ...(inv.status === "cancelled" ? ["cancelled"] : [])].map((sk) => <option key={sk} value={sk}>{sk === inv.status && late ? "済（期日超過）" : INVOICE_SEND_LABEL[sk]}</option>)}
                           </select>
                         </TableCell>
                             );

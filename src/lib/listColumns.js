@@ -28,7 +28,7 @@ export const LIST_DEFS = {
   invoices: {
     label: "請求書", columns: [
       ["invoice_number", "番号"], ["invoice_date", "請求日"], ["due_date", "入金期日"], ["client_name", "請求先"],
-      ["title", "件名"], ["total", "請求金額"], ["status", "状態"],
+      ["title", "件名"], ["total", "請求金額"], ["status", "送付"],
     ],
   },
   receipts: {

@@ -160,6 +160,11 @@ export function paymentTermsFromSettings(settings) {
   try { const v = JSON.parse(row.setting_value); return Array.isArray(v) && v.length ? v.map(String) : DEFAULT_PAYMENT_TERMS; } catch { return DEFAULT_PAYMENT_TERMS; }
 }
 
+/** 請求書一覧の「送付」の呼び方（中身は INVOICE_STATUS_MAP と同じ状態。未＝下書き、済＝送付済） */
+export const INVOICE_SEND_LABEL = { draft: "未", sent: "済", paid: "入金済", cancelled: "取消" };
+/** 請求書一覧で選べる「送付」（取消は、取消済みの請求書のときだけ出す） */
+export const INVOICE_SEND_KEYS = ["draft", "sent", "paid"];
+
 export const INVOICE_STATUS_MAP = {
   draft: { label: "下書き", color: "bg-muted text-muted-foreground" },
   sent: { label: "送付済", color: "bg-blue-100 text-blue-700" },
