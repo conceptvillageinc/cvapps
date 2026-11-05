@@ -19,7 +19,6 @@ import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { DailyView, NextActionView } from "@/components/projects/ProjectViews";
 import MonthEndView from "@/components/projects/MonthEndView";
 import { useDeliveryIndex } from "@/components/documents/DeliveryBadge";
-import ProjectDeliveryCell from "@/components/projects/ProjectDeliveryCell";
 import PeriodFilter, { emptyPeriod, inPeriod, periodActive, periodLabel } from "@/components/table/PeriodFilter";
 
 // 期間で絞り込める日付
@@ -40,20 +39,20 @@ const VIEWS = [
 ];
 
 // 条件の札の並び（並び順のあと。受注確度 → 状態 の順で、ほかの列はその間）
-const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status", "delivery"];
+const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status"];
 
 // 案件一覧（標準）の列の並び
 //   横スクロールなしで見られるように、クライアント・案件名・案件番号は 1 つの欄、完了予定と入金予定も 1 つの欄にまとめる
-const COLUMN_ORDER = ["registered_at", "due_date", "client_name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status", "delivery"];
+// 「納品・請求」の列は一覧に出さない（状態は納品書・請求書と案件の手動の状態に残り、月末チェック・CSV 出力では使う）
+const COLUMN_ORDER = ["registered_at", "due_date", "client_name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status"];
 // 見出しの名前（まとめた欄）
 const HEAD_LABEL = { client_name: "クライアント／案件名", due_date: "完了予定／入金予定" };
 
 /** 案件一覧（標準）の 1 マス */
-function ProjectCell({ col, p, delivery }) {
+function ProjectCell({ col, p }) {
   switch (col) {
     // 納品・請求（納品書・請求書のつながりから自動。完了予定が今月中か過ぎた未納品は赤）
     // 納品・請求: 札を押すと、その場で状態を変えられる（自動／未納品／納品済・未請求／請求済／対象外）
-    case "delivery": return <TableCell onClick={(e) => e.stopPropagation()}><ProjectDeliveryCell project={p} info={delivery} /></TableCell>;
     case "project_number": return (
       <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{p.project_number}</TableCell>
     );
@@ -193,7 +192,7 @@ export default function ProjectList() {
     delivery: { label: "納品・請求", getValue: (p) => DELIVERY_STATE[projectDelivery(p, deliveryIndex.byProject).state].label, master: DELIVERY_STATE_ORDER.map((k) => DELIVERY_STATE[k].label) },
   }), [dealProbabilityOptions, phaseOptions, deliveryIndex]);
 
-  const FILTERABLE_KEYS = ["client_name", "deal_probability", "phase", "status", "delivery", "subsidy"];
+  const FILTERABLE_KEYS = ["client_name", "deal_probability", "phase", "status", "subsidy"];
 
   const columnOptions = useMemo(() => {
     const result = {};
@@ -471,7 +470,7 @@ export default function ProjectList() {
                   {sorted.map((p) => {
                     return (
                       <TableRow key={p.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => window.open(`/projects/${p.id}`, "_blank", "noopener")}>
-                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} delivery={key === "delivery" ? projectDelivery(p, deliveryIndex.byProject) : null} />)}
+                        {COLUMN_ORDER.map((key) => <ProjectCell key={key} col={key} p={p} />)}
                         <TableCell>
                           <Link to={`/projects/${p.id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                             <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
