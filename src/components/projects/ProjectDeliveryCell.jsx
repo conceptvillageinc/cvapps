@@ -74,7 +74,7 @@ export default function ProjectDeliveryCell({ project, info }) {
               <div key={n.id} className="flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-muted/50">
                 <Link to={`/delivery-notes/${n.id}`} className="font-mono text-primary hover:underline">{n.delivery_number}</Link>
                 <span className="text-muted-foreground">{ymd(n.delivery_date)}</span>
-                <span className="ml-auto">{n.invoice_id ? <Link to={`/invoices/${n.invoice_id}`} className="text-sky-700 hover:underline">請求済</Link> : n.status === "issued" ? <span className="text-amber-700">未請求</span> : <span className="text-muted-foreground">下書き</span>}</span>
+                <span className="ml-auto">{n.invoice_id ? <Link to={`/invoices/${n.invoice_id}`} className="text-sky-700 hover:underline">請求済</Link> : <span className="text-amber-700">未請求</span>}</span>
               </div>
             ))}
           </>

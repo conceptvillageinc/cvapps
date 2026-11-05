@@ -124,7 +124,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
             <div className="divide-y">
               {list.map(({ p, d, est }) => {
                 const overdue = String(p.due_date) < today && d.state === "none";
-                const firstUninvoiced = d.notes.find((n) => n.status === "issued" && !n.invoice_id);
+                const firstUninvoiced = d.notes.find((n) => !n.invoice_id);
                 return (
                   <div key={p.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm ${d.state === "none" && String(p.due_date) <= monthEnd ? "bg-red-50/40" : ""}`} data-testid="monthend-row">
                     <span className={`w-14 shrink-0 tabular-nums text-xs ${overdue ? "text-red-700 font-semibold" : "text-muted-foreground"}`} title="完了予定">{md(p.due_date)}</span>
@@ -137,7 +137,6 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
                     <span className="w-36 shrink-0 text-right">
                       {d.state === "none" && est && <Link to={`/delivery-notes/new?estimate=${est.id}`} className="inline-flex items-center gap-1 rounded border border-primary/40 px-2 py-0.5 text-[11px] text-primary hover:bg-primary/5"><FileText className="w-3 h-3" /> 納品書を作る</Link>}
                       {d.state === "none" && !est && <Link to={`/delivery-notes/new?project=${p.id}`} className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50"><FileText className="w-3 h-3" /> 納品書を作る</Link>}
-                      {d.state === "draft" && <Link to={`/delivery-notes/${d.notes[0].id}`} className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] hover:bg-muted/50"><FileText className="w-3 h-3" /> 下書きを開く</Link>}
                       {firstUninvoiced && <Link to={`/invoices/new?delivery=${firstUninvoiced.id}`} className="inline-flex items-center gap-1 rounded border border-amber-400 px-2 py-0.5 text-[11px] text-amber-800 hover:bg-amber-50"><Receipt className="w-3 h-3" /> 請求書を作る</Link>}
                     </span>
                   </div>
