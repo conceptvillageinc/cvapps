@@ -6,12 +6,13 @@ import { Loader2, Check, FileText } from "lucide-react";
 import { db } from "@/api/db";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DELIVERY_STATE, MANUAL_DELIVERY_STATES } from "@/lib/deliveryStatus";
+import { NoteInvoiceLabel } from "@/components/documents/DeliveryBadge";
 
 const ymd = (s) => String(s || "").slice(5, 10).replace("-", "/");
 const HINT = {
   none: "まだ納品していない",
   uninvoiced: "納品したが、まだ請求していない",
-  invoiced: "請求まで終わった（freee販売で請求した案件など）",
+  invoiced: "請求書まで作った（freee販売で請求した案件など）",
   na: "納品書・請求書の要らない案件（月末チェックに出さない）",
 };
 
@@ -74,7 +75,7 @@ export default function ProjectDeliveryCell({ project, info }) {
               <div key={n.id} className="flex items-center gap-2 px-2 py-1 text-xs rounded hover:bg-muted/50">
                 <Link to={`/delivery-notes/${n.id}`} className="font-mono text-primary hover:underline">{n.delivery_number}</Link>
                 <span className="text-muted-foreground">{ymd(n.delivery_date)}</span>
-                <span className="ml-auto">{n.invoice_id ? <Link to={`/invoices/${n.invoice_id}`} className="text-sky-700 hover:underline">請求済</Link> : <span className="text-amber-700">未請求</span>}</span>
+                <span className="ml-auto"><NoteInvoiceLabel note={n} /></span>
               </div>
             ))}
           </>

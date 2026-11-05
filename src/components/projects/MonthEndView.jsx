@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronLeft, ChevronRight, FileText, Receipt, UserRound } from "lucide-react";
 import DeliveryBadge from "@/components/documents/DeliveryBadge";
-import { projectDelivery, estimateDelivery, stateOfNotes, DELIVERY_STATE, DELIVERY_STATE_ORDER, monthEndOf } from "@/lib/deliveryStatus";
+import { projectDelivery, estimateDelivery, stateOfNotes, DELIVERY_STATE, DELIVERY_STATE_ORDER, monthEndOf, isBilledState } from "@/lib/deliveryStatus";
 import { isRecurringParent, recurringMonths } from "@/lib/projectInvoicing";
 import { submissionOf } from "@/lib/submission";
 import { todayString } from "@/lib/fiscal";
@@ -70,7 +70,7 @@ export default function MonthEndView({ projects, isLoading, deliveryIndex }) {
       if (d.state === "na") return false; // 納品・請求を「対象外」にした案件は出さない
       const due = String(p.due_date);
       if (due >= monthStart && due <= monthEnd) return true; // その月の完了予定
-      return due < monthStart && d.state !== "invoiced"; // 前の月までで、請求がまだ
+      return due < monthStart && !isBilledState(d.state); // 前の月までで、請求がまだ
     })], [projects, deliveryIndex, estByProject, month, monthStart, monthEnd]);
 
   const count = (st) => rows.filter((r) => r.d.state === st).length;
