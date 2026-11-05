@@ -10,6 +10,10 @@ import { addDays, weekStart, daysBetween, dayInfo, diffDays, md } from "@/lib/sc
 import { workload, dailyHoursOf, userLabel, assigneesOf, isPrivateTask } from "@/lib/tasks";
 import { useTaskWrites } from "@/lib/useTaskData";
 import { UserAvatar } from "@/components/tasks/parts";
+import { useAuth } from "@/lib/AuthContext";
+
+// メンバーの行の「1 日 ○h ・ この期間 ○h / ○h（○%）」は、このアドレスの人の画面だけに出す
+const WORKLOAD_STATS_EMAILS = ["daichi@concept-village.co.jp"];
 
 const fmtH = (h) => (h ? (Math.round(h * 10) / 10).toString() : "");
 const ORDER_KEY = "workload_member_order";
@@ -66,6 +70,8 @@ function lanesOf(items, minSpan) {
  */
 export default function Workload({ data, today, onOpenTask }) {
   const { tasks, users, byId } = data;
+  const { user: me } = useAuth();
+  const showStats = WORKLOAD_STATS_EMAILS.includes(String(me?.email || "").toLowerCase());
   const { companyHolidays, settings } = useSystemSettings();
   const qc = useQueryClient();
   // メンバーの並び順（全員で同じ。システム設定の workload_member_order に利用者の id の順で持つ）
@@ -215,7 +221,7 @@ export default function Workload({ data, today, onOpenTask }) {
                     <UserAvatar user={u} size={30} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-slate-800">{u.full_name || userLabel(u)}</span>
-                      <span className="block text-[10px] text-slate-500 tabular-nums">1 日 {cap}h ・ この期間 {fmtH(sum) || 0}h / {capSum}h（{capSum ? Math.round((sum / capSum) * 100) : 0}%）</span>
+                      {showStats && <span className="block text-[10px] text-slate-500 tabular-nums">1 日 {cap}h ・ この期間 {fmtH(sum) || 0}h / {capSum}h（{capSum ? Math.round((sum / capSum) * 100) : 0}%）</span>}
                     </span>
                   </button>
                   <div className="relative bg-slate-50/40" style={{ width: gridW, height: MEMBER_H }}>
