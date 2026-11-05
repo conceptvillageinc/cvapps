@@ -173,10 +173,14 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           {/* 紐づけ先（先頭に 1 つだけ。押すと選べる。サブタスクは親と同じ紐づけ先なので、親の紐づけ先と親のタスクを出す） */}
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500" data-testid="task-place-head">
-            {parent
-              ? <><TaskPlaceChip task={parent} byId={byId} /><span>›</span><button type="button" className="hover:underline" onClick={() => onOpenTask(parent.id)}>{parent.name}</button></>
-              : <PlacePicker task={task} projects={projects} internalProjects={internalProjects} byId={byId} onChange={setPlace} />}
+          <div data-testid="task-place-head">
+            <Field label="紐づけ先">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                {parent
+                  ? <><TaskPlaceChip task={parent} byId={byId} /><span>›</span><button type="button" className="hover:underline" onClick={() => onOpenTask(parent.id)}>{parent.name}</button></>
+                  : <PlacePicker task={task} projects={projects} internalProjects={internalProjects} byId={byId} onChange={setPlace} />}
+              </div>
+            </Field>
           </div>
           <textarea value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== task.name && save({ name: name.trim() })} rows={1}
             className={`w-full resize-none text-xl font-bold leading-snug focus:outline-none rounded px-1 -mx-1 hover:bg-muted/40 ${task.completed ? "line-through text-muted-foreground" : ""}`} data-testid="task-name" />
