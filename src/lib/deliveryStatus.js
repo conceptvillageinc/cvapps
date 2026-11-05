@@ -27,7 +27,7 @@ export const DELIVERY_STATE_ORDER = ["none", "uninvoiced", "invoiced", "sent", "
 export const isBilledState = (state) => state === "invoiced" || state === "sent";
 
 /** 案件で手で決められる状態（projects.delivery_state_manual。空なら納品書から自動） */
-export const MANUAL_DELIVERY_STATES = ["none", "uninvoiced", "invoiced", "na"];
+export const MANUAL_DELIVERY_STATES = ["none", "uninvoiced", "invoiced", "sent", "na"];
 
 const sumItems = (items) => (items || []).reduce((s, li) => s + (Number(li.amount) || 0), 0);
 
