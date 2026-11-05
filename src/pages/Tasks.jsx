@@ -318,6 +318,10 @@ const TABS = [
 /**
  * タスク（マイタスク・プロジェクト）とワークロード（/workload）。?task=ID でタスクの詳細を右に開く
  */
+// 誰のタスクを見るかの並び: 自分がいちばん上、共用のアカウント（info@）はいちばん下
+const WHO_LAST_EMAILS = ["info@concept-village.co.jp"];
+const whoRank = (u, me) => (u.id === me.id && !WHO_LAST_EMAILS.includes(String(u.email || "").toLowerCase()) ? 0 : WHO_LAST_EMAILS.includes(String(u.email || "").toLowerCase()) ? 2 : 1);
+
 /** 誰のタスクを見るか（いつも下に開く。人が多いときは中でスクロール） */
 function WhoPicker({ users, me, value, onChange }) {
   const [open, setOpen] = useState(false);
@@ -331,7 +335,7 @@ function WhoPicker({ users, me, value, onChange }) {
         </button>
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-60 p-1 max-h-[min(24rem,60vh)] overflow-y-auto" data-testid="tasks-who-list">
-        {[...users].sort((a, b) => Number(b.id === me.id) - Number(a.id === me.id)).map((u) => (
+        {[...users].sort((a, b) => whoRank(a, me) - whoRank(b, me)).map((u) => (
           <button key={u.id} type="button" onClick={() => { onChange(u.id); setOpen(false); }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted">
             <span className="w-4 shrink-0">{u.id === value && <Check className="w-4 h-4 text-primary" />}</span>
             <UserAvatar user={u} size={20} />
