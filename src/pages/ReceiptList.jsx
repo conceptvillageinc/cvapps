@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import { db } from "@/api/db";
@@ -10,6 +10,7 @@ import { Search, Loader2, ReceiptText } from "lucide-react";
 import { RECEIPT_STATUS_MAP, paymentMethodLabel } from "@/lib/documents";
 import { useListColumns, columnLabel } from "@/lib/listColumns";
 import { ListColumnsButton } from "@/components/table/ListColumnsEditor";
+import { useSessionState } from "@/hooks/use-session-state";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -17,7 +18,7 @@ const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 export default function ReceiptList() {
   const cols = useListColumns("receipts"); // 列の並び・表示（全員共通）
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSessionState("receipts.search", ""); // 詳細を開いて戻ってきても残す
   const { data: receipts = [], isLoading } = useQuery({ queryKey: ["receipts"], queryFn: () => db.entities.Receipt.listAll("-issue_date") });
 
   const filtered = useMemo(() => {

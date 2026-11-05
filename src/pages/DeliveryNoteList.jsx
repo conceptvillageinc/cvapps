@@ -25,6 +25,7 @@ import PeriodFilter, { emptyPeriod, inPeriod } from "@/components/table/PeriodFi
 // 期間で絞り込める日付
 const PERIOD_FIELDS = [{ value: "delivery_date", label: "納品日" }, { value: "created_date", label: "作成日" }];
 import { exportDeliveryNotesCsv } from "@/lib/listCsv";
+import { useSessionState } from "@/hooks/use-session-state";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -32,10 +33,11 @@ export default function DeliveryNoteList() {
   const cols = useListColumns("delivery_notes"); // 列の並び・表示（全員共通）
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all"); // all | uninvoiced | draft
-  const [showRecurring, setShowRecurring] = useState(false); // 定期売上の納品書（案件の「月ごとの納品・請求」で見る）は、ふだんは出さない
-  const [period, setPeriod] = useState(() => emptyPeriod("delivery_date")); // 期間（納品日・作成日）
+  // 検索・絞り込みは、詳細を開いて戻ってきても残す（このタブのあいだ）
+  const [search, setSearch] = useSessionState("deliveryNotes.search", "");
+  const [filter, setFilter] = useSessionState("deliveryNotes.filter", "all"); // all | uninvoiced | draft
+  const [showRecurring, setShowRecurring] = useSessionState("deliveryNotes.showRecurring", false); // 定期売上の納品書（案件の「月ごとの納品・請求」で見る）は、ふだんは出さない
+  const [period, setPeriod] = useSessionState("deliveryNotes.period", () => emptyPeriod("delivery_date")); // 期間（納品日・作成日）
   const [picked, setPicked] = useState(() => new Set());
   const recurringIds = useRecurringProjectIds();
   const [deleting, setDeleting] = useState(false);

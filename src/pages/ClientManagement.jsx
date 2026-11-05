@@ -14,6 +14,7 @@ import FreeePartnerImport from "@/components/clients/FreeePartnerImport";
 import { isImeEnter } from "@/lib/ime";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportClientsCsv } from "@/lib/listCsv";
+import { useSessionState } from "@/hooks/use-session-state";
 
 
 // クリックしてその場で編集できるセル。フォーカスを外すと自動保存される。
@@ -79,7 +80,7 @@ export default function ClientManagement() {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useSessionState("clients.search", ""); // 検索・並び順は、詳細を開いて戻ってきても残す
   const [freeeOpen, setFreeeOpen] = useState(false); // freee の取引先 CSV から郵便番号・住所を補う
 
   const { data: clients = [], isLoading } = useQuery({
@@ -105,7 +106,7 @@ export default function ClientManagement() {
   const lastProjectOf = (c) => lastProjectAt[c.id] || lastProjectAt[c.name] || "";
 
   // 並び替え（列見出しをクリック。既定は最終案件日の新しい順）
-  const [sort, setSort] = useState({ key: "last_project", dir: "desc" });
+  const [sort, setSort] = useSessionState("clients.sort", { key: "last_project", dir: "desc" });
   const toggleSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "last_project" ? "desc" : "asc" }));
   const SortIcon = ({ col }) => sort.key !== col
     ? <ArrowUpDown className="w-3 h-3 opacity-40" />

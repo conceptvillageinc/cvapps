@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/api/db";
@@ -20,6 +20,7 @@ import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportInvoicesCsv } from "@/lib/listCsv";
 import ConditionFilter, { matchConditions, conditionActive } from "@/components/table/ConditionFilter";
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
+import { useSessionState } from "@/hooks/use-session-state";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const ALL = "all";
@@ -31,10 +32,11 @@ export default function InvoiceList() {
   const recurringIds = useRecurringProjectIds();
   const { fiscalYearStartMonth } = useSystemSettings();
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
-  const [fiscalYear, setFiscalYear] = useState(String(currentFy));
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("unpaid"); // all | unpaid | overdue | paid
-  const [conditions, setConditions] = useState([]);
+  // 期・検索・絞り込み・条件は、詳細を開いて戻ってきても残す（このタブのあいだ）
+  const [fiscalYear, setFiscalYear] = useSessionState("invoices.fiscalYear", String(currentFy));
+  const [search, setSearch] = useSessionState("invoices.search", "");
+  const [filter, setFilter] = useSessionState("invoices.filter", "unpaid"); // all | unpaid | overdue | paid
+  const [conditions, setConditions] = useSessionState("invoices.conditions", []);
   const today = todayString();
 
   // 条件で絞る項目（freee の「条件追加」のように、いくつでも重ねられる）
