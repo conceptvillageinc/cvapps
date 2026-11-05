@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { db } from "@/api/db";
+import { estimateSubtotal } from "@/lib/estimateTotals";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,8 @@ import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 import { SECTION_PRESETS, sectionsFromPreset, newSection, sectionsOf, groupBySection, sectionRoleLabels } from "@/lib/estimateSections";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
+/** 案件の画面では見積の金額を税別で出す（明細の無い古い見積は税込の合計のまま） */
+const exTax = (e) => estimateSubtotal(e) ?? (Number(e.total_amount) || 0);
 
 /** 区分の役割の印（見込みに入れる／納品書・請求書の元／参考） */
 export function SectionRoleChips({ section, className = "" }) {
@@ -68,7 +71,7 @@ function SectionHeading({ section, index, count, sum, onPatch, onMove, onRemove,
         <button type="button" onClick={() => { setDraft(section.name); setEditing(true); }} className="text-sm font-semibold hover:underline underline-offset-2" title="押すと名前を直せます" data-testid="section-name">▼{section.name}</button>
       )}
       <SectionRoleChips section={section} />
-      <span className="text-[11px] text-muted-foreground">{count}件{count > 0 && `・${yen(sum)}`}</span>
+      <span className="text-[11px] text-muted-foreground">{count}件{count > 0 && `・${yen(sum)}（税別）`}</span>
       <div className="flex-1" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -102,7 +105,7 @@ function EstimateRow({ e, sections, onMove }) {
           {e.revision_label && <Badge variant="outline" className="text-[9px] font-normal">{e.revision_label}</Badge>}
           <SubmissionBadge estimate={e} size="xs" />
           <Badge className={`text-[9px] ${es.color}`}>{es.label}</Badge>
-          <span className="text-sm tabular-nums w-28 text-right">{e.total_amount ? yen(e.total_amount) : "—"}</span>
+          <span className="text-sm tabular-nums w-32 text-right whitespace-nowrap" title={e.total_amount ? `税込 ${yen(e.total_amount)}` : undefined}>{exTax(e) || e.total_amount ? <>{yen(exTax(e))}<span className="ml-1 text-[10px] text-muted-foreground">{estimateSubtotal(e) == null ? "税込" : "税別"}</span></> : "—"}</span>
           <span className="text-[10px] text-muted-foreground w-12 text-right">{format(new Date(e.created_date), "M/d")}</span>
         </Link>
         {sections.length > 0 && <SectionPicker sections={sections} value={sections.some((s) => s.id === e.estimate_section) ? e.estimate_section : null} onChange={(sid) => onMove(e, sid)} testId="estimate-section-picker" className="w-44 shrink-0" />}
@@ -203,7 +206,7 @@ export default function EstimateSectionsCard({ project, estimates }) {
           <div className="space-y-2">
             {groups.map((g) => {
               const i = g.section ? sections.findIndex((s) => s.id === g.section.id) : -1;
-              const sum = g.estimates.reduce((s, e) => s + (Number(e.total_amount) || 0), 0);
+              const sum = g.estimates.reduce((s, e) => s + exTax(e), 0);
               return (
                 <div key={g.section?.id || "none"}>
                   {g.section ? (

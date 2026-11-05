@@ -581,7 +581,7 @@ export default function ProjectDetail() {
                     <span className="text-sm flex-1 truncate">{n.title || "（件名なし）"}</span>
                     <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
                     {n.invoice_id ? <Badge className="text-[9px] bg-blue-100 text-blue-700 hover:bg-blue-100">請求済</Badge> : <Badge variant="outline" className="text-[9px] font-normal text-amber-700">未請求</Badge>}
-                    <span className="text-sm tabular-nums w-28 text-right">{yen(n.total)}</span>
+                    <span className="text-sm tabular-nums w-32 text-right whitespace-nowrap" title={`税込 ${yen(n.total)}`}>{yen(n.subtotal)}<span className="ml-1 text-[10px] text-muted-foreground">税別</span></span>
                   </Link>
                 );
               })}
@@ -612,9 +612,9 @@ export default function ProjectDetail() {
                     <span className="text-xs font-mono text-muted-foreground w-28 shrink-0">{inv.invoice_number}</span>
                     <span className="text-xs text-muted-foreground w-20 shrink-0">{inv.invoice_date}</span>
                     <span className="text-sm flex-1 truncate">{inv.title || "（件名なし）"}</span>
-                    {(() => { const share = invoiceShareFor(inv, project.id); return share.subtotal !== Number(inv.subtotal || 0) ? <span className="text-[10px] text-muted-foreground whitespace-nowrap" title="ほかの案件の納品書とまとめた請求書です。売上はこの案件の分だけを数えます">うちこの案件分 {yen(share.total)}{inv.project_id !== project.id ? "（まとめた請求書）" : ""}</span> : null; })()}
+                    {(() => { const share = invoiceShareFor(inv, project.id); return share.subtotal !== Number(inv.subtotal || 0) ? <span className="text-[10px] text-muted-foreground whitespace-nowrap" title="ほかの案件の納品書とまとめた請求書です。売上はこの案件の分だけを数えます">うちこの案件分 {yen(share.subtotal)}（税別）{inv.project_id !== project.id ? "（まとめた請求書）" : ""}</span> : null; })()}
                     <Badge className={`text-[9px] ${st.color}`}>{st.label}</Badge>
-                    <span className="text-sm tabular-nums w-28 text-right">{yen(inv.total)}</span>
+                    <span className="text-sm tabular-nums w-32 text-right whitespace-nowrap" title={`税込 ${yen(inv.total)}`}>{yen(inv.subtotal)}<span className="ml-1 text-[10px] text-muted-foreground">税別</span></span>
                   </Link>
                 );
               })}

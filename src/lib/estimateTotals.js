@@ -48,6 +48,12 @@ export function computeEstimateTotals(lineItems, { taxInclusive = false } = {}) 
   return { subtotal, tax, total: subtotal + tax, breakdown: breakdown.length ? breakdown : [{ rate: 10, taxable: 0, tax: 0, gross: 0 }] };
 }
 
+/** 見積の税別の合計（明細から。明細の無い古い見積は null） */
+export function estimateSubtotal(e) {
+  if (!Array.isArray(e?.line_items) || e.line_items.length === 0) return null;
+  return computeEstimateTotals(e.line_items, { taxInclusive: !!e.tax_inclusive }).subtotal;
+}
+
 /** 税込単価を税抜に直す（納品書・請求書は税抜で持つため） */
 export function toTaxExclusiveUnitPrice(unitPrice, rate = 10) {
   const n = Number(unitPrice) || 0;

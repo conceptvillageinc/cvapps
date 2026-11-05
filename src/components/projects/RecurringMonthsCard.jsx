@@ -51,7 +51,7 @@ export default function RecurringMonthsCard({ project, deliveryNotes, invoices }
                 {invs.map((inv) => <Link key={inv.id} to={`/invoices/${inv.id}`} className="inline-flex items-center gap-1 text-primary hover:underline"><Receipt className="w-3 h-3" />{inv.invoice_number}</Link>)}
                 {notes.length === 0 && invs.length === 0 && <span className="text-muted-foreground">まだありません</span>}
               </span>
-              <span className="w-28 text-right tabular-nums text-xs">{billed ? <>請求 {yen(billed)}</> : <span className="text-muted-foreground">—</span>}</span>
+              <span className="w-36 text-right tabular-nums text-xs whitespace-nowrap">{billed ? <>請求 {yen(billed)}<span className="ml-1 text-[10px] text-muted-foreground">税別</span></> : <span className="text-muted-foreground">—</span>}</span>
               <span className="w-28 shrink-0 text-right">
                 {notes.length === 0 && <Link to={`/delivery-notes/new?project=${project.id}`} className="inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/50"><FileText className="w-3 h-3" /> 納品書を作る</Link>}
                 {notes.some((n) => !n.invoice_id) && <Link to={`/invoices/new?delivery=${notes.filter((n) => !n.invoice_id).map((n) => n.id).join(",")}`} className="inline-flex items-center gap-1 rounded border border-amber-400 px-2 py-0.5 text-[11px] text-amber-800 hover:bg-amber-50"><Receipt className="w-3 h-3" /> 請求書を作る</Link>}
