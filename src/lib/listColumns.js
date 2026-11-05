@@ -22,7 +22,7 @@ export const LIST_DEFS = {
   delivery_notes: {
     label: "納品書", columns: [
       ["delivery_number", "番号"], ["delivery_date", "納品日"], ["client_name", "クライアント"], ["title", "件名"],
-      ["total", "合計（税込）"], ["status", "状態"], ["invoice", "請求"],
+      ["total", "合計（税込）"], ["status", "状態"], ["invoice", "請求書作成"],
     ],
   },
   invoices: {

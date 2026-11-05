@@ -132,7 +132,7 @@ export default function DeliveryNoteList() {
           <Input placeholder="番号・クライアント名・件名で検索" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <div className="flex gap-1">
-          {[["all", "すべて"], ["uninvoiced", "未請求"], ["draft", "下書き"]].map(([k, label]) => (
+          {[["all", "すべて"], ["uninvoiced", "請求書作成：未処理"], ["draft", "下書き"]].map(([k, label]) => (
             <Button key={k} size="sm" variant={filter === k ? "default" : "outline"} className="text-xs" onClick={() => setFilter(k)}>{label}</Button>
           ))}
         </div>
@@ -145,7 +145,7 @@ export default function DeliveryNoteList() {
           <>
             <span className="inline-flex items-center gap-1.5"><SquareCheck className="w-3.5 h-3.5 text-sky-700 shrink-0" /><span>左のチェックで納品書を選ぶと、<strong>同じクライアントの未請求の納品書を 1 枚の請求書にまとめて</strong>作れます</span></span>
             <span className="flex-1" />
-            {filter !== "uninvoiced" && <Button size="sm" variant="outline" className="h-8 text-xs bg-white" onClick={() => setFilter("uninvoiced")}>未請求だけ表示</Button>}
+            {filter !== "uninvoiced" && <Button size="sm" variant="outline" className="h-8 text-xs bg-white" onClick={() => setFilter("uninvoiced")}>未処理だけ表示</Button>}
             <Button size="sm" className="h-8 gap-1.5 text-xs" disabled title="先に左のチェックで納品書を選んでください">
               <SquareCheck className="w-3.5 h-3.5" /> 選択した納品書で請求書を作る
             </Button>
@@ -243,8 +243,8 @@ export default function DeliveryNoteList() {
                             case "invoice": return (
                               <TableCell key={k}>
                                 {n.invoice_id
-                                  ? <Link to={`/invoices/${n.invoice_id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline">請求済</Link>
-                                  : <span className="text-xs text-amber-700">未請求</span>}
+                                  ? <Link to={`/invoices/${n.invoice_id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline" title="この納品書から作った請求書を開く">処理済</Link>
+                                  : <span className="text-xs text-amber-700">未処理</span>}
                               </TableCell>
                             );
                             default: return <TableCell key={k} />;
