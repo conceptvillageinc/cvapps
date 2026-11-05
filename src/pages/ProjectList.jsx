@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { db } from "@/api/db";
@@ -28,6 +28,7 @@ import RecurringMark from "@/components/projects/RecurringMark";
 import SubsidyMark from "@/components/projects/SubsidyMark";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportProjectsCsv } from "@/lib/listCsv";
+import { useSessionState } from "@/hooks/use-session-state";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const ALL_YEARS = "all";
@@ -129,12 +130,20 @@ export default function ProjectList() {
 
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   // 期の絞り込みは最初「すべての期」（標準・速報デイリーで共通。期を選ぶとその期だけ）
-  const [fiscalYear, setFiscalYear] = useState(ALL_YEARS);
-  const [search, setSearch] = useState(searchParams.get("q") || "");
-  const [period, setPeriod] = useState(() => emptyPeriod("registered_at")); // 期間（登録日・完了予定・入金予定のどれかで）
+  // 期・検索・期間・絞り込み・並び順は、詳細を開いて戻ってきても残す（このタブのあいだ）
+  const [fiscalYear, setFiscalYear] = useSessionState("projects.fiscalYear", ALL_YEARS);
+  const [search, setSearch] = useSessionState("projects.search", "");
+  // URL の ?q=（ほかの画面からの検索リンク）は、検索欄に移してから URL から外す
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q === null) return;
+    setSearch(q);
+    setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("q"); return n; }, { replace: true });
+  }, [searchParams, setSearch, setSearchParams]);
+  const [period, setPeriod] = useSessionState("projects.period", () => emptyPeriod("registered_at")); // 期間（登録日・完了予定・入金予定のどれかで）
   // 既定では進行中・完了の案件を表示する（失注・取消は隠す）
-  const [columnFilters, setColumnFilters] = useState({ status: DEFAULT_STATUS_FILTER });
-  const [sortConfig, setSortConfig] = useState({ key: "registered_at", direction: "desc" });
+  const [columnFilters, setColumnFilters] = useSessionState("projects.columnFilters", { status: DEFAULT_STATUS_FILTER });
+  const [sortConfig, setSortConfig] = useSessionState("projects.sort", { key: "registered_at", direction: "desc" });
   const [createOpen, setCreateOpen] = useState(false);
   // 表示ビュー（標準／速報デイリー／案件別ネクストアクション）。URL の ?view= で共有できる
   const view = VIEWS.some((v) => v.key === searchParams.get("view")) ? searchParams.get("view") : "standard";

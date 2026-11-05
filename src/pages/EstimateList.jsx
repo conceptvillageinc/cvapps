@@ -30,6 +30,7 @@ import { sectionOf } from "@/lib/estimateSections";
 import { clientLines } from "@/lib/estimateTotals";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportEstimatesCsv } from "@/lib/listCsv";
+import { useSessionState } from "@/hooks/use-session-state";
 
 /** 原価を持つ明細から見積の粗利・粗利率を出す（新形式のみ。原価が1行も無ければ null） */
 function estimateGross(e) {
@@ -48,11 +49,12 @@ function estimateGross(e) {
 export default function EstimateList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [submissionFilter, setSubmissionFilter] = useState("all"); // 提出ステータスで絞り込む
+  // 検索・絞り込み・並び順は、詳細を開いて戻ってきても残す（このタブのあいだ）
+  const [search, setSearch] = useSessionState("estimates.search", "");
+  const [submissionFilter, setSubmissionFilter] = useSessionState("estimates.submission", "all"); // 提出ステータスで絞り込む
   const listCols = useListColumns("estimates");
-  const [columnFilters, setColumnFilters] = useState({});
-  const [sortConfig, setSortConfig] = useState(null); // { key, direction: 'asc'|'desc' }
+  const [columnFilters, setColumnFilters] = useSessionState("estimates.columnFilters", {});
+  const [sortConfig, setSortConfig] = useSessionState("estimates.sort", null); // { key, direction: 'asc'|'desc' }
   const [picked, setPicked] = useState(() => new Set()); // まとめて削除する見積の id
   const [showAll, setShowAll] = useState(false); // 1000件超でも重くならないよう、最初は 200 件だけ描画する
   const PAGE_ROWS = 200;

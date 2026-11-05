@@ -21,6 +21,7 @@ import InlineBadgeSelect from "@/components/projects/InlineBadgeSelect";
 import { useCostTotals } from "@/lib/usePayablesAccess";
 import { isImeEnter } from "@/lib/ime";
 import RecurringMark from "@/components/projects/RecurringMark";
+import { useSessionState } from "@/hooks/use-session-state";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -80,8 +81,8 @@ function Empty({ text }) {
 const SORTABLE = { deal_probability: "dealProbabilityOptions", phase: "phaseOptions" };
 
 /** 見出しクリックで 昇順 → 降順 → 解除 */
-function useColumnSort() {
-  const [sort, setSort] = useState(null); // { key, dir: "asc" | "desc" } | null
+function useColumnSort(storeKey) {
+  const [sort, setSort] = useSessionState(`${storeKey}.sort`, null); // { key, dir: "asc" | "desc" } | null
   const toggle = (key) => setSort((cur) => (!cur || cur.key !== key ? { key, dir: "asc" } : cur.dir === "asc" ? { key, dir: "desc" } : null));
   return [sort, toggle, setSort];
 }
@@ -100,8 +101,8 @@ function optionComparator(sort, settings) {
 const EMPTY_VALUE = "__empty__";
 
 /** 列ごとの「表示する値」（チェックで複数選択）。null = 絞り込みなし */
-function useColumnFilters(defaults = null) {
-  const [filters, setFilters] = useState({});
+function useColumnFilters(storeKey, defaults = null) {
+  const [filters, setFilters] = useSessionState(`${storeKey}.filters`, {});
   const setFilter = (key, values) => setFilters((cur) => ({ ...cur, [key]: values && values.length ? values : null }));
   // 初期値（まだ触っていない列だけに効く。「すべて」で解除すると null になり初期値も外れる）
   const applied = useMemo(() => ({ ...(defaults || {}), ...filters }), [defaults, filters]);
@@ -379,8 +380,8 @@ export function DailyView({ projects, isLoading }) {
   const today = todayString();
   const yesterday = addDaysYmd(today, -1);
   const settings = useSystemSettings();
-  const [sort, toggleSort] = useColumnSort();
-  const [filters, setFilter] = useColumnFilters();
+  const [sort, toggleSort] = useColumnSort("projects.daily");
+  const [filters, setFilter] = useColumnFilters("projects.daily");
   const filtered = useMemo(() => applyFilters(projects, filters), [projects, filters]);
   const dt = useDailyTarget(today);
   const { target, holidays } = dt;
@@ -582,18 +583,18 @@ const NEXT_STATUS_KEYS = Object.keys(PROJECT_STATUS_MAP);
 const NEXT_DEFAULT_STATUS = ["open", "completed"];
 
 export function NextActionView({ projects: allProjects, isLoading, search = "", onClearSearch }) {
-  const [onlyEmpty, setOnlyEmpty] = useState(false);
-  const [statusFilter, setStatusFilter] = useState(NEXT_DEFAULT_STATUS); // null = すべて
+  const [onlyEmpty, setOnlyEmpty] = useSessionState("projects.next.onlyEmpty", false);
+  const [statusFilter, setStatusFilter] = useSessionState("projects.next.status", NEXT_DEFAULT_STATUS); // null = すべて
   const projects = useMemo(() => (statusFilter ? allProjects.filter((p) => statusFilter.includes(p.status || "open")) : allProjects), [allProjects, statusFilter]);
   const today = todayString();
   const settings = useSystemSettings();
-  const [sort, toggleSort, setSort] = useColumnSort();
+  const [sort, toggleSort, setSort] = useColumnSort("projects.next");
   // 受注確度は「A」と「要注意（A）」を初期値にする（朝会で新規売上の進捗を見るため）
   const defaultFilters = useMemo(() => {
     const picks = (settings.dealProbabilityOptions || []).filter((v) => v === "A" || /要注意/.test(v));
     return picks.length ? { deal_probability: picks } : null;
   }, [settings.dealProbabilityOptions]);
-  const [filters, setFilter] = useColumnFilters(defaultFilters);
+  const [filters, setFilter] = useColumnFilters("projects.next", defaultFilters);
   const monthStart = today.slice(0, 8) + "01";
   const nextMonthStart = useMemo(() => {
     const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
