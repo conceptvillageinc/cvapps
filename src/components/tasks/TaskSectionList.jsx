@@ -8,8 +8,8 @@ import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tas
 import { useTaskWrites } from "@/lib/useTaskData";
 import PlacePicker, { moveTaskPlace } from "@/components/tasks/PlacePicker";
 
-// 表の列（タスク名・優先度・確認・期日・紐づけ先・公開範囲・予定時間・担当）
-const gridOf = ({ place, assignee }) => ({ gridTemplateColumns: ["minmax(18rem,1fr)", "4.5rem", "5rem", "6.5rem", place && "minmax(8rem,13rem)", "6rem", "4.5rem", assignee && "3rem"].filter(Boolean).join(" ") });
+// 表の列（タスク名・予定時間・紐づけ先・公開範囲・優先度・確認・期日・担当）
+const gridOf = ({ place, assignee }) => ({ gridTemplateColumns: ["minmax(18rem,1fr)", "4.5rem", place && "minmax(8rem,13rem)", "6rem", "4.5rem", "5rem", "6.5rem", assignee && "3rem"].filter(Boolean).join(" ") });
 
 function Pill({ map, value }) {
   const v = map[value];
@@ -44,6 +44,39 @@ function InlineTaskName({ task, onSave, onEditing }) {
   }
   return (
     <span onClick={start} title="押すと名前を直せます" className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text hover:ring-1 hover:ring-slate-300 hover:bg-white ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
+  );
+}
+
+/** 予定時間（押すとその場で入れられる。空にすると消える） */
+function InlineHours({ task, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState("");
+  const cur = Number(task.estimated_hours) > 0 ? Number(task.estimated_hours) : null;
+  const end = (save) => {
+    setEditing(false);
+    if (!save) return;
+    const s = String(v).trim().replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[hH時間]/g, "");
+    const n = s === "" ? null : Number(s);
+    if (n !== null && (!Number.isFinite(n) || n < 0)) { toast.error("予定時間は数字で入れてください"); return; }
+    const next = n === null || n === 0 ? null : Math.round(n * 100) / 100;
+    if (next !== cur) onSave(next);
+  };
+  if (editing) {
+    return (
+      <span className="flex justify-end pr-1" onClick={(e) => e.stopPropagation()}>
+        <input autoFocus inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} onFocus={(e) => e.target.select()}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); end(true); } if (e.key === "Escape") end(false); }}
+          onBlur={() => end(true)} className="h-7 w-14 rounded border border-primary/50 bg-white px-1.5 text-right text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="予定時間（時間）" data-testid="task-hours-inline" />
+      </span>
+    );
+  }
+  return (
+    <span className="flex justify-end pr-1">
+      <button type="button" onClick={(e) => { e.stopPropagation(); setV(cur ?? ""); setEditing(true); }} title="押すと予定時間を入れられます（時間）"
+        className={`h-7 min-w-[2.75rem] rounded px-1.5 text-right text-xs tabular-nums hover:bg-white hover:ring-1 hover:ring-slate-300 ${cur ? "text-slate-600" : "text-slate-300"}`} data-testid="task-hours">
+        {cur ? `${cur}h` : "—"}
+      </button>
+    </span>
   );
 }
 
@@ -208,7 +241,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto" data-testid="task-list">
       <div className="min-w-[900px]">
         <div style={grid} className="sticky top-0 z-10 grid items-center border-b border-slate-200 bg-slate-50/90 backdrop-blur px-2 text-[11px] font-medium text-slate-500">
-          <span className="py-2 pl-9">タスク名</span><span>優先度</span><span>確認</span><span>期日</span>{showPlace && <span>紐づけ先</span>}<span>公開範囲</span><span className="text-right pr-2">予定時間</span>{showAssignee && <span>担当</span>}
+          <span className="py-2 pl-9">タスク名</span><span className="text-right pr-3">予定時間</span>{showPlace && <span>紐づけ先</span>}<span>公開範囲</span><span>優先度</span><span>確認</span><span>期日</span>{showAssignee && <span>担当</span>}
         </div>
         {groups.map((g, gi) => {
           const collapsed = g.section ? !!g.section.collapsed : noneCollapsed;
@@ -236,9 +269,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                             <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(t.id); }} className="ml-auto shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-slate-100 hover:text-slate-700 focus:opacity-100" title="詳細を開く" aria-label="詳細を開く" data-testid="task-open"><PanelRightOpen className="w-3.5 h-3.5" /></button>
                             <button type="button" onClick={(e) => { e.stopPropagation(); writes.removeWithUndo(t, data.tasks); }} className="mr-1 shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-rose-50 hover:text-rose-600 focus:opacity-100" title="このタスクを削除" aria-label="削除" data-testid="task-delete"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
-                          <span><Pill map={PRIORITY} value={t.priority} /></span>
-                          <span><Pill map={REVIEW_STATUS} value={t.review_status} /></span>
-                          <DueLabel task={t} today={today} />
+                          <InlineHours task={t} onSave={(h) => writes.update(t, { estimated_hours: h }).catch((e) => toast.error("予定時間を保存できませんでした: " + (e?.message || "")))} />
                           {showPlace && (
                             // 一覧から紐づけ先を選べる（サブタスクは親と同じなので、親の紐づけ先を出すだけ）
                             <span className="min-w-0 pr-2 overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -248,7 +279,9 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                             </span>
                           )}
                           <Visibility task={t} />
-                          <span className="text-right pr-2 text-xs tabular-nums text-slate-600">{Number(t.estimated_hours) > 0 ? `${Number(t.estimated_hours)}h` : ""}</span>
+                          <span><Pill map={PRIORITY} value={t.priority} /></span>
+                          <span><Pill map={REVIEW_STATUS} value={t.review_status} /></span>
+                          <DueLabel task={t} today={today} />
                           {showAssignee && <span><UserAvatar user={data.byId.users.get(t.assignee_id)} size={22} /></span>}
                         </div>
                       </div>
