@@ -501,8 +501,8 @@ export default function RecurringProjects() {
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     <TableHead className="text-xs text-white">クライアント</TableHead>
                     <TableHead className="text-xs text-white">案件名</TableHead>
-                    <TableHead className="text-xs text-white text-right">受注見込/月</TableHead>
-                    <TableHead className="text-xs text-white text-right">粗利見込/月</TableHead>
+                    <TableHead className="text-xs text-white text-right whitespace-nowrap">受注見込/月（税別）</TableHead>
+                    <TableHead className="text-xs text-white text-right whitespace-nowrap">粗利見込/月（税別）</TableHead>
                     <TableHead className="text-xs text-white">期間</TableHead>
                     <TableHead className="text-xs text-white">終了・更新</TableHead>
                     <TableHead className="text-xs text-white">案件・最新の納品書</TableHead>
@@ -576,6 +576,24 @@ export default function RecurringProjects() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {/* 表示中（絞り込みのあと）の件数と合計。停止中のひな形が入っていれば、有効な分だけの合計も出す */}
+                  {(() => {
+                    const rev = (t) => Number(t.expected_revenue || 0);
+                    const gross = (t) => rev(t) - Number(t.expected_cost || 0) - Number(t.other_cost || 0);
+                    const active = shown.filter((t) => t.is_active);
+                    const hasStopped = active.length !== shown.length;
+                    return (
+                      <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium" data-testid="list-total">
+                        <TableCell colSpan={2} className="text-xs text-muted-foreground whitespace-nowrap">
+                          表示中の合計（{shown.length}件）
+                          {hasStopped && <span className="block text-[10px] font-normal">うち有効 {active.length}件</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums whitespace-nowrap">{yen(shown.reduce((a, t) => a + rev(t), 0))}{hasStopped && <span className="block text-[10px] font-normal text-muted-foreground">有効 {yen(active.reduce((a, t) => a + rev(t), 0))}</span>}</TableCell>
+                        <TableCell className="text-right text-sm tabular-nums whitespace-nowrap">{yen(shown.reduce((a, t) => a + gross(t), 0))}{hasStopped && <span className="block text-[10px] font-normal text-muted-foreground">有効 {yen(active.reduce((a, t) => a + gross(t), 0))}</span>}</TableCell>
+                        <TableCell colSpan={5} />
+                      </TableRow>
+                    );
+                  })()}
                 </TableBody>
               </Table>
             </div>
