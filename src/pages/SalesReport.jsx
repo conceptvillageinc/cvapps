@@ -520,16 +520,16 @@ export default function SalesReport() {
                       ["発注見込 A", "forecast", "cost_a"], ["発注見込（要注意）", "forecast", "cost_a2"],
                       ["粗利", "forecast", "gross"], ["粗利率", "forecast", "margin", "pct"],
                       ["うち定期売上", "forecast", "recurring", "yen", true],
-                      ["必要売上", "forecast", "need_sales"], ["必要粗利（必達）", "forecast", "need_gross_must"], ["必要粗利（目標）", "forecast", "need_gross"],
+                      ["必要売上", "forecast", "need_sales"], ["必要粗利（目標）", "forecast", "need_gross"], ["必要粗利（必達）", "forecast", "need_gross_must"],
                     ]],
                     ["実績", [
                       ["売上（請求）", "actual", "sales"], ["調達（仕入）", "actual", "purchase"], ["その他原価", "actual", "other_cost"],
                       ["粗利", "actual", "gross"], ["粗利率", "actual", "margin", "pct"],
-                      ["必要売上", "actual", "need_sales"], ["必要粗利（必達）", "actual", "need_gross_must"], ["必要粗利（目標）", "actual", "need_gross"],
+                      ["必要売上", "actual", "need_sales"], ["必要粗利（目標）", "actual", "need_gross"], ["必要粗利（必達）", "actual", "need_gross_must"],
                     ]],
                     ["計", [
                       ["売上", "total", "sales"], ["仕入", "total", "purchase"], ["粗利", "total", "gross"], ["粗利率", "total", "margin", "pct"],
-                      ["必要売上（目標）", "total", "need_sales"], ["必要粗利（必達）", "total", "need_gross_must"], ["必要粗利（目標）", "total", "need_gross"],
+                      ["必要売上（目標）", "total", "need_sales"], ["必要粗利（目標）", "total", "need_gross"], ["必要粗利（必達）", "total", "need_gross_must"],
                     ]],
                   ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false], i) => (
                     <tr key={`${block}-${key}`} className={`border-t ${i === 0 ? "border-t-2 border-t-slate-300" : ""} ${block === "計" ? "bg-muted/30" : ""}`}>
