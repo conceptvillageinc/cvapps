@@ -185,9 +185,9 @@ export default function InvoiceList() {
                             value={inv.status}
                             onChange={(e) => statusMutation.mutate({ id: inv.id, status: e.target.value })}
                             title="一覧から送付を変えられます（未＝まだ送っていない・済＝送った。入金額まで記録するときは請求書を開いて「入金を記録」）"
-                            className={`h-7 rounded-md border px-1.5 text-[11px] font-medium cursor-pointer ${late ? "bg-red-100 text-red-700 border-red-200" : `${st.color} border-transparent`}`}
+                            className={`h-7 rounded-md border px-1.5 text-[11px] font-medium cursor-pointer ${st.color} border-transparent`}
                           >
-                            {[...INVOICE_SEND_KEYS, ...(inv.status === "cancelled" ? ["cancelled"] : [])].map((sk) => <option key={sk} value={sk}>{sk === inv.status && late ? "済（期日超過）" : INVOICE_SEND_LABEL[sk]}</option>)}
+                            {[...INVOICE_SEND_KEYS, ...(inv.status === "cancelled" ? ["cancelled"] : [])].map((sk) => <option key={sk} value={sk}>{INVOICE_SEND_LABEL[sk]}</option>)}
                           </select>
                         </TableCell>
                             );
