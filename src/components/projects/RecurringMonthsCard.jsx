@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Repeat, FileText, Receipt } from "lucide-react";
 import { todayString } from "@/lib/fiscal";
 import { addMonthsYm, invoiceProjectShares, recurringMonths } from "@/lib/projectInvoicing";
-import { stateOfNotes, DELIVERY_STATE, isSentInvoiceStatus } from "@/lib/deliveryStatus";
+import { stateOfNotes, DELIVERY_STATE } from "@/lib/deliveryStatus";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const label = (ym) => `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月`;
@@ -29,10 +29,7 @@ export default function RecurringMonthsCard({ project, deliveryNotes, invoices }
         const s = invoiceProjectShares(inv).filter((x) => x.project_id === project.id && x.month === m).reduce((a, x) => a + x.subtotal, 0);
         if (s) { billed += s; invs.push(inv); }
       }
-      const statusOf = (n) => invoices.find((i) => i.id === n.invoice_id)?.status;
-      const state = billed > 0 && notes.every((n) => n.invoice_id)
-        ? (invs.every((i) => isSentInvoiceStatus(i.status)) ? "sent" : "invoiced")
-        : stateOfNotes(notes, statusOf);
+      const state = billed > 0 && notes.every((n) => n.invoice_id) ? "invoiced" : stateOfNotes(notes);
       return { m, notes, invs, billed, state };
     });
   }, [project, deliveryNotes, invoices, thisMonth]);

@@ -2,21 +2,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { db } from "@/api/db";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DELIVERY_STATE, indexNotes, isSentInvoiceStatus } from "@/lib/deliveryStatus";
+import { DELIVERY_STATE, indexNotes } from "@/lib/deliveryStatus";
 import { useMemo } from "react";
 
-/** 納品書を見積・案件ごとに引く（一覧で使う。キャッシュは納品書一覧と共有。請求書の状態も添える） */
+/** 納品書を見積・案件ごとに引く（一覧で使う。キャッシュは納品書一覧と共有） */
 export function useDeliveryIndex(enabled = true) {
   const { data: notes = [] } = useQuery({ queryKey: ["deliveryNotes", "all"], queryFn: () => db.entities.DeliveryNote.list("-delivery_date"), enabled });
-  const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "statusIndex"], queryFn: () => db.entities.Invoice.list("-invoice_date"), enabled, staleTime: 30_000 });
-  return useMemo(() => indexNotes(notes, invoices), [notes, invoices]);
+  return useMemo(() => indexNotes(notes), [notes]);
 }
 
-/** 納品書 1 枚の請求の印（未請求／請求書作成済／請求書送付済） */
+/** 納品書 1 枚の請求の印（未請求／請求書作成済） */
 export function NoteInvoiceLabel({ note }) {
   if (!note.invoice_id) return <span className="text-amber-700">未請求</span>;
-  const sent = isSentInvoiceStatus(note._invoice_status);
-  return <Link to={`/invoices/${note.invoice_id}`} className={`${sent ? "text-blue-700" : "text-sky-700"} hover:underline`}>{sent ? "請求書送付済" : "請求書作成済"}</Link>;
+  return <Link to={`/invoices/${note.invoice_id}`} className="text-sky-700 hover:underline">請求書作成済</Link>;
 }
 
 const ymd = (s) => String(s || "").slice(5, 10).replace("-", "/");

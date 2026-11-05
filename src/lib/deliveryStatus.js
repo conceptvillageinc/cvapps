@@ -3,8 +3,8 @@
 //   納品書・請求書のつながり（納品書の estimate_id / project_id / invoice_id）から自動で決める。入力は増やさない。
 //     none        未納品            … 納品書がまだ無い
 //     uninvoiced  納品済・未請求     … 納品書のうち、請求書になっていないものがある（請求担当の作業待ち。納品書が下書きでも同じ）
-//     invoiced    請求書作成済       … 納品書がすべて請求書になった（請求書はまだ下書き）
-//     sent        請求書送付済       … その請求書がすべて送付済（入金済も含む）
+//     invoiced    請求書作成済       … 納品書がすべて請求書になった
+//     sent        請求書送付済       … 手で決める（案件の「納品・請求」で選ぶ。請求書の状態からは自動で決めない）
 //   見積は、その見積から作った納品書の明細の合計が見積の合計に届いていなければ「一部納品 ○%」も付ける（分納）。
 // ============================================================================
 import { clientLines } from "@/lib/estimateTotals";
@@ -25,21 +25,19 @@ export const DELIVERY_STATE = {
 export const DELIVERY_STATE_ORDER = ["none", "uninvoiced", "invoiced", "sent", "na"];
 /** 請求書まで作った状態（作成済・送付済） */
 export const isBilledState = (state) => state === "invoiced" || state === "sent";
-/** 請求書が送付済か（入金済も送付のあと） */
-export const isSentInvoiceStatus = (status) => status === "sent" || status === "paid";
+
 /** 案件で手で決められる状態（projects.delivery_state_manual。空なら納品書から自動） */
 export const MANUAL_DELIVERY_STATES = ["none", "uninvoiced", "invoiced", "na"];
 
 const sumItems = (items) => (items || []).reduce((s, li) => s + (Number(li.amount) || 0), 0);
 
 /** 納品書の一覧から状態を決める */
-export function stateOfNotes(notes, invoiceStatusOf = (n) => n._invoice_status) {
+export function stateOfNotes(notes) {
   const list = notes || [];
   if (list.length === 0) return "none";
   // 「納品書 下書き」の状態は使わない（下書きの納品書も、納品済・未請求として数える）
-  if (list.some((n) => !n.invoice_id)) return "uninvoiced";
-  // 請求書がすべて送付済（入金済）なら「請求書送付済」、まだ下書きのものがあれば「請求書作成済」
-  return list.every((n) => isSentInvoiceStatus(invoiceStatusOf(n))) ? "sent" : "invoiced";
+  // 「請求書送付済」は手で決める（請求書の状態からは自動で決めない）
+  return list.some((n) => !n.invoice_id) ? "uninvoiced" : "invoiced";
 }
 
 /** 見積の税抜の明細合計（納品書と同じ数え方: テキスト行・小計行は除く） */
@@ -78,13 +76,10 @@ export function projectDelivery(project, notesByProject) {
 }
 
 /** 納品書を見積・案件ごとに引けるようにする */
-export function indexNotes(notes, invoices = []) {
+export function indexNotes(notes) {
   const byEstimate = new Map();
   const byProject = new Map();
-  const statusById = new Map((invoices || []).map((i) => [i.id, i.status]));
-  for (const raw of notes || []) {
-    // 納品書に、つながっている請求書の状態を添える（請求書作成済／送付済の見分けに使う）
-    const n = raw.invoice_id ? { ...raw, _invoice_status: statusById.get(raw.invoice_id) || null } : raw;
+  for (const n of notes || []) {
     if (n.estimate_id) byEstimate.set(n.estimate_id, [...(byEstimate.get(n.estimate_id) || []), n]);
     if (n.project_id) byProject.set(n.project_id, [...(byProject.get(n.project_id) || []), n]);
   }
