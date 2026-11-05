@@ -88,7 +88,7 @@ const highlight = (body, users) => {
 };
 
 /**
- * タスクの詳細（右から開く）。紐づけ先・担当者・期日・優先度・確認の状態・作業時間・説明・サブタスク・添付・コメント
+ * タスクの詳細（右から開く）。紐づけ先（先頭）・担当者・期日・優先度・確認の状態・作業時間・説明・サブタスク・添付・コメント
  */
 export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
   const { tasks, users, projects, internalProjects, byId } = data;
@@ -172,15 +172,16 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {/* 紐づけ先（パンくず） */}
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500"><TaskPlaceChip task={parent || task} byId={byId} />{parent && <><span>›</span><button type="button" className="hover:underline" onClick={() => onOpenTask(parent.id)}>{parent.name}</button></>}</div>
+          {/* 紐づけ先（先頭に 1 つだけ。押すと選べる。サブタスクは親と同じ紐づけ先なので、親の紐づけ先と親のタスクを出す） */}
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-500" data-testid="task-place-head">
+            {parent
+              ? <><TaskPlaceChip task={parent} byId={byId} /><span>›</span><button type="button" className="hover:underline" onClick={() => onOpenTask(parent.id)}>{parent.name}</button></>
+              : <PlacePicker task={task} projects={projects} internalProjects={internalProjects} byId={byId} onChange={setPlace} />}
+          </div>
           <textarea value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== task.name && save({ name: name.trim() })} rows={1}
             className={`w-full resize-none text-xl font-bold leading-snug focus:outline-none rounded px-1 -mx-1 hover:bg-muted/40 ${task.completed ? "line-through text-muted-foreground" : ""}`} data-testid="task-name" />
 
           <div className="space-y-1.5">
-            <Field label="紐づけ先">
-              <PlacePicker task={task} projects={projects} internalProjects={internalProjects} byId={byId} onChange={setPlace} />
-            </Field>
             <Field label="担当者">
               <div className="flex items-center gap-2">
               <select value={task.assignee_id || ""} onChange={(e) => save({ assignee_id: e.target.value || null, my_section_id: null, my_sort_order: null })} /* 担当が変わったら、新しい担当者の「新しく割り当てられたタスク」に入る */ className="h-8 rounded border px-2 text-sm" data-testid="task-assignee">
