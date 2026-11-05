@@ -17,9 +17,14 @@ export const PRIORITY = {
   low: { label: "低", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
 };
 /**
- * 優先度・確認の選択肢のボタン（いつも色付き。選んでいるものは濃い色・太字・✓ で分かるように）
+ * 優先度の選択肢のボタン
+ *   選んでいないもの: 背景なし・文字の色だけ（マウスを乗せると薄く背景）
+ *   選んでいるもの: 背景の色・太字・✓
  */
-export const choiceCls = (v, selected) => `rounded px-2 text-xs leading-6 ring-1 transition ${v.cls} ${selected ? "font-bold shadow-sm" : "opacity-60 hover:opacity-100"}`;
+export const choiceCls = (v, selected) => {
+  const text = v.cls.split(" ").filter((c) => c.startsWith("text-") || c.startsWith("ring-")).join(" ");
+  return `rounded px-2 text-xs leading-6 ring-1 transition ${selected ? `${v.cls} font-bold shadow-sm` : `${text} bg-transparent hover:bg-slate-50`}`;
+};
 
 export const REVIEW_STATUS = {
   todo: { label: "要対応", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
