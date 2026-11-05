@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Plus, ListTodo, Layers, BarChart3, Lock, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, ListTodo, Layers, BarChart3, Lock, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { useTaskData, useTaskWrites } from "@/lib/useTaskData";
 import { MY_GROUPS, myGroupOf, myTasks, userLabel, todayYmd, dueOf, isPrivateTask, assigneesOf } from "@/lib/tasks";
 import { movePatch, nextSectionOrder, MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
@@ -141,9 +142,7 @@ function MyTasksView({ data, me, today, onOpen }) {
       <div className="flex flex-wrap items-center gap-2">
         {isMe && <ViewSwitch value={view} onChange={changeView} />}
         {me.role !== "guest" && (
-          <select value={who} onChange={(e) => setWho(e.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm" data-testid="tasks-who">
-            {data.users.filter((u) => u.role !== "guest" || u.id === me.id).map((u) => <option key={u.id} value={u.id}>{u.id === me.id ? `自分（${userLabel(u)}）` : `${userLabel(u)}さんのタスク`}</option>)}
-          </select>
+          <WhoPicker users={data.users.filter((u) => u.role !== "guest" || u.id === me.id)} me={me} value={who} onChange={setWho} />
         )}
         {!isMe && <span className="text-[11px] text-slate-500"><Lock className="inline w-3 h-3 mr-0.5" />{userLabel(person)}さんの「自分だけ」のタスクと見出しは出ません</span>}
         <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-500"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />完了したタスクも出す</label>
@@ -319,6 +318,31 @@ const TABS = [
 /**
  * タスク（マイタスク・プロジェクト）とワークロード（/workload）。?task=ID でタスクの詳細を右に開く
  */
+/** 誰のタスクを見るか（いつも下に開く。人が多いときは中でスクロール） */
+function WhoPicker({ users, me, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const nameOf = (u) => (u.id === me.id ? `自分（${userLabel(u)}）` : `${userLabel(u)}さんのタスク`);
+  const cur = users.find((u) => u.id === value);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-sm hover:bg-slate-50" data-testid="tasks-who">
+          {cur ? nameOf(cur) : "選ぶ"}<ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-60 p-1 max-h-[min(24rem,60vh)] overflow-y-auto" data-testid="tasks-who-list">
+        {[...users].sort((a, b) => Number(b.id === me.id) - Number(a.id === me.id)).map((u) => (
+          <button key={u.id} type="button" onClick={() => { onChange(u.id); setOpen(false); }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted">
+            <span className="w-4 shrink-0">{u.id === value && <Check className="w-4 h-4 text-primary" />}</span>
+            <UserAvatar user={u} size={20} />
+            <span className="truncate">{nameOf(u)}</span>
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function Tasks() {
   const { user } = useAuth();
   const location = useLocation();

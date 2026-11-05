@@ -7,6 +7,7 @@ import { MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
 import { subtasksOf, isPrivateTask, PRIORITY, REVIEW_STATUS } from "@/lib/tasks";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
 import { useTaskWrites } from "@/lib/useTaskData";
+import RangeCalendar from "@/components/tasks/RangeCalendar";
 import PlacePicker, { moveTaskPlace } from "@/components/tasks/PlacePicker";
 
 // 表の列（タスク名・予定時間・紐づけ先・公開範囲・優先度・確認・期日・担当）
@@ -57,13 +58,14 @@ function PillPicker({ map, value, label, onChange, testId }) {
       <PopoverTrigger asChild>
         <button type="button" className="rounded-full px-0.5 hover:ring-1 hover:ring-slate-300" title={`${label}を変える`} data-testid={testId}><Pill map={map} value={value} /></button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-1.5">
+      <PopoverContent align="start" className="w-28 p-1.5">
         <p className="px-1 pb-1 text-[10px] font-semibold text-muted-foreground">{label}</p>
-        <div className="flex gap-1">
+        {/* 選択肢は縦に並べる */}
+        <div className="flex flex-col gap-1">
           {Object.entries(map).map(([k, v]) => (
-            <button key={k} type="button" onClick={() => pick(k)} className={`rounded px-2 text-xs leading-6 ring-1 ${value === k ? v.cls : "ring-slate-200 text-slate-600 hover:bg-muted"}`}>{v.label}</button>
+            <button key={k} type="button" onClick={() => pick(k)} className={`rounded px-2 text-left text-xs leading-7 ring-1 ${value === k ? v.cls : "ring-slate-200 text-slate-600 hover:bg-muted"}`}>{v.label}</button>
           ))}
-          {value && <button type="button" onClick={() => pick(value)} className="rounded px-2 text-xs leading-6 text-muted-foreground hover:bg-muted">外す</button>}
+          {value && <button type="button" onClick={() => pick(value)} className="rounded px-2 text-left text-xs leading-7 text-muted-foreground hover:bg-muted">外す</button>}
         </div>
       </PopoverContent>
     </Popover>
@@ -82,10 +84,11 @@ function DuePicker({ task, today, onChange }) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-2 space-y-2">
         <p className="text-[10px] font-semibold text-muted-foreground">期日（開始日〜期限）</p>
-        <div className="flex items-center gap-1.5">
-          <input type="date" value={task.start_date || ""} onChange={(e) => setStart(e.target.value)} className="h-8 rounded border px-2 text-sm" aria-label="開始日" data-testid="task-due-start" />
+        <RangeCalendar start={task.start_date} end={task.end_date} today={today} onChange={onChange} />
+        <div className="flex items-center gap-1.5 border-t pt-2">
+          <input type="date" value={task.start_date || ""} onChange={(e) => setStart(e.target.value)} className="h-7 w-[7.2rem] rounded border px-1.5 text-xs" aria-label="開始日" data-testid="task-due-start" />
           <span className="text-muted-foreground">〜</span>
-          <input type="date" value={task.end_date || ""} onChange={(e) => setEnd(e.target.value)} className="h-8 rounded border px-2 text-sm" aria-label="期限" data-testid="task-due-end" />
+          <input type="date" value={task.end_date || ""} onChange={(e) => setEnd(e.target.value)} className="h-7 w-[7.2rem] rounded border px-1.5 text-xs" aria-label="期限" data-testid="task-due-end" />
         </div>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => onChange({ start_date: today, end_date: today })} className="rounded border px-2 py-0.5 text-[11px] hover:bg-muted">今日</button>

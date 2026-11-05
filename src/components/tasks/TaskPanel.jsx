@@ -236,7 +236,7 @@ export default function TaskPanel({ taskId, data, onClose, onOpenTask }) {
               <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}ファイルを添付</Button>
               <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,application/pdf" className="hidden" onChange={(e) => { upload([...e.target.files]); e.target.value = ""; }} />
             </div>
-            {attachments.length === 0 ? <p className="text-[11px] text-muted-foreground">デザインデータ（PNG・JPG・PDF）を添付すると、直してほしい場所にピンを打ってコメントできます</p> : (
+            {attachments.length === 0 ? <p className="text-[11px] text-muted-foreground">資料・デザインデータ・構築画面（PNG・JPG・PDF）を添付すると、直してほしい場所にピンを打ってコメントできます。</p> : (
               <div className="flex flex-wrap gap-2">{attachments.map((a) => <AttachmentThumb key={a.id} att={a} onOpen={() => setProof(a.id)} />)}</div>
             )}
           </section>
