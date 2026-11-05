@@ -4,14 +4,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2, PanelRightOpen } from "lucide-react";
 import { MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
-import { subtasksOf, isPrivateTask, PRIORITY, REVIEW_STATUS, choiceCls } from "@/lib/tasks";
+import { subtasksOf, isPrivateTask, PRIORITY, choiceCls } from "@/lib/tasks";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
 import { useTaskWrites } from "@/lib/useTaskData";
 import RangeCalendar from "@/components/tasks/RangeCalendar";
 import PlacePicker, { moveTaskPlace } from "@/components/tasks/PlacePicker";
 
-// 表の列（タスク名・予定時間・紐づけ先・公開範囲・優先度・確認・期日・担当）
-const gridOf = ({ place, assignee }) => ({ gridTemplateColumns: ["minmax(18rem,1fr)", "4.5rem", place && "minmax(8rem,13rem)", "6rem", "4.5rem", "5rem", "6.5rem", assignee && "3rem"].filter(Boolean).join(" ") });
+// 表の列（タスク名・予定時間・紐づけ先・公開範囲・優先度・期日・担当）
+const gridOf = ({ place, assignee }) => ({ gridTemplateColumns: ["minmax(18rem,1fr)", "4.5rem", place && "minmax(8rem,13rem)", "6rem", "4.5rem", "6.5rem", assignee && "3rem"].filter(Boolean).join(" ") });
 
 function Pill({ map, value }) {
   const v = map[value];
@@ -264,7 +264,6 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-6">
                         <Pill map={PRIORITY} value={t.priority} />
-                        {t.review_status && <Pill map={REVIEW_STATUS} value={t.review_status} />}
                         {showPlace && <TaskPlaceChip task={t} byId={data.byId} />}
                       </div>
                       <div className="mt-2 flex items-center gap-2 pl-6 text-[11px] text-slate-400">
@@ -294,7 +293,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto" data-testid="task-list">
       <div className="min-w-[900px]">
         <div style={grid} className="sticky top-0 z-10 grid items-center border-b border-slate-200 bg-slate-50/90 backdrop-blur px-2 text-[11px] font-medium text-slate-500">
-          <span className="py-2 pl-9">タスク名</span><span className="text-right pr-3">予定時間</span>{showPlace && <span>紐づけ先</span>}<span>公開範囲</span><span>優先度</span><span>確認</span><span>期日</span>{showAssignee && <span>担当</span>}
+          <span className="py-2 pl-9">タスク名</span><span className="text-right pr-3">予定時間</span>{showPlace && <span>紐づけ先</span>}<span>公開範囲</span><span>優先度</span><span>期日</span>{showAssignee && <span>担当</span>}
         </div>
         {groups.map((g, gi) => {
           const collapsed = g.section ? !!g.section.collapsed : noneCollapsed;
@@ -334,7 +333,6 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                           <Visibility task={t} />
                           {/* 優先度・確認・期日は、一覧から押して変えられる */}
                           <span onClick={(e) => e.stopPropagation()}><PillPicker map={PRIORITY} value={t.priority} label="優先度" onChange={(v) => save(t, { priority: v })} testId="task-priority" /></span>
-                          <span onClick={(e) => e.stopPropagation()}><PillPicker map={REVIEW_STATUS} value={t.review_status} label="確認の状態" onChange={(v) => save(t, { review_status: v })} testId="task-review" /></span>
                           <span onClick={(e) => e.stopPropagation()}><DuePicker task={t} today={today} onChange={(patch) => save(t, patch)} /></span>
                           {showAssignee && <span><UserAvatar user={data.byId.users.get(t.assignee_id)} size={22} /></span>}
                         </div>

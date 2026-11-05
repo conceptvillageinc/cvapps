@@ -5,8 +5,8 @@ import { db } from "@/api/db";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Send, FileImage, ScanEye, UserRound, CalendarDays, Flag, CircleDot, Timer, AlignLeft, ListChecks, MessageSquare } from "lucide-react";
-import { PRIORITY, REVIEW_STATUS, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel, todayYmd, choiceCls } from "@/lib/tasks";
+import { X, Link2, MoreHorizontal, Trash2, Paperclip, Loader2, Plus, Lock, FolderKanban, Send, FileImage, ScanEye, UserRound, CalendarDays, Flag, Timer, AlignLeft, ListChecks, MessageSquare } from "lucide-react";
+import { PRIORITY, isPrivateTask, subtasksOf, nextPinNo, mentionsIn, userLabel, todayYmd, choiceCls } from "@/lib/tasks";
 import { useTaskWrites, TASK_TEMPLATES } from "@/lib/useTaskData";
 import { UserAvatar, TaskCheck, TaskPlaceChip, PinBadge, DueLabel } from "@/components/tasks/parts";
 import ProofViewer, { useAttachmentImage } from "@/components/tasks/ProofViewer";
@@ -15,7 +15,7 @@ import { RangeCalendarButton } from "@/components/tasks/RangeCalendar";
 
 const fmtAt = (s) => { if (!s) return ""; const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
-const FIELD_ICONS = { 担当者: UserRound, 期日: CalendarDays, 紐づけ先: FolderKanban, 優先度: Flag, 確認の状態: CircleDot, 作業時間数: Timer };
+const FIELD_ICONS = { 担当者: UserRound, 期日: CalendarDays, 紐づけ先: FolderKanban, 優先度: Flag, 作業時間数: Timer };
 function Field({ label, children }) {
   const Icon = FIELD_ICONS[label];
   return (
@@ -90,7 +90,7 @@ const highlight = (body, users) => {
 
 /**
  * タスクの詳細（右から開く。variant="modal" は画面の真ん中に開く＝「タスクを作成」のとき）。
- *   紐づけ先（先頭）・担当者・期日・優先度・確認の状態・作業時間・説明・サブタスク・添付・コメント
+ *   紐づけ先（先頭）・担当者・期日・優先度・作業時間・説明・サブタスク・添付・コメント
  *   isNew: 作ったばかりの空のタスク。名前を入れずに閉じたら消す
  */
 export default function TaskPanel({ taskId, data, onClose: close, onOpenTask, variant = "side", isNew = false }) {
@@ -223,11 +223,6 @@ export default function TaskPanel({ taskId, data, onClose: close, onOpenTask, va
             <Field label="優先度">
               <div className="flex gap-1">
                 {Object.entries(PRIORITY).map(([k, v]) => <button key={k} type="button" onClick={() => save({ priority: task.priority === k ? null : k })} aria-pressed={task.priority === k} className={choiceCls(v, task.priority === k)}>{task.priority === k && "✓ "}{v.label}</button>)}
-              </div>
-            </Field>
-            <Field label="確認の状態">
-              <div className="flex gap-1">
-                {Object.entries(REVIEW_STATUS).map(([k, v]) => <button key={k} type="button" onClick={() => save({ review_status: task.review_status === k ? null : k })} aria-pressed={task.review_status === k} className={choiceCls(v, task.review_status === k)}>{task.review_status === k && "✓ "}{v.label}</button>)}
               </div>
             </Field>
             <Field label="作業時間数">
