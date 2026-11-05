@@ -23,7 +23,7 @@ export const choiceCls = (v, selected) => `rounded px-2 text-xs leading-6 ring-1
 
 export const REVIEW_STATUS = {
   todo: { label: "要対応", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
-  reviewing: { label: "確認中", cls: "bg-violet-100 text-violet-700 ring-violet-200" },
+  reviewing: { label: "確認中", cls: "bg-amber-100 text-amber-800 ring-amber-200" }, // 優先度「中」と同じ色
   ok: { label: "OK", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
 };
 
