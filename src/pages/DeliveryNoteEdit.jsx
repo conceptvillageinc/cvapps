@@ -301,8 +301,8 @@ export default function DeliveryNoteEdit() {
           <Button variant="ghost" size="icon" onClick={() => navigate("/delivery-notes")}><ArrowLeft className="w-4 h-4" /></Button>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold tracking-tight">{isNew ? "納品書を作成" : `納品書 ${form.delivery_number}`}</h1>
-              {!isNew && <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>}
+              <h1 className="text-xl font-bold tracking-tight">{isNew ? "納品書" : `納品書 ${form.delivery_number}`}</h1>
+              {isNew ? <Badge className="text-[10px] bg-slate-100 text-slate-600 hover:bg-slate-100" data-testid="delivery-unsaved">未保存（番号は保存したときに付きます）</Badge> : <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>}
               {locked && <Badge className="text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-100">請求済</Badge>}
             </div>
             <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
@@ -312,8 +312,8 @@ export default function DeliveryNoteEdit() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {!isNew && (
-            <>
+          {/* 新規でも同じボタンを並べる（保存して番号が付くまでは押せない） */}
+          <fieldset disabled={isNew} className="contents" title={isNew ? "保存すると使えます" : undefined} data-testid="delivery-actions">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" className="gap-1.5 text-xs" disabled={pdfLoading} data-testid="delivery-preview">
@@ -351,7 +351,7 @@ export default function DeliveryNoteEdit() {
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => saveThenGo(`/receipts/new?delivery=${id}`)} title="この納品書の明細から領収書を作ります">
                 <ReceiptText className="w-3.5 h-3.5" /> 領収書を発行{receipts.length > 0 ? `（${receipts.length}）` : ""}
               </Button>
-              <AlertDialog>
+              {!isNew && <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:text-destructive" disabled={locked}><Trash2 className="w-3.5 h-3.5" /> 削除</Button>
                 </AlertDialogTrigger>
@@ -365,11 +365,10 @@ export default function DeliveryNoteEdit() {
                     <AlertDialogAction onClick={() => remove.mutate()} className="bg-destructive text-destructive-foreground">削除</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
-              </AlertDialog>
-            </>
-          )}
+              </AlertDialog>}
+          </fieldset>
           <Button size="sm" className="gap-1.5 text-xs" onClick={() => save.mutate()} disabled={!canSave}>
-            {save.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} {isNew ? "作成" : "保存"}
+            {save.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} 保存
           </Button>
         </div>
         <DocPreviewSwitches prefs={pv} />
