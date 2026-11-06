@@ -285,7 +285,8 @@ export default function EstimateThumbs({ estimates, all = false }) {
   const shown = all ? sorted : sorted.slice(0, THUMB_COUNT);
   return (
     <>
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4" data-testid="estimate-thumbs">
+      {/* 2 列 × 2 段（開かなくても中身が読める大きさ） */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2" data-testid="estimate-thumbs">
         {shown.map((e, i) => <Thumb key={e.id} e={e} index={i} company={company} onOpen={() => setOpenIdx(i)} />)}
       </div>
       {/* 左右で並びの隣へ（4 件だけ見ているときも、この案件の見積すべてを順に見られる） */}
