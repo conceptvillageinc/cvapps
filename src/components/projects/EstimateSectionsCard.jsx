@@ -15,6 +15,7 @@ import {
 import { FileText, Plus, ChevronDown, MoreHorizontal, Landmark, Layers } from "lucide-react";
 import { STATUS_MAP } from "@/lib/constants";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
+import EstimateThumbs from "@/components/projects/EstimateThumbs";
 import { SECTION_PRESETS, sectionsFromPreset, newSection, sectionsOf, groupBySection, sectionRoleLabels } from "@/lib/estimateSections";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
@@ -198,6 +199,7 @@ export default function EstimateSectionsCard({ project, estimates }) {
         </div>
       </CardHeader>
       <CardContent>
+        <EstimateThumbs estimates={estimates} />
         {estimates.length === 0 && sections.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">まだ見積がありません</p>
         ) : sections.length === 0 ? (
