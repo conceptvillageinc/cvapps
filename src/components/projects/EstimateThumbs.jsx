@@ -1,77 +1,124 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { format } from "date-fns";
-import { Eye, EyeOff } from "lucide-react";
-import { clientLines, computeEstimateTotals } from "@/lib/estimateTotals";
+import { addMonths, format } from "date-fns";
+import { clientLines, computeEstimateTotals, lineTaxRate } from "@/lib/estimateTotals";
+import { companyInfoFromSettings } from "@/lib/documents";
+import { useSystemSettings } from "@/lib/useSystemSettings";
+import { formatPostalCode } from "@/lib/postalCode";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
 
 // ============================================================================
-// 案件の画面の「見積」の欄: 見積書の小さなプレビュー（新しい順に 4 件まで。押すと見積を開く）
-//   A4 の見積書を実寸（595×842）で組んで、枠の幅に合わせて縮める
+// 案件の画面の「見積」の欄: 見積書の 1 ページ目のプレビュー（新しい順に 4 件。押すと見積を開く）
+//   PDF（api/_lib/estimatePdf.js・docLayout.js）と同じ位置・大きさで A4（595×842pt）を組み、枠の幅に合わせて縮める
+//   1 ページに収まる見積は 17 行の表＋内訳・備考、収まらない見積は 1 ページ目に 24 行（残りは 2 ページ目以降）
 // ============================================================================
 
 const PAGE_W = 595;
 const PAGE_H = 842;
-const CROP_H = 470; // 縦に長くならないよう、見積書の上半分（宛先・金額・明細の初めの行）だけ見せる
-const MAX_ROWS = 10; // 出す明細の行数（それ以上は「ほか n 行」）
-const SHOW = 4;
-const PREF_KEY = "cvapps:projectEstimateThumbs";
+const M = 40; // 余白
+const ROW_H = 17.4;
+const HEAD_H = 16;
+const TABLE_Y = 354;
+const ROWS_SINGLE = 17; // 1 ページだけのとき（下に内訳・備考）
+const ROWS_FIRST = 24; // 2 ページ以上のときの 1 ページ目
+export const THUMB_COUNT = 4;
 
 const num = (n) => Math.round(Number(n) || 0).toLocaleString("ja-JP");
-const dateOf = (e) => { const d = e.estimate_date || e.created_date; try { return d ? format(new Date(d), "yyyy-MM-dd") : ""; } catch { return ""; } };
+const fmt = (d) => { try { return d ? format(new Date(d), "yyyy-MM-dd") : ""; } catch { return ""; } };
 
-function Sheet({ e }) {
+function Sheet({ e, company }) {
   const lines = clientLines(e.line_items);
+  const hasItems = Array.isArray(e.line_items) && e.line_items.length > 0;
   const t = computeEstimateTotals(e.line_items, { taxInclusive: !!e.tax_inclusive });
-  const total = Array.isArray(e.line_items) && e.line_items.length ? t.total : Number(e.total_amount) || 0;
-  const shown = lines.slice(0, MAX_ROWS);
-  const rest = lines.length - shown.length;
+  const total = hasItems ? t.total : Number(e.total_amount) || 0;
+  const single = lines.length <= ROWS_SINGLE;
+  const cap = single ? ROWS_SINGLE : ROWS_FIRST;
+  const pages = single ? 1 : 1 + Math.ceil((lines.length - ROWS_FIRST) / 30);
+  const rows = [...lines.slice(0, cap), ...Array(Math.max(0, cap - lines.length)).fill(null)];
+  const issued = e.estimate_date || e.created_date;
+  const months = e.validity_period_months ?? 6;
+  const until = issued ? addMonths(new Date(issued), months) : null;
+  const who = e.person_in_charge || "";
+  const cell = "border-l border-neutral-400 first:border-l-0";
   return (
-    <div className="bg-white text-neutral-900" style={{ width: PAGE_W, height: PAGE_H, padding: 36, fontSize: 10, lineHeight: 1.45 }}>
-      <div className="flex justify-between">
-        <p className="mt-6 text-[15px] font-semibold">{e.client_name || "（クライアント未入力）"} {e.client_honorific ?? "御中"}</p>
-        <table className="text-[9px] text-neutral-600"><tbody>
-          <tr><td className="pr-4">見積書番号</td><td className="text-right text-neutral-900">{e.estimate_number}</td></tr>
-          <tr><td className="pr-4">発行日</td><td className="text-right text-neutral-900">{dateOf(e)}</td></tr>
+    <div className="relative bg-white text-neutral-900" style={{ width: PAGE_W, height: PAGE_H, fontSize: 8.5, lineHeight: 1.35 }}>
+      {/* 宛名 */}
+      <div className="absolute" style={{ left: M, top: 58, width: 290 }}>
+        {e.client_postal_code && <p className="text-[7.5px]">{formatPostalCode(e.client_postal_code)}</p>}
+        <p className="text-[13px]">{e.client_name || "（クライアント未入力）"}　{e.client_honorific ?? "御中"}</p>
+      </div>
+      {/* 番号・日付と自社情報（右上） */}
+      <div className="absolute" style={{ left: 357, top: 32, width: PAGE_W - 357 - M }}>
+        <table className="w-full text-[8px]"><tbody>
+          <tr><td>見積書番号</td><td className="text-right">{e.estimate_number}</td></tr>
+          <tr><td>発行日</td><td className="text-right">{fmt(issued)}</td></tr>
+          <tr><td>有効期限</td><td className="text-right">{until ? fmt(until) : ""}</td></tr>
         </tbody></table>
+        <p className="mt-3 text-[8.5px]">{company.name}{who ? `　${who}` : ""}</p>
+        {(company.locations || []).map((loc, i) => (
+          <Fragment key={i}>
+            {loc.label && <p className="text-[7px] text-neutral-700">［{loc.label}］</p>}
+            <p className="text-[7px] text-neutral-700 whitespace-nowrap overflow-hidden">{formatPostalCode(loc.postal || "")}　{loc.address}</p>
+          </Fragment>
+        ))}
+        {(company.tel || company.fax) && <p className="text-[7px] text-neutral-700">{[company.tel ? `tel ${company.tel}` : "", company.fax ? `fax ${company.fax}` : ""].filter(Boolean).join("｜")}</p>}
       </div>
-      <p className="mt-8 text-center text-[20px] font-bold tracking-[0.4em]">御見積書</p>
-      <p className="mt-5"><span className="text-neutral-500">件名</span>　{e.estimate_title || e.print_type || "—"}</p>
-      <div className="mt-3 flex w-[60%] border border-neutral-400 text-center">
-        <div className="flex-1 border-r border-neutral-400"><p className="bg-neutral-900 text-[9px] text-white">小計</p><p className="py-1">{num(t.subtotal)}</p></div>
-        <div className="flex-1 border-r border-neutral-400"><p className="bg-neutral-900 text-[9px] text-white">消費税</p><p className="py-1">{num(t.tax)}</p></div>
-        <div className="flex-1"><p className="bg-neutral-900 text-[9px] text-white">見積金額</p><p className="py-1 text-[13px] font-bold">{num(total)}</p></div>
+      <p className="absolute w-full text-center text-[16px]" style={{ top: 198 }}>御見積書</p>
+      <p className="absolute text-[11px]" style={{ left: M, top: 260, right: M }}><span className="mr-9">件名</span>{e.estimate_title || e.print_type || ""}</p>
+      {/* 小計・消費税・見積金額 */}
+      <div className="absolute flex text-center" style={{ left: M, top: 286, width: 294 }}>
+        {[["小計", `${num(t.subtotal)}円`, 85], ["消費税", `${num(t.tax)}円`, 74], ["見積金額", `${num(total)}円`, 135]].map(([k, v, w], i) => (
+          <div key={k} style={{ width: w }} className={i ? "ml-px" : ""}>
+            <p className="bg-black text-white text-[7.5px]" style={{ height: HEAD_H, lineHeight: `${HEAD_H}px` }}>{k}</p>
+            <p className={`border border-neutral-400 text-right pr-1 ${i === 2 ? "text-[14px] font-bold" : "text-[8.5px]"}`} style={{ height: 26, lineHeight: "26px" }}>{v}</p>
+          </div>
+        ))}
       </div>
-      <table className="mt-5 w-full border border-neutral-400">
-        <thead><tr className="bg-neutral-900 text-[9px] text-white">
-          <th className="px-1.5 py-1 text-left font-normal">摘要</th><th className="w-[12%] font-normal">数量</th><th className="w-[14%] text-right font-normal pr-1.5">単価</th><th className="w-[16%] text-right font-normal pr-1.5">金額</th>
+      {/* 明細（PDF と同じく決まった行数。グレー・白の互い違い） */}
+      <table className="absolute border border-neutral-400 table-fixed" style={{ left: M, top: TABLE_Y, width: PAGE_W - M * 2 }}>
+        <colgroup><col /><col style={{ width: 63 }} /><col style={{ width: 63 }} /><col style={{ width: 88 }} /></colgroup>
+        <thead><tr className="bg-black text-white text-[8px]" style={{ height: HEAD_H }}>
+          <th className="font-normal">摘要</th><th className="font-normal border-l border-white">数量</th><th className="font-normal border-l border-white">単価</th><th className="font-normal border-l border-white">明細金額</th>
         </tr></thead>
         <tbody>
-          {shown.map((li, i) => (
-            <tr key={li.id || i} className={i % 2 === 0 ? "bg-neutral-100" : ""}>
-              {li.row_type === "text" || li.row_type === "subtotal" ? (
-                <td colSpan={4} className={`px-1.5 py-[3px] ${li.row_type === "subtotal" ? "text-right font-semibold" : ""}`}>
+          {rows.map((li, i) => (
+            <tr key={li?.id || `blank${i}`} className={`border-t border-neutral-400 ${i % 2 === 0 ? "bg-neutral-200/70" : ""}`} style={{ height: ROW_H }}>
+              {li && (li.row_type === "text" || li.row_type === "subtotal") ? (
+                <td colSpan={4} className={`px-1.5 truncate ${li.row_type === "subtotal" ? "text-right font-bold" : ""}`}>
                   {li.row_type === "subtotal" ? `${li.name || "小計"}　${num(li.amount)}` : (li.text || " ")}
                 </td>
               ) : (
                 <>
-                  <td className="px-1.5 py-[3px] truncate max-w-0">{li.name}</td>
-                  <td className="text-center whitespace-nowrap">{`${li.quantity ?? ""} ${li.unit || ""}`.trim()}</td>
-                  <td className="pr-1.5 text-right">{num(li.unit_price)}</td>
-                  <td className="pr-1.5 text-right">{num(li.amount)}</td>
+                  <td className={`${cell} px-1.5 truncate`}>{li ? `${li.name || ""}${lineTaxRate(li) === 8 ? "（軽減8%）" : ""}` : ""}</td>
+                  <td className={`${cell} text-center whitespace-nowrap`}>{li ? `${li.quantity ?? ""} ${li.unit || ""}`.trim() : ""}</td>
+                  <td className={`${cell} text-right pr-1.5`}>{li ? num(li.unit_price) : ""}</td>
+                  <td className={`${cell} text-right pr-1.5`}>{li ? num(li.amount) : ""}</td>
                 </>
               )}
             </tr>
           ))}
-          {rest > 0 && <tr><td colSpan={4} className="px-1.5 py-[3px] text-center text-neutral-500">…ほか {rest} 行</td></tr>}
         </tbody>
       </table>
+      {single && (
+        <>
+          {/* 内訳・備考（最後のページだけ） */}
+          <div className="absolute border border-neutral-400 px-1.5 py-1" style={{ left: 334, top: 690, width: PAGE_W - 334 - M }}>
+            {t.breakdown.map((b) => (
+              <div key={b.rate} className="flex justify-between text-[8px]"><span>内訳　{b.rate}%対象(税抜)<span className="ml-4 text-[6.5px]">{b.rate}%消費税</span></span><span className="text-right">{num(b.taxable)}円<br /><span className="text-[6.5px]">{num(b.tax)}円</span></span></div>
+            ))}
+          </div>
+          <div className="absolute border border-neutral-400 px-3 py-1.5 text-[8px] whitespace-pre-line overflow-hidden" style={{ left: M, top: 729, width: PAGE_W - M * 2, height: 63 }}>
+            備考{e.additional_notes ? `\n${e.additional_notes}` : ""}
+          </div>
+        </>
+      )}
+      <p className="absolute w-full text-center text-[7px]" style={{ top: PAGE_H - 30 }}>1 / {pages}</p>
     </div>
   );
 }
 
-/** 枠の幅に合わせて A4 の見積書を縮めて出す */
-function Thumb({ e }) {
+/** 枠の幅に合わせて A4 の 1 ページ目を縮めて出す */
+function Thumb({ e, company }) {
   const box = useRef(null);
   const [scale, setScale] = useState(0.35);
   useEffect(() => {
@@ -83,9 +130,9 @@ function Thumb({ e }) {
   }, []);
   return (
     <Link to={`/estimates/${e.id}`} className="group block min-w-0" data-testid="estimate-thumb" title={`${e.estimate_number} を開く`}>
-      <div ref={box} className="relative w-full overflow-hidden rounded-md border bg-white shadow-sm transition group-hover:shadow-md group-hover:ring-2 group-hover:ring-primary/40" style={{ aspectRatio: `${PAGE_W} / ${CROP_H}` }}>
+      <div ref={box} className="relative w-full overflow-hidden rounded-sm border bg-white shadow-sm transition group-hover:shadow-md group-hover:ring-2 group-hover:ring-primary/40" style={{ aspectRatio: `${PAGE_W} / ${PAGE_H}` }}>
         <div className="pointer-events-none absolute left-0 top-0 origin-top-left" style={{ transform: `scale(${scale})` }}>
-          <Sheet e={e} />
+          <Sheet e={e} company={company} />
         </div>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 min-w-0">
@@ -98,33 +145,18 @@ function Thumb({ e }) {
 }
 
 /**
- * @param {{ estimates: object[] }} p  新しい順
+ * 見積書の 1 ページ目のプレビューを並べる
+ * @param {{ estimates: object[], all?: boolean }} p
  */
-export default function EstimateThumbs({ estimates }) {
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem(PREF_KEY) !== "off"; } catch { return true; } });
-  const [all, setAll] = useState(false);
+export default function EstimateThumbs({ estimates, all = false }) {
+  const { settings } = useSystemSettings();
+  const company = useMemo(() => companyInfoFromSettings(settings), [settings]);
   if (!estimates.length) return null;
-  const toggle = () => { const v = !open; setOpen(v); try { localStorage.setItem(PREF_KEY, v ? "on" : "off"); } catch { /* 保存できなくても表示は切り替える */ } };
   const sorted = [...estimates].sort((a, b) => String(b.created_date || "").localeCompare(String(a.created_date || "")));
-  const shown = all ? sorted : sorted.slice(0, SHOW);
+  const shown = all ? sorted : sorted.slice(0, THUMB_COUNT);
   return (
-    <div className="mb-3 border-b pb-3" data-testid="estimate-thumbs">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-[11px] font-semibold text-muted-foreground">プレビュー{open ? `（新しい順に ${shown.length} 件）` : ""}</span>
-        <button type="button" onClick={toggle} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground" data-testid="estimate-thumbs-toggle">
-          {open ? <><EyeOff className="h-3 w-3" />隠す</> : <><Eye className="h-3 w-3" />表示する</>}
-        </button>
-        {open && estimates.length > SHOW && (
-          <button type="button" onClick={() => setAll((v) => !v)} className="ml-auto text-[11px] text-primary hover:underline" data-testid="estimate-thumbs-all">
-            {all ? `${SHOW} 件に戻す` : `すべて表示（${estimates.length} 件）`}
-          </button>
-        )}
-      </div>
-      {open && (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {shown.map((e) => <Thumb key={e.id} e={e} />)}
-        </div>
-      )}
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4" data-testid="estimate-thumbs">
+      {shown.map((e) => <Thumb key={e.id} e={e} company={company} />)}
     </div>
   );
 }

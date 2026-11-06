@@ -12,10 +12,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuCheckboxItem, DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { FileText, Plus, ChevronDown, MoreHorizontal, Landmark, Layers } from "lucide-react";
+import { FileText, Plus, ChevronDown, MoreHorizontal, Landmark, Layers, Eye } from "lucide-react";
 import { STATUS_MAP } from "@/lib/constants";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
-import EstimateThumbs from "@/components/projects/EstimateThumbs";
+import EstimateThumbs, { THUMB_COUNT } from "@/components/projects/EstimateThumbs";
 import { SECTION_PRESETS, sectionsFromPreset, newSection, sectionsOf, groupBySection, sectionRoleLabels } from "@/lib/estimateSections";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
@@ -129,6 +129,11 @@ export default function EstimateSectionsCard({ project, estimates }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const sections = sectionsOf(project);
+  // 見積書のプレビュー（開いたかどうかはこのブラウザに覚える）
+  const PREVIEW_KEY = "cvapps:projectEstimatePreview";
+  const [preview, setPreview] = useState(() => { try { return localStorage.getItem(PREVIEW_KEY) === "on"; } catch { return false; } });
+  const [previewAll, setPreviewAll] = useState(false);
+  const togglePreview = () => { const v = !preview; setPreview(v); try { localStorage.setItem(PREVIEW_KEY, v ? "on" : "off"); } catch { /* 覚えられなくても切り替える */ } };
   const groups = groupBySection(project, estimates);
 
   const saveProject = async (patch, msg) => {
@@ -162,6 +167,11 @@ export default function EstimateSectionsCard({ project, estimates }) {
             {project.uses_subsidy && <span className="inline-flex items-center gap-0.5 rounded bg-orange-100 px-1.5 text-[10px] font-semibold text-orange-800" data-testid="subsidy-badge"><Landmark className="w-3 h-3" /> 補助金</span>}
           </CardTitle>
           <div className="flex items-center gap-2">
+            {estimates.length > 0 && (
+              <Button size="sm" variant={preview ? "secondary" : "outline"} className="gap-1 text-xs h-8" onClick={togglePreview} aria-pressed={preview} title="見積書の 1 ページ目を、新しい順に 4 件並べて見る" data-testid="estimate-preview-toggle">
+                <Eye className="w-3.5 h-3.5" /> プレビュー{preview ? "を閉じる" : ""}
+              </Button>
+            )}
             <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer" title="案件一覧に「補助金」の印を出し、絞り込めるようにします">
               <input type="checkbox" className="h-3.5 w-3.5 accent-orange-600" checked={!!project.uses_subsidy} onChange={(ev) => saveProject({ uses_subsidy: ev.target.checked })} data-testid="subsidy-toggle" />
               補助金の案件
@@ -199,7 +209,16 @@ export default function EstimateSectionsCard({ project, estimates }) {
         </div>
       </CardHeader>
       <CardContent>
-        <EstimateThumbs estimates={estimates} />
+        {preview && estimates.length > 0 && (
+          <div className="mb-3 border-b pb-3">
+            <EstimateThumbs estimates={estimates} all={previewAll} />
+            {estimates.length > THUMB_COUNT && (
+              <button type="button" onClick={() => setPreviewAll((v) => !v)} className="mt-2 text-[11px] text-primary hover:underline" data-testid="estimate-thumbs-all">
+                {previewAll ? `新しい ${THUMB_COUNT} 件だけにする` : `ほかの ${estimates.length - THUMB_COUNT} 件も見る`}
+              </button>
+            )}
+          </div>
+        )}
         {estimates.length === 0 && sections.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">まだ見積がありません</p>
         ) : sections.length === 0 ? (
