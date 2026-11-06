@@ -6,8 +6,9 @@ import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { FileCheck2, Plus, Copy, ExternalLink, Trash2, Loader2, Search, MessageSquareText } from "lucide-react";
+import { FileCheck2, Plus, Copy, ExternalLink, Trash2, Loader2, Search, MessageSquareText, Pencil } from "lucide-react";
 import NewProofFormDialog, { proofUrl } from "@/components/proofForms/NewProofFormDialog";
+import EditProofFormDialog from "@/components/proofForms/EditProofFormDialog";
 import { RESULT_LABEL } from "@/lib/proofForms";
 import { useInbox, unreadProofNotices, INBOX_KEY } from "@/lib/useInbox";
 
@@ -25,6 +26,7 @@ export default function ProofForms() {
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
   const [newOpen, setNewOpen] = useState(false);
+  const [editing, setEditing] = useState(null); // 編集中のフォーム
   const [q, setQ] = useState("");
   const { data: forms = [], isLoading } = useQuery({ queryKey: ["proofForms"], queryFn: () => db.entities.ProofForm.listAll("-created_at") });
   const { data: responses = [] } = useQuery({ queryKey: ["proofForms", "responses"], queryFn: () => db.entities.ProofFormResponse.listAll("-submitted_at") });
@@ -118,6 +120,7 @@ export default function ProofForms() {
                   </td>
                   <td className="px-3 py-2.5"><Switch checked={!!f.enabled} onCheckedChange={(v) => toggleEnabled(f, v)} aria-label="受付" /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-right">
+                    <Button size="sm" variant="outline" className="h-7 gap-1 text-xs mr-1" onClick={() => setEditing(f)} data-testid="proof-row-edit"><Pencil className="w-3.5 h-3.5" />編集</Button>
                     <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => copy(f)} data-testid="proof-row-copy"><Copy className="w-3.5 h-3.5" />URL</Button>
                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-1" title="フォームを開く" onClick={() => window.open(proofUrl(f.token), "_blank", "noopener")}><ExternalLink className="w-3.5 h-3.5" /></Button>
                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600" title="削除" onClick={() => remove(f)}><Trash2 className="w-3.5 h-3.5" /></Button>
@@ -130,6 +133,7 @@ export default function ProofForms() {
       </div>
 
       <NewProofFormDialog open={newOpen} onOpenChange={setNewOpen} />
+      <EditProofFormDialog form={editing} responseCount={editing ? (byForm.get(editing.id) || []).length : 0} onClose={() => setEditing(null)} />
       <AnswersDialog form={openForm} responses={openForm ? byForm.get(openForm.id) || [] : []} onClose={() => setOpen(null)} />
     </div>
   );

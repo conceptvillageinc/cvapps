@@ -68,14 +68,19 @@ export function validateAnswers(questions, answers) {
   return { ok: Object.keys(errors).length === 0, errors, clean };
 }
 
-/** 回答の結果（最終確認で「校了します」を選んだか） */
+/**
+ * 回答の結果（最終確認で「校了」の選択肢を選んだか）
+ *   最終確認の質問（id: final のラジオボタン。無ければ「校了します」の選択肢があるラジオボタン）の
+ *   1 つ目の選択肢（フォームを編集して文を変えても 1 つ目）か「校了します」の文を選んだら校了、ほかを選んだら修正希望
+ */
 export function resultOf(questions, answers) {
-  const final = (questions || []).find((q) => q.type === "radio" && (q.options || []).includes(APPROVE_OPTION));
+  const list = questions || [];
+  const final = list.find((q) => q.id === "final" && q.type === "radio") || list.find((q) => q.type === "radio" && (q.options || []).includes(APPROVE_OPTION));
   if (!final) return null;
   const v = answers?.[final.id];
-  if (v === APPROVE_OPTION) return "approved";
-  if (v) return "revise";
-  return null;
+  if (!v) return null;
+  if (v === APPROVE_OPTION || (final.id === "final" && v === (final.options || [])[0])) return "approved";
+  return "revise";
 }
 
 export const RESULT_LABEL = { approved: "校了", revise: "修正希望" };

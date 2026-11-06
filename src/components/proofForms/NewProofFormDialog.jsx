@@ -5,7 +5,8 @@ import { db } from "@/api/db";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Search, Check, Loader2, FolderKanban, FileText, Copy, ExternalLink, ChevronLeft } from "lucide-react";
-import { PROOF_TITLE, PROOF_DESCRIPTION, PROOF_QUESTIONS, proofConfirmMessage, QUESTION_TYPE_LABEL, newProofToken } from "@/lib/proofForms";
+import { PROOF_TITLE, PROOF_DESCRIPTION, PROOF_QUESTIONS, proofConfirmMessage, newProofToken } from "@/lib/proofForms";
+import ProofFormFields, { cleanProofFields } from "@/components/proofForms/ProofFormFields";
 import { submissionOf, SUBMISSION_STATUS } from "@/lib/submission";
 
 const STEPS = ["案件を選ぶ", "見積書を選ぶ", "項目を選ぶ", "内容を確かめる", "URL を共有"];
@@ -28,9 +29,8 @@ export default function NewProofFormDialog({ open, onOpenChange }) {
   const [project, setProject] = useState(null);
   const [estimate, setEstimate] = useState(null);
   const [picked, setPicked] = useState(new Set());
-  const [title, setTitle] = useState(PROOF_TITLE);
-  const [description, setDescription] = useState(PROOF_DESCRIPTION);
-  const [confirm, setConfirm] = useState(proofConfirmMessage());
+  // 「内容を確かめる」で直す中身（タイトル・説明・校了の対象・質問・送信後のメッセージ）
+  const [fields, setFields] = useState(null);
   const [created, setCreated] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,7 +40,7 @@ export default function NewProofFormDialog({ open, onOpenChange }) {
   useEffect(() => {
     if (!open) return;
     setStep(0); setQ(""); setEstimate(null); setPicked(new Set()); setCreated(null);
-    setTitle(PROOF_TITLE); setDescription(PROOF_DESCRIPTION); setConfirm(proofConfirmMessage());
+    setFields(null);
     setProject(null);
   }, [open]);
 
@@ -55,15 +55,27 @@ export default function NewProofFormDialog({ open, onOpenChange }) {
   const pickEstimate = (e) => { setEstimate(e); setPicked(new Set(proofItemsOf(e).map((li) => li._k))); setStep(2); };
   const toggle = (id) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
+  // 選んだ項目とひな形の文で、直す欄の中身を作る（戻って選び直したら作り直す）
+  const toFields = () => {
+    setFields((f) => ({
+      title: f?.title ?? PROOF_TITLE,
+      description: f?.description ?? PROOF_DESCRIPTION,
+      confirm_message: f?.confirm_message ?? proofConfirmMessage(),
+      questions: f?.questions ?? PROOF_QUESTIONS.map((q) => ({ ...q, options: q.options ? [...q.options] : undefined })),
+      items: items.filter((li) => picked.has(li._k)).map((li) => ({ _k: li._k, id: li.id || null, name: li.name, quantity: li.quantity ?? null, unit: li.unit || "" })),
+    }));
+    setStep(3);
+  };
   const create = async () => {
+    const { error, data } = cleanProofFields(fields);
+    if (error) { toast.error(error); return; }
     setBusy(true);
     try {
       const row = await db.entities.ProofForm.create({
         token: newProofToken(),
         project_id: project.id, estimate_id: estimate.id,
         client_name: estimate.client_name || project.client_name || "", project_name: project.name || "", estimate_number: estimate.estimate_number || "",
-        items: items.filter((li) => picked.has(li._k)).map((li) => ({ id: li.id || null, name: li.name, quantity: li.quantity ?? null, unit: li.unit || "" })),
-        title: title.trim() || PROOF_TITLE, description, questions: PROOF_QUESTIONS, confirm_message: confirm, enabled: true,
+        ...data, enabled: true,
       });
       qc.invalidateQueries({ queryKey: ["proofForms"] });
       setCreated(row); setStep(4);
@@ -152,30 +164,10 @@ export default function NewProofFormDialog({ open, onOpenChange }) {
             </div>
           )}
 
-          {step === 3 && (
-            <div className="space-y-3">
-              <label className="block space-y-1"><span className="block text-xs text-slate-500">フォームタイトル</span>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} className="h-9 w-full rounded-lg border px-3 text-sm font-semibold" data-testid="proof-title" /></label>
-              <label className="block space-y-1"><span className="block text-xs text-slate-500">フォームの説明</span>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-lg border px-3 py-2 text-sm leading-relaxed" /></label>
-              <div className="space-y-1">
-                <p className="text-xs text-slate-500">校了の対象（{picked.size} 項目）</p>
-                <ul className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-0.5">{items.filter((li) => picked.has(li._k)).map((li) => <li key={li._k}>・{li.name}</li>)}</ul>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-slate-500">質問（ひな形）</p>
-                <ol className="rounded-lg border divide-y text-xs">
-                  {PROOF_QUESTIONS.map((qq, i) => (
-                    <li key={qq.id} className="px-3 py-1.5">
-                      <span className="text-slate-400 mr-1">質問{i + 1}</span><span className="font-medium text-slate-800">{qq.label}</span>{qq.required && <span className="ml-1 text-rose-600">（必須）</span>}
-                      <span className="ml-2 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{QUESTION_TYPE_LABEL[qq.type]}</span>
-                      {qq.options && <span className="block pl-10 text-[11px] text-slate-500">{qq.options.join("／")}</span>}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-              <label className="block space-y-1"><span className="block text-xs text-slate-500">送信後の確認メッセージ</span>
-                <textarea value={confirm} onChange={(e) => setConfirm(e.target.value)} rows={3} className="w-full rounded-lg border px-3 py-2 text-sm leading-relaxed" data-testid="proof-confirm" /></label>
+          {step === 3 && fields && (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500">クライアントさんに出る内容です。文・校了の対象・質問は、ここで直せます（作ったあとも「編集」で直せます）</p>
+              <ProofFormFields value={fields} onChange={setFields} />
             </div>
           )}
 
@@ -196,8 +188,8 @@ export default function NewProofFormDialog({ open, onOpenChange }) {
           {step > 0 && step < 4 ? <Button variant="ghost" className="gap-1" onClick={() => setStep(step - 1)}><ChevronLeft className="w-4 h-4" />戻る</Button> : <span />}
           <div className="flex gap-2">
             {step < 4 && <Button variant="outline" onClick={() => onOpenChange(false)}>やめる</Button>}
-            {step === 2 && <Button onClick={() => setStep(3)} disabled={picked.size === 0} data-testid="proof-next">次へ</Button>}
-            {step === 3 && <Button onClick={create} disabled={busy || !title.trim()} data-testid="proof-create">{busy && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}フォームを作成</Button>}
+            {step === 2 && <Button onClick={toFields} disabled={picked.size === 0} data-testid="proof-next">次へ</Button>}
+            {step === 3 && <Button onClick={create} disabled={busy || !String(fields?.title || "").trim()} data-testid="proof-create">{busy && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}フォームを作成</Button>}
             {step === 4 && <Button onClick={() => onOpenChange(false)}>閉じる</Button>}
           </div>
         </DialogFooter>
