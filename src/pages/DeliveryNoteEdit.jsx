@@ -20,6 +20,7 @@ import {
 import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, CheckCircle2, FileText, Receipt, ReceiptText, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
+import { useRowDrag, RowHandle } from "@/components/documents/RowDrag";
 import DocumentPreview, { useDocPreviewPrefs, DocPreviewSwitches } from "@/components/documents/DocumentPreview";
 import ClientCombobox from "@/components/clients/ClientCombobox";
 import { Mail } from "lucide-react";
@@ -171,6 +172,8 @@ export default function DeliveryNoteEdit() {
   }, [form?.client_name, clients.length]);
 
   const totals = useMemo(() => computeDocTotals(form?.line_items || []), [form?.line_items]);
+  // 明細の行をつかんで上下に動かす
+  const drag = useRowDrag(form?.line_items || [], (items) => setForm((f) => ({ ...f, line_items: items })));
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setItem = (itemId, patch) => setForm((f) => ({
@@ -213,7 +216,7 @@ export default function DeliveryNoteEdit() {
         // 保存したら発行済（下書きのままにしたいときは、状態で「下書き」を選んでから保存）
         status: form.status === "draft" && !statusTouched.current ? "issued" : form.status,
         client_name: (form.client_name || "").trim(),
-        line_items: form.line_items.filter((li) => li.name || li.amount).map((li) => ({ ...li, unit_price: roundUnitPrice(li.unit_price) })),
+        line_items: form.line_items.filter((li) => isTextRow(li) || li.name || li.amount).map((li) => ({ ...li, unit_price: roundUnitPrice(li.unit_price) })),
         ...totals,
         created_by: form.created_by || user?.id || null,
       };
@@ -470,6 +473,7 @@ export default function DeliveryNoteEdit() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-800 text-white text-xs">
+                  <th className="w-6"></th>
                   <th className="text-left px-3 py-2 font-medium">摘要</th>
                   <th className="text-right px-2 py-2 font-medium w-20">数量</th>
                   <th className="text-left px-2 py-2 font-medium w-16">単位</th>
@@ -481,14 +485,15 @@ export default function DeliveryNoteEdit() {
               </thead>
               <tbody>
                 {form.line_items.length === 0 && (
-                  <tr><td colSpan={7} className="text-center text-xs text-muted-foreground py-8">明細がありません。「行を追加」または見積から取り込んでください</td></tr>
+                  <tr><td colSpan={8} className="text-center text-xs text-muted-foreground py-8">明細がありません。「行を追加」または見積から取り込んでください</td></tr>
                 )}
-                {form.line_items.map((li) => isTextRow(li) ? (
-                  <tr key={li.id} className="border-b bg-slate-50/60" data-testid="doc-text-row">
+                {form.line_items.map((li, idx) => isTextRow(li) ? (
+                  <tr key={li.id} {...drag.rowProps(li)} className={`group border-b bg-slate-50/60 ${drag.rowProps(li).className}`} data-testid="doc-text-row">
+                    <td className="pl-2 py-1 align-middle w-6"><RowHandle {...drag.handleProps(li, idx)} disabled={locked} /></td>
                     <td className="px-2 py-1" colSpan={6}>
                       <div className="flex items-center gap-2">
                         <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">テキスト</span>
-                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし）" className="h-8 text-xs" disabled={locked} />
+                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし。空のままなら 1 行分の余白）" className="h-8 text-xs" disabled={locked} />
                       </div>
                     </td>
                     <td className="px-1 py-1">
@@ -496,7 +501,8 @@ export default function DeliveryNoteEdit() {
                     </td>
                   </tr>
                 ) : (
-                  <tr key={li.id} className="border-b">
+                  <tr key={li.id} {...drag.rowProps(li)} className={`group border-b ${drag.rowProps(li).className}`} data-testid="doc-item-row">
+                    <td className="pl-2 py-1 align-middle w-6"><RowHandle {...drag.handleProps(li, idx)} disabled={locked} /></td>
                     <td className="px-2 py-1">
                       <Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" disabled={locked} />
                       <div className="mt-0.5"><SalesCategorySelect item={li} onChange={(p) => setItem(li.id, p)} disabled={locked} /></div>

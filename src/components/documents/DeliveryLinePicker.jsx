@@ -33,12 +33,21 @@ export default function DeliveryLinePicker({ estimate, siblings, noteId, items, 
   const elsewhere = useMemo(() => deliveredElsewhereMap(siblings, noteId), [siblings, noteId]);
   const inNote = new Map(items.filter((li) => li.source_line_id).map((li) => [li.source_line_id, li]));
 
-  // 選び直した結果: 見積の順で選んだ行 → 見積に無い行
+  // 選び直した結果: いまの並び（上下に動かした順）はそのまま、外した行を抜き、
+  //   新しく選んだ行は、見積でその行より前にある行のすぐ後ろに入れる（無ければ先頭）
   const rebuild = (picked) => {
     const ownIds = new Set(estItems.map((li) => li.source_line_id));
-    const rows = estItems.filter((li) => picked.has(li.source_line_id)).map((li) => inNote.get(li.source_line_id) || li);
-    const others = items.filter((li) => !li.source_line_id || !ownIds.has(li.source_line_id));
-    onChange([...rows, ...others]);
+    const next = items.filter((li) => !li.source_line_id || !ownIds.has(li.source_line_id) || picked.has(li.source_line_id));
+    estItems.forEach((src, i) => {
+      if (!picked.has(src.source_line_id) || next.some((li) => li.source_line_id === src.source_line_id)) return;
+      let at = 0;
+      for (let j = i - 1; j >= 0; j--) {
+        const k = next.findIndex((li) => li.source_line_id === estItems[j].source_line_id);
+        if (k >= 0) { at = k + 1; break; }
+      }
+      next.splice(at, 0, src);
+    });
+    onChange(next);
   };
   const toggle = (sid) => {
     const picked = new Set(inNote.keys());
@@ -78,7 +87,7 @@ export default function DeliveryLinePicker({ estimate, siblings, noteId, items, 
               <label key={src.source_line_id} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs cursor-pointer hover:bg-muted/40 ${on ? "" : "text-muted-foreground"}`} data-testid="delivery-line-option">
                 <Checkbox checked={on} disabled={disabled} onCheckedChange={() => toggle(src.source_line_id)} aria-label={`${src.name} を納品する`} />
                 {src.row_type === "text" && <span className="shrink-0 rounded bg-slate-200 px-1.5 text-[10px] text-slate-600">テキスト</span>}
-                <span className="flex-1 min-w-0 truncate">{src.name}</span>
+                <span className="flex-1 min-w-0 truncate">{src.row_type === "text" && !String(src.name || "").trim() ? <span className="text-muted-foreground">（空行・余白）</span> : src.name}</span>
                 {done && <span className="shrink-0 rounded bg-sky-50 border border-sky-200 px-1.5 text-[10px] text-sky-800">{done} で納品済</span>}
                 <span className="shrink-0 tabular-nums w-24 text-right">{src.row_type === "text" ? "" : `${Number(src.quantity).toLocaleString()}${src.unit}`}</span>
                 <span className="shrink-0 tabular-nums w-24 text-right">{src.row_type === "text" ? "" : yen(src.amount)}</span>

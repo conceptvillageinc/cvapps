@@ -21,6 +21,7 @@ import {
 import { ArrowLeft, Save, FileDown, FileOutput, Plus, Trash2, Loader2, Truck, Send, CircleCheck, Undo2, ReceiptText, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import DocumentEmailDialog from "@/components/documents/DocumentEmailDialog";
+import { useRowDrag, RowHandle } from "@/components/documents/RowDrag";
 import DocumentPreview, { useDocPreviewPrefs, DocPreviewSwitches } from "@/components/documents/DocumentPreview";
 import ClientCombobox from "@/components/clients/ClientCombobox";
 import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
@@ -205,6 +206,8 @@ export default function InvoiceEdit() {
   }, [form?.client_name, clients.length]);
 
   const totals = useMemo(() => computeDocTotals(form?.line_items || []), [form?.line_items]);
+  // 明細の行をつかんで上下に動かす
+  const drag = useRowDrag(form?.line_items || [], (items) => setForm((f) => ({ ...f, line_items: items })));
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setItem = (itemId, patch) => setForm((f) => ({
     ...f,
@@ -250,7 +253,7 @@ export default function InvoiceEdit() {
       const payload = {
         ...form,
         client_name: (form.client_name || "").trim(),
-        line_items: form.line_items.filter((li) => li.name || li.amount).map((li) => ({ ...li, unit_price: roundUnitPrice(li.unit_price) })),
+        line_items: form.line_items.filter((li) => isTextRow(li) || li.name || li.amount).map((li) => ({ ...li, unit_price: roundUnitPrice(li.unit_price) })),
         ...totals,
         created_by: form.created_by || user?.id || null,
       };
@@ -570,6 +573,7 @@ export default function InvoiceEdit() {
               <thead>
                 <tr className="bg-slate-800 text-white text-xs">
                   <th className="text-left px-2 py-2 font-medium w-32">取引日</th>
+                  <th className="w-6"></th>
                   <th className="text-left px-3 py-2 font-medium">摘要</th>
                   <th className="text-right px-2 py-2 font-medium w-20">数量</th>
                   <th className="text-left px-2 py-2 font-medium w-16">単位</th>
@@ -581,21 +585,23 @@ export default function InvoiceEdit() {
               </thead>
               <tbody>
                 {form.line_items.length === 0 && (
-                  <tr><td colSpan={8} className="text-center text-xs text-muted-foreground py-8">明細がありません。納品書をチェックするか「行を追加」してください</td></tr>
+                  <tr><td colSpan={9} className="text-center text-xs text-muted-foreground py-8">明細がありません。納品書をチェックするか「行を追加」してください</td></tr>
                 )}
-                {form.line_items.map((li) => isTextRow(li) ? (
-                  <tr key={li.id} className="border-b bg-slate-50/60" data-testid="doc-text-row">
+                {form.line_items.map((li, idx) => isTextRow(li) ? (
+                  <tr key={li.id} {...drag.rowProps(li)} className={`group border-b bg-slate-50/60 ${drag.rowProps(li).className}`} data-testid="doc-text-row">
+                    <td className="pl-2 py-1 align-middle w-6"><RowHandle {...drag.handleProps(li, idx)} disabled={locked} /></td>
                     <td className="px-2 py-1" colSpan={7}>
                       <div className="flex items-center gap-2">
                         <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">テキスト</span>
-                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし）" className="h-8 text-xs" disabled={locked} />
+                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし。空のままなら 1 行分の余白）" className="h-8 text-xs" disabled={locked} />
                         {li.delivery_number && <span className="shrink-0 text-[10px] text-muted-foreground">納品書 {li.delivery_number}</span>}
                       </div>
                     </td>
                     <td className="px-1 py-1"><button onClick={() => removeItem(li.id)} className="text-muted-foreground hover:text-destructive" disabled={locked}><Trash2 className="w-3.5 h-3.5" /></button></td>
                   </tr>
                 ) : (
-                  <tr key={li.id} className="border-b">
+                  <tr key={li.id} {...drag.rowProps(li)} className={`group border-b ${drag.rowProps(li).className}`} data-testid="doc-item-row">
+                    <td className="pl-2 py-1 align-middle w-6"><RowHandle {...drag.handleProps(li, idx)} disabled={locked} /></td>
                     <td className="px-2 py-1"><Input type="date" value={li.transaction_date || ""} onChange={(e) => setItem(li.id, { transaction_date: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
                     <td className="px-2 py-1">
                       <Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" disabled={locked} />

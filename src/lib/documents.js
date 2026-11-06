@@ -29,7 +29,7 @@ export function newDocItem(defaults = {}) {
   };
 }
 
-/** テキスト行（金額の無い見出し・注記の行。文字は name に持つ） */
+/** テキスト行（金額の無い見出し・注記の行。文字は name に持つ。空のままなら 1 行分の余白） */
 export const isTextRow = (li) => li?.row_type === "text";
 
 /** 帳票のテキスト行 */
@@ -45,7 +45,8 @@ export function docItemsFromEstimate(estimate, { withText = false } = {}) {
   // 税込見積の明細は税抜に直して写す（納品書・請求書は税抜で持つ）
   const inclusive = !!estimate?.tax_inclusive;
   return clientLines(estimate?.line_items) // 提出しない（社内用）の明細は写さない
-    .filter((li) => li.row_type !== "subtotal" && (li.row_type !== "text" || (withText && String(li.text || "").trim())))
+    // 空のテキスト行も写す（余白として使っている行）
+    .filter((li) => li.row_type !== "subtotal" && (li.row_type !== "text" || withText))
     .map((li) => {
       if (li.row_type === "text") return { text: true, li };
       const rate = lineTaxRate(li);

@@ -65,7 +65,7 @@ const Head = ({ children, className = "" }) => <th className={`bg-black text-whi
  */
 export default function DocumentPreview({ type, doc, totals, company }) {
   const isInvoice = type === "invoice";
-  const items = (doc.line_items || []).filter((li) => li && (li.name || Number(li.amount)));
+  const items = (doc.line_items || []).filter((li) => li && (li.row_type === "text" || li.name || Number(li.amount)));
   const breakdown = totals.tax_breakdown?.length ? totals.tax_breakdown : [{ rate: 10, taxable: totals.subtotal, tax: totals.tax }];
   const hasReduced = items.some((li) => Number(li.tax_rate) === 8);
   const meta = isInvoice
@@ -144,7 +144,7 @@ export default function DocumentPreview({ type, doc, totals, company }) {
             )}
             {items.map((li, i) => li.row_type === "text" ? (
               <tr key={li.id || i} className={i % 2 ? "bg-neutral-100" : ""}>
-                <td colSpan={cols} className="px-1.5 py-1 break-words whitespace-pre-line font-semibold">{li.name}</td>
+                <td colSpan={cols} className="px-1.5 py-1 break-words whitespace-pre-line font-semibold">{li.name || "\u00a0"}</td>
               </tr>
             ) : (
               <tr key={li.id || i} className={i % 2 ? "bg-neutral-100" : ""}>
