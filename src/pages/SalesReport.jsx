@@ -576,7 +576,7 @@ export default function SalesReport() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">着地見込の内訳（案件）</CardTitle>
-          <CardDescription className="text-xs">進行中で受注確度 A / A（定期売上）/ 要注意（A）の案件。完了予定日の月に計上し、請求済みの金額は除きます</CardDescription>
+          <CardDescription className="text-xs">受注確度 A / A（定期売上）/ 要注意（A）で、フェーズが着手中の案件。完了予定日の月に計上し、請求済みの金額は除きます</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {rows.filter((r) => r.forecast.projects.length > 0).length === 0 ? (

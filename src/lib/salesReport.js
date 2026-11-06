@@ -136,7 +136,8 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
   };
   // 定期売上の案件は、年度の月ごとに 1 件ずつに広げる（月額 − その月の分の請求済み額）
   for (const p of forecastProjects(projects, invoices, { fromYm: from.slice(0, 7), toYm: to.slice(0, 7) })) {
-    if (p.status !== "open") continue;
+    // 受注確度が A・A（定期売上）・要注意（A）で、かつフェーズが「着手中」の案件だけ（状態＝進行中かどうかは見ない。速報デイリーと同じ）
+    if (String(p.phase || "") !== "着手中") continue;
     const prob = p.deal_probability || "";
     const isA = prob === "A" || prob === "A（定期売上）";
     const isA2 = /要注意/.test(prob);
