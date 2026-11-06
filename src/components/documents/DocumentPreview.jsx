@@ -142,12 +142,13 @@ export default function DocumentPreview({ type, doc, totals, company }) {
             {items.length === 0 && (
               <tr><td colSpan={cols} className="text-center text-neutral-500 py-6">明細を入れると、ここにそのまま反映されます</td></tr>
             )}
+            {/* 行の背景は PDF と同じく、1 行目からグレー・白の互い違い */}
             {items.map((li, i) => li.row_type === "text" ? (
-              <tr key={li.id || i} className={i % 2 ? "bg-neutral-100" : ""}>
+              <tr key={li.id || i} className={i % 2 === 0 ? "bg-neutral-100" : ""}>
                 <td colSpan={cols} className="px-1.5 py-1 break-words whitespace-pre-line">{li.name || "\u00a0"}</td>
               </tr>
             ) : (
-              <tr key={li.id || i} className={i % 2 ? "bg-neutral-100" : ""}>
+              <tr key={li.id || i} className={i % 2 === 0 ? "bg-neutral-100" : ""}>
                 {isInvoice && <td className="px-1.5 py-1 text-center tabular-nums">{dateOf(li.transaction_date)}</td>}
                 <td className={`px-1.5 py-1 break-words ${isInvoice ? SEP : ""}`}>{li.name}{Number(li.tax_rate) === 8 ? "（軽減8%）" : ""}</td>
                 <td className={`px-1.5 py-1 text-center tabular-nums whitespace-nowrap ${SEP}`}>{`${qty(li.quantity)} ${li.unit || ""}`.trim()}</td>

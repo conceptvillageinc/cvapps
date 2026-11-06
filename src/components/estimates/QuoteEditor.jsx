@@ -475,7 +475,8 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                   </td>
                 </tr>
               )}
-              {lineItems.filter(li => showInternal || !isInternalLine(li)).map(li => isInternalLine(li) ? (
+              {/* 行の背景は PDF と同じく、グレーと白の互い違い（1 行目がグレー。提出しない行は数えない） */}
+              {(() => { let n = 0; return lineItems.filter(li => showInternal || !isInternalLine(li)).map(li => ({ li, stripe: isInternalLine(li) ? "" : (n++ % 2 === 0 ? "bg-neutral-100" : "bg-white") })); })().map(({ li, stripe }) => isInternalLine(li) ? (
                   // 提出しない明細: 社内確認用のときだけ薄く出す（提出用・印刷・PDF には出ない）
                   <tr key={li.id} className="border-b border-dashed text-muted-foreground/70 bg-amber-50/40" data-testid="preview-internal-line">
                     <td className="px-3 py-1.5 align-top text-xs" colSpan={li.row_type === "item" || !li.row_type ? 1 : 5}>
@@ -491,16 +492,16 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                   </tr>
                 ) : (
                 li.row_type === "text" ? (
-                  <tr key={li.id} className="bg-muted/30">
-                    <td colSpan={5} className="px-3 py-1.5 text-xs">{li.text}</td>
+                  <tr key={li.id} className={stripe} data-testid="preview-row">
+                    <td colSpan={5} className="px-3 py-1.5 text-xs">{li.text || "\u00a0"}</td>
                   </tr>
                 ) : li.row_type === "subtotal" ? (
-                  <tr key={li.id} className="bg-slate-50 border-t border-slate-400">
+                  <tr key={li.id} className={`${stripe} border-t border-slate-400`} data-testid="preview-row">
                     <td colSpan={4} className="px-3 py-1.5 text-right text-xs font-semibold">{li.name || "小計"}</td>
                     <td className="px-3 py-1.5 text-right font-semibold">{yen(li.amount)}</td>
                   </tr>
                 ) : (
-                  <tr key={li.id} className="border-b">
+                  <tr key={li.id} className={`border-b ${stripe}`} data-testid="preview-row">
                     <td className="px-3 py-2 align-top">{li.name}{lineTaxRate(li) === 8 && <span className="text-[10px] text-muted-foreground ml-1">（軽減8%）</span>}</td>
                     <td className="px-3 py-2 text-right align-top">{li.quantity?.toLocaleString?.() ?? li.quantity}</td>
                     <td className="px-3 py-2 text-right align-top">{li.unit}</td>
