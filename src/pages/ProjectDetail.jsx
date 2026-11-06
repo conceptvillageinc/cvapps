@@ -30,6 +30,7 @@ import RecurringFirstNote from "@/components/projects/RecurringFirstNote";
 import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
 import DuplicateProjectDialog from "@/components/projects/DuplicateProjectDialog";
 import EstimateSectionsCard from "@/components/projects/EstimateSectionsCard";
+import { DocThumbsSection, usePreviewToggle, PreviewToggleButton } from "@/components/projects/DocThumbs";
 import { computeActuals, actualsPatch } from "@/lib/projectActuals";
 import { recurringDrift, recurringPayloadFromEstimate, templateAddsMonth } from "@/lib/recurringSetup";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
@@ -61,6 +62,9 @@ export default function ProjectDetail() {
   // 定期売上の案件は、納品書・請求書の一覧を最初は折りたたむ（「月ごとの納品・請求」と同じものが並ぶため）
   const [notesOpen, setNotesOpen] = useState(false);
   const [invoicesOpen, setInvoicesOpen] = useState(false);
+  // 納品書・請求書の欄の「プレビュー」（1 ページ目を 2 列で並べる。開いたかどうかはこのブラウザに覚える）
+  const [notesPreview, toggleNotesPreview] = usePreviewToggle("delivery");
+  const [invoicesPreview, toggleInvoicesPreview] = usePreviewToggle("invoice");
   const [deleteDocs, setDeleteDocs] = useState(false); // 紐づく見積・納品書・請求書も一緒に消す
   const [deleteRecurring, setDeleteRecurring] = useState(true); // 定期売上の案件なら、定期売上一覧（ひな形）からも消す
 
@@ -563,12 +567,16 @@ export default function ProjectDetail() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm flex items-center gap-2"><Truck className="w-4 h-4" /> 納品書（{deliveryNotes.length}件）{docsFolded && <FoldToggle open={notesOpen} onClick={() => setNotesOpen((v) => !v)} />}</CardTitle>
-            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/delivery-notes/new?project=${project.id}`)}>
-              <Plus className="w-3.5 h-3.5" /> 納品書を作成
-            </Button>
+            <div className="flex items-center gap-2">
+              {deliveryNotes.length > 0 && (!docsFolded || notesOpen) && <PreviewToggleButton open={notesPreview} onClick={toggleNotesPreview} noun="納品書" testId="delivery-preview-toggle" />}
+              <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/delivery-notes/new?project=${project.id}`)}>
+                <Plus className="w-3.5 h-3.5" /> 納品書を作成
+              </Button>
+            </div>
           </div>
         </CardHeader>
         {(!docsFolded || notesOpen) && <CardContent>
+          {notesPreview && <DocThumbsSection kind="delivery" docs={deliveryNotes} />}
           {deliveryNotes.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">まだ納品書がありません。見積詳細の「納品書を作成」からも作れます</p>
           ) : (
@@ -597,12 +605,16 @@ export default function ProjectDetail() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm flex items-center gap-2"><Receipt className="w-4 h-4" /> 請求書（{invoices.length}件）{docsFolded && <FoldToggle open={invoicesOpen} onClick={() => setInvoicesOpen((v) => !v)} />}</CardTitle>
-            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/invoices/new?project=${project.id}`)}>
-              <Plus className="w-3.5 h-3.5" /> 請求書を作成
-            </Button>
+            <div className="flex items-center gap-2">
+              {invoices.length > 0 && (!docsFolded || invoicesOpen) && <PreviewToggleButton open={invoicesPreview} onClick={toggleInvoicesPreview} noun="請求書" testId="invoice-preview-toggle" />}
+              <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={() => navigate(`/invoices/new?project=${project.id}`)}>
+                <Plus className="w-3.5 h-3.5" /> 請求書を作成
+              </Button>
+            </div>
           </div>
         </CardHeader>
         {(!docsFolded || invoicesOpen) && <CardContent>
+          {invoicesPreview && <DocThumbsSection kind="invoice" docs={invoices} />}
           {invoices.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">まだ請求書がありません。納品書の「請求書を作成」からも作れます</p>
           ) : (
