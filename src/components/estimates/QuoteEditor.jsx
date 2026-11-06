@@ -492,7 +492,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
                 ) : (
                 li.row_type === "text" ? (
                   <tr key={li.id} className="bg-muted/30">
-                    <td colSpan={5} className="px-3 py-1.5 font-medium text-xs">{li.text}</td>
+                    <td colSpan={5} className="px-3 py-1.5 text-xs">{li.text}</td>
                   </tr>
                 ) : li.row_type === "subtotal" ? (
                   <tr key={li.id} className="bg-slate-50 border-t border-slate-400">

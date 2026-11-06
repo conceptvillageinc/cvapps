@@ -209,6 +209,8 @@ export default function DeliveryNoteEdit() {
 
   // 状態を画面で「下書き」に選び直したか（選び直していなければ、保存で「発行済」にする）
   const statusTouched = useRef(false);
+  // 「作成」で作った納品書の id。作った直後（画面を移る前・入稿記録の確認中）にもう一度押されても、2 件目を作らず上書きする
+  const createdId = useRef(null);
   const save = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -220,9 +222,12 @@ export default function DeliveryNoteEdit() {
         ...totals,
         created_by: form.created_by || user?.id || null,
       };
+      if (isNew && createdId.current) return db.entities.DeliveryNote.update(createdId.current, payload);
       if (isNew) {
         payload.delivery_number = await generateDocumentNumber("delivery", form.delivery_date);
-        return db.entities.DeliveryNote.create(payload);
+        const row = await db.entities.DeliveryNote.create(payload);
+        createdId.current = row.id;
+        return row;
       }
       return db.entities.DeliveryNote.update(id, payload);
     },
