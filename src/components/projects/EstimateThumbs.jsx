@@ -164,7 +164,7 @@ function Sheet({ e, company, page = 0 }) {
 }
 
 /** 枠の幅に合わせて A4 の 1 ページ目を縮めて出す */
-function Thumb({ e, company, onOpen }) {
+function Thumb({ e, company, onOpen, index }) {
   const box = useRef(null);
   const [scale, setScale] = useState(0.35);
   useEffect(() => {
@@ -175,7 +175,7 @@ function Thumb({ e, company, onOpen }) {
     return () => ro.disconnect();
   }, []);
   return (
-    <button type="button" onClick={onOpen} className="group block w-full min-w-0 text-left" data-testid="estimate-thumb" title={`${e.estimate_number} を大きく見る`}>
+    <button type="button" onClick={onOpen} data-thumb-index={index} className="group block w-full min-w-0 text-left" data-testid="estimate-thumb" title={`${e.estimate_number} を大きく見る`}>
       <div ref={box} className="relative w-full overflow-hidden rounded-sm border bg-white shadow-sm transition group-hover:shadow-md group-hover:ring-2 group-hover:ring-primary/40" style={{ aspectRatio: `${PAGE_W} / ${PAGE_H}` }}>
         <div className="pointer-events-none absolute left-0 top-0 origin-top-left" style={{ transform: `scale(${scale})` }}>
           <Sheet e={e} company={company} />
@@ -192,10 +192,23 @@ function Thumb({ e, company, onOpen }) {
 
 /** ポップアップ: 全ページを縦に並べてスクロールで見る。左右（ボタン・← →）で隣の見積へ */
 function PreviewDialog({ list, index, onIndex, company }) {
-  const e = index != null ? list[index] : null;
+  // 閉じる間（アニメーション中）も中身を消さないよう、最後に見ていた見積を残す
+  const current = index != null ? list[index] : null;
+  const lastShown = useRef(null);
+  const lastIndex = useRef(0);
+  if (current) { lastShown.current = current; lastIndex.current = index; }
+  const idx = index ?? lastIndex.current;
+  const e = current || lastShown.current;
   const pages = useMemo(() => (e ? paginate(clientLines(e.line_items)).length : 0), [e]);
   const scroller = useRef(null);
-  const [scale, setScale] = useState(1.2);
+  // ページの大きさは画面の幅だけで決める（開いた直後と切り替えたあとで同じ大きさにする。最大で実寸の 1.4 倍）
+  const calcScale = () => Math.min(1.4, (Math.min(896, window.innerWidth - 32) - 32 - 16) / PAGE_W);
+  const [scale, setScale] = useState(calcScale);
+  useEffect(() => {
+    const onResize = () => setScale(calcScale());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const go = useCallback((d) => { if (index == null) return; const n = index + d; if (n >= 0 && n < list.length) onIndex(n); }, [index, list.length, onIndex]);
   useEffect(() => {
     if (index == null) return undefined;
@@ -209,18 +222,23 @@ function PreviewDialog({ list, index, onIndex, company }) {
   }, [index, go]);
   // 見積が替わったら先頭（1 ページ目）から
   useEffect(() => { if (scroller.current) scroller.current.scrollTop = 0; }, [index]);
-  // ページの幅は枠に合わせる（広すぎる画面では実寸の 1.4 倍まで）
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el || typeof ResizeObserver === "undefined") return undefined;
-    const ro = new ResizeObserver(([entry]) => setScale(Math.min(1.4, (entry.contentRect.width - 32) / PAGE_W)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [e]);
+  // 開いたまま後ろの小さなプレビューを押したら、閉じずにその見積に替える（押したところの下にあるプレビューを探す）
+  const onPointerDownOutside = (ev) => {
+    const o = ev.detail?.originalEvent;
+    if (!o) return;
+    // 開いている間は後ろの画面が押せない（pointer-events: none）ので、位置で探す
+    const hit = [...document.querySelectorAll("[data-thumb-index]")].find((el) => {
+      const r = el.getBoundingClientRect();
+      return o.clientX >= r.left && o.clientX <= r.right && o.clientY >= r.top && o.clientY <= r.bottom;
+    });
+    if (!hit) return;
+    ev.preventDefault();
+    onIndex(Number(hit.dataset.thumbIndex));
+  };
   const nav = "absolute top-1/2 -translate-y-1/2 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 shadow-lg ring-1 ring-black/10 hover:bg-white disabled:opacity-30 disabled:cursor-default";
   return (
-    <Dialog open={!!e} onOpenChange={(v) => !v && onIndex(null)}>
-      <DialogContent className="max-w-4xl w-[calc(100vw-2rem)] p-0 gap-0 overflow-hidden [&>*]:min-w-0" data-testid="estimate-preview-dialog">
+    <Dialog open={!!current} onOpenChange={(v) => !v && onIndex(null)}>
+      <DialogContent className="max-w-4xl w-[calc(100vw-2rem)] p-0 gap-0 overflow-hidden [&>*]:min-w-0" onPointerDownOutside={onPointerDownOutside} data-testid="estimate-preview-dialog">
         {e && (
           <>
             <div className="flex items-center gap-3 border-b px-4 py-3 pr-12">
@@ -229,14 +247,14 @@ function PreviewDialog({ list, index, onIndex, company }) {
                 <DialogDescription className="flex items-center gap-2 text-[11px]">
                   <span className="font-mono">{e.estimate_number}</span><SubmissionBadge estimate={e} size="xs" />
                   <span>{pages} ページ</span>
-                  <span className="tabular-nums">{index + 1} / {list.length} 件目</span>
+                  <span className="tabular-nums">{idx + 1} / {list.length} 件目</span>
                 </DialogDescription>
               </div>
               <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-xs"><Link to={`/estimates/${e.id}`} data-testid="estimate-preview-open"><ExternalLink className="h-3.5 w-3.5" />見積を開く</Link></Button>
             </div>
             <div className="relative">
-              <button type="button" className={`${nav} left-3`} onClick={() => go(-1)} disabled={index === 0} aria-label="前の見積" title="前の見積（←）" data-testid="estimate-preview-prev"><ChevronLeft className="h-6 w-6" /></button>
-              <button type="button" className={`${nav} right-3`} onClick={() => go(1)} disabled={index === list.length - 1} aria-label="次の見積" title="次の見積（→）" data-testid="estimate-preview-next"><ChevronRight className="h-6 w-6" /></button>
+              <button type="button" className={`${nav} left-3`} onClick={() => go(-1)} disabled={idx === 0} aria-label="前の見積" title="前の見積（←）" data-testid="estimate-preview-prev"><ChevronLeft className="h-6 w-6" /></button>
+              <button type="button" className={`${nav} right-3`} onClick={() => go(1)} disabled={idx === list.length - 1} aria-label="次の見積" title="次の見積（→）" data-testid="estimate-preview-next"><ChevronRight className="h-6 w-6" /></button>
               <div ref={scroller} className="max-h-[78vh] overflow-y-auto bg-slate-200/70 px-4 py-4" data-testid="estimate-preview-pages">
                 <div className="mx-auto space-y-4" style={{ width: PAGE_W * scale }}>
                   {Array.from({ length: pages }, (_, p) => (
@@ -268,7 +286,7 @@ export default function EstimateThumbs({ estimates, all = false }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4" data-testid="estimate-thumbs">
-        {shown.map((e, i) => <Thumb key={e.id} e={e} company={company} onOpen={() => setOpenIdx(i)} />)}
+        {shown.map((e, i) => <Thumb key={e.id} e={e} index={i} company={company} onOpen={() => setOpenIdx(i)} />)}
       </div>
       {/* 左右で並びの隣へ（4 件だけ見ているときも、この案件の見積すべてを順に見られる） */}
       <PreviewDialog list={sorted} index={openIdx} onIndex={setOpenIdx} company={company} />
