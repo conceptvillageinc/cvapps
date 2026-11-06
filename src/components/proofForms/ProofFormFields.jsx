@@ -1,4 +1,5 @@
-import { Plus, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
+import { useRowDrag, RowHandle } from "@/components/documents/RowDrag";
 import { QUESTION_TYPE_LABEL } from "@/lib/proofForms";
 
 // ============================================================================
@@ -7,30 +8,20 @@ import { QUESTION_TYPE_LABEL } from "@/lib/proofForms";
 // ============================================================================
 
 const uid = (p) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-const move = (list, i, d) => { const j = i + d; if (j < 0 || j >= list.length) return list; const n = [...list]; [n[i], n[j]] = [n[j], n[i]]; return n; };
 const hasOptions = (t) => t === "checkbox" || t === "radio";
 const input = "h-8 w-full rounded-md border px-2 text-sm";
 
-function MoveButtons({ i, n, onMove }) {
-  return (
-    <span className="flex flex-col">
-      <button type="button" onClick={() => onMove(-1)} disabled={i === 0} className="text-slate-400 hover:text-slate-700 disabled:opacity-20 leading-none" aria-label="1 つ上へ" title="1 つ上へ"><ChevronUp className="h-3.5 w-3.5" /></button>
-      <button type="button" onClick={() => onMove(1)} disabled={i === n - 1} className="text-slate-400 hover:text-slate-700 disabled:opacity-20 leading-none" aria-label="1 つ下へ" title="1 つ下へ"><ChevronDown className="h-3.5 w-3.5" /></button>
-    </span>
-  );
-}
-
 /** 質問 1 つ */
-function QuestionEditor({ q, i, n, onChange, onMove, onRemove }) {
+function QuestionEditor({ q, onChange, onRemove, index, rowProps, handleProps }) {
   const set = (patch) => onChange({ ...q, ...patch });
   const options = q.options || [];
   const setOption = (k, v) => set({ options: options.map((o, j) => (j === k ? v : o)) });
   const isFinal = q.id === "final";
   return (
-    <li className="rounded-lg border bg-white p-3 space-y-2" data-testid="proof-q-editor">
+    <li {...rowProps} className={`group rounded-lg border bg-white p-3 space-y-2 ${rowProps.className}`} data-testid="proof-q-editor">
       <div className="flex items-start gap-2">
-        <MoveButtons i={i} n={n} onMove={onMove} />
-        <span className="mt-1.5 shrink-0 text-[11px] text-slate-400">質問{i + 1}</span>
+        <span className="mt-1"><RowHandle {...handleProps} /></span>
+        <span className="mt-1.5 shrink-0 text-[11px] text-slate-400">質問{index + 1}</span>
         <input value={q.label || ""} onChange={(e) => set({ label: e.target.value })} placeholder="質問の文" className={`${input} font-medium`} data-testid="proof-q-label" />
         <select value={q.type} onChange={(e) => { const t = e.target.value; set({ type: t, options: hasOptions(t) ? (options.length ? options : ["選択肢 1"]) : undefined }); }} className="h-8 shrink-0 rounded-md border bg-white px-1.5 text-xs" aria-label="答え方" data-testid="proof-q-type">
           {Object.entries(QUESTION_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -61,6 +52,9 @@ export default function ProofFormFields({ value, onChange }) {
   const items = value.items || [];
   const questions = value.questions || [];
   const setItem = (i, patch) => set({ items: items.map((it, j) => (j === i ? { ...it, ...patch } : it)) });
+  // つまんで上下に動かす（▲▼でも 1 つずつ）
+  const itemDrag = useRowDrag(items, (next) => set({ items: next }), { keyOf: (it) => it._k || it.id });
+  const qDrag = useRowDrag(questions, (next) => set({ questions: next }), { keyOf: (q) => q.id });
   return (
     <div className="space-y-4" data-testid="proof-fields">
       <label className="block space-y-1"><span className="block text-xs text-slate-500">フォームタイトル</span>
@@ -72,8 +66,8 @@ export default function ProofFormFields({ value, onChange }) {
         <p className="text-xs text-slate-500">校了の対象（{items.length} 項目）</p>
         <ul className="rounded-lg border divide-y bg-slate-50/50">
           {items.map((it, i) => (
-            <li key={it._k || it.id || i} className="flex items-center gap-2 px-2 py-1.5" data-testid="proof-item-editor">
-              <MoveButtons i={i} n={items.length} onMove={(d) => set({ items: move(items, i, d) })} />
+            <li key={it._k || it.id || i} {...itemDrag.rowProps(it)} className={`group flex items-center gap-2 bg-white px-2 py-1.5 ${itemDrag.rowProps(it).className}`} data-testid="proof-item-editor">
+              <RowHandle {...itemDrag.handleProps(it, i)} />
               <input value={it.name || ""} onChange={(e) => setItem(i, { name: e.target.value })} placeholder="項目名" className={input} data-testid="proof-item-name" />
               <input value={it.quantity ?? ""} onChange={(e) => setItem(i, { quantity: e.target.value === "" ? null : e.target.value })} inputMode="decimal" placeholder="数量" className="h-8 w-20 shrink-0 rounded-md border px-2 text-right text-sm tabular-nums" aria-label="数量" />
               <input value={it.unit || ""} onChange={(e) => setItem(i, { unit: e.target.value })} placeholder="単位" className="h-8 w-14 shrink-0 rounded-md border px-2 text-sm" aria-label="単位" />
@@ -89,9 +83,8 @@ export default function ProofFormFields({ value, onChange }) {
         <p className="text-xs text-slate-500">質問（{questions.length}）</p>
         <ol className="space-y-2">
           {questions.map((q, i) => (
-            <QuestionEditor key={q.id} q={q} i={i} n={questions.length}
+            <QuestionEditor key={q.id} q={q} index={i} rowProps={qDrag.rowProps(q)} handleProps={qDrag.handleProps(q, i)}
               onChange={(nq) => set({ questions: questions.map((x, j) => (j === i ? nq : x)) })}
-              onMove={(d) => set({ questions: move(questions, i, d) })}
               onRemove={() => set({ questions: questions.filter((_, j) => j !== i) })} />
           ))}
         </ol>

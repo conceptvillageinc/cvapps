@@ -16,9 +16,9 @@ export function moveTo(items, fromIdx, toIdx) {
   return next;
 }
 
-export function useRowDrag(items, onChange, { disabled = false } = {}) {
+export function useRowDrag(items, onChange, { disabled = false, keyOf = (x) => x.id } = {}) {
   const [dragId, setDragId] = useState(null);
-  const idxOf = (id) => items.findIndex((li) => li.id === id);
+  const idxOf = (id) => items.findIndex((li) => keyOf(li) === id);
   return {
     dragId,
     /** 行（tr）に付ける: 上に重ねた時点で入れ替える（落とすまで待たない） */
@@ -27,10 +27,10 @@ export function useRowDrag(items, onChange, { disabled = false } = {}) {
         if (!dragId) return;
         e.preventDefault();
         if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-        if (dragId !== li.id) onChange(moveTo(items, idxOf(dragId), idxOf(li.id)));
+        if (dragId !== keyOf(li)) onChange(moveTo(items, idxOf(dragId), idxOf(keyOf(li))));
       },
       onDrop: (e) => { if (dragId) { e.preventDefault(); setDragId(null); } },
-      className: dragId === li.id ? "opacity-40" : "",
+      className: dragId === keyOf(li) ? "opacity-40" : "",
     }),
     /** つまみ（RowHandle）に渡す */
     handleProps: (li, idx) => ({
@@ -38,10 +38,10 @@ export function useRowDrag(items, onChange, { disabled = false } = {}) {
       isFirst: idx === 0,
       isLast: idx === items.length - 1,
       onDragStart: (e) => {
-        setDragId(li.id);
-        // つかんだ行そのものを影として出す
-        const row = e.currentTarget.closest("tr");
-        if (row && e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", li.id); e.dataTransfer.setDragImage(row, 16, 16); }
+        setDragId(keyOf(li));
+        // つかんだ行（表の行・リストの 1 つ）そのものを影として出す
+        const row = e.currentTarget.closest("tr, li");
+        if (row && e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(keyOf(li))); e.dataTransfer.setDragImage(row, 16, 16); }
       },
       onDragEnd: () => setDragId(null),
       onMove: (dir) => onChange(moveTo(items, idx, idx + dir)),
