@@ -33,7 +33,8 @@ export function renderDocumentPdf({ type, doc, company, stamp, logo = null }) {
     const items = Array.isArray(doc.line_items) ? doc.line_items : [];
     const rows = items.filter(Boolean).map((li) => {
       // テキスト行（見出し・注記。金額なし。空なら 1 行分の余白）
-      if (li.row_type === 'text') return { kind: 'text', text: String(li.name || '') };
+      // 文字は明細と同じ 8.5pt・太字なし
+      if (li.row_type === 'text') return { kind: 'text', text: String(li.name || ''), bold: false };
       const reduced = Number(li.tax_rate) === 8 ? '（軽減8%）' : '';
       const name = `${li.name || ''}${reduced}`;
       const qty = `${fmtQty(li.quantity)} ${li.unit || ''}`.trim();

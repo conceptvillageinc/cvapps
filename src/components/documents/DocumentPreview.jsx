@@ -144,7 +144,7 @@ export default function DocumentPreview({ type, doc, totals, company }) {
             )}
             {items.map((li, i) => li.row_type === "text" ? (
               <tr key={li.id || i} className={i % 2 ? "bg-neutral-100" : ""}>
-                <td colSpan={cols} className="px-1.5 py-1 break-words whitespace-pre-line font-semibold">{li.name || "\u00a0"}</td>
+                <td colSpan={cols} className="px-1.5 py-1 break-words whitespace-pre-line">{li.name || "\u00a0"}</td>
               </tr>
             ) : (
               <tr key={li.id || i} className={i % 2 ? "bg-neutral-100" : ""}>

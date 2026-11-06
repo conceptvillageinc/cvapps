@@ -356,7 +356,7 @@ export function drawBankBand(pdf, y, { dueDate, accounts }) {
 /**
  * 明細表（1ページ分）。固定行数で、足りない分は空行で埋める。戻り値は表の下端 y
  * @param {Array<[string, number, 'left'|'center'|'right']>} columns  [見出し, 幅, 揃え]（幅 0 の列は残り幅）
- * @param {Array<object>} rows  { kind:'item', cells:[...] } | { kind:'text', text } | { kind:'subtotal', name, amount }
+ * @param {Array<object>} rows  { kind:'item', cells:[...] } | { kind:'text', text, bold? } | { kind:'subtotal', name, amount }
  */
 const MAX_ROW_LINES = 3; // 名称が長いときは最大 3 行まで折り返す（それ以上は省略記号）
 
@@ -433,8 +433,10 @@ export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
     if (row.kind === 'subtotal') drawSeparators(h, widths.length - 1);
     pdf.fillColor(BLACK);
     if (row.kind === 'text') {
-      if (units > 1) paragraphV(pdf, row.text, MARGIN + 6, ry + 2, CONTENT_W - 12, h - 4, { size: 8.5, bold: true });
-      else textV(pdf, row.text, MARGIN + 6, ry, CONTENT_W - 12, h, { size: 8.5, bold: true });
+      // 見積書は太字。納品書・請求書は普通の太さ（bold: false）
+      const bold = row.bold !== false;
+      if (units > 1) paragraphV(pdf, row.text, MARGIN + 6, ry + 2, CONTENT_W - 12, h - 4, { size: 8.5, bold });
+      else textV(pdf, row.text, MARGIN + 6, ry, CONTENT_W - 12, h, { size: 8.5, bold });
     } else if (row.kind === 'subtotal') {
       textV(pdf, row.name || '小計', MARGIN + 6, ry, CONTENT_W - amountW - 12, h, { align: 'right', size: 8.5, bold: true });
       textV(pdf, signedYen(row.amount), PAGE.width - MARGIN - amountW, ry, amountW - 6, h, { align: 'right', size: 8.5, bold: true });
