@@ -32,7 +32,7 @@ import DeliveryLinePicker, { deliveredElsewhereMap } from "@/components/document
 import { isPrintLine, orderFromLine } from "@/lib/printOrders";
 import { estimateQuery } from "@/lib/estimateQuery";
 import {
-  newDocItem, docItemsFromEstimate, computeDocTotals, generateDocumentNumber,
+  newDocItem, newDocTextItem, isTextRow, docItemsFromEstimate, computeDocTotals, generateDocumentNumber,
   companyInfoFromSettings, DELIVERY_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
 
@@ -147,7 +147,7 @@ export default function DeliveryNoteEdit() {
           const done = deliveredElsewhereMap(siblingNotes, null);
           // ?only=行id,… のときはその行だけ（定期売上の案件で「初回だけの費用の分だけで作る」）
           const only = (searchParams.get("only") || "").split(",").filter(Boolean);
-          const all = docItemsFromEstimate(sourceEstimate).filter((li) => !only.length || only.includes(li.source_line_id));
+          const all = docItemsFromEstimate(sourceEstimate, { withText: true }).filter((li) => !only.length || only.includes(li.source_line_id));
           const rest = all.filter((li) => !done.has(li.source_line_id));
           if (rest.length < all.length) toast.info(`ほかの納品書で納品済みの ${all.length - rest.length} 行は外しています`);
           return rest;
@@ -183,9 +183,10 @@ export default function DeliveryNoteEdit() {
     }),
   }));
   const addItem = () => set("line_items", [...form.line_items, newDocItem()]);
+  const addTextItem = () => set("line_items", [...form.line_items, newDocTextItem()]);
   const removeItem = (itemId) => set("line_items", form.line_items.filter((li) => li.id !== itemId));
   const importFromEstimate = (est) => {
-    const items = docItemsFromEstimate(est);
+    const items = docItemsFromEstimate(est, { withText: true });
     if (items.length === 0) { toast.info("その見積には明細がありません"); return; }
     setForm((f) => ({ ...f, estimate_id: est.id, title: f.title || est.estimate_title || "", line_items: [...f.line_items, ...items] }));
     toast.success(`${est.estimate_number} の明細を${items.length}行取り込みました`);
@@ -460,6 +461,7 @@ export default function DeliveryNoteEdit() {
                 </Select>
               )}
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addItem} disabled={locked}><Plus className="w-3.5 h-3.5" /> 行を追加</Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addTextItem} disabled={locked} data-testid="add-text-row"><Plus className="w-3.5 h-3.5" /> テキスト行</Button>
             </div>
           </div>
         </CardHeader>
@@ -481,7 +483,19 @@ export default function DeliveryNoteEdit() {
                 {form.line_items.length === 0 && (
                   <tr><td colSpan={7} className="text-center text-xs text-muted-foreground py-8">明細がありません。「行を追加」または見積から取り込んでください</td></tr>
                 )}
-                {form.line_items.map((li) => (
+                {form.line_items.map((li) => isTextRow(li) ? (
+                  <tr key={li.id} className="border-b bg-slate-50/60" data-testid="doc-text-row">
+                    <td className="px-2 py-1" colSpan={6}>
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">テキスト</span>
+                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし）" className="h-8 text-xs" disabled={locked} />
+                      </div>
+                    </td>
+                    <td className="px-1 py-1">
+                      <button onClick={() => removeItem(li.id)} className="text-muted-foreground hover:text-destructive" disabled={locked}><Trash2 className="w-3.5 h-3.5" /></button>
+                    </td>
+                  </tr>
+                ) : (
                   <tr key={li.id} className="border-b">
                     <td className="px-2 py-1">
                       <Input value={li.name} onChange={(e) => setItem(li.id, { name: e.target.value })} className="h-8 text-xs" disabled={locked} />

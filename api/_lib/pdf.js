@@ -31,7 +31,9 @@ export function renderDocumentPdf({ type, doc, company, stamp, logo = null }) {
 
     const isInvoice = type === 'invoice';
     const items = Array.isArray(doc.line_items) ? doc.line_items : [];
-    const rows = items.map((li) => {
+    const rows = items.filter((li) => li && (li.row_type !== 'text' || String(li.name || '').trim())).map((li) => {
+      // テキスト行（見積から写した見出し・注記。金額なし）
+      if (li.row_type === 'text') return { kind: 'text', text: String(li.name || '') };
       const reduced = Number(li.tax_rate) === 8 ? '（軽減8%）' : '';
       const name = `${li.name || ''}${reduced}`;
       const qty = `${fmtQty(li.quantity)} ${li.unit || ''}`.trim();

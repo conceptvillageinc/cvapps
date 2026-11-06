@@ -74,7 +74,7 @@ export default function ReceiptEdit() {
   });
 
   // 以前の版で納品書から作った請求書は行に id が無いことがあるので、並び順で補う
-  const sourceItems = useMemo(() => (source?.line_items || []).map((li, i) => (li && !li.id ? { ...li, id: `row${i}` } : li)).filter((li) => li && (li.name || li.amount)), [source]);
+  const sourceItems = useMemo(() => (source?.line_items || []).map((li, i) => (li && !li.id ? { ...li, id: `row${i}` } : li)).filter((li) => li && li.row_type !== "text" && (li.name || li.amount)), [source]);
   const receiptedElsewhere = useMemo(() => {
     const m = new Map();
     for (const r of siblings) {

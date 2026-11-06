@@ -11,7 +11,8 @@ export function deliveredElsewhereMap(siblings, noteId) {
   const m = new Map();
   for (const n of siblings || []) {
     if (n.id === noteId) continue;
-    for (const li of n.line_items || []) if (li.source_line_id && !m.has(li.source_line_id)) m.set(li.source_line_id, n.delivery_number || "別の納品書");
+    // テキスト行（金額なし）は納品済みに数えない（分納のどの納品書にも入れてよい）
+    for (const li of n.line_items || []) if (li.source_line_id && li.row_type !== "text" && !m.has(li.source_line_id)) m.set(li.source_line_id, n.delivery_number || "別の納品書");
   }
   return m;
 }
@@ -28,7 +29,7 @@ export function deliveredElsewhereMap(siblings, noteId) {
  * @param {(items: object[]) => void} p.onChange
  */
 export default function DeliveryLinePicker({ estimate, siblings, noteId, items, onChange, disabled = false }) {
-  const estItems = useMemo(() => docItemsFromEstimate(estimate), [estimate]);
+  const estItems = useMemo(() => docItemsFromEstimate(estimate, { withText: true }), [estimate]);
   const elsewhere = useMemo(() => deliveredElsewhereMap(siblings, noteId), [siblings, noteId]);
   const inNote = new Map(items.filter((li) => li.source_line_id).map((li) => [li.source_line_id, li]));
 
@@ -76,10 +77,11 @@ export default function DeliveryLinePicker({ estimate, siblings, noteId, items, 
             return (
               <label key={src.source_line_id} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs cursor-pointer hover:bg-muted/40 ${on ? "" : "text-muted-foreground"}`} data-testid="delivery-line-option">
                 <Checkbox checked={on} disabled={disabled} onCheckedChange={() => toggle(src.source_line_id)} aria-label={`${src.name} を納品する`} />
+                {src.row_type === "text" && <span className="shrink-0 rounded bg-slate-200 px-1.5 text-[10px] text-slate-600">テキスト</span>}
                 <span className="flex-1 min-w-0 truncate">{src.name}</span>
                 {done && <span className="shrink-0 rounded bg-sky-50 border border-sky-200 px-1.5 text-[10px] text-sky-800">{done} で納品済</span>}
-                <span className="shrink-0 tabular-nums w-24 text-right">{Number(src.quantity).toLocaleString()}{src.unit}</span>
-                <span className="shrink-0 tabular-nums w-24 text-right">{yen(src.amount)}</span>
+                <span className="shrink-0 tabular-nums w-24 text-right">{src.row_type === "text" ? "" : `${Number(src.quantity).toLocaleString()}${src.unit}`}</span>
+                <span className="shrink-0 tabular-nums w-24 text-right">{src.row_type === "text" ? "" : yen(src.amount)}</span>
               </label>
             );
           })}

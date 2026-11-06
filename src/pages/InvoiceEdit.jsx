@@ -30,7 +30,7 @@ import { todayString } from "@/lib/fiscal";
 import { formatPostalCode } from "@/lib/postalCode";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import {
-  newDocItem, computeDocTotals, generateDocumentNumber, defaultDueDate,
+  newDocItem, newDocTextItem, isTextRow, computeDocTotals, generateDocumentNumber, defaultDueDate,
   companyInfoFromSettings, INVOICE_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
 import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
@@ -216,6 +216,7 @@ export default function InvoiceEdit() {
     }),
   }));
   const addItem = () => set("line_items", [...form.line_items, newDocItem({ transaction_date: form.invoice_date })]);
+  const addTextItem = () => set("line_items", [...form.line_items, newDocTextItem()]);
   const removeItem = (itemId) => set("line_items", form.line_items.filter((li) => li.id !== itemId));
 
   const toggleNote = (dn) => {
@@ -560,6 +561,7 @@ export default function InvoiceEdit() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">明細（{form.line_items.length}行）</CardTitle>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addItem} disabled={locked}><Plus className="w-3.5 h-3.5" /> 行を追加</Button>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addTextItem} disabled={locked}><Plus className="w-3.5 h-3.5" /> テキスト行</Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -581,7 +583,18 @@ export default function InvoiceEdit() {
                 {form.line_items.length === 0 && (
                   <tr><td colSpan={8} className="text-center text-xs text-muted-foreground py-8">明細がありません。納品書をチェックするか「行を追加」してください</td></tr>
                 )}
-                {form.line_items.map((li) => (
+                {form.line_items.map((li) => isTextRow(li) ? (
+                  <tr key={li.id} className="border-b bg-slate-50/60" data-testid="doc-text-row">
+                    <td className="px-2 py-1" colSpan={7}>
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">テキスト</span>
+                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし）" className="h-8 text-xs" disabled={locked} />
+                        {li.delivery_number && <span className="shrink-0 text-[10px] text-muted-foreground">納品書 {li.delivery_number}</span>}
+                      </div>
+                    </td>
+                    <td className="px-1 py-1"><button onClick={() => removeItem(li.id)} className="text-muted-foreground hover:text-destructive" disabled={locked}><Trash2 className="w-3.5 h-3.5" /></button></td>
+                  </tr>
+                ) : (
                   <tr key={li.id} className="border-b">
                     <td className="px-2 py-1"><Input type="date" value={li.transaction_date || ""} onChange={(e) => setItem(li.id, { transaction_date: e.target.value })} className="h-8 text-xs" disabled={locked} /></td>
                     <td className="px-2 py-1">

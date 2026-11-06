@@ -50,7 +50,7 @@ function partnerOrderTemplate(doc, company, user) {
 function estimateTemplate(doc, company, user) {
   const items = (doc.line_items || []).filter((li) => li.row_type !== "subtotal");
   const total = Number(doc.total_amount) || computeEstimateTotals(items, { taxInclusive: !!doc.tax_inclusive }).total;
-  const headings = items.filter((li) => li.row_type === "text" && li.text).map((li) => `　・${li.text}`);
+  const headings = items.filter((li) => li.row_type === "text" && (li.text || li.name)).map((li) => `　・${li.text || li.name}`);
   const mains = items.filter((li) => li.row_type !== "text").sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0)).slice(0, 5).map((li) => `　・${li.name}`);
   const outline = headings.length > 0 ? headings.slice(0, 8) : mains;
   const validity = doc.validity_period_months ?? 6;

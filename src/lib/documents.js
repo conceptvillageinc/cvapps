@@ -29,19 +29,31 @@ export function newDocItem(defaults = {}) {
   };
 }
 
-/** 見積の明細（テキスト行を除く）を帳票の明細に写す */
-export function docItemsFromEstimate(estimate) {
+/** テキスト行（金額の無い見出し・注記の行。文字は name に持つ） */
+export const isTextRow = (li) => li?.row_type === "text";
+
+/** 帳票のテキスト行 */
+export function newDocTextItem(text = "", extra = {}) {
+  return { id: uid(), row_type: "text", name: text, quantity: null, unit: "", unit_price: null, amount: 0, ...extra };
+}
+
+/**
+ * 見積の明細を帳票の明細に写す（小計行は写さない）
+ *   withText: true … 見積のテキスト行も、見積と同じ位置にテキスト行として写す（納品書）
+ */
+export function docItemsFromEstimate(estimate, { withText = false } = {}) {
   // 税込見積の明細は税抜に直して写す（納品書・請求書は税抜で持つ）
   const inclusive = !!estimate?.tax_inclusive;
   return clientLines(estimate?.line_items) // 提出しない（社内用）の明細は写さない
-    .filter((li) => li.row_type !== "text" && li.row_type !== "subtotal")
+    .filter((li) => li.row_type !== "subtotal" && (li.row_type !== "text" || (withText && String(li.text || "").trim())))
     .map((li) => {
+      if (li.row_type === "text") return { text: true, li };
       const rate = lineTaxRate(li);
       const qty = Number(li.quantity) || 1;
       const unitPrice = inclusive ? toTaxExclusiveUnitPrice(li.unit_price, rate) : (Number(li.unit_price) || 0);
       return { li, rate, qty, unitPrice };
     })
-    .map(({ li, rate, qty, unitPrice }) => newDocItem({
+    .map(({ text, li, rate, qty, unitPrice }) => text ? newDocTextItem(String(li.text || ""), { source_line_id: li.id }) : newDocItem({
       name: li.name || "",
       quantity: qty,
       unit: li.unit || "式",
@@ -62,7 +74,7 @@ export function docItemsFromEstimate(estimate) {
  * 消費税は税率ごとに合計してから計算する（明細ごとに計算すると端数がずれるため）。
  */
 export function computeDocTotals(items) {
-  const rows = (items || []).filter((li) => li && li.name !== undefined);
+  const rows = (items || []).filter((li) => li && li.name !== undefined && !isTextRow(li));
   const byRate = new Map();
   for (const li of rows) {
     const rate = Number(li.tax_rate ?? DEFAULT_TAX_RATE);
