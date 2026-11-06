@@ -342,16 +342,17 @@ function DailyTargetCard({ dt }) {
 /**
  * 粗利目標に計上する案件: 受注確度が A／要注意（A）／A（定期売上）のいずれか、かつ フェーズが「着手中」
  */
-/** 受注確度が A・要注意（A）・A（定期売上）のどれか（速報デイリーの売上見込・粗利見込に入れる案件。売上粗利管理表の着地見込と同じ） */
+/** 受注確度が A・要注意（A）・A（定期売上）のどれか */
 export function isForecastProb(p) {
   const prob = String(p.deal_probability || "");
   return prob === "A" || prob.includes("要注意") || prob.includes("定期");
 }
+/** 速報デイリーの売上見込・粗利見込・計上に入れる案件: 上の確度で、かつフェーズが「着手中」 */
 export function countsTowardTarget(p) {
   return isForecastProb(p) && String(p.phase || "") === "着手中";
 }
-const sumBy = (rows, key) => rows.reduce((s, p) => s + (isForecastProb(p) ? Number(p[key] || 0) : 0), 0);
-const FORECAST_RULE = "売上見込・粗利見込: 受注確度が A・要注意（A）・A（定期売上）の案件だけを合計";
+const sumBy = (rows, key) => rows.reduce((s, p) => s + (countsTowardTarget(p) ? Number(p[key] || 0) : 0), 0);
+const FORECAST_RULE = "売上見込・粗利見込: 受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件だけを合計";
 const TARGET_RULE = "計上: 受注確度が A・要注意（A）・A（定期売上）で、フェーズが着手中の案件の粗利（見込）";
 
 /** 粗利（見込）が目標に届いているか */
@@ -426,7 +427,7 @@ export function DailyView({ projects, isLoading }) {
       let g = out[out.length - 1];
       if (!g || g.date !== key) { g = { date: key, rows: [], revenue: 0, gross: 0, actual: 0, counted: 0, countedCount: 0 }; out.push(g); }
       g.rows.push(p);
-      if (isForecastProb(p)) { g.revenue += Number(p.expected_revenue || 0); g.gross += Number(p.expected_gross_profit || 0); }
+      if (countsTowardTarget(p)) { g.revenue += Number(p.expected_revenue || 0); g.gross += Number(p.expected_gross_profit || 0); }
       if (countsTowardTarget(p)) { g.counted += Number(p.expected_gross_profit || 0); g.countedCount += 1; }
       g.actual += Number(p.actual_gross_profit || 0);
     }
