@@ -31,7 +31,7 @@ import ReviewPanel from "@/components/estimates/ReviewPanel";
 import DesignFeeTable from "@/components/estimates/DesignFeeTable";
 import RevisionPanel from "@/components/estimates/RevisionPanel";
 import { convertLegacyEstimate, summarizeConversion } from "@/lib/convertLegacyEstimate";
-import { estimateQuery } from "@/lib/estimateQuery";
+import { estimateQuery, trackEstimateSave } from "@/lib/estimateQuery";
 import ProjectLinkDialog from "@/components/estimates/ProjectLinkDialog";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import EstimatePreview from "@/components/estimates/EstimatePreview";
@@ -74,7 +74,8 @@ function EstimateDetail() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const { data: estimate, isLoading } = useQuery(estimateQuery(estimateId));
+  // 開くたびに読み直す（ほかの画面へ移って戻ったとき、前に読んだ古い内容で入力欄を作らないため）
+  const { data: estimate, isLoading, isFetchedAfterMount } = useQuery(estimateQuery(estimateId, { fresh: true }));
 
   const { data: emailLogs = [] } = useQuery({
     queryKey: ["emailLogs", estimateId],
@@ -172,10 +173,10 @@ function EstimateDetail() {
   const skipAutosave = useRef(true);
 
   useEffect(() => {
-    if (estimate && !formData) {
+    if (estimate && !formData && isFetchedAfterMount) {
       setFormData({ ...estimate });
     }
-  }, [estimate]);
+  }, [estimate, isFetchedAfterMount]);
 
   const saveMutation = useMutation({
     // 提出ステータスは画面の保存では送らない（ボタン・メール送信・案件の失注で別に保存する。古い値で上書きしないため）
@@ -186,10 +187,12 @@ function EstimateDetail() {
       delete rest.estimate_number;
       delete rest.id;
       if (data.id && data.id !== estimateId) throw new Error("別の見積の内容です。画面を開き直してください");
-      return db.entities.Estimate.update(estimateId, rest);
+      return trackEstimateSave(estimateId, db.entities.Estimate.update(estimateId, rest));
     },
     onSuccess: (_res, saved) => {
       queryClient.invalidateQueries({ queryKey: ["estimate", estimateId] });
+      // 案件の画面・一覧に出る見積のタイトル・金額も新しくする
+      queryClient.invalidateQueries({ queryKey: ["estimates"] });
       setLastSavedAt(new Date());
       if (saved === latestForm.current) setDirty(false);
     },
@@ -209,10 +212,20 @@ function EstimateDetail() {
     if (skipAutosave.current) { skipAutosave.current = false; return; }
     setDirty(true);
     autosaveTimer.current = setTimeout(() => {
+      autosaveTimer.current = null;
       saveMutation.mutate(formData);
     }, 1000);
     return () => clearTimeout(autosaveTimer.current);
   }, [formData]);
+  // 自動保存を待っている間に別の画面へ移ったら、その場で保存する（タイトルを直してすぐ案件へ移ると消えていた）
+  const flushOnLeave = useRef(null);
+  flushOnLeave.current = () => {
+    if (!autosaveTimer.current || !latestForm.current) return;
+    clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = null;
+    saveMutation.mutate(latestForm.current);
+  };
+  useEffect(() => () => flushOnLeave.current?.(), []);
   const saveNow = async () => {
     // 入力中の欄（数量・単価など）を確定させてから保存する
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
