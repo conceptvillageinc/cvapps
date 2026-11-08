@@ -464,7 +464,7 @@ export default function ProjectDetail() {
                       {tag(revManual, actuals.revenueCount ? `自動・請求書 ${actuals.revenueCount} 件から` : "自動・請求書はまだありません", "revenue", actuals.revenue)}
                     </Field>
                     <Field label="発注合計">
-                      <span className="tabular-nums">{yen(cost)}</span>
+                      <span className="tabular-nums" data-testid="actual-cost">{Number(cost) > 0 ? "−" : ""}{yen(cost)}</span>
                       {tag(costManual, actuals.poCount || actuals.printCount ? `自動・${[actuals.poCount && `発注書 ${actuals.poCount} 件`, actuals.printCount && `入稿記録 ${actuals.printCount} 件`].filter(Boolean).join("・")}から` : "自動・発注書／入稿記録はまだありません", "cost", actuals.cost)}
                     </Field>
                     <Field label="粗利（実績）" className="col-span-2">
