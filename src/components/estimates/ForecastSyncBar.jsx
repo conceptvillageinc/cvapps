@@ -12,6 +12,7 @@ import { forecastLines, forecastSources, sumLines } from "@/lib/projectForecast"
 //   明細を直すたびに（入力が落ち着いたら）案件の見込みも入れ直す。
 //   入れ元は案件の forecast_source に残す（案件の画面の「見積から見込みを入れる」と同じ形。この見積の分に auto: true）。
 //   ほかの見積から入れた分があれば、その分も足したまま残す。
+//   案件の見込みがまだ空なら、最初からオンにする（明細が入った時点で）。
 // ============================================================================
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
@@ -72,6 +73,15 @@ export default function ForecastSyncBar({ estimate, project, user }) {
       toast.error("案件の見込みを入れられませんでした: " + (err?.message || "不明なエラー"));
     }
   };
+
+  // 案件の見込みがまだ空（どの見積からも入れていない・金額も 0）なら、明細が入った時点で最初からオンにする
+  const autoStarted = useRef(false);
+  const emptyForecast = sources.length === 0 && !(Number(project.expected_revenue) > 0) && !(Number(project.expected_cost) > 0);
+  useEffect(() => {
+    if (autoStarted.current || !emptyForecast || picked.lines.length === 0) return;
+    autoStarted.current = true;
+    write(true, { silent: true });
+  }, [emptyForecast, picked.lines.length]);
 
   // オンのあいだは、明細が変わったら入れ直す（入力が落ち着いてから）
   const timer = useRef(null);
