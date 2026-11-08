@@ -37,6 +37,8 @@ import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 import MonthSelect from "@/components/ui/month-select";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
+/** 粗利: マイナスのときは「−¥1,000」の形（「¥-1,000」にしない） */
+const grossYen = (n) => (Number(n) < 0 ? `−${yen(-Number(n))}` : yen(n));
 const signedYen = (n) => `${Number(n) >= 0 ? "+" : "−"}¥${Math.abs(Math.round(Number(n) || 0)).toLocaleString()}`;
 
 function Field({ label, children, className = "" }) {
@@ -437,7 +439,7 @@ export default function ProjectDetail() {
                 <Field label="発注見込"><span className="tabular-nums" data-testid="expected-cost">{Number(project.expected_cost) > 0 ? "−" : ""}{yen(project.expected_cost)}</span></Field>
                 <Field label="その他費用"><span className="tabular-nums" data-testid="other-cost">{Number(project.other_cost) > 0 ? "−" : ""}{yen(project.other_cost)}</span></Field>
                 <Field label="粗利見込">
-                  <span className={`tabular-nums font-medium ${expectedGross < 0 ? "text-destructive" : "text-emerald-700"}`}>{yen(expectedGross)}</span>
+                  <span className={`tabular-nums font-medium ${expectedGross < 0 ? "text-destructive" : "text-emerald-700"}`}>{grossYen(expectedGross)}</span>
                   {Number(project.expected_revenue) > 0 && (
                     <span className="text-[10px] text-muted-foreground ml-1">
                       {Math.round((expectedGross / Number(project.expected_revenue)) * 100)}%
@@ -468,7 +470,8 @@ export default function ProjectDetail() {
                       {tag(costManual, actuals.poCount || actuals.printCount ? `自動・${[actuals.poCount && `発注書 ${actuals.poCount} 件`, actuals.printCount && `入稿記録 ${actuals.printCount} 件`].filter(Boolean).join("・")}から` : "自動・発注書／入稿記録はまだありません", "cost", actuals.cost)}
                     </Field>
                     <Field label="粗利（実績）" className="col-span-2">
-                      <span className="tabular-nums font-medium">{yen(gross)}</span>
+                      {/* 粗利見込と同じ色（プラスは緑・マイナスは赤） */}
+                      <span className={`tabular-nums font-medium ${gross < 0 ? "text-destructive" : gross > 0 ? "text-emerald-700" : ""}`} data-testid="actual-gross">{grossYen(gross)}</span>
                       {rev > 0 && <span className="text-[10px] text-muted-foreground ml-1">{Math.round((gross / rev) * 100)}%</span>}
                     </Field>
                   </div>
