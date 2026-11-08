@@ -1,5 +1,5 @@
 import { db } from "@/api/db";
-import { PRICE_READ_NOTES, PRICE_TAX_MODES } from "@/lib/priceTax";
+import { PRICE_READ_NOTES, PRICE_TAX_MODES, toTaxExcluded } from "@/lib/priceTax";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef, useEffect, Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -447,6 +447,47 @@ function DialogAutoFill({ form, onDetected }) {
   );
 }
 
+/** 読み込んだ価格表（枚数 × 納期）の金額を確かめる表。税込表示のマスタは、見積に入れるときの税別の原価も出す */
+function LoadedPriceTable({ grid, taxMode }) {
+  const labels = [...new Set(grid.flatMap((r) => (r.cells || []).map((c) => c.label)))];
+  const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString("ja-JP")}`;
+  const unit = (n) => (Math.round(n * 100) / 100).toLocaleString("ja-JP", { maximumFractionDigits: 2 });
+  return (
+    <div className="space-y-1.5 rounded-md border bg-muted/30 p-2.5" data-testid="loaded-price-table">
+      <p className="text-[11px] font-medium">読み込んだ金額（{grid.length} 行・{taxMode === "excluded" ? "税別" : "税込"}表示）</p>
+      <div className="max-h-56 overflow-auto rounded border bg-white">
+        <table className="w-full text-[11px] tabular-nums">
+          <thead className="sticky top-0 bg-slate-50 text-slate-500">
+            <tr><th className="px-2 py-1 text-left font-medium">枚数</th>{labels.map((l) => <th key={l} className="px-2 py-1 text-right font-medium whitespace-nowrap">{l || "—"}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y">
+            {grid.map((row, i) => (
+              <tr key={i}>
+                <td className="px-2 py-1 whitespace-nowrap">{Number(row.quantity || 0).toLocaleString("ja-JP")}枚</td>
+                {labels.map((l) => {
+                  const c = (row.cells || []).find((x) => x.label === l);
+                  if (!c) return <td key={l} className="px-2 py-1 text-right text-slate-300">—</td>;
+                  const ex = toTaxExcluded(c.price, taxMode);
+                  return (
+                    <td key={l} className="px-2 py-1 text-right whitespace-nowrap">
+                      {yen(c.price)}
+                      <span className="block text-[9px] text-muted-foreground">{taxMode === "excluded" ? "" : `税別 ${yen(ex)}・`}1枚 {unit(ex / (Number(row.quantity) || 1))}円</span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        保存後、一覧の「見積候補」から使うセルを選択してください。1枚の金額は、見積に入れるときの原価（税別）です。
+        {grid.length > 30 && <span className="text-amber-600"> ※行数が多めです。ページのノイズを誤認識している可能性があるので、内容をご確認ください。</span>}
+      </p>
+    </div>
+  );
+}
+
 const emptyForm = {
   category: "", vendor_name: "", vendorSelectValue: "", paper_type_group: "紙",
   spec_summary: "", price_grid: [], source_url: "", notes: "", price_tax_mode: "included",
@@ -668,7 +709,6 @@ export default function PriceMasterList() {
             <DialogTitle>{editing ? "価格データを編集" : "価格データを追加"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <DialogAutoFill form={form} onDetected={applyAutoFill} />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">大カテゴリ *</Label>
@@ -730,26 +770,9 @@ export default function PriceMasterList() {
               <Label className="text-xs">備考</Label>
               <Input value={form.notes || ""} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
-            {form.price_grid.length > 0 && (
-              <div className="p-2.5 rounded-md bg-muted/40 border space-y-1.5">
-                <p className="text-[10px] text-muted-foreground">
-                  価格表を{form.price_grid.length}行分取り込み済みです。保存後、一覧の「見積候補」から使うセルを選択してください。
-                  {form.price_grid.length > 30 && (
-                    <span className="text-amber-600"> ※行数が多めです。ページのノイズを誤認識している可能性があるので、下のプレビューで内容をご確認ください。</span>
-                  )}
-                </p>
-                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                  {form.price_grid.slice(0, 20).map((row, i) => (
-                    <Badge key={i} variant="outline" className="text-[9px] font-normal">
-                      {row.quantity}枚（{(row.cells || []).length}パターン）
-                    </Badge>
-                  ))}
-                  {form.price_grid.length > 20 && (
-                    <Badge variant="outline" className="text-[9px] font-normal">他{form.price_grid.length - 20}行</Badge>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* URL・スクショからの自動入力（読み込んだ金額はすぐ下に出る） */}
+            <DialogAutoFill form={form} onDetected={applyAutoFill} />
+            {form.price_grid.length > 0 && <LoadedPriceTable grid={form.price_grid} taxMode={form.price_tax_mode || "included"} />}
             <Button className="w-full" onClick={handleSubmit} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {editing ? "更新" : "追加"}
