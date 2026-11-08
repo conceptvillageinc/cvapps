@@ -16,7 +16,7 @@
 import { useMemo } from "react";
 import { isInternalLine } from "@/lib/estimateTotals";
 import { useSystemSettings } from "@/lib/useSystemSettings";
-import { DEFAULT_MARKUP, DEFAULT_LABEL_WORDS, DEFAULT_PACKAGE_WORDS, markupKindOf } from "@/lib/markupKinds";
+import { DEFAULT_MARKUP, DEFAULT_LABEL_WORDS, DEFAULT_PACKAGE_WORDS, DEFAULT_OTHER_WORDS, markupKindOf } from "@/lib/markupKinds";
 
 export const DEFAULT_PRICING_RULES = {
   // 印刷費の掛け率
@@ -24,6 +24,8 @@ export const DEFAULT_PRICING_RULES = {
   // この言葉が名前（印刷物種別・明細名など）に入っていれば、その掛け率にする（ラベルを先に見る）
   label_words: DEFAULT_LABEL_WORDS,
   package_words: DEFAULT_PACKAGE_WORDS,
+  // この言葉が入っていれば、ラベル・パッケージの言葉があってもパッケージ以外の掛け率（例: 箱ラベル）
+  other_words: DEFAULT_OTHER_WORDS,
   // 外注: 売価 = 仕入 ÷ 率
   outsourcing: { design: 0.6, build: 0.75, photo: 0.6 },
   // 切り上げの単位（円）
@@ -81,6 +83,8 @@ export function mergePricingRules(saved, legacyMarkup) {
     markup,
     label_words: labelWords,
     package_words: packageWords.length ? packageWords : d.package_words,
+    // 保存していなければ既定（箱ラベル）。空で保存したら使わない
+    other_words: Array.isArray(s.other_words) ? clean(s.other_words) : d.other_words,
     outsourcing: { ...d.outsourcing, ...(s.outsourcing || {}) },
     rounding: { ...d.rounding, ...(s.rounding || {}) },
     concept_fee: { ...d.concept_fee, ...(s.concept_fee || {}) },

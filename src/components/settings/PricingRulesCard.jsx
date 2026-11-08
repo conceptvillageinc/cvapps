@@ -42,6 +42,7 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
       markup_other: String(r.markup.other),
       label_words: r.label_words.join("、"),
       package_words: r.package_words.join("、"),
+      other_words: r.other_words.join("、"),
       out_design: String(r.outsourcing.design),
       out_build: String(r.outsourcing.build),
       out_photo: String(r.outsourcing.photo),
@@ -68,6 +69,7 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
         markup: { package: n(form.markup_package, 1.3), label: n(form.markup_label, 1.3), other: n(form.markup_other, 1.35) },
         label_words: splitWords(form.label_words),
         package_words: splitWords(form.package_words),
+        other_words: splitWords(form.other_words || ""),
         outsourcing: { design: n(form.out_design, 0.6), build: n(form.out_build, 0.75), photo: n(form.out_photo, 0.6) },
         rounding: { outsourcing: n(form.round_out, 5000), concept: n(form.round_concept, 5000), proofreading: n(form.round_proof, 1000), direction: n(form.round_direction, 5000) },
         concept_fee: { rate: fromPct(n(form.concept_rate, 20)) },
@@ -116,7 +118,7 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
               <NumInput value={form.markup_other} onChange={(v) => set("markup_other", v)} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 max-w-2xl">
+          <div className="grid grid-cols-3 gap-4 max-w-3xl">
             <div className="space-y-1.5">
               <Label className="text-xs">ラベル・シールの掛け率にする言葉（「、」区切り）</Label>
               <Input value={form.label_words} onChange={(e) => set("label_words", e.target.value)} placeholder="ラベル、シール" className="h-9" />
@@ -125,8 +127,12 @@ export default function PricingRulesCard({ settings, upsertSetting }) {
               <Label className="text-xs">パッケージの掛け率にする言葉（「、」区切り）</Label>
               <Input value={form.package_words} onChange={(e) => set("package_words", e.target.value)} placeholder="パッケージ" className="h-9" />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">パッケージ以外の掛け率にする言葉（いちばん先に見る）</Label>
+              <Input value={form.other_words ?? ""} onChange={(e) => set("other_words", e.target.value)} placeholder="箱ラベル" className="h-9" data-testid="markup-other-words" />
+            </div>
           </div>
-          <p className="text-[10px] text-muted-foreground">印刷物種別・価格マスタのカテゴリ名や、PDF から読み取った明細名にこの言葉が入っていれば、その掛け率になります（両方入っていればラベル・シールが先。例:「パッケージラベル印刷」→ ラベル・シール）。どれにも入っていなければパッケージ以外。掛けたあとの単価は小数第一位まで切り上げます</p>
+          <p className="text-[10px] text-muted-foreground">印刷物種別・価格マスタのカテゴリ名や、PDF から読み取った明細名にこの言葉が入っていれば、その掛け率になります（両方入っていればラベル・シールが先。例:「パッケージラベル印刷」→ ラベル・シール）。ただし「パッケージ以外の掛け率にする言葉」が入っていれば、ラベルでもパッケージ以外になります（例:「箱ラベル」→ パッケージ以外）。どれにも入っていなければパッケージ以外。掛けたあとの単価は小数第一位まで切り上げます</p>
         </section>
 
         <section className="space-y-2">

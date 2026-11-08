@@ -239,7 +239,7 @@ export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }
         </div>
       </div>
       <p className="text-[11px] text-muted-foreground -mt-2" data-testid="markup-rule">
-        掛け率は行ごとに、明細の名前から自動で決めています。「{rules.label_words.join("・")}」→ ×{rules.markup.label}、「{rules.package_words.join("・")}」→ ×{rules.markup.package}、それ以外 ×{rules.markup.other}（システム設定の値付けルールで変えられます）。
+        掛け率は行ごとに、明細の名前から自動で決めています。{rules.other_words?.length ? <>「{rules.other_words.join("・")}」→ ×{rules.markup.other}（いちばん先）、</> : null}「{rules.label_words.join("・")}」→ ×{rules.markup.label}、「{rules.package_words.join("・")}」→ ×{rules.markup.package}、それ以外 ×{rules.markup.other}（システム設定の値付けルールで変えられます）。
       </p>
 
       <div className="border rounded-lg overflow-x-auto">
