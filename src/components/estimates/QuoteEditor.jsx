@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, Fragment, forwardRef } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment, forwardRef, createContext, useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { db } from "@/api/db";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,10 @@ const PREVIEW_LEFT_KEY = "cv.quoteEditor.previewLeft";
 const readPref = (k) => { try { return window.localStorage.getItem(k); } catch { return null; } };
 const writePref = (k, v) => { try { window.localStorage.setItem(k, v); } catch { /* 保存できない環境では今回だけ */ } };
 
-export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
+/** 「案件の見込みに自動で入れる」をオンにしているとき、行ごとに「見込」のチェックを出す */
+const ForecastPickContext = createContext(false);
+
+export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPick = false }) {
   const [showInternal, setShowInternal] = useState(true);
   const [showPreview, setShowPreview] = useState(true); // プレビューを隠して編集側を広く使える
   // プレビューを左に置く（人ごとの好み。このブラウザに保存して次回も同じ並びにする）
@@ -350,6 +353,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
 
 
   return (
+    <ForecastPickContext.Provider value={forecastPick}>
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-3">
         <div className="flex items-center gap-1.5" title="ON にすると単価・金額を税込で入力し、消費税は税込合計から逆算します（切り捨て）。既定は税別">
@@ -1099,6 +1103,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview }) {
       </Dialog>
       <PrintOrderDialog open={!!orderDraft} onOpenChange={(v) => { if (!v) setOrderDraft(null); }} order={orderDraft} onSaved={() => refetchOrders()} />
     </div>
+    </ForecastPickContext.Provider>
   );
 }
 
@@ -1138,16 +1143,26 @@ function RowHandle({ onDragStart, onDragEnd, onMove, isFirst, isLast }) {
 function RowActions({ onDuplicate, onRemove, item, onChange }) {
   const canSubmit = item && onChange && item.row_type !== "subtotal";
   const on = canSubmit && !isInternalLine(item);
+  const forecastPick = useContext(ForecastPickContext);
+  const canForecast = forecastPick && on && item.row_type !== "text";
   return (
-    <div className="flex items-center justify-end gap-1">
-      {canSubmit && (
-        <label className={`inline-flex items-center gap-0.5 whitespace-nowrap text-[10px] cursor-pointer select-none ${on ? "text-muted-foreground" : "text-amber-800 font-semibold"}`} title="チェックを外すと、この行は見積書・PDF・メールに出さず、合計にも入れません（社内用に残す。別の数量の案など）">
-          <input type="checkbox" checked={on} onChange={(e) => onChange({ internal_only: !e.target.checked })} className="h-3 w-3 accent-primary" data-testid="line-submit" aria-label="提出する" />
-          提出
+    <div className="flex flex-col items-end gap-0.5">
+      <div className="flex items-center justify-end gap-1">
+        {canSubmit && (
+          <label className={`inline-flex items-center gap-0.5 whitespace-nowrap text-[10px] cursor-pointer select-none ${on ? "text-muted-foreground" : "text-amber-800 font-semibold"}`} title="チェックを外すと、この行は見積書・PDF・メールに出さず、合計にも入れません（社内用に残す。別の数量の案など）">
+            <input type="checkbox" checked={on} onChange={(e) => onChange({ internal_only: !e.target.checked })} className="h-3 w-3 accent-primary" data-testid="line-submit" aria-label="提出する" />
+            提出
+          </label>
+        )}
+        {onDuplicate && <button type="button" onClick={onDuplicate} className="text-muted-foreground hover:text-primary" title="この行を複製して下に追加" aria-label="複製"><Copy className="w-3.5 h-3.5" /></button>}
+        <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive" title="削除" aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></button>
+      </div>
+      {canForecast && (
+        <label className={`inline-flex items-center gap-0.5 whitespace-nowrap text-[10px] cursor-pointer select-none ${item.forecast_exclude ? "text-muted-foreground/60" : "text-emerald-700 font-semibold"}`} title="チェックした行の金額・原価が、案件の受注見込・発注見込に入ります">
+          <input type="checkbox" checked={!item.forecast_exclude} onChange={(e) => onChange({ forecast_exclude: e.target.checked ? undefined : true })} className="h-3 w-3 accent-emerald-600" data-testid="line-forecast" aria-label="案件の見込みに入れる" />
+          見込
         </label>
       )}
-      {onDuplicate && <button type="button" onClick={onDuplicate} className="text-muted-foreground hover:text-primary" title="この行を複製して下に追加" aria-label="複製"><Copy className="w-3.5 h-3.5" /></button>}
-      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive" title="削除" aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></button>
     </div>
   );
 }

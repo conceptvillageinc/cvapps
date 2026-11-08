@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import RecurringSetupDialog from "@/components/projects/RecurringSetupDialog";
 import { isRecurringParent } from "@/lib/projectInvoicing";
+import ForecastSyncBar from "@/components/estimates/ForecastSyncBar";
+import { forecastSources } from "@/lib/projectForecast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -683,7 +685,10 @@ function EstimateDetail() {
               <VendorRequestBar estimate={formData} emailLogs={emailLogs} onOpen={(n) => { setToolStep(n); setToolOpen(true); }} />
               <CarriedPriceCheck estimate={formData} onUpdate={handleUpdate} onOpenRequestTool={() => { setToolStep(1); setToolOpen(true); }} />
               <InternalMemoCard estimate={formData} onUpdate={handleUpdate} />
-              <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf} />
+              {/* 案件に紐づいた見積: 明細で選んだ行を、案件の受注見込・発注見込に自動で入れる（定期売上の案件は定期売上の設定から入るので出さない） */}
+              {project && formData.project_id === project.id && !isRecurringParent(project) && <ForecastSyncBar estimate={formData} project={project} user={user} />}
+              <QuoteEditor estimate={formData} onUpdate={handleUpdate} onPreview={previewPdf}
+                forecastPick={!!project && !isRecurringParent(project) && forecastSources(project.forecast_source).some((s) => s.estimate_id === formData.id && s.auto)} />
             </div>
           ) : (
             <ReviewStep
