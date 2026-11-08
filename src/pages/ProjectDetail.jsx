@@ -433,8 +433,9 @@ export default function ProjectDetail() {
                   <span className="tabular-nums font-medium">{yen(project.expected_revenue)}</span>
                   {isRecurringParent(project) && Number(project.recurring_one_time_revenue) > 0 && <span className="block text-[10px] text-muted-foreground whitespace-nowrap" data-testid="onetime-note">＋初回だけの費用 {yen(project.recurring_one_time_revenue)}（開始月）</span>}
                 </Field>
-                <Field label="発注見込"><span className="tabular-nums">{yen(project.expected_cost)}</span></Field>
-                <Field label="その他費用"><span className="tabular-nums">{yen(project.other_cost)}</span></Field>
+                {/* 受注見込から引く金額なので「−」を付ける（0 円のときは付けない） */}
+                <Field label="発注見込"><span className="tabular-nums" data-testid="expected-cost">{Number(project.expected_cost) > 0 ? "−" : ""}{yen(project.expected_cost)}</span></Field>
+                <Field label="その他費用"><span className="tabular-nums" data-testid="other-cost">{Number(project.other_cost) > 0 ? "−" : ""}{yen(project.other_cost)}</span></Field>
                 <Field label="粗利見込">
                   <span className={`tabular-nums font-medium ${expectedGross < 0 ? "text-destructive" : "text-emerald-700"}`}>{yen(expectedGross)}</span>
                   {Number(project.expected_revenue) > 0 && (
