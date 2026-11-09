@@ -27,7 +27,7 @@
       "includeFiles": "api/_lib/fonts/**"
     },
     "api/send-document-email.js": {
-      "maxDuration": 30,
+      "maxDuration": 60,
       "includeFiles": "api/_lib/fonts/**"
     },
     "api/export-schedule-sheet.js": {
