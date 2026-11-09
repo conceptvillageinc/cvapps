@@ -113,6 +113,37 @@ export function defaultTemplate(type, doc, company, user) {
  * 納品書・請求書をPDF添付でクライアントへ送るダイアログ。
  * 宛先はクライアント一覧のメールアドレス（画面からは変更できない）。
  */
+/** 同じクライアント宛ての請求書を 1 通にまとめるときの件名・本文（1 件ならいつものひな形） */
+export function invoiceGroupTemplate(invs, company, user) {
+  if (invs.length === 1) return defaultTemplate("invoice", invs[0], company, user);
+  const first = invs[0];
+  const total = invs.reduce((s, i) => s + (Number(i.total) || 0), 0);
+  const subject = `【御請求書】${invs.length}件のご請求（${company.name}）`;
+  const lines = [
+    `${first.client_name} ${first.client_honorific || "御中"}`,
+    "",
+    "いつもお世話になっております。",
+    greetingLine(user, company),
+    "",
+    `御請求書を${invs.length}件お送りいたします。PDFを添付しておりますのでご確認ください。`,
+    "",
+    ...invs.flatMap((i, k) => [
+      `　${k + 1}. 御請求書番号: ${i.invoice_number}`,
+      `　　件名: ${i.title || ""}`,
+      `　　請求金額: ${yen(i.total)}（税込）　入金期日: ${i.due_date || ""}`,
+    ]),
+    "",
+    `　合計: ${yen(total)}（税込）`,
+    "",
+    "お手数ですが、それぞれの期日までにお振込みをお願いいたします。",
+    "",
+    "今後ともよろしくお願いいたします。",
+    "",
+    senderSignature(user, company),
+  ];
+  return { subject, body: lines.join("\n") };
+}
+
 /** 送付先のクライアント（サーバーと同じ決め方: 書類に紐づいたクライアント → 無ければ同じ名前のうち最初に登録したもの） */
 export function clientForDoc(doc, clients) {
   if (doc?.client_id) { const c = (clients || []).find((x) => x.id === doc.client_id); if (c) return c; }
