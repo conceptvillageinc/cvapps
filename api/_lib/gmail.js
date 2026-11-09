@@ -268,7 +268,7 @@ function buildMime({ to, cc, from, subject, body, replyTo, attachments = [] }) {
  * 画面から指定できる作りにすると、社内の別の人になりすましてメールを
  * 出せてしまう。
  */
-export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, cc, attachments }) {
+export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, cc, attachments, keepSelfCc = false }) {
   const { fallbackSender, alwaysCc } = config();
 
   const sender = sendAs || fallbackSender;
@@ -276,9 +276,9 @@ export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, c
     throw new Error('差出人が決まりません（GMAIL_SENDER が未設定です）');
   }
 
-  // 送信控えのアドレス。差出人自身が入っていても意味がないので除く。
-  const ccList = [...new Set([cc, alwaysCc].filter(Boolean))]
-    .filter(addr => addr.toLowerCase() !== sender.toLowerCase());
+  // 送信控えのアドレス。差出人自身は除く（keepSelfCc のときは残す: 請求書の送付確認用に info@ を CC に見せる）
+  const ccList = [...new Set([cc, alwaysCc].filter(Boolean).flatMap((a) => String(a).split(',')).map((a) => a.trim()).filter(Boolean))]
+    .filter(addr => keepSelfCc || addr.toLowerCase() !== sender.toLowerCase());
 
   const token = await getAccessToken(sender);
   const from = fromName ? `${encodeHeader(fromName)} <${sender}>` : sender;

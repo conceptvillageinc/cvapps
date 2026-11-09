@@ -1,6 +1,7 @@
 import { requireMember, requirePost, adminClient } from './_lib/guard.js';
 import { sendMail, isMailConfigured } from './_lib/gmail.js';
 import { loadDocumentPdf } from './document-pdf.js';
+import { documentMailSender } from '../src/lib/mailSenders.js';
 
 // ============================================================================
 // POST /api/send-document-email  { type: 'invoice'|'delivery'|'estimate'|'receipt', id, subject, body, stamp? }
@@ -8,7 +9,8 @@ import { loadDocumentPdf } from './document-pdf.js';
 // 納品書・請求書・見積書のPDFを添付して、クライアントへメールを送る。
 // 宛先はクライアントマスタのメールアドレス（サーバー側で解決）。
 // 画面から任意のアドレスへは送れない（見積依頼メールと同じ方針）。
-// 差出人は操作した本人。GMAIL_ALWAYS_CC が設定されていれば控えがCCされる。
+// 差出人は操作した本人。ただし請求書は会社の共通アドレス（info@）から送り、送付確認用に info@ も CC に入れる
+// （src/lib/mailSenders.js。画面からは変えられない）。GMAIL_ALWAYS_CC が設定されていれば控えがCCされる。
 // ============================================================================
 
 export default async function handler(req, res) {
@@ -54,13 +56,15 @@ export default async function handler(req, res) {
       return;
     }
 
+    const fixed = documentMailSender(type);
     let sendError = null;
     try {
       await sendMail({
-        sendAs: user.email,
+        sendAs: fixed.sendAs || user.email,
         to: client.email,
-        // クライアント一覧の CC（最大2件）。画面からは指定できない
-        cc: (Array.isArray(client.cc_emails) ? client.cc_emails : []).filter((a) => typeof a === 'string' && a.includes('@')).slice(0, 2).join(', '),
+        // クライアント一覧の CC（最大2件）＋ 書類ごとに決めた CC（請求書は info@）。画面からは指定できない
+        cc: [...(Array.isArray(client.cc_emails) ? client.cc_emails : []).filter((a) => typeof a === 'string' && a.includes('@')).slice(0, 2), ...fixed.cc].join(', '),
+        keepSelfCc: fixed.cc.length > 0,
         subject,
         body,
         fromName: '株式会社コンセプト・ヴィレッジ',

@@ -15,6 +15,7 @@ import { companyInfoFromSettings } from "@/lib/documents";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { useAuth } from "@/lib/AuthContext";
 import { greetingLine, senderSignature } from "@/lib/senderProfile";
+import { documentMailSender } from "@/lib/mailSenders";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -160,7 +161,11 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{LABELS[type] || "帳票"}をメールで送る</DialogTitle>
-          <DialogDescription className="text-xs">差出人はログイン中のご自身のアドレスです。送信控えは Gmail の「送信済み」に残ります</DialogDescription>
+          <DialogDescription className="text-xs">
+            {documentMailSender(type).sendAs
+              ? `差出人は ${documentMailSender(type).sendAs} です（請求書は会社の共通アドレスから送ります）。送付確認用に CC にも ${documentMailSender(type).cc.join("・")} を入れます`
+              : "差出人はログイン中のご自身のアドレスです。送信控えは Gmail の「送信済み」に残ります"}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
           <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
@@ -168,9 +173,10 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
               <span className="text-muted-foreground w-12">宛先</span>
               <span className="font-medium">{toName}</span>
               {client?.email ? <span className="text-muted-foreground">{client.email}</span> : <span className="text-amber-700">メールアドレスが未登録です（{recipient ? "クライアント一覧か印刷所情報" : "クライアント一覧"}で登録してください）</span>}
-              {Array.isArray(client?.cc_emails) && client.cc_emails.filter(Boolean).length > 0 && (
-                <span className="text-muted-foreground">CC: {client.cc_emails.filter(Boolean).join(", ")}</span>
-              )}
+              {(() => {
+                const cc = [...(Array.isArray(client?.cc_emails) ? client.cc_emails.filter(Boolean) : []), ...documentMailSender(type).cc];
+                return cc.length > 0 && <span className="text-muted-foreground" data-testid="mail-cc">CC: {cc.join(", ")}</span>;
+              })()}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground w-12">添付</span>
