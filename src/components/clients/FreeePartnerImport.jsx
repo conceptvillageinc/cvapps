@@ -11,7 +11,7 @@ import { readFreeePartners, matchPartners } from "@/lib/freeePartners";
 import { formatPostalCode } from "@/lib/postalCode";
 
 /**
- * クライアント一覧の「freee の取引先 CSV から郵便番号・住所を補う」。
+ * クライアント一覧の「freee の取引先 CSV から郵便番号・住所・メールを補う」。
  *   CSV を選ぶ → 埋める内容を一覧で確認 → チェックした行だけ保存する。CSV は保存しない。
  */
 export default function FreeePartnerImport({ open, onOpenChange, clients }) {
@@ -46,10 +46,12 @@ export default function FreeePartnerImport({ open, onOpenChange, clients }) {
         const patch = {};
         if (p.postal) patch.postal_code = p.postal;
         if (p.address) patch.address = p.address;
+        if (p.email) patch.email = p.email;
+        if (p.cc?.length) patch.cc_emails = p.cc.slice(0, 2);
         await db.entities.Client.update(p.client.id, patch);
         done += 1;
       }
-      toast.success(`${done} 件のクライアントに郵便番号・住所を入れました`);
+      toast.success(`${done} 件のクライアントに郵便番号・住所・メールを入れました`);
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       close(false);
     } catch (e) {
@@ -63,14 +65,16 @@ export default function FreeePartnerImport({ open, onOpenChange, clients }) {
   const toggle = (id) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const postalCount = result ? result.proposals.filter((p) => picked.has(p.client.id) && p.postal).length : 0;
   const addressCount = result ? result.proposals.filter((p) => picked.has(p.client.id) && p.address).length : 0;
+  const emailCount = result ? result.proposals.filter((p) => picked.has(p.client.id) && p.email).length : 0;
+  const ccCount = result ? result.proposals.filter((p) => picked.has(p.client.id) && p.cc?.length).length : 0;
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-3xl" data-testid="freee-partner-import">
+      <DialogContent className="max-w-5xl" data-testid="freee-partner-import">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" /> freee の取引先 CSV から郵便番号・住所を補う</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" /> freee の取引先 CSV から郵便番号・住所・メールを補う</DialogTitle>
           <DialogDescription className="text-xs">
-            freee（会計・販売）の「取引先」から書き出した CSV を選ぶと、クライアント名で突き合わせて、空になっている郵便番号・住所だけを埋めます。入っている値は変えません。CSV はこの画面で読むだけで、アプリには保存しません
+            freee（会計・販売）の「取引先」から書き出した CSV を選ぶと、クライアント名で突き合わせて、空になっている郵便番号・住所・メール（To・CC）だけを埋めます。入っている値は変えません。メールは「メール」の入った列から読み、見出しに CC がある列は CC に、1 つの欄に複数あれば 2 つ目から CC に入れます（CC は最大 2 件）。CSV はこの画面で読むだけで、アプリには保存しません
           </DialogDescription>
         </DialogHeader>
 
@@ -82,11 +86,11 @@ export default function FreeePartnerImport({ open, onOpenChange, clients }) {
 
         {result && (
           result.proposals.length === 0 ? (
-            <p className="text-sm text-muted-foreground rounded-md bg-muted/30 px-3 py-4 text-center">埋められるクライアントはありませんでした{result.unmatched ? `（郵便番号か住所が空で、CSV に同じ名前の取引先が無いクライアント ${result.unmatched} 件）` : ""}</p>
+            <p className="text-sm text-muted-foreground rounded-md bg-muted/30 px-3 py-4 text-center">埋められるクライアントはありませんでした{result.unmatched ? `（空の欄があり、CSV に同じ名前の取引先が無いクライアント ${result.unmatched} 件）` : ""}</p>
           ) : (
             <div className="space-y-2">
               <p className="text-xs">
-                <b>{result.proposals.length} 件</b>のクライアントに入れられます（郵便番号 {postalCount} 件・住所 {addressCount} 件）。
+                <b>{result.proposals.length} 件</b>のクライアントに入れられます（郵便番号 {postalCount} 件・住所 {addressCount} 件・メール To {emailCount} 件・CC {ccCount} 件）。
                 {result.unmatched > 0 && <span className="text-muted-foreground">CSV に同じ名前の取引先が無いクライアントが {result.unmatched} 件あります（そのまま）</span>}
               </p>
               <div className="max-h-[50vh] overflow-y-auto rounded-md border">
@@ -97,6 +101,8 @@ export default function FreeePartnerImport({ open, onOpenChange, clients }) {
                       <th className="text-left px-2 py-1.5 font-medium">クライアント</th>
                       <th className="text-left px-2 py-1.5 font-medium w-24">郵便番号</th>
                       <th className="text-left px-2 py-1.5 font-medium">住所</th>
+                      <th className="text-left px-2 py-1.5 font-medium">メール（To）</th>
+                      <th className="text-left px-2 py-1.5 font-medium">CC</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -109,6 +115,8 @@ export default function FreeePartnerImport({ open, onOpenChange, clients }) {
                         </td>
                         <td className="px-2 py-1.5 tabular-nums whitespace-nowrap">{p.postal ? formatPostalCode(p.postal) : <span className="text-muted-foreground">{p.client.postal_code ? formatPostalCode(p.client.postal_code) : "—"}（そのまま）</span>}</td>
                         <td className="px-2 py-1.5">{p.address || <span className="text-muted-foreground">{p.client.address || "—"}（そのまま）</span>}</td>
+                        <td className="px-2 py-1.5 break-all" data-testid="freee-partner-email">{p.email || <span className="text-muted-foreground">{p.client.email || "—"}（そのまま）</span>}</td>
+                        <td className="px-2 py-1.5 break-all">{p.cc?.length ? p.cc.join(", ") : <span className="text-muted-foreground">{(p.client.cc_emails || []).filter(Boolean).join(", ") || "—"}（そのまま）</span>}</td>
                       </tr>
                     ))}
                   </tbody>

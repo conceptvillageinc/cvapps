@@ -170,8 +170,8 @@ export default function ClientManagement() {
           <p className="text-sm text-muted-foreground mt-0.5">取引先情報を管理します（各項目はクリックでその場編集できます）</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1" onClick={() => setFreeeOpen(true)} title="freee の取引先一覧の CSV から、空の郵便番号・住所を埋めます">
-            <MapPin className="w-4 h-4" /> freee の取引先 CSV から郵便番号・住所を補う
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => setFreeeOpen(true)} title="freee の取引先一覧の CSV から、空の郵便番号・住所・メール（To・CC）を埋めます">
+            <MapPin className="w-4 h-4" /> freee の取引先 CSV から郵便番号・住所・メールを補う
           </Button>
           <CsvExportButton count={filtered.length} onExport={() => exportClientsCsv(filtered, { lastProjectOf })} className="h-8 text-xs" />
           <Button onClick={openNew} size="sm">
