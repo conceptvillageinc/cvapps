@@ -78,7 +78,7 @@ function estimateTemplate(doc, company, user) {
   return { subject, body: lines.join("\n") };
 }
 
-function defaultTemplate(type, doc, company, user) {
+export function defaultTemplate(type, doc, company, user) {
   if (type === "estimate") return estimateTemplate(doc, company, user);
   if (type === "partner_order") return partnerOrderTemplate(doc, company, user);
   const label = LABELS[type];
@@ -113,6 +113,37 @@ function defaultTemplate(type, doc, company, user) {
  * 納品書・請求書をPDF添付でクライアントへ送るダイアログ。
  * 宛先はクライアント一覧のメールアドレス（画面からは変更できない）。
  */
+/** 送付先のクライアント（サーバーと同じ決め方: 書類に紐づいたクライアント → 無ければ同じ名前のうち最初に登録したもの） */
+export function clientForDoc(doc, clients) {
+  if (doc?.client_id) { const c = (clients || []).find((x) => x.id === doc.client_id); if (c) return c; }
+  return [...(clients || [])].filter((c) => c.name === doc?.client_name).sort((a, b) => String(a.created_at || a.created_date || "").localeCompare(String(b.created_at || b.created_date || "")))[0] || null;
+}
+
+/** 送るアドレス（差出人・To・CC） */
+export function mailAddressesFor(type, client, user) {
+  const fixed = documentMailSender(type);
+  const cc = [...new Set([...(Array.isArray(client?.cc_emails) ? client.cc_emails.filter(Boolean).slice(0, 2) : []), ...fixed.cc])];
+  return { from: fixed.sendAs || user?.email || "", to: client?.email || "", cc };
+}
+
+/** 送る前に目で確かめる送付先（差出人・To・CC を 1 行ずつ） */
+export function RecipientCheck({ name, addresses, missingNote }) {
+  const row = "grid grid-cols-[4.5rem_1fr] items-baseline gap-2";
+  return (
+    <div className="space-y-1 text-xs" data-testid="recipient-check">
+      <div className={row}><span className="text-muted-foreground">差出人</span><span className="font-mono">{addresses.from}</span></div>
+      <div className={row}>
+        <span className="text-muted-foreground">宛先（To）</span>
+        <span>
+          <span className="font-medium mr-3">{name}</span>
+          {addresses.to ? <span className="font-mono text-sm font-semibold text-slate-900" data-testid="mail-to">{addresses.to}</span> : <span className="text-amber-700 font-medium">メールアドレスが未登録です（{missingNote}）</span>}
+        </span>
+      </div>
+      <div className={row}><span className="text-muted-foreground">CC</span><span className="font-mono" data-testid="mail-cc">{addresses.cc.length ? addresses.cc.join(", ") : "なし"}</span></div>
+    </div>
+  );
+}
+
 export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onSent, recipient = null }) {
   const queryClient = useQueryClient();
   const { settings } = useSystemSettings();
@@ -129,8 +160,12 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
     enabled: open,
   });
   // 宛先の表示。発注書は連携先（recipient で渡される）、それ以外はクライアント一覧から
-  const client = recipient || clients.find((c) => (doc.client_id && c.id === doc.client_id) || c.name === doc.client_name);
+  const client = recipient || clientForDoc(doc, clients);
   const toName = recipient ? recipient.name : doc.client_name;
+  const addresses = mailAddressesFor(type, client, user);
+  // 送る前に送付先を目で確かめる（チェックしないと送れない）
+  const [checked, setChecked] = useState(false);
+  useEffect(() => { if (open) setChecked(false); }, [open, doc.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -168,22 +203,16 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
-          <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-muted-foreground w-12">宛先</span>
-              <span className="font-medium">{toName}</span>
-              {client?.email ? <span className="text-muted-foreground">{client.email}</span> : <span className="text-amber-700">メールアドレスが未登録です（{recipient ? "クライアント一覧か印刷所情報" : "クライアント一覧"}で登録してください）</span>}
-              {(() => {
-                const cc = [...(Array.isArray(client?.cc_emails) ? client.cc_emails.filter(Boolean) : []), ...documentMailSender(type).cc];
-                return cc.length > 0 && <span className="text-muted-foreground" data-testid="mail-cc">CC: {cc.join(", ")}</span>;
-              })()}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-12">添付</span>
+          <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-2">
+            <RecipientCheck name={toName} addresses={addresses} missingNote={`${recipient ? "クライアント一覧か印刷所情報" : "クライアント一覧"}で登録してください`} />
+            <div className="grid grid-cols-[4.5rem_1fr] items-center gap-2">
+              <span className="text-muted-foreground">添付</span>
+              <span className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="text-[10px] font-normal gap-1"><Paperclip className="w-3 h-3" /> {documentFilename(type, doc)}</Badge>
               <label className="flex items-center gap-1 text-[11px] cursor-pointer ml-2">
                 <input type="checkbox" checked={withStamp} onChange={(e) => setWithStamp(e.target.checked)} /> 電子印鑑あり
               </label>
+              </span>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -195,11 +224,17 @@ export default function DocumentEmailDialog({ open, onOpenChange, type, doc, onS
             <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={14} className="text-sm font-mono" />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="items-center gap-2 sm:justify-between">
+          <label className={`flex items-center gap-2 text-sm cursor-pointer ${addresses.to ? "" : "opacity-40"}`}>
+            <input type="checkbox" checked={checked} disabled={!addresses.to} onChange={(e) => setChecked(e.target.checked)} className="h-4 w-4 accent-primary" data-testid="mail-confirm" />
+            上の送付先（宛先・CC）を確認しました
+          </label>
+          <span className="flex gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>キャンセル</Button>
-          <Button onClick={send} disabled={sending || !client?.email || !subject.trim() || !body.trim()} className="gap-1.5">
+          <Button onClick={send} disabled={sending || !checked || !client?.email || !subject.trim() || !body.trim()} className="gap-1.5" data-testid="mail-send">
             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} 送信
           </Button>
+          </span>
         </DialogFooter>
       </DialogContent>
     </Dialog>

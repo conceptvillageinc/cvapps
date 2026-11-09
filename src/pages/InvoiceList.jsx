@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/api/db";
@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Loader2, Receipt, ArrowRight, Plus } from "lucide-react";
+import { Search, Loader2, Receipt, ArrowRight, Plus, Mail } from "lucide-react";
+import BulkInvoiceMailDialog from "@/components/documents/BulkInvoiceMailDialog";
 import { toast } from "sonner";
 import { INVOICE_STATUS_MAP, INVOICE_SEND_LABEL, INVOICE_SEND_KEYS } from "@/lib/documents";
 import { useSystemSettings } from "@/lib/useSystemSettings";
@@ -28,6 +29,11 @@ const ALL = "all";
 
 export default function InvoiceList() {
   const cols = useListColumns("invoices"); // 列の並び・表示（全員共通）
+  // 選んだ請求書をまとめてメールで送る
+  const [selected, setSelected] = useState(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkList, setBulkList] = useState([]);
+  const toggleSel = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const recurringIds = useRecurringProjectIds();
@@ -124,6 +130,11 @@ export default function InvoiceList() {
               <SelectItem value={ALL} className="text-xs">すべての期</SelectItem>
             </SelectContent>
           </Select>
+          {selected.size > 0 && (
+            <Button variant="outline" className="gap-1.5" onClick={() => { setBulkList(invoices.filter((i) => selected.has(i.id))); setBulkOpen(true); }} data-testid="bulk-mail-open">
+              <Mail className="w-4 h-4" /> 選んだ請求書をメールで送る（{selected.size}件）
+            </Button>
+          )}
           <CsvExportButton count={shown.length} onExport={() => exportInvoicesCsv(shown)} />
           <ListColumnsButton list="invoices" />
           <Button className="gap-2" onClick={() => navigate("/invoices/new")}><Plus className="w-4 h-4" /> 請求書を作成</Button>
@@ -164,6 +175,11 @@ export default function InvoiceList() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
+                    <TableHead className="w-8 px-2">
+                      <input type="checkbox" className="h-3.5 w-3.5 accent-white" aria-label="表示中をすべて選ぶ" title="表示中の請求書をすべて選ぶ（メールでまとめて送る）"
+                        checked={shown.length > 0 && shown.every((i) => selected.has(i.id))}
+                        onChange={(e) => setSelected(e.target.checked ? new Set([...selected, ...shown.map((i) => i.id)]) : new Set([...selected].filter((id) => !shown.some((i) => i.id === id))))} />
+                    </TableHead>
                     {cols.map((k) => (
                       <TableHead key={k} className={`text-xs text-white whitespace-nowrap ${k === "total" ? "text-right" : ""}`}>{columnLabel("invoices", k)}</TableHead>
                     ))}
@@ -175,7 +191,10 @@ export default function InvoiceList() {
                     const st = INVOICE_STATUS_MAP[inv.status] || INVOICE_STATUS_MAP.draft;
                     const late = inv.status === "sent" && inv.due_date && inv.due_date < today;
                     return (
-                      <TableRow key={inv.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => window.open(`/invoices/${inv.id}`, "_blank", "noopener")} title="新しいタブで開きます">
+                      <TableRow key={inv.id} className={`group cursor-pointer hover:bg-muted/40 ${selected.has(inv.id) ? "bg-primary/5" : ""}`} onClick={() => window.open(`/invoices/${inv.id}`, "_blank", "noopener")} title="新しいタブで開きます">
+                        <TableCell className="w-8 px-2" onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={selected.has(inv.id)} onChange={() => toggleSel(inv.id)} aria-label={`${inv.invoice_number} を選ぶ`} data-testid="invoice-select" />
+                        </TableCell>
                         {cols.map((k) => {
                           switch (k) {
                             case "invoice_number": return <TableCell key={k} className="text-xs font-mono text-muted-foreground whitespace-nowrap">{inv.invoice_number}</TableCell>;
@@ -204,6 +223,7 @@ export default function InvoiceList() {
                     );
                   })}
                   <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium">
+                    <TableCell />
                     {cols.map((k, i) => (k === "total"
                       ? <TableCell key={k} className="text-right text-sm tabular-nums">{yen(sum(shown))}</TableCell>
                       : <TableCell key={k} className="text-xs text-muted-foreground whitespace-nowrap">{i === cols.findIndex((c) => c !== "total") ? `表示中の合計（${shown.length}件）` : ""}</TableCell>))}
@@ -215,6 +235,7 @@ export default function InvoiceList() {
           )}
         </CardContent>
       </Card>
+      <BulkInvoiceMailDialog open={bulkOpen} onOpenChange={setBulkOpen} invoices={bulkList} onDone={() => setSelected(new Set())} />
     </div>
   );
 }
