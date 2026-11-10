@@ -37,6 +37,28 @@ import {
 import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
 import RecurringMark from "@/components/projects/RecurringMark";
 
+// 納品書を 2 件以上まとめた（合算した）請求書の件名は「〇月ご請求内容」（〇＝請求日の月）
+export function mergedInvoiceTitle(date) {
+  const m = Number(String(date || "").slice(5, 7));
+  return m ? `${m}月ご請求内容` : "ご請求内容";
+}
+const MERGED_TITLE_RE = /^(\d{1,2}月)?ご請求内容$/;
+/**
+ * 明細に入っている納品書の数に合わせて件名を決め直す。
+ *   2 件以上 →「〇月ご請求内容」、1 件 → その納品書の件名、0 件 → いまのまま。
+ *   自分で書き換えた件名（空・「〇月ご請求内容」・どれかの納品書の件名、のどれでもないもの）はそのまま
+ */
+export function autoInvoiceTitle(current, lineItems, date, titleOf) {
+  const ids = [...new Set((lineItems || []).map((li) => li.delivery_note_id).filter(Boolean))];
+  const t = String(current || "").trim();
+  const known = (id) => (titleOf(id) || "").trim();
+  const isAuto = !t || MERGED_TITLE_RE.test(t) || ids.some((id) => known(id) === t) || [...titleOf.all || []].includes(t);
+  if (!isAuto) return current;
+  if (ids.length >= 2) return mergedInvoiceTitle(date);
+  if (ids.length === 1) return known(ids[0]) || current || "";
+  return current;
+}
+
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
@@ -178,10 +200,11 @@ export default function InvoiceEdit() {
         client_honorific: sourceDelivery.client_honorific || "御中",
         client_postal_code: sourceDelivery.client_postal_code || "",
         client_address: sourceDelivery.client_address || "",
-        title: sourceDelivery.title || "",
         line_items: sourceDeliveries.filter((dn) => dn.client_name === sourceDelivery.client_name).flatMap(itemsFromDeliveryNote),
         person_in_charge: sourceDelivery.person_in_charge || base.person_in_charge,
       });
+      // 納品書 1 件ならその件名、2 件以上まとめたら「〇月ご請求内容」
+      base.title = autoInvoiceTitle("", base.line_items, base.invoice_date, (nid) => sourceDeliveries.find((dn) => dn.id === nid)?.title) || "";
     } else if (project) {
       Object.assign(base, { project_id: project.id, client_name: project.client_name || "", title: project.name || "" });
     }
@@ -222,12 +245,20 @@ export default function InvoiceEdit() {
   const addTextItem = () => set("line_items", [...form.line_items, newDocTextItem()]);
   const removeItem = (itemId) => set("line_items", form.line_items.filter((li) => li.id !== itemId));
 
+  // 納品書 id → 件名（件名を自動で決め直すときに使う）
+  const noteTitleOf = useMemo(() => {
+    const notes = [...clientNotes, ...(sourceDeliveries || [])];
+    const fn = (nid) => notes.find((n) => n.id === nid)?.title;
+    fn.all = new Set(notes.map((n) => (n.title || "").trim()).filter(Boolean));
+    return fn;
+  }, [clientNotes, sourceDeliveries]);
   const toggleNote = (dn) => {
-    if (includedNoteIds.includes(dn.id)) {
-      set("line_items", form.line_items.filter((li) => li.delivery_note_id !== dn.id));
-    } else {
-      setForm((f) => ({ ...f, title: f.title || dn.title || "", line_items: [...f.line_items, ...itemsFromDeliveryNote(dn)] }));
-    }
+    setForm((f) => {
+      const line_items = includedNoteIds.includes(dn.id)
+        ? f.line_items.filter((li) => li.delivery_note_id !== dn.id)
+        : [...f.line_items, ...itemsFromDeliveryNote(dn)];
+      return { ...f, line_items, title: autoInvoiceTitle(f.title, line_items, f.invoice_date, noteTitleOf) };
+    });
   };
 
   // 売上は明細の案件ごとに分けて数える（納品書をまとめた請求書）。2 つ以上の案件にまたがるときだけ内訳を出す
@@ -486,7 +517,7 @@ export default function InvoiceEdit() {
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs">請求日 <span className="text-destructive">*</span></Label>
-              <Input type="date" value={form.invoice_date || ""} onChange={(e) => setForm((f) => ({ ...f, invoice_date: e.target.value, due_date: f.due_date && f.due_date !== defaultDueDate(f.invoice_date) ? f.due_date : defaultDueDate(e.target.value) }))} className="h-9" disabled={locked} />
+              <Input type="date" value={form.invoice_date || ""} onChange={(e) => setForm((f) => ({ ...f, invoice_date: e.target.value, title: MERGED_TITLE_RE.test(String(f.title || "").trim()) ? mergedInvoiceTitle(e.target.value) : f.title, due_date: f.due_date && f.due_date !== defaultDueDate(f.invoice_date) ? f.due_date : defaultDueDate(e.target.value) }))} className="h-9" disabled={locked} />
               {isNew && <p className="text-[10px] text-muted-foreground">番号は請求日の年月で採番されます（I-YYMM-連番）</p>}
             </div>
             <div className="space-y-1.5">
