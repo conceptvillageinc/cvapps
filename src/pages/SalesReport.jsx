@@ -89,7 +89,7 @@ function SimCell({ value, original, edited, onCommit }) {
         inputMode="numeric"
         title={edited ? `実データ: ¥${yen(original)}（空にすると実データに戻ります）` : "数字を入れると試算に使います"}
         aria-label="シミュレーションの値"
-        className={`w-full min-w-0 h-6 px-1 text-right tabular-nums rounded border outline-none focus:border-primary ${edited ? "bg-amber-50 border-amber-300 font-medium text-amber-900" : "bg-background border-input hover:border-slate-400"}`}
+        className={`w-full min-w-0 h-6 px-1 text-right tabular-nums rounded border outline-none focus:border-primary ${edited ? "bg-primary/5 border-primary/40 font-medium text-primary" : "bg-background border-input hover:border-slate-400"}`}
       />
     </td>
   );
@@ -376,9 +376,9 @@ export default function SalesReport() {
         <span className="text-[11px] text-muted-foreground">要約・グラフの粗利・表の「計」に反映されます</span>
       </div>
       {isSim && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-2.5 space-y-2 text-xs">
+        <div className="rounded-xl border bg-card px-4 py-2.5 space-y-2 text-xs">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="font-semibold text-amber-900">シミュレーション</span>
+            <span className="font-semibold text-foreground">シミュレーション</span>
             {scenarios.length > 0 ? (
               <Select value={active?.id || ""} onValueChange={selectScenario}>
                 <SelectTrigger className="h-7 w-[220px] text-xs bg-background"><SelectValue placeholder="パターンを選ぶ" /></SelectTrigger>
