@@ -6,10 +6,11 @@ import { Loader2, Paperclip, ImagePlus, FileText, Trash2, ExternalLink } from "l
 import { toast } from "sonner";
 
 // ============================================================================
-// 議事録の「参考資料」: スクリーンショットや資料ファイルを添付する。
+// 議事録・案件の「参考資料」: スクリーンショットや資料ファイルを添付する。
 //   画像はサムネイル、それ以外はファイル名で並ぶ。クリックで開く。各ファイルにひとことメモを付けられる。
 //   追加のしかた: 「ファイルを選ぶ」／ この枠へドラッグ＆ドロップ ／ 枠をクリックしてから Ctrl+V（⌘+V）でスクショを貼り付け。
 //   保存先は Storage の uploads/meetings/<議事録ID>/attachments/、一覧は meetings.summary.attachments。
+//   案件では pathPrefix に projects/<案件ID>/attachments を渡す（一覧は projects.attachments）。
 // ============================================================================
 
 const MAX_MB = 20;
@@ -66,8 +67,9 @@ function Tile({ a, onCaption, onRemove, readOnly }) {
  * @param {(next:object[], opts?:{ save?: boolean, removed?: string[] })=>void} p.onChange
  *        ファイルの追加・削除はすぐ保存（save: true）。メモの書き換えは他の項目と同じく「保存」で
  * @param {string} [p.userName]
+ * @param {string} [p.pathPrefix]  Storage の保存先（既定は meetings/<議事録ID>/attachments）
  */
-export default function MeetingAttachments({ meetingId, value, onChange, userName = "", readOnly = false }) {
+export default function MeetingAttachments({ meetingId, value, onChange, userName = "", readOnly = false, pathPrefix = null }) {
   const list = Array.isArray(value) ? value : [];
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(0);
@@ -90,7 +92,7 @@ export default function MeetingAttachments({ meetingId, value, onChange, userNam
         const p2 = (n) => String(n).padStart(2, "0");
         const local = `${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}_${p2(now.getHours())}${p2(now.getMinutes())}${p2(now.getSeconds())}`;
         const name = f.name && f.name !== "image.png" ? f.name : `スクリーンショット_${local}${ext}`;
-        const path = `meetings/${meetingId}/attachments/${stamp}-${crypto.randomUUID().slice(0, 8)}${ext}`;
+        const path = `${pathPrefix || `meetings/${meetingId}/attachments`}/${stamp}-${crypto.randomUUID().slice(0, 8)}${ext}`;
         await db.integrations.Core.UploadFile({ file: f, path });
         added.push({ id: crypto.randomUUID(), path, name, type: f.type || "", size: f.size, caption: "", uploaded_at: now.toISOString(), uploaded_by: userName });
       } catch (e) {

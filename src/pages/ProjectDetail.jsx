@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { todayString } from "@/lib/fiscal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ProjectAttachmentsCard from "@/components/projects/ProjectAttachmentsCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -518,6 +519,9 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 参考資料（ファイル添付） */}
+      <ProjectAttachmentsCard key={project.id} project={project} />
 
       {/* 議事録 */}
       <Card>

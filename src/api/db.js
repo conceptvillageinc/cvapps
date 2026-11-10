@@ -127,7 +127,7 @@ const WRITABLE_COLUMNS = {
     'confirmed_revenue', 'confirmed_cost', 'registered_at', 'due_date',
     'payment_due_date', 'vendor_payment_date', 'is_recurring', 'notes', 'created_by',
     'next_action', 'next_action_updated_at', 'next_action_updated_by', 'schedule_settings', 'forecast_source',
-    'actual_revenue_manual', 'actual_cost_manual', 'estimate_sections', 'uses_subsidy', 'delivery_state_manual',
+    'actual_revenue_manual', 'actual_cost_manual', 'estimate_sections', 'uses_subsidy', 'delivery_state_manual', 'attachments',
   ],
   estimates: [
     'estimate_number', 'project_id', 'client_name', 'print_specs', 'client_honorific', 'person_in_charge',
