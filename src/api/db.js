@@ -74,7 +74,7 @@ const WRITABLE_COLUMNS = {
   notifications: ['read_at'],
   fiscal_targets: [
     'fiscal_year', 'sales', 'purchase', 'gross_jump', 'gross_must',
-    'actual_purchase', 'actual_other_cost', 'notes', 'simulation',
+    'actual_purchase', 'actual_other_cost', 'notes', 'simulation', 'memos',
   ],
   bank_transactions: [
     'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',
