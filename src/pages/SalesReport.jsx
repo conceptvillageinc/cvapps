@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -29,6 +29,8 @@ import { useAuth } from "@/lib/AuthContext";
 import { useCostTotals } from "@/lib/usePayablesAccess";
 import { isImeEnter } from "@/lib/ime";
 
+// 売上粗利管理表を「シミュレーション」の表示から開く人
+const SIMULATION_FIRST_EMAILS = ["daichi@concept-village.co.jp"];
 // 検証済みの配色（dataviz の基準パレット: 青 / オレンジ / アクア / 黄）
 const C = { actual: "#2a78d6", forecast: "#eb6834", target: "#1baf7a", must: "#eda100", grid: "#e5e7eb", text: "#52514e" };
 
@@ -220,8 +222,14 @@ export default function SalesReport() {
   const [fiscalYear, setFiscalYear] = useState(String(currentFy));
   const [chart, setChart] = useState("sales"); // sales | gross
   // 「計」の集計範囲: forecast=着地見込だけ / actual=実績だけ / simulation=着地見込を手で置き換えて試算
-  const [totalMode, setTotalMode] = useState("forecast");
+  //   最初に開いたときは「着地見込のみ」。SIMULATION_FIRST_EMAILS の人だけ「シミュレーション」から
   const { user } = useAuth();
+  const simFirst = SIMULATION_FIRST_EMAILS.includes(String(user?.email || "").toLowerCase());
+  const [totalMode, setTotalModeState] = useState(simFirst ? "simulation" : "forecast");
+  const modeTouched = useRef(false);
+  const setTotalMode = (m) => { modeTouched.current = true; setTotalModeState(m); };
+  // ログイン情報があとから読み込まれたとき（まだ切り替えていなければ）に合わせる
+  useEffect(() => { if (!modeTouched.current) setTotalModeState(simFirst ? "simulation" : "forecast"); }, [simFirst]);
   const queryClient = useQueryClient();
   const { allowed: pipelineAllowed } = useCashAccess(); // 案件の積み上げは資金繰り表と同じアドレスだけ
   // シミュレーションの上書き値（期ごとに fiscal_targets.simulation へ保存）
