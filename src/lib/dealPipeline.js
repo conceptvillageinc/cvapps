@@ -152,3 +152,26 @@ export function pipelineToCsv({ deals, tags, summary, fiscalLabel }) {
   }
   return "﻿" + [[`案件の積み上げ ${fiscalLabel || ""}`], ...lines].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
+
+/**
+ * シミュレーション（着地見込を書き換えた値）に、案件の積み上げの確定（＋見込）を足したまとめ
+ * @param {{ sales: number, purchase: number }} sim  シミュレーションの年計（売上・発注見込）
+ * @param {object} summary  pipelineSummary の結果
+ * @param {boolean} withForecast  見込（未確定）も足すか
+ */
+export function simCombo(sim, summary, withForecast) {
+  const parts = [summary.confirmed, ...(withForecast ? [summary.forecast] : [])];
+  const sales = n(sim?.sales) + parts.reduce((s, t) => s + n(t.sales), 0);
+  const purchase = n(sim?.purchase) + parts.reduce((s, t) => s + n(t.purchase), 0);
+  const gross = sales - purchase;
+  const hc = n(summary.headcount);
+  return {
+    sales, purchase, gross,
+    sales_tax: Math.round(sales * (1 + TAX_RATE)), purchase_tax: Math.round(purchase * (1 + TAX_RATE)), gross_tax: Math.round(gross * (1 + TAX_RATE)),
+    margin: sales > 0 ? gross / sales : null,
+    target: { diff: gross - n(summary.grossMust), rate: n(summary.grossMust) > 0 ? gross / n(summary.grossMust) : null },
+    per_person: hc > 0 ? { sales: Math.round(sales / hc), gross: Math.round(gross / hc) } : { sales: null, gross: null },
+    sim_sales: n(sim?.sales), sim_gross: n(sim?.sales) - n(sim?.purchase),
+    deals_sales: parts.reduce((s, t) => s + n(t.sales), 0), deals_gross: parts.reduce((s, t) => s + n(t.gross), 0),
+  };
+}

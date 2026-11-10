@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   DEAL_COLORS, DEAL_COLOR_KEYS, MAX_DEAL_TAGS, DEFAULT_PER_PERSON, SECTIONS,
-  newDeal, renumber, totalsOf, pipelineSummary, dealFromProject, pipelineToCsv,
+  newDeal, renumber, totalsOf, pipelineSummary, dealFromProject, pipelineToCsv, simCombo,
 } from "@/lib/dealPipeline";
 import { isImeEnter } from "@/lib/ime";
 
@@ -270,10 +270,11 @@ function ImportDialog({ open, onOpenChange, projects, deals, tags, onImport }) {
  * @param {(patch:object)=>void} p.onChangeMeta   区分・人数の保存（パターンをまたいで共通）
  * @param {number} p.grossMust          最低粗利目標（必達粗利の年間合計）
  * @param {object} p.appAnnual          アプリ側の年計 { total: {sales, gross}, actual: {...}, forecast: {...} }
+ * @param {{ sales: number, purchase: number }} [p.simTotals]  シミュレーションの年計（着地見込を書き換えた値）
  * @param {object[]} p.projects
  * @param {string} p.fiscalLabel
  */
-export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChangeMeta, grossMust, appAnnual, projects, fiscalLabel, readOnly = false }) {
+export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChangeMeta, grossMust, appAnnual, simTotals = null, projects, fiscalLabel, readOnly = false }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const projectsById = useMemo(() => Object.fromEntries((projects || []).map((p) => [p.id, p])), [projects]);
@@ -375,6 +376,32 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
           </div>
         </CardContent>
       </Card>
+
+      {/* シミュレーション（着地見込を書き換えた値）＋ 確定、＋ 確定 ＋ 見込 */}
+      {simTotals && [["シミュレーション＋確定", false], ["シミュレーション＋確定＋見込", true]].map(([title, withForecast]) => {
+        const c = simCombo(simTotals, summary, withForecast);
+        return (
+          <Card key={title} className="bg-muted/20" data-testid={withForecast ? "sim-confirmed-forecast" : "sim-confirmed"}>
+            <CardContent className="p-3 space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold">{title}</span>
+                <span className="text-[11px] text-muted-foreground">シミュレーション（表の着地見込を書き換えた値）の年計 売上 {yen(c.sim_sales)}・粗利 {yen(c.sim_gross)} に、上の{withForecast ? "確定と見込" : "確定"}の行（売上 {yen(c.deals_sales)}・粗利 {yen(c.deals_gross)}）を足したもの</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+                <Stat label="売上（税別）" value={yen(c.sales)} sub={`税込 ${yen(c.sales_tax)}`} />
+                <Stat label="仕入（税別）" value={yen(c.purchase)} sub={`税込 ${yen(c.purchase_tax)}`} />
+                <Stat label="粗利（税別）" value={yen(c.gross)} sub={`税込 ${yen(c.gross_tax)}`} />
+                <Stat label="粗利率" value={pct(c.margin)} />
+                <Stat label="最低粗利目標との差" value={yen(c.target.diff)} sub={c.target.rate === null ? "目標が未設定" : `達成率 ${pct(c.target.rate)}`} tone={c.target.diff < 0 ? "text-red-700" : "text-emerald-700"} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label="売上／人" value={hc ? yen(c.per_person.sales) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonSales)}`} tone={hc ? perOk(c.per_person.sales, summary.perPersonSales) : ""} />
+                <Stat label="粗利／人" value={hc ? yen(c.per_person.gross) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonGross)}`} tone={hc ? perOk(c.per_person.gross, summary.perPersonGross) : ""} />
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
 
       {settingsOpen && <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} tags={tags} meta={meta} onSave={onChangeMeta} />}
       {importOpen && <ImportDialog open={importOpen} onOpenChange={setImportOpen} projects={projects} deals={deals} tags={tags} onImport={(rows) => set([...deals, ...rows.map((r) => ({ ...r, sort: 9999 }))])} />}

@@ -616,6 +616,7 @@ export default function SalesReport() {
           onChangeMeta={({ tags, ...meta }) => persist({ ...sim, deal_tags: tags, ...meta })}
           grossMust={annual.target.gross_must}
           appAnnual={report.annual}
+          simTotals={{ sales: view.annual.forecast.sales, purchase: view.annual.forecast.cost }}
           projects={projects}
           fiscalLabel={fiscalYearLabel(fy, fiscalYearStartMonth)}
         />
