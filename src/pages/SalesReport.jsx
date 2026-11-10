@@ -375,8 +375,8 @@ export default function SalesReport() {
         <TotalModeSwitch />
         <span className="text-[11px] text-muted-foreground">要約・グラフの粗利・表の「計」に反映されます</span>
       </div>
-      {/* メモ（表示ごとに別々） */}
-      <SalesReportMemo key={`${fy}-${totalMode}`} fy={fy} targets={targets} mode={totalMode} label={totalLabel} />
+      {/* メモ（表示ごとに別々。daichi@ だけ） */}
+      <SalesReportMemo key={`${fy}-${totalMode}`} fy={fy} mode={totalMode} label={totalLabel} />
       {isSim && (
         <div className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-2.5 space-y-2 text-xs">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

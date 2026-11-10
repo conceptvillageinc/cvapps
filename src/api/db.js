@@ -53,6 +53,7 @@ const TABLES = {
   TaskComment: 'task_comments',
   TaskAttachment: 'task_attachments',
   Notification: 'notifications',
+  SalesReportMemo: 'sales_report_memos',
 };
 
 // 書き込みを許可するカラム。
@@ -72,9 +73,10 @@ const WRITABLE_COLUMNS = {
   task_comments: ['task_id', 'body', 'mentions', 'attachment_ids', 'pin_task_id'],
   task_attachments: ['task_id', 'path', 'file_name', 'mime_type', 'size', 'page_count'],
   notifications: ['read_at'],
+  sales_report_memos: ['fiscal_year', 'mode', 'body', 'updated_by'],
   fiscal_targets: [
     'fiscal_year', 'sales', 'purchase', 'gross_jump', 'gross_must',
-    'actual_purchase', 'actual_other_cost', 'notes', 'simulation', 'memos',
+    'actual_purchase', 'actual_other_cost', 'notes', 'simulation',
   ],
   bank_transactions: [
     'bank', 'account_label', 'transaction_date', 'amount_in', 'amount_out', 'payee_raw',
