@@ -88,7 +88,8 @@ export function defaultTemplate(type, doc, company, user) {
     `${doc.client_name} ${doc.client_honorific || "御中"}`,
     "",
     "いつもお世話になっております。",
-    greetingLine(user, company),
+    // 請求書は会社の共通アドレス（info@）から送るので、出だしは誰が送っても「コンセプト・ヴィレッジです。」（名前を入れない）
+    greetingLine(type === "invoice" ? null : user, company),
     "",
     `${label}をお送りいたします。PDFを添付しておりますのでご確認ください。`,
     "",
@@ -123,7 +124,7 @@ export function invoiceGroupTemplate(invs, company, user) {
     `${first.client_name} ${first.client_honorific || "御中"}`,
     "",
     "いつもお世話になっております。",
-    greetingLine(user, company),
+    greetingLine(null, company), // 請求書なので名前を入れない（上と同じ）
     "",
     `御請求書を${invs.length}件お送りいたします。PDFを添付しておりますのでご確認ください。`,
     "",
