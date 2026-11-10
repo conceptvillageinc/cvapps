@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Copy, ArrowUp, ArrowDown, ArrowLeftRight, Download, Settings2, FolderInput, ExternalLink } from "lucide-react";
+import { Plus, Trash2, Copy, ArrowLeftRight, Download, Settings2, FolderInput, ExternalLink, GripVertical } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -53,53 +53,67 @@ function TagSelect({ value, tags, onChange }) {
   );
 }
 
-function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, onAdd, onRemove, onDuplicate, onMove, onSwap, readOnly }) {
+function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, onAdd, onRemove, onDuplicate, onSwap, drag, readOnly }) {
   const t = totalsOf(rows);
+  const dragging = !!drag.dragId;
+  const fromOther = dragging && drag.dragSection !== sectionKey;
   return (
-    <Card>
+    <Card
+      // 別の欄（確定⇔見込）からつまんできた行は、この欄の上に来たら最後に入れる（行の上に来たらその位置に入れる）
+      onDragOver={(e) => { if (!fromOther || readOnly) return; e.preventDefault(); drag.overSection(sectionKey); }}
+      onDrop={(e) => { if (dragging) { e.preventDefault(); drag.end(); } }}
+      className={fromOther ? "ring-2 ring-primary/40" : ""}
+      data-testid={`deal-section-${sectionKey}`}
+    >
       <CardContent className="p-0">
         <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
           <span className="text-sm font-semibold">{label}</span>
           <span className="text-[11px] text-muted-foreground">{rows.length} 件</span>
+          {fromOther && <span className="text-[11px] text-primary">ここに離すと{label}へ移ります</span>}
           {!readOnly && <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] gap-1 ml-auto" onClick={() => onAdd(sectionKey)}><Plus className="w-3 h-3" /> 行を追加</Button>}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs table-fixed min-w-[640px]" data-section={sectionKey}>
+        <div>
+          <table className="w-full text-xs table-fixed" data-section={sectionKey}>
             <thead className="bg-slate-800 text-white">
               <tr>
-                <th className="text-left px-2 py-1.5 w-[88px] whitespace-nowrap">区分</th>
-                <th className="text-left px-2 py-1.5 whitespace-nowrap">クライアント名・件名</th>
-                <th className="text-right px-2 py-1.5 w-[104px] whitespace-nowrap">売上（税別）</th>
-                <th className="text-right px-2 py-1.5 w-[104px] whitespace-nowrap">仕入（税別）</th>
-                <th className="text-left px-2 py-1.5 w-[22%] whitespace-nowrap">備考</th>
-                {!readOnly && <th className="w-[112px]"></th>}
+                {!readOnly && <th className="w-[18px]"></th>}
+                <th className="text-left px-1.5 py-1.5 w-[76px] whitespace-nowrap">区分</th>
+                <th className="text-left px-1.5 py-1.5 whitespace-nowrap">クライアント名・件名</th>
+                <th className="text-right px-1.5 py-1.5 w-[92px] whitespace-nowrap">売上（税別）</th>
+                <th className="text-right px-1.5 py-1.5 w-[92px] whitespace-nowrap">仕入（税別）</th>
+                <th className="text-left px-1.5 py-1.5 w-[18%] whitespace-nowrap">備考</th>
+                {!readOnly && <th className="w-[60px]"></th>}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={readOnly ? 5 : 6} className="px-3 py-6 text-center text-muted-foreground">まだ行がありません{!readOnly && "。「行を追加」か「案件一覧から取り込む」から"}</td></tr>
+                <tr><td colSpan={readOnly ? 5 : 7} className="px-3 py-6 text-center text-muted-foreground">まだ行がありません{!readOnly && "。「行を追加」か「案件一覧から取り込む」から（もう一方の欄の行をつまんで、ここへ移すこともできます）"}</td></tr>
               )}
-              {rows.map((d, i) => {
+              {rows.map((d) => {
                 const tag = tags.find((x) => x.id === d.tag);
                 const color = tag ? DEAL_COLORS[tag.color] : null;
                 const proj = d.project_id ? projectsById[d.project_id] : null;
                 return (
-                  <tr key={d.id} className={`border-t ${color ? color.row : ""}`} data-deal={d.id}>
-                    <td className="px-1 py-1"><TagSelect value={d.tag} tags={tags} onChange={(v) => onPatch(d.id, { tag: v })} /></td>
-                    <td className="px-1 py-1">
+                  <tr key={d.id} className={`border-t ${color ? color.row : ""} ${drag.dragId === d.id ? "opacity-40" : ""}`} data-deal={d.id}
+                    onDragOver={(e) => { if (!dragging || readOnly) return; e.preventDefault(); e.stopPropagation(); drag.overRow(d); }}>
+                    {!readOnly && (
+                      <td className="pl-1 py-1 text-center">
+                        <span draggable onDragStart={(e) => drag.start(e, d)} onDragEnd={drag.end} title="つかんで上下に動かす（確定⇔見込の欄へも移せます）" className="inline-block text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing" data-testid="deal-grip"><GripVertical className="w-3.5 h-3.5" /></span>
+                      </td>
+                    )}
+                    <td className="px-0.5 py-1"><TagSelect value={d.tag} tags={tags} onChange={(v) => onPatch(d.id, { tag: v })} /></td>
+                    <td className="px-0.5 py-1">
                       <div className="flex items-center gap-1">
-                        <Input value={d.name} onChange={(e) => onPatch(d.id, { name: e.target.value })} className="h-7 text-xs bg-background/70" aria-label="クライアント名・件名" readOnly={readOnly} />
+                        <Input value={d.name} onChange={(e) => onPatch(d.id, { name: e.target.value })} className="h-7 text-xs bg-background/70 px-1.5" aria-label="クライアント名・件名" readOnly={readOnly} title={d.name} />
                         {proj && <Link to={`/projects/${proj.id}`} className="text-muted-foreground hover:text-primary shrink-0" title={`案件 ${proj.project_number || ""} を開く`}><ExternalLink className="w-3.5 h-3.5" /></Link>}
                       </div>
                     </td>
-                    <td className="px-1 py-1"><YenInput value={d.sales} onChange={(v) => onPatch(d.id, { sales: v })} aria-label="売上" className="bg-background/70" readOnly={readOnly} /></td>
-                    <td className="px-1 py-1"><YenInput value={d.purchase} onChange={(v) => onPatch(d.id, { purchase: v })} aria-label="仕入" className="bg-background/70" readOnly={readOnly} /></td>
-                    <td className="px-1 py-1"><Input value={d.memo} onChange={(e) => onPatch(d.id, { memo: e.target.value })} className="h-7 text-xs bg-background/70" aria-label="備考" readOnly={readOnly} title={d.memo} /></td>
+                    <td className="px-0.5 py-1"><YenInput value={d.sales} onChange={(v) => onPatch(d.id, { sales: v })} aria-label="売上" className="bg-background/70" readOnly={readOnly} /></td>
+                    <td className="px-0.5 py-1"><YenInput value={d.purchase} onChange={(v) => onPatch(d.id, { purchase: v })} aria-label="仕入" className="bg-background/70" readOnly={readOnly} /></td>
+                    <td className="px-0.5 py-1"><Input value={d.memo} onChange={(e) => onPatch(d.id, { memo: e.target.value })} className="h-7 text-xs bg-background/70 px-1.5" aria-label="備考" readOnly={readOnly} title={d.memo} /></td>
                     {!readOnly && (
-                      <td className="px-1 py-1">
+                      <td className="px-0.5 py-1">
                         <div className="flex items-center justify-end gap-0.5 text-muted-foreground">
-                          <button type="button" className="p-0.5 hover:text-foreground disabled:opacity-30" onClick={() => onMove(d.id, -1)} disabled={i === 0} title="上へ" aria-label="上へ"><ArrowUp className="w-3.5 h-3.5" /></button>
-                          <button type="button" className="p-0.5 hover:text-foreground disabled:opacity-30" onClick={() => onMove(d.id, 1)} disabled={i === rows.length - 1} title="下へ" aria-label="下へ"><ArrowDown className="w-3.5 h-3.5" /></button>
                           <button type="button" className="p-0.5 hover:text-foreground" onClick={() => onSwap(d.id)} title={sectionKey === "confirmed" ? "見込へ移す" : "確定へ移す"} aria-label={sectionKey === "confirmed" ? "見込へ移す" : "確定へ移す"}><ArrowLeftRight className="w-3.5 h-3.5" /></button>
                           <button type="button" className="p-0.5 hover:text-foreground" onClick={() => onDuplicate(d.id)} title="複製" aria-label="複製"><Copy className="w-3.5 h-3.5" /></button>
                           <button type="button" className="p-0.5 hover:text-destructive" onClick={() => onRemove(d.id)} title="削除" aria-label="削除"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -111,10 +125,10 @@ function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, on
               })}
             </tbody>
             <tfoot className="text-xs">
-              <tr className="border-t bg-muted/30 font-medium"><td colSpan={2} className="px-2 py-1 text-right">売上／仕入（税別）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase)}</td><td colSpan={readOnly ? 1 : 2}></td></tr>
-              <tr className="bg-muted/30"><td colSpan={2} className="px-2 py-1 text-right">売上／仕入（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales_tax)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase_tax)}</td><td colSpan={readOnly ? 1 : 2}></td></tr>
-              <tr className="bg-muted/30"><td colSpan={2} className="px-2 py-1 text-right">粗利（税別）</td><td className="px-2 py-1 text-right tabular-nums font-semibold">{yen(t.gross)}</td><td className="px-2 py-1 text-right tabular-nums text-muted-foreground">{pct(t.margin)}</td><td colSpan={readOnly ? 1 : 2} className="px-2 py-1 text-[10px] text-muted-foreground">← 粗利率</td></tr>
-              <tr className="bg-muted/30"><td colSpan={2} className="px-2 py-1 text-right">粗利（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.gross_tax)}</td><td colSpan={readOnly ? 2 : 3}></td></tr>
+              <tr className="border-t bg-muted/30 font-medium"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">売上／仕入（税別）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase)}</td><td colSpan={readOnly ? 1 : 2}></td></tr>
+              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">売上／仕入（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales_tax)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase_tax)}</td><td colSpan={readOnly ? 1 : 2}></td></tr>
+              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">粗利（税別）</td><td className="px-2 py-1 text-right tabular-nums font-semibold">{yen(t.gross)}</td><td className="px-2 py-1 text-right tabular-nums text-muted-foreground">{pct(t.margin)}</td><td colSpan={readOnly ? 1 : 2} className="px-2 py-1 text-[10px] text-muted-foreground">← 粗利率</td></tr>
+              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">粗利（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.gross_tax)}</td><td colSpan={readOnly ? 2 : 3}></td></tr>
             </tfoot>
           </table>
         </div>
@@ -265,19 +279,43 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
   const projectsById = useMemo(() => Object.fromEntries((projects || []).map((p) => [p.id, p])), [projects]);
   const summary = useMemo(() => pipelineSummary({ deals, grossMust, headcount: meta.headcount, perPersonSales: meta.per_person_sales, perPersonGross: meta.per_person_gross }), [deals, grossMust, meta]);
 
-  const set = (next) => onChangeDeals(renumber(next));
+  // 並び（sort）の順にそろえてから 0,1,2… に振り直す（↑↓・つまんで動かす・確定⇔見込の移動が並びに効くように）
+  const set = (next) => onChangeDeals(renumber([...next].sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0))));
   const patch = (id, data) => set(deals.map((d) => (d.id === id ? { ...d, ...data } : d)));
   const add = (section) => set([...deals, newDeal(section, { sort: 9999 })]);
   const remove = (id) => { const d = deals.find((x) => x.id === id); if (d && (d.name || d.sales || d.purchase) && !window.confirm(`「${d.name || "（名前なし）"}」を削除しますか？`)) return; set(deals.filter((x) => x.id !== id)); };
   const duplicate = (id) => { const i = deals.findIndex((x) => x.id === id); if (i < 0) return; const copy = { ...deals[i], id: crypto.randomUUID(), project_id: null }; set([...deals.slice(0, i + 1), copy, ...deals.slice(i + 1)]); };
   const swap = (id) => patch(id, { section: deals.find((x) => x.id === id)?.section === "confirmed" ? "forecast" : "confirmed", sort: 9999 });
-  const move = (id, dir) => {
+  // つまんで動かす: 同じ欄では並べ替え、もう一方の欄（確定⇔見込）の行や欄の上に来たらそちらへ移す
+  const [dragId, setDragId] = useState(null);
+  const placeDeal = (id, section, beforeId) => {
     const d = deals.find((x) => x.id === id); if (!d) return;
-    const same = deals.filter((x) => x.section === d.section);
-    const i = same.findIndex((x) => x.id === id); const j = i + dir;
-    if (j < 0 || j >= same.length) return;
-    const order = same.map((x) => x.id); [order[i], order[j]] = [order[j], order[i]];
-    set(deals.map((x) => (x.section === d.section ? { ...x, sort: order.indexOf(x.id) } : x)));
+    const list = deals.filter((x) => x.section === section && x.id !== id);
+    const sameSection = d.section === section;
+    let at = beforeId ? list.findIndex((x) => x.id === beforeId) : list.length;
+    if (at < 0) at = list.length;
+    // 同じ欄で下へ動かすときは、重ねた行の後ろに入れる（上へは前に）
+    if (sameSection && beforeId) {
+      const from = deals.filter((x) => x.section === section).findIndex((x) => x.id === id);
+      const to = deals.filter((x) => x.section === section).findIndex((x) => x.id === beforeId);
+      if (from < to) at += 1;
+    }
+    const ordered = [...list.slice(0, at), { ...d, section }, ...list.slice(at)];
+    const sortOf = new Map(ordered.map((x, i) => [x.id, i]));
+    const next = deals.map((x) => (x.id === id ? { ...x, section, sort: sortOf.get(id) } : x.section === section ? { ...x, sort: sortOf.get(x.id) } : x));
+    set(next);
+  };
+  const drag = {
+    dragId,
+    dragSection: deals.find((x) => x.id === dragId)?.section || null,
+    start: (e, d) => {
+      setDragId(d.id);
+      const row = e.currentTarget.closest("tr");
+      if (row && e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", d.id); e.dataTransfer.setDragImage(row, 16, 16); }
+    },
+    end: () => setDragId(null),
+    overRow: (target) => { if (dragId && dragId !== target.id) placeDeal(dragId, target.section, target.id); },
+    overSection: (section) => { const d = deals.find((x) => x.id === dragId); if (d && d.section !== section) placeDeal(dragId, section, null); },
   };
   const exportCsv = () => {
     const blob = new Blob([pipelineToCsv({ deals, tags, summary, fiscalLabel })], { type: "text/csv;charset=utf-8" });
@@ -311,7 +349,7 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
       <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3">
         {SECTIONS.map(([key, label]) => (
           <SectionTable key={key} sectionKey={key} label={label} rows={deals.filter((d) => d.section === key)} tags={tags} projectsById={projectsById}
-            onPatch={patch} onAdd={add} onRemove={remove} onDuplicate={duplicate} onMove={move} onSwap={swap} readOnly={readOnly} />
+            onPatch={patch} onAdd={add} onRemove={remove} onDuplicate={duplicate} onSwap={swap} drag={drag} readOnly={readOnly} />
         ))}
       </div>
 
