@@ -381,7 +381,7 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
       {simTotals && [["シミュレーション＋確定", false], ["シミュレーション＋確定＋見込", true]].map(([title, withForecast]) => {
         const c = simCombo(simTotals, summary, withForecast);
         return (
-          <Card key={title} className="bg-muted/20" data-testid={withForecast ? "sim-confirmed-forecast" : "sim-confirmed"}>
+          <Card key={title} className="bg-sky-100/70 border-sky-200" data-testid={withForecast ? "sim-confirmed-forecast" : "sim-confirmed"}>
             <CardContent className="p-3 space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold">{title}</span>
