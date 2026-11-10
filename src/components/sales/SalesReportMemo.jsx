@@ -77,10 +77,10 @@ function MemoBox({ fy, mode, label }) {
   useEffect(() => () => { clearTimeout(timer.current); if (dirty.current) commitRef.current(latestText.current); }, []);
 
   return (
-    <div className="rounded-xl border bg-yellow-50/60 border-yellow-200 px-4 py-3 space-y-1.5" data-testid="sales-report-memo">
+    <div className="rounded-xl border bg-card px-4 py-3 space-y-1.5" data-testid="sales-report-memo">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <StickyNote className="w-3.5 h-3.5 text-yellow-700" />
-        <span className="font-semibold text-yellow-900">メモ（{label}）</span>
+        <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="font-semibold text-foreground">メモ（{label}）</span>
         <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><Lock className="w-3 h-3" />あなただけに見えています。表示ごとに別々のメモです（この期の分）</span>
         <span className="ml-auto text-[11px] text-muted-foreground inline-flex items-center gap-1">
           {pending > 0 ? <><Loader2 className="w-3 h-3 animate-spin" />保存中</> : dirty.current ? "入力中…" : row?.updated_at ? <><Check className="w-3 h-3 text-emerald-600" />{fmt(row.updated_at)}{row.updated_by ? `・${row.updated_by}` : ""}</> : null}
@@ -92,7 +92,7 @@ function MemoBox({ fy, mode, label }) {
         onBlur={() => commit()}
         rows={Math.min(10, Math.max(3, text.split("\n").length + 1))}
         placeholder={`${label}の表についてのメモ（前提・気になる案件・次にやることなど）`}
-        className="w-full rounded-md border border-yellow-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none focus:ring-2 focus:ring-yellow-300"
+        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed outline-none focus:ring-2 focus:ring-ring/30"
         data-testid="sales-report-memo-text"
       />
     </div>
