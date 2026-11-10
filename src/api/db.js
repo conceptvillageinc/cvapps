@@ -312,9 +312,10 @@ function createEntity(entityName) {
       for (const [field, value] of Object.entries(conditions)) {
         // NULL の比較は eq では一致しない（SQL の NULL = NULL は真にならない）。
         // 「未対応のものだけ」のような絞り込みには is を使う必要がある。
+        // 配列を渡すと「どれか」（in）
         query = value === null
           ? query.is(toColumn(field), null)
-          : query.eq(toColumn(field), value);
+          : Array.isArray(value) ? query.in(toColumn(field), value) : query.eq(toColumn(field), value);
       }
       const parsed = parseSort(sort);
       if (parsed) query = query.order(parsed.column, { ascending: parsed.ascending });

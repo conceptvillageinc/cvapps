@@ -110,8 +110,8 @@ function ProjectCell({ col, p }) {
   }
 }
 
-// 案件一覧（標準）の最初の状態の絞り込み: 進行中・完了（失注・取消は隠す）
-const DEFAULT_STATUS_FILTER = [PROJECT_STATUS_MAP.open.label, PROJECT_STATUS_MAP.completed.label];
+// 案件一覧（標準）の最初の状態の絞り込み: 未・進行中・完了（失注・取消は隠す）
+const DEFAULT_STATUS_FILTER = [PROJECT_STATUS_MAP.pending.label, PROJECT_STATUS_MAP.open.label, PROJECT_STATUS_MAP.completed.label];
 // 並び順の言い方（日付は新しい順／古い順、金額は大きい順／小さい順、文字は昇順／降順）
 const DATE_KEYS = ["registered_at", "due_date", "payment_due_date"];
 const AMOUNT_KEYS = ["expected_revenue", "expected_gross_profit"];
@@ -142,7 +142,7 @@ export default function ProjectList() {
     setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("q"); return n; }, { replace: true });
   }, [searchParams, setSearch, setSearchParams]);
   const [period, setPeriod] = useSessionState("projects.period", () => emptyPeriod("registered_at")); // 期間（登録日・完了予定・入金予定のどれかで）
-  // 既定では進行中・完了の案件を表示する（失注・取消は隠す）
+  // 既定では未・進行中・完了の案件を表示する（失注・取消は隠す）
   const [columnFilters, setColumnFilters] = useSessionState("projects.columnFilters", { status: DEFAULT_STATUS_FILTER });
   const [sortConfig, setSortConfig] = useSessionState("projects.sort", { key: "registered_at", direction: "desc" });
   const [createOpen, setCreateOpen] = useState(false);
@@ -159,7 +159,7 @@ export default function ProjectList() {
       : db.entities.Project.listAll("-registered_at"),
   });
 
-  // ネクストアクションは期に関係なくすべての案件を読み、タブの中で状態を絞り込む（最初は進行中・完了）
+  // ネクストアクションは期に関係なくすべての案件を読み、タブの中で状態を絞り込む（最初は未・進行中・完了）
   const { data: nextProjects = [], isLoading: nextLoading } = useQuery({
     queryKey: ["projects", "all", "next"],
     queryFn: () => db.entities.Project.list("due_date"),
@@ -417,7 +417,7 @@ export default function ProjectList() {
           })}
           {hiddenByStatus.length > 0 && <span>（非表示：{hiddenByStatus.map(([label, n]) => `${label} ${n}件`).join("・")}）</span>}
           <span className="ml-1 flex items-center gap-2">
-            {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">状態を進行中・完了に戻す</button>}
+            {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">状態を未・進行中・完了に戻す</button>}
             {columnFilters.status && <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>}
             {/* 補助金の案件だけに絞る（もう一度押すと外す） */}
             <button type="button" onClick={() => setColumnFilter("subsidy", columnFilters.subsidy ? null : ["補助金の案件"])} className={`inline-flex items-center gap-1 rounded border px-1.5 ${columnFilters.subsidy ? "border-orange-300 bg-orange-50 text-orange-800" : "text-muted-foreground hover:bg-muted/50"}`} data-testid="subsidy-filter">

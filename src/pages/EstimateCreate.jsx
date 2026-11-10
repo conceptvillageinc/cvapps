@@ -69,7 +69,7 @@ export default function EstimateCreate() {
   // 進行中の案件（新しい順）。件名・クライアントの初期値に使う。
   const { data: openProjects = [] } = useQuery({
     queryKey: ["projects", "open"],
-    queryFn: () => db.entities.Project.filter({ status: "open" }, "-registered_at", 300),
+    queryFn: () => db.entities.Project.filter({ status: ["pending", "open"] }, "-registered_at", 300),
   });
 
   const { data: clients = [] } = useQuery({

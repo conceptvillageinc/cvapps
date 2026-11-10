@@ -583,9 +583,9 @@ const NEXT_COLS = [
 
 const sameStatus = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
 
-// 案件別ネクストアクションの状態の絞り込み（最初は進行中・完了）
+// 案件別ネクストアクションの状態の絞り込み（最初は未・進行中・完了）
 const NEXT_STATUS_KEYS = Object.keys(PROJECT_STATUS_MAP);
-const NEXT_DEFAULT_STATUS = ["open", "completed"];
+const NEXT_DEFAULT_STATUS = ["pending", "open", "completed"];
 
 export function NextActionView({ projects: allProjects, isLoading, search = "", onClearSearch }) {
   const [onlyEmpty, setOnlyEmpty] = useSessionState("projects.next.onlyEmpty", false);
@@ -672,7 +672,7 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
           editor={() => <CheckListEditor options={NEXT_STATUS_KEYS} selected={statusFilter} onChange={setStatusFilter} labelOf={(k) => PROJECT_STATUS_MAP[k]?.label || k} />}
         />
         {onlyEmpty && <CondChip label="ネクストアクション" value="空の案件だけ" onClear={() => setOnlyEmpty(false)} />}
-        {!sameStatus(statusFilter, NEXT_DEFAULT_STATUS) && <button type="button" onClick={() => setStatusFilter(NEXT_DEFAULT_STATUS)} className="ml-1 text-primary hover:underline">状態を進行中・完了に戻す</button>}
+        {!sameStatus(statusFilter, NEXT_DEFAULT_STATUS) && <button type="button" onClick={() => setStatusFilter(NEXT_DEFAULT_STATUS)} className="ml-1 text-primary hover:underline">状態を未・進行中・完了に戻す</button>}
       </ConditionsRow>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground shrink-0">
         <span>

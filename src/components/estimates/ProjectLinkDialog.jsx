@@ -74,10 +74,10 @@ export default function ProjectLinkDialog({ open, onOpenChange, estimate, curren
   const docLabels = [["delivery", "納品書"], ["invoice", "請求書"], ["printOrder", "入稿記録"], ["partnerOrder", "連携先への発注書"], ["meeting", "議事録"]]
     .filter(([k]) => docs[k].length > 0).map(([k, label]) => `${label} ${docs[k].length}件`);
 
-  // 同じクライアントの案件を先に、進行中・完了を先に
+  // 同じクライアントの案件を先に、未・進行中・完了を先に
   const sameClient = (p) => !!estimate.client_name && normalizeClientName(p.client_name) === normalizeClientName(estimate.client_name);
   const ordered = useMemo(() => {
-    const rank = (p) => (sameClient(p) ? 0 : 2) + (p.status === "open" || p.status === "completed" ? 0 : 1);
+    const rank = (p) => (sameClient(p) ? 0 : 2) + (["pending", "open", "completed"].includes(p.status) ? 0 : 1);
     return [...projects].filter((p) => p.id !== current?.id).sort((a, b) => rank(a) - rank(b));
   }, [projects, current, estimate.client_name]);
   const mismatch = picked && estimate.client_name && picked.client_name && !sameClient(picked);

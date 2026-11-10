@@ -31,7 +31,7 @@ export default function MeetingNew() {
   const fileRef = useRef(null);
 
   const { data: clients = [] } = useQuery({ queryKey: ["clients"], queryFn: () => db.entities.Client.list("name") });
-  const { data: projects = [] } = useQuery({ queryKey: ["projects", "open"], queryFn: () => db.entities.Project.filter({ status: "open" }, "-registered_at", 300) });
+  const { data: projects = [] } = useQuery({ queryKey: ["projects", "open"], queryFn: () => db.entities.Project.filter({ status: ["pending", "open"] }, "-registered_at", 300) });
   const { data: appUsers = [] } = useQuery({ queryKey: ["appUsers"], queryFn: () => db.entities.User.list("full_name") });
 
   const [form, setForm] = useState({
