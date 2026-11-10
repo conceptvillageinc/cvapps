@@ -233,14 +233,16 @@ export default function SalesReport() {
   const { data: invoices = [] } = useQuery({ queryKey: ["invoices", "all"], queryFn: () => db.entities.Invoice.list("-invoice_date") });
   const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), select: forPayments });
   const { payables, cardCharges } = useCostTotals(); // 支払い先まとめ・カード明細は月ごとの合計だけ（明細は見せない）
+  // 定期売上のひな形（「有効」のものだけ着地見込に入れる）
+  const { data: recurringTemplates = [] } = useQuery({ queryKey: ["recurringTemplates"], queryFn: () => db.entities.RecurringProjectTemplate.list("-created_date") });
   // 売上カテゴリーの振り分けに使う見積（今期以降に作ったもの）
   const { data: categoryEstimates = [] } = useQuery({ queryKey: ["estimates", "salesCategory"], queryFn: () => db.entities.Estimate.between("created_at", SALES_CATEGORY_FROM, null), retry: false });
   const { data: targetRows = [], isLoading } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list() });
   const targets = targetRows.find((t) => Number(t.fiscal_year) === fy) || null;
 
   const report = useMemo(
-    () => buildSalesReport({ fiscalYear: fy, startMonth: fiscalYearStartMonth, projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets, marginTarget: grossMarginTarget }),
-    [fy, fiscalYearStartMonth, projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets, grossMarginTarget],
+    () => buildSalesReport({ fiscalYear: fy, startMonth: fiscalYearStartMonth, projects, invoices, bankTxs, payables, cardCharges, recurringTemplates, payablesMonthMode, targets, marginTarget: grossMarginTarget }),
+    [fy, fiscalYearStartMonth, projects, invoices, bankTxs, payables, cardCharges, recurringTemplates, payablesMonthMode, targets, grossMarginTarget],
   );
   // 保存形式: { scenarios: [{ id, name, values: { sales_a:[12], ... }, updated_at, updated_by }], active_id }
   // （最初の版は値を直接持っていたので、その形は「パターン1」として読み替える）
@@ -576,7 +578,7 @@ export default function SalesReport() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">着地見込の内訳（案件）</CardTitle>
-          <CardDescription className="text-xs">受注確度 A / A（定期売上）/ 要注意（A）で、フェーズが着手中の案件。完了予定日の月に計上し、請求済みの金額は除きます</CardDescription>
+          <CardDescription className="text-xs">状態が進行中・完了で、受注確度 A / A（定期売上）/ 要注意（A）の案件（フェーズは見ません）と、ひな形が「有効」の定期売上（月ごと）。完了予定日の月に計上し、請求済みの金額は除きます</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {rows.filter((r) => r.forecast.projects.length > 0).length === 0 ? (

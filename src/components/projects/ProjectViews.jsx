@@ -236,10 +236,11 @@ function useDailyTarget(today) {
   const { data: bankTxs = [] } = useQuery({ queryKey: ["bankTransactions"], queryFn: () => db.entities.BankTransaction.list("-transaction_date", 1000), select: forPayments, retry: false });
   const { payables, cardCharges } = useCostTotals(); // 支払い先まとめ・カード明細は月ごとの合計だけ（明細は見せない）
   const { data: targetRows = [] } = useQuery({ queryKey: ["fiscalTargets"], queryFn: () => db.entities.FiscalTarget.list(), retry: false });
+  const { data: recurringTemplates = [] } = useQuery({ queryKey: ["recurringTemplates"], queryFn: () => db.entities.RecurringProjectTemplate.list("-created_date"), retry: false });
   const targets = targetRows.find((t) => Number(t.fiscal_year) === fy) || null;
   const auto = useMemo(
-    () => autoDailyTarget({ today, fiscalYear: fy, startMonth: fiscalYearStartMonth, holidays: companyHolidays, marginTarget: grossMarginTarget, data: { projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets } }),
-    [today, fy, fiscalYearStartMonth, companyHolidays, grossMarginTarget, projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode, targets],
+    () => autoDailyTarget({ today, fiscalYear: fy, startMonth: fiscalYearStartMonth, holidays: companyHolidays, marginTarget: grossMarginTarget, data: { projects, invoices, bankTxs, payables, cardCharges, recurringTemplates, payablesMonthMode, targets } }),
+    [today, fy, fiscalYearStartMonth, companyHolidays, grossMarginTarget, projects, invoices, bankTxs, payables, cardCharges, recurringTemplates, payablesMonthMode, targets],
   );
   const target = mode === "manual" ? manual : auto.daily;
   return { fy, fiscalYearStartMonth, target, manual, row, mode, modeRow, auto, holidays: companyHolidays };

@@ -17,6 +17,8 @@ import { fiscalYearRange } from "@/lib/fiscal";
 import { forecastProjects } from "@/lib/projectInvoicing";
 
 const n = (v) => Number(v) || 0;
+/** 着地見込に入れる案件の状態（進行中・完了） */
+export const FORECAST_STATUSES = ["open", "completed"];
 
 /** 期の12ヶ月の { key: "yyyy-MM", label: "10月" } */
 export function fiscalMonths(fiscalYear, startMonth) {
@@ -71,10 +73,11 @@ export function emptyTargets(fiscalYear) {
  * @param {object[]} [p.payables]  支払い先まとめの行（CV 分の税込金額だけを仕入の実績に使う）
  * @param {object[]} [p.cardCharges] カード利用明細まとめ（entity が cv のものだけ。税込。その他原価の実績）
  * @param {string}  [p.payablesMonthMode] 支払月をどの月に数えるか: "prev"（支払月の前月＝請求月）/ "same"（支払月）
+ * @param {object[]} [p.recurringTemplates] 定期売上のひな形（is_active＝「有効」のものだけ見込に入れる）
  * @param {object} p.targets      fiscal_targets の行（無ければ emptyTargets）
  * @param {number} p.marginTarget 粗利率の目標（0.8）
  */
-export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, bankTxs, payables, cardCharges, payablesMonthMode = "prev", targets, marginTarget }) {
+export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, bankTxs, payables, cardCharges, recurringTemplates, payablesMonthMode = "prev", targets, marginTarget }) {
   const months = fiscalMonths(fiscalYear, startMonth);
   const idx = new Map(months.map((m) => [m.key, m.index]));
   const { from, to } = fiscalYearRange(fiscalYear, startMonth);
@@ -127,6 +130,12 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     cardCount[idx.get(k)] += c.row_count ?? 1;
   }
 
+  // 定期売上のひな形の「有効／停止中」。ひな形が見つからない（古い定期売上の案件）ときは、案件の状態が進行中・完了なら有効とみなす
+  const templateActive = new Map((recurringTemplates || []).map((t) => [t.id, !!t.is_active]));
+  const recurringActive = (p) => (p.recurring_template_id && templateActive.has(p.recurring_template_id)
+    ? templateActive.get(p.recurring_template_id)
+    : FORECAST_STATUSES.includes(p.status || "open"));
+
   // 見込（案件）
   const fc = {
     salesA: Array(12).fill(0), salesA2: Array(12).fill(0),
@@ -136,12 +145,19 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
   };
   // 定期売上の案件は、年度の月ごとに 1 件ずつに広げる（月額 − その月の分の請求済み額）
   for (const p of forecastProjects(projects, invoices, { fromYm: from.slice(0, 7), toYm: to.slice(0, 7) })) {
-    // 受注確度が A・A（定期売上）・要注意（A）で、かつフェーズが「着手中」の案件だけ（状態＝進行中かどうかは見ない。速報デイリーと同じ）
-    if (String(p.phase || "") !== "着手中") continue;
     const prob = p.deal_probability || "";
-    const isA = prob === "A" || prob === "A（定期売上）";
-    const isA2 = /要注意/.test(prob);
-    if (!isA && !isA2) continue;
+    let isA, isA2;
+    if (p._recurring_month) {
+      // 定期売上: ひな形の状態が「有効」なものだけ（受注確度・フェーズは見ない）。要注意（A）なら要注意の行、ほかは A の行
+      if (!recurringActive(p)) continue;
+      isA2 = /要注意/.test(prob); isA = !isA2;
+    } else {
+      // 状態が「進行中」「完了」で、受注確度が A・A（定期売上）・要注意（A）の案件だけ（フェーズは見ない）
+      if (!FORECAST_STATUSES.includes(p.status || "open")) continue;
+      isA = prob === "A" || prob === "A（定期売上）";
+      isA2 = /要注意/.test(prob);
+      if (!isA && !isA2) continue;
+    }
     const k = monthKey(p.due_date || p.payment_due_date || p.registered_at);
     if (!idx.has(k)) continue;
     const i = idx.get(k);
