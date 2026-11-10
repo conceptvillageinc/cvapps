@@ -368,12 +368,11 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
             <Stat label="確定だけの達成率" value={pct(summary.confirmed.target.rate)} sub={`確定の粗利 ${yen(summary.confirmed.gross)}`} tone={summary.confirmed.target.diff < 0 ? "text-red-700" : "text-emerald-700"} />
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <Stat label={`売上／人${hc ? `（${hc} 人）` : ""}`} value={hc ? yen(all.per_person.sales) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonSales)}${hc ? `　確定だけ ${yen(summary.confirmed.per_person.sales)}` : ""}`} tone={hc ? perOk(all.per_person.sales, summary.perPersonSales) : ""} />
-            <Stat label={`粗利／人${hc ? `（${hc} 人）` : ""}`} value={hc ? yen(all.per_person.gross) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonGross)}${hc ? `　確定だけ ${yen(summary.confirmed.per_person.gross)}` : ""}`} tone={hc ? perOk(all.per_person.gross, summary.perPersonGross) : ""} />
+            <Stat label="売上／人" value={hc ? yen(all.per_person.sales) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonSales)}${hc ? `　確定だけ ${yen(summary.confirmed.per_person.sales)}` : ""}`} tone={hc ? perOk(all.per_person.sales, summary.perPersonSales) : ""} />
+            <Stat label="粗利／人" value={hc ? yen(all.per_person.gross) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonGross)}${hc ? `　確定だけ ${yen(summary.confirmed.per_person.gross)}` : ""}`} tone={hc ? perOk(all.per_person.gross, summary.perPersonGross) : ""} />
             <Stat label="アプリの実績＋着地見込（売上）" value={yen(appAnnual?.total?.sales)} sub={`実績 ${yen(appAnnual?.actual?.sales)}／着地見込 ${yen(appAnnual?.forecast?.sales)}`} />
             <Stat label="アプリの実績＋着地見込（粗利）" value={yen(appAnnual?.total?.gross)} sub="請求書と案件一覧から。一覧との差の確認用" />
           </div>
-          {meta.headcount_memo && <p className="text-[11px] text-muted-foreground">人数のメモ: {meta.headcount_memo}</p>}
         </CardContent>
       </Card>
 
