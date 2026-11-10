@@ -277,8 +277,17 @@ export async function sendMail({ sendAs, to, subject, body, replyTo, fromName, c
   }
 
   // 送信控えのアドレス。差出人自身は除く（keepSelfCc のときは残す: 請求書の送付確認用に info@ を CC に見せる）
-  const ccList = [...new Set([cc, alwaysCc].filter(Boolean).flatMap((a) => String(a).split(',')).map((a) => a.trim()).filter(Boolean))]
-    .filter(addr => keepSelfCc || addr.toLowerCase() !== sender.toLowerCase());
+  // 同じアドレスは大文字・小文字の違いも含めて 1 つにまとめる（クライアントの CC・請求書の info@・GMAIL_ALWAYS_CC が重なっても 1 通だけ）。
+  // 宛先（To）と同じアドレスも CC からは外す
+  const toSet = new Set(String(to || '').split(',').map((a) => a.trim().toLowerCase()).filter(Boolean));
+  const seen = new Set();
+  const ccList = [cc, alwaysCc].filter(Boolean).flatMap((a) => String(a).split(',')).map((a) => a.trim()).filter(Boolean)
+    .filter((addr) => {
+      const k = addr.toLowerCase();
+      if (seen.has(k) || toSet.has(k)) return false;
+      seen.add(k);
+      return keepSelfCc || k !== sender.toLowerCase();
+    });
 
   const token = await getAccessToken(sender);
   const from = fromName ? `${encodeHeader(fromName)} <${sender}>` : sender;

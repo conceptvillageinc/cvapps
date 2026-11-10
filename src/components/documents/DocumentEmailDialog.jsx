@@ -153,8 +153,12 @@ export function clientForDoc(doc, clients) {
 /** 送るアドレス（差出人・To・CC） */
 export function mailAddressesFor(type, client, user) {
   const fixed = documentMailSender(type);
-  const cc = [...new Set([...(Array.isArray(client?.cc_emails) ? client.cc_emails.filter(Boolean).slice(0, 2) : []), ...fixed.cc])];
-  return { from: fixed.sendAs || user?.email || "", to: client?.email || "", cc };
+  // サーバー（api/_lib/gmail.js）と同じく、同じアドレスは大文字・小文字の違いも含めて 1 つに。To と同じものは CC に出さない
+  const to = client?.email || "";
+  const seen = new Set(to ? [to.trim().toLowerCase()] : []);
+  const cc = [...(Array.isArray(client?.cc_emails) ? client.cc_emails.filter(Boolean).slice(0, 2) : []), ...fixed.cc]
+    .map((a) => String(a).trim()).filter((a) => { const k = a.toLowerCase(); if (!a || seen.has(k)) return false; seen.add(k); return true; });
+  return { from: fixed.sendAs || user?.email || "", to, cc };
 }
 
 /** 送る前に目で確かめる送付先（差出人・To・CC を 1 行ずつ） */
