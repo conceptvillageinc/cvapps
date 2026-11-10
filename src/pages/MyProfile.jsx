@@ -89,7 +89,7 @@ export default function MyProfile() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">メール署名</CardTitle>
-          <CardDescription className="text-xs">見積依頼メール（印刷所宛）と見積書・納品書・請求書の送付メール（クライアント宛）の末尾に、この通り入ります</CardDescription>
+          <CardDescription className="text-xs">見積依頼メール（印刷所宛）と見積書・納品書の送付メール（クライアント宛）の末尾に、この通り入ります（請求書は info@ から送るので、会社共通の署名になります）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Textarea

@@ -39,3 +39,19 @@ export function defaultSignature(user, company) {
   const name = user?.full_name && !String(user.full_name).includes("@") ? user.full_name : "";
   return [co.name || COMPANY_INFO.name, name, user?.email || "", co.tel ? `tel ${co.tel}` : ""].filter(Boolean).join("\n");
 }
+
+/**
+ * 会社共通の署名（請求書のように会社の共通アドレスから送るメール用。誰が送っても同じ）
+ *   株式会社コンセプト・ヴィレッジ ／ 拠点の住所 ／ tel ／ 共通アドレス
+ */
+export function companySignature(company, email) {
+  const co = company || COMPANY_INFO;
+  const locations = (co.locations?.length ? co.locations : COMPANY_INFO.locations) || [];
+  const tel = co.tel || COMPANY_INFO.tel;
+  return [
+    co.name || COMPANY_INFO.name,
+    ...locations.filter((l) => l?.address).map((l) => [l.label ? `${l.label}：` : "", l.postal || "", l.postal ? " " : "", l.address].join("")),
+    tel ? `tel ${tel}` : "",
+    email || "",
+  ].filter(Boolean).join("\n");
+}

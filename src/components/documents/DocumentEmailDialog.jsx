@@ -14,8 +14,8 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { companyInfoFromSettings } from "@/lib/documents";
 import { computeEstimateTotals } from "@/lib/estimateTotals";
 import { useAuth } from "@/lib/AuthContext";
-import { greetingLine, senderSignature } from "@/lib/senderProfile";
-import { documentMailSender } from "@/lib/mailSenders";
+import { greetingLine, senderSignature, companySignature } from "@/lib/senderProfile";
+import { documentMailSender, INVOICE_MAIL_SENDER } from "@/lib/mailSenders";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -105,7 +105,8 @@ export function defaultTemplate(type, doc, company, user) {
     "",
     "今後ともよろしくお願いいたします。",
     "",
-    senderSignature(user, company),
+    // 請求書は会社の共通アドレスから送るので、署名も会社共通（誰が送っても同じ）
+    type === "invoice" ? companySignature(company, INVOICE_MAIL_SENDER) : senderSignature(user, company),
   ];
   return { subject, body: lines.join("\n") };
 }
@@ -140,7 +141,7 @@ export function invoiceGroupTemplate(invs, company, user) {
     "",
     "今後ともよろしくお願いいたします。",
     "",
-    senderSignature(user, company),
+    companySignature(company, INVOICE_MAIL_SENDER), // 請求書なので会社共通の署名（上と同じ）
   ];
   return { subject, body: lines.join("\n") };
 }
