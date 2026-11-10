@@ -271,6 +271,12 @@ export function applySimulation(report, sim, marginTarget) {
         forecast.simulated[k] = true;
       }
     }
+    // 「うち定期売上」は売上（案件見込 A）の内訳。定期売上だけ書き換えた月は、その差を売上（案件見込 A）にも足す
+    // （売上（案件見込 A）も書き換えた月は、そちらに入れた値をそのまま使う）
+    if (forecast.simulated.recurring && !forecast.simulated.sales_a) {
+      forecast.sales_a = Math.max(0, r.forecast.sales_a + (forecast.recurring - r.forecast.recurring));
+      forecast.recurring_carried = true;
+    }
     forecast.sales = forecast.sales_a + forecast.sales_a2;
     forecast.cost = forecast.cost_a + forecast.cost_a2;
     forecast.gross = forecast.sales - forecast.cost;
