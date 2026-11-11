@@ -29,6 +29,8 @@ import { useAuth } from "@/lib/AuthContext";
 import { useCostTotals } from "@/lib/usePayablesAccess";
 import { isImeEnter } from "@/lib/ime";
 
+// シミュレーションの書き換えを自動で保存するまでの待ち時間（入力が止まってから）
+const AUTOSAVE_MS = 2000;
 // 売上粗利管理表を「シミュレーション」の表示から開く人
 const SIMULATION_FIRST_EMAILS = ["daichi@concept-village.co.jp"];
 // 検証済みの配色（dataviz の基準パレット: 青 / オレンジ / アクア / 黄）
@@ -256,7 +258,13 @@ export default function SalesReport() {
   // 保存形式: { scenarios: [{ id, name, values: { sales_a:[12], ... }, updated_at, updated_by }], active_id }
   // （最初の版は値を直接持っていたので、その形は「パターン1」として読み替える）
   const simDoc = useMemo(() => normalizeSimulation(targets?.simulation), [targets?.simulation]);
-  useEffect(() => { setSim(simDoc); setSimDirty(false); }, [targets?.id, targets?.updated_date]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 自動保存: 書き換え（表の値・案件の積み上げ）が落ち着いたら AUTOSAVE_MS 後に保存する。
+  //   保存中にさらに書き換えたときは、その分を消さないよう、保存が済んだら続けて保存する（版 versionRef で見分ける）
+  const dirtyRef = useRef(false);
+  const versionRef = useRef(0);
+  const [autoSavedAt, setAutoSavedAt] = useState(null);
+  // 保存した内容（またはほかの画面での保存）を読み直したら、書きかけが無いときだけ画面に入れる
+  useEffect(() => { if (!dirtyRef.current) { setSim(simDoc); setSimDirty(false); } }, [targets?.id, targets?.updated_date]); // eslint-disable-line react-hooks/exhaustive-deps
   const isSim = totalMode === "simulation";
   const scenarios = sim.scenarios || [];
   const active = scenarios.find((sc) => sc.id === sim.active_id) || scenarios[0] || null;
@@ -269,7 +277,7 @@ export default function SalesReport() {
   const stamp = () => ({ updated_at: new Date().toISOString(), updated_by: user?.full_name || user?.email || "" });
   const updateActive = (patch) => {
     setSim((prev) => ({ ...prev, scenarios: (prev.scenarios || []).map((sc) => (sc.id === (active?.id) ? { ...sc, ...patch } : sc)) }));
-    setSimDirty(true);
+    setSimDirty(true); dirtyRef.current = true; versionRef.current += 1;
   };
   const setSimValue = (key, monthIdx, value) => {
     const arr = Array.from({ length: 12 }, (_, i) => activeValues[key]?.[i] ?? null);
@@ -277,19 +285,48 @@ export default function SalesReport() {
     updateActive({ values: { ...activeValues, [key]: arr } });
   };
   const saveSim = useMutation({
-    mutationFn: async (next) => {
+    mutationFn: async ({ next }) => {
       const payload = { simulation: next };
       if (targets?.id) return db.entities.FiscalTarget.update(targets.id, payload);
       return db.entities.FiscalTarget.create({ ...emptyTargets(fy), ...payload });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["fiscalTargets"] }); setSimDirty(false); toast.success("シミュレーションを保存しました"); },
-    onError: (err) => toast.error("保存できませんでした: " + (err?.message || "不明なエラー")),
+    onSuccess: (_r, { version, auto }) => {
+      // 保存を始めてから書き換えていなければ「保存済み」
+      if (versionRef.current === version) { dirtyRef.current = false; setSimDirty(false); }
+      queryClient.invalidateQueries({ queryKey: ["fiscalTargets"] });
+      if (auto) setAutoSavedAt(new Date()); else toast.success("シミュレーションを保存しました");
+    },
+    onError: (err, { auto }) => toast.error((auto ? "自動保存できませんでした: " : "保存できませんでした: ") + (err?.message || "不明なエラー")),
   });
-  const persist = (next) => { setSim(next); saveSim.mutate(next); };
-  const saveActive = () => {
+  const persist = (next, { auto = false } = {}) => { setSim(next); saveSim.mutate({ next, version: versionRef.current, auto }); };
+  const saveActive = (opts) => {
     const next = { ...sim, scenarios: scenarios.map((sc) => (sc.id === active?.id ? { ...sc, ...stamp() } : sc)) };
-    persist(next);
+    persist(next, opts);
   };
+  // 書き換えが落ち着いたら自動で保存（保存中なら、終わってから）
+  useEffect(() => {
+    if (!simDirty || saveSim.isPending) return undefined;
+    const t = setTimeout(() => saveActive({ auto: true }), AUTOSAVE_MS);
+    return () => clearTimeout(t);
+  }, [sim, simDirty, saveSim.isPending]);
+  // まだ保存していない書き換えがあるままページを閉じようとしたら、確認を出す
+  useEffect(() => {
+    const onBeforeUnload = (e) => { if (dirtyRef.current) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+  // ほかの画面へ移るときは、書きかけをその場で保存する
+  const flushRef = useRef(null);
+  flushRef.current = () => {
+    if (!dirtyRef.current || !active) return;
+    const next = { ...sim, scenarios: scenarios.map((sc) => (sc.id === active.id ? { ...sc, ...stamp() } : sc)) };
+    const payload = { simulation: next };
+    (targets?.id ? db.entities.FiscalTarget.update(targets.id, payload) : db.entities.FiscalTarget.create({ ...emptyTargets(fy), ...payload }))
+      .then(() => queryClient.invalidateQueries({ queryKey: ["fiscalTargets"] }))
+      .catch(() => {});
+    dirtyRef.current = false;
+  };
+  useEffect(() => () => flushRef.current?.(), []);
   const newScenario = (copyFrom = null) => {
     const name = window.prompt("パターンの名前", copyFrom ? `${copyFrom.name}のコピー` : `パターン${scenarios.length + 1}`);
     if (!name || !name.trim()) return;
@@ -313,10 +350,10 @@ export default function SalesReport() {
     if (!window.confirm(`「${active.name}」の書き換えをすべて消して実データに戻しますか？`)) return;
     persist({ ...sim, scenarios: scenarios.map((sc) => (sc.id === active.id ? { ...sc, values: {}, ...stamp() } : sc)) });
   };
+  // パターンを切り替える（書きかけがあれば、それも一緒に保存する）
   const selectScenario = (id) => {
-    if (simDirty && !window.confirm("保存していない書き換えがあります。切り替えると消えますがよいですか？")) return;
-    setSim({ ...simDoc, active_id: id }); setSimDirty(false);
-    saveSim.mutate({ ...simDoc, active_id: id });
+    const base = dirtyRef.current ? { ...sim, scenarios: scenarios.map((sc) => (sc.id === active?.id ? { ...sc, ...stamp() } : sc)) } : sim;
+    persist({ ...base, active_id: id });
   };
 
   // 表示モードに応じた「計」の値（月ごと・年計とも同じ形にそろえる）
@@ -407,12 +444,13 @@ export default function SalesReport() {
             )}
             <span className="ml-auto text-muted-foreground whitespace-nowrap">
               {active ? <>書き換え {simEditedCount} か所{active.updated_at ? `　最終保存 ${new Date(active.updated_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })} ${active.updated_by || ""}` : ""}</> : null}
+              {active && <span className="ml-2" data-testid="sim-autosave">{saveSim.isPending ? "保存中…" : simDirty ? "書き換え中（少しすると自動で保存します）" : autoSavedAt ? `自動保存しました（${autoSavedAt.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}）` : ""}</span>}
             </span>
             {active && (
               <>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={resetSim} disabled={saveSim.isPending || simEditedCount === 0}>実データに戻す</Button>
-                <Button size="sm" className="h-7 text-xs" onClick={saveActive} disabled={saveSim.isPending || !simDirty}>
-                  {saveSim.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : simDirty ? "保存" : "保存済み"}
+                <Button size="sm" className="h-7 text-xs" onClick={() => saveActive()} disabled={saveSim.isPending || !simDirty}>
+                  {saveSim.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : simDirty ? "今すぐ保存" : "保存済み"}
                 </Button>
               </>
             )}
