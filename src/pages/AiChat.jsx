@@ -439,7 +439,7 @@ const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onCl
         </div>
       )}
       <textarea value={text} onChange={(e) => onChange(e.target.value)} readOnly={!canWrite}
-        placeholder={canWrite ? "提案書やメール文などを、メンバーと一緒に書ける欄です。\n\n・Claude の回答の下にある「下書きに入れる」ボタンを押すと、その回答の文章がここに入ります。\n・ここに直接書き込むこともできます。\n・チャットで「下書きを直して」と頼むと、Claude がここの文章を読んで、直した文章を回答します。" : "（このチャットの下書きは直せません）"}
+        placeholder={canWrite ? "提案書やメール文などを、メンバーと一緒に書ける欄です。\n\n・Claude の回答した内容の文末に表示される「下書きに入れる」ボタンを押すと、その回答の文章がここに入ります。\n・ここに直接書き込むこともできます。\n・チャットで「下書きを直して」と頼むと、Claude がここの文章を読んで、直した文章を回答します。" : "（このチャットの下書きは直せません）"}
         className="min-h-0 flex-1 resize-none bg-background px-4 py-3 text-sm leading-relaxed outline-none" data-testid="ai-chat-draft-text" />
     </aside>
   );
