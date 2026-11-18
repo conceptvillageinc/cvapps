@@ -255,8 +255,10 @@ export default function InvoiceEdit() {
     const notes = [...clientNotes, ...(sourceDeliveries || [])];
     const fn = (nid) => notes.find((n) => n.id === nid);
     fn.titles = new Set(notes.map((n) => (n.title || "").trim()).filter(Boolean));
+    // 案件から作った請求書は、最初は件名が案件名。これも自動の件名として扱い、納品書を 2 件以上まとめたら「〇月ご請求内容」に変える
+    if (project?.name?.trim()) fn.titles.add(project.name.trim());
     return fn;
-  }, [clientNotes, sourceDeliveries]);
+  }, [clientNotes, sourceDeliveries, project?.name]);
   const toggleNote = (dn) => {
     setForm((f) => {
       const line_items = includedNoteIds.includes(dn.id)
