@@ -14,8 +14,8 @@
 // （請求済みでも引かない。実績は会計の数字との確認用に別に出す。実績＋着地見込を足すと二重になるので、足さない）
 // ============================================================================
 
-import { fiscalYearRange } from "@/lib/fiscal";
-import { forecastProjects } from "@/lib/projectInvoicing";
+import { fiscalYearRange } from "./fiscal.js";
+import { forecastProjects } from "./projectInvoicing.js";
 
 const n = (v) => Number(v) || 0;
 /** 着地見込に入れる案件の進捗（着手中・納品済） */

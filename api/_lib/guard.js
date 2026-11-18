@@ -26,6 +26,22 @@ export function adminClient() {
 }
 
 /**
+ * 呼び出した人の権限で読み書きするクライアント（RLS が効く）。
+ * AI チャットが CVアプリの情報を読むときに使う（見られない情報は、その人のチャットからも見えない）。
+ */
+export function userClient(accessToken) {
+  const key = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!SUPABASE_URL || !key) throw new Error('サーバー側の環境変数が未設定です（SUPABASE_URL と公開キー）');
+  return createClient(SUPABASE_URL, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+}
+
+/** Authorization ヘッダーのトークン */
+export const bearerToken = (req) => { const h = req.headers.authorization || ''; return h.startsWith('Bearer ') ? h.slice(7) : null; };
+
+/**
  * 呼び出し元がこのアプリの利用者かを確認する。
  * 通れば user を返し、通らなければレスポンスを返し終えて null を返す。
  */

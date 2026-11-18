@@ -65,6 +65,10 @@
       "maxDuration": 300,
       "memory": 1024
     },
+    "api/ai-chat.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
     "api/print-specs.js": {
       "maxDuration": 60
     },

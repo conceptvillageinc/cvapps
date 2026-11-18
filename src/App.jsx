@@ -28,6 +28,7 @@ import MyProfile from '@/pages/MyProfile';
 import MeetingList from '@/pages/MeetingList';
 import MeetingNew from '@/pages/MeetingNew';
 import MeetingDetail from '@/pages/MeetingDetail';
+import AiChat from '@/pages/AiChat';
 import PrintSpecList from '@/pages/PrintSpecList';
 import ScheduleTemplateMaster from '@/pages/ScheduleTemplateMaster';
 import ProjectSchedulePage from '@/pages/ProjectSchedulePage';
@@ -128,6 +129,8 @@ const AuthenticatedApp = () => {
           <Route path="/meetings" element={<MeetingList />} />
           <Route path="/meetings/new" element={<MeetingNew />} />
           <Route path="/meetings/:id" element={<MeetingDetail />} />
+          <Route path="/ai-chat" element={<AiChat />} />
+          <Route path="/ai-chat/:id" element={<AiChat />} />
           <Route path="/print-specs/:id" element={<PrintSpecList />} />
           <Route path="/settings" element={<SystemSettingsPage />} />
           <Route path="/users" element={<UserManagement />} />

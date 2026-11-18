@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useRecurringAlerts } from "@/lib/recurringStatus";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users, Layers, LayoutTemplate,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft, ListTodo, Inbox, FileCheck2
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft, ListTodo, Inbox, FileCheck2, Bot
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { db } from "@/api/db";
@@ -30,6 +30,7 @@ const navItems = [
   { path: "/workload", label: "ワークロード", icon: BarChart3, trial: true },
   { path: "/inbox", label: "受信トレイ", icon: Inbox, guest: true, trial: true },
   { path: "/meetings", label: "議事録", icon: Mic },
+  { path: "/ai-chat", label: "AIチャット", icon: Bot },
   { path: "/projects", label: "案件一覧", icon: FolderKanban },
   { path: "/clients", label: "クライアント一覧", icon: UserSquare },
   { path: "/estimates/new", label: "新規見積作成", icon: Plus },

@@ -543,6 +543,7 @@ const FUNCTION_ROUTES = {
   backup: 'backup',
   costSheetImport: 'cost-sheet-import',
   meetingChat: 'meeting-chat',
+  aiChat: 'ai-chat',
 };
 
 const functions = {

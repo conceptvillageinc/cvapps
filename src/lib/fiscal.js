@@ -1,7 +1,7 @@
 // 会計期（10月始まり）の計算。
 // 「第N期」ではなく、期首の年で呼ぶ（例: 2025年10月〜2026年9月 = 「2025年度」）。
 
-import { DEFAULT_FISCAL_YEAR_START_MONTH } from "@/lib/constants";
+import { DEFAULT_FISCAL_YEAR_START_MONTH } from "./constants.js";
 
 const pad = (n) => String(n).padStart(2, "0");
 
