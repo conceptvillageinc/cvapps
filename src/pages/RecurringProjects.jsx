@@ -102,7 +102,7 @@ function TemplateLines({ lines, onChange, monthHint }) {
 function TemplateDialog({ open, onOpenChange, template, clients }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
+  const { dealProbabilityOptions } = useSystemSettings();
   const [form, setForm] = useState(emptyForm());
   const [clientOpen, setClientOpen] = useState(false);
 
@@ -223,17 +223,6 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
                 <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {[...new Set([...dealProbabilityOptions, form.deal_probability].filter(Boolean))].map((o) => (
-                    <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">フェーズ</Label>
-              <Select value={form.phase} onValueChange={(v) => set("phase", v)}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[...new Set([...phaseOptions, form.phase].filter(Boolean))].map((o) => (
                     <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
                   ))}
                 </SelectContent>

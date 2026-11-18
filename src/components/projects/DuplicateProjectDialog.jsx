@@ -67,7 +67,7 @@ export default function DuplicateProjectDialog({ open, onOpenChange, project, es
           <DialogTitle className="flex items-center gap-2"><Copy className="w-4 h-4" /> 案件を複製</DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
             {project.project_number}　{project.client_name} の案件をもとに、新しい案件を作ります。
-            クライアント・受注確度・見込みの金額を写し、案件番号と登録日は新しくなります（フェーズは未着手）。
+            クライアント・受注確度・見込みの金額を写し、案件番号と登録日は新しくなります（進捗は着手中）。
           </DialogDescription>
         </DialogHeader>
 

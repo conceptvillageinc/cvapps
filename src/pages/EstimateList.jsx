@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ColumnFilter, SortButton, stripCorpAffix } from "@/components/table/ColumnControls";
 import { useSystemSettings } from "@/lib/useSystemSettings";
-import { getDealProbabilityColor, getPhaseColor, PRINT_TYPES } from "@/lib/constants";
+import { getDealProbabilityColor, PRINT_TYPES, PROJECT_STATUS_MAP } from "@/lib/constants";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
@@ -79,9 +79,9 @@ export default function EstimateList() {
     return m;
   }, [clients]);
 
-  const { dealProbabilityOptions: dealProbabilityMaster, phaseOptions: phaseMaster } = useSystemSettings();
+  const { dealProbabilityOptions: dealProbabilityMaster } = useSystemSettings();
 
-  // 案件に紐付いた見積は、受注確度・フェーズを案件から表示する
+  // 案件に紐付いた見積は、受注確度・進捗を案件から表示する
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", "all"],
     queryFn: () => db.entities.Project.listAll("-registered_at"),
@@ -91,7 +91,9 @@ export default function EstimateList() {
   const deliveryIndex = useDeliveryIndex();
   const deliveryOf = (e) => estimateDelivery(e, deliveryIndex.byEstimate, { submitted: submissionOf(e) === "submitted" });
   const probabilityOf = (e) => (e.project_id && projectById[e.project_id]?.deal_probability) || e.deal_probability || "";
-  const phaseOf = (e) => (e.project_id && projectById[e.project_id]?.phase) || e.phase || "";
+  // 進捗（以前の列の名前は phase のまま。中身は案件の進捗＝状態のラベル）。案件に紐付いていない見積は空
+  const progressKeyOf = (e) => (e.project_id && projectById[e.project_id]?.status) || "";
+  const phaseOf = (e) => PROJECT_STATUS_MAP[progressKeyOf(e)]?.label || "";
 
   const togglePick = (id) => setPicked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const deletePicked = async () => {
@@ -118,12 +120,12 @@ export default function EstimateList() {
     client_name: { label: "クライアント", getValue: e => e.client_name || "" },
     print_type: { label: "印刷物種別", getValue: e => e.print_type || "", master: PRINT_TYPES },
     deal_probability: { label: "受注確度", getValue: probabilityOf, master: dealProbabilityMaster },
-    phase: { label: "フェーズ", getValue: phaseOf, master: phaseMaster },
+    phase: { label: "進捗", getValue: phaseOf, master: Object.values(PROJECT_STATUS_MAP).map((v) => v.label) },
     total_amount: { label: "合計金額（税別）", getValue: e => exTaxOf(e) ? `¥${exTaxOf(e).toLocaleString()}` : "—" },
     desired_delivery_date: { label: "希望納期", getValue: e => e.desired_delivery_date || "—" },
     created_date: { label: "作成日", getValue: e => format(new Date(e.created_date), "yyyy-MM-dd") },
     person_in_charge: { label: "作成担当者", getValue: e => e.person_in_charge || "" },
-    }), [dealProbabilityMaster, phaseMaster, projectById, deliveryIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+    }), [dealProbabilityMaster, projectById, deliveryIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 各列の選択肢（マスタ + 実データにある値の和集合。存在するものだけ表示）
   const columnOptions = useMemo(() => {
@@ -236,7 +238,7 @@ export default function EstimateList() {
       case "deal_probability":
         return <TableCell key={key}>{latest}{probabilityOf(est) && <Badge className={`text-[10px] ${getDealProbabilityColor(probabilityOf(est))}`}>{probabilityOf(est)}</Badge>}</TableCell>;
       case "phase":
-        return <TableCell key={key}>{latest}{phaseOf(est) && <Badge className={`text-[10px] ${getPhaseColor(phaseOf(est))}`}>{phaseOf(est)}</Badge>}</TableCell>;
+        return <TableCell key={key}>{latest}{phaseOf(est) && <Badge className={`text-[10px] ${PROJECT_STATUS_MAP[progressKeyOf(est)]?.color || ""}`}>{phaseOf(est)}</Badge>}</TableCell>;
       case "total_amount": {
         const g = estimateGross(est);
         return (

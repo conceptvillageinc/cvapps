@@ -18,7 +18,7 @@ import { fiscalYearRange } from "@/lib/fiscal";
 import { forecastProjects } from "@/lib/projectInvoicing";
 
 const n = (v) => Number(v) || 0;
-/** 着地見込に入れる案件の状態（進行中・完了） */
+/** 着地見込に入れる案件の進捗（着手中・納品済） */
 export const FORECAST_STATUSES = ["open", "completed"];
 
 /** 期の12ヶ月の { key: "yyyy-MM", label: "10月" } */
@@ -131,7 +131,7 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     cardCount[idx.get(k)] += c.row_count ?? 1;
   }
 
-  // 定期売上のひな形の「有効／停止中」。ひな形が見つからない（古い定期売上の案件）ときは、案件の状態が進行中・完了なら有効とみなす
+  // 定期売上のひな形の「有効／停止中」。ひな形が見つからない（古い定期売上の案件）ときは、案件の進捗が着手中・納品済なら有効とみなす
   const templateActive = new Map((recurringTemplates || []).map((t) => [t.id, !!t.is_active]));
   const recurringActive = (p) => (p.recurring_template_id && templateActive.has(p.recurring_template_id)
     ? templateActive.get(p.recurring_template_id)
@@ -149,11 +149,11 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     const prob = p.deal_probability || "";
     let isA, isA2;
     if (p._recurring_month) {
-      // 定期売上: ひな形の状態が「有効」なものだけ（受注確度・フェーズは見ない）。要注意（A）なら要注意の行、ほかは A の行
+      // 定期売上: ひな形の状態が「有効」なものだけ（受注確度・進捗は見ない）。要注意（A）なら要注意の行、ほかは A の行
       if (!recurringActive(p)) continue;
       isA2 = /要注意/.test(prob); isA = !isA2;
     } else {
-      // 状態が「進行中」「完了」で、受注確度が A・A（定期売上）・要注意（A）の案件だけ（フェーズは見ない）
+      // 進捗が「着手中」「納品済」で、受注確度が A・A（定期売上）・要注意（A）の案件だけ
       if (!FORECAST_STATUSES.includes(p.status || "open")) continue;
       isA = prob === "A" || prob === "A（定期売上）";
       isA2 = /要注意/.test(prob);

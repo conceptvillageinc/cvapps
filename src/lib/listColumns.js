@@ -15,7 +15,7 @@ export const LIST_DEFS = {
   estimates: {
     label: "見積書", columns: [
       ["estimate_number", "見積番号"], ["submission", "提出"], ["delivery", "納品・請求"], ["client_name", "クライアント"], ["print_type", "印刷物種別"],
-      ["deal_probability", "受注確度"], ["phase", "フェーズ"], ["total_amount", "合計金額（税別）"], ["desired_delivery_date", "希望納期"],
+      ["deal_probability", "受注確度"], ["phase", "進捗"], ["total_amount", "合計金額（税別）"], ["desired_delivery_date", "希望納期"],
       ["created_date", "作成日"], ["person_in_charge", "作成担当者"],
     ],
   },

@@ -627,7 +627,7 @@ export default function SalesReport() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">着地見込の内訳（案件）</CardTitle>
-          <CardDescription className="text-xs">状態が進行中・完了で、受注確度 A / A（定期売上）/ 要注意（A）の案件（フェーズは見ません）と、ひな形が「有効」の定期売上（月ごと）。案件の受注見込・発注見込（＋その他費用）・粗利見込をそのまま、完了予定日の月に入れます（請求済みでも引きません）</CardDescription>
+          <CardDescription className="text-xs">進捗が着手中・納品済で、受注確度 A / A（定期売上）/ 要注意（A）の案件と、ひな形が「有効」の定期売上（月ごと）。案件の受注見込・発注見込（＋その他費用）・粗利見込をそのまま、完了予定日の月に入れます（請求済みでも引きません）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {rows.filter((r) => r.forecast.projects.length > 0).length === 0 ? (

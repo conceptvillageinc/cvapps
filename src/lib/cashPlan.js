@@ -31,8 +31,8 @@ export const CATEGORIES = [
 ];
 export const directionOf = (category) => CATEGORIES.find((c) => c.key === category)?.direction || "out";
 
-/** 未請求の見込として数える案件（受注確度 A／要注意（A）／A（定期売上）で、フェーズが着手中） */
-export const countsAsForecast = (p) => p.status === "open" && p.phase === "着手中" && ["A", "A（定期売上）", "要注意（A）"].includes(p.deal_probability || "");
+/** 未請求の見込として数える案件（受注確度 A／要注意（A）／A（定期売上）で、進捗が着手中）。以前のフェーズは見ない */
+export const countsAsForecast = (p) => p.status === "open" && ["A", "A（定期売上）", "要注意（A）"].includes(p.deal_probability || "");
 
 /** 口座ごとの最後の残高（最後の日付の明細のうち、最後に取り込んだもの） */
 export function latestBalances(bankTxs) {

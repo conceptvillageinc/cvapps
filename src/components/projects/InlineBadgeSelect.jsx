@@ -9,12 +9,12 @@ import { useSystemSettings } from "@/lib/useSystemSettings";
 import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
 
 // ============================================================================
-// 一覧の札（受注確度・フェーズ・状態）をクリックして、その場で変える
+// 一覧の札（受注確度・進捗）をクリックして、その場で変える
 //   案件一覧（標準）と案件別ネクストアクションで共通。選ぶとすぐ保存する。
 //   受注確度を「定期」を含む値にしても、定期売上の印は付けない（「定期売上にする」で付く。案内だけ出す）
 // ============================================================================
 
-const FIELD_LABEL = { deal_probability: "受注確度", phase: "フェーズ", status: "状態" };
+const FIELD_LABEL = { deal_probability: "受注確度", phase: "フェーズ", status: "進捗" };
 
 function useChoices(field) {
   const { dealProbabilityOptions = [], phaseOptions = [] } = useSystemSettings();

@@ -40,13 +40,13 @@ const VIEWS = [
   { key: "monthend", label: "月末チェック（納品・請求）" },
 ];
 
-// 条件の札の並び（並び順のあと。受注確度 → 状態 の順で、ほかの列はその間）
-const CHIP_ORDER = ["client_name", "deal_probability", "phase", "status"];
+// 条件の札の並び（並び順のあと。受注確度 → 進捗 の順で、ほかの列はその間）
+const CHIP_ORDER = ["client_name", "deal_probability", "status"];
 
 // 案件一覧（標準）の列の並び
 //   横スクロールなしで見られるように、クライアント・案件名・案件番号は 1 つの欄、完了予定と入金予定も 1 つの欄にまとめる
 // 「納品・請求」の列は一覧に出さない（状態は納品書・請求書と案件の手動の状態に残り、月末チェック・CSV 出力では使う）
-const COLUMN_ORDER = ["registered_at", "due_date", "client_name", "expected_revenue", "expected_gross_profit", "deal_probability", "phase", "status"];
+const COLUMN_ORDER = ["registered_at", "due_date", "client_name", "expected_revenue", "expected_gross_profit", "deal_probability", "status"];
 // 見出しの名前（まとめた欄）
 const HEAD_LABEL = { client_name: "クライアント／案件名", due_date: "完了予定／入金予定" };
 
@@ -81,9 +81,8 @@ function ProjectCell({ col, p }) {
         </div>
       </TableCell>
     );
-    // 受注確度・フェーズ・状態は札をクリックしてその場で変えられる
+    // 受注確度・進捗は札をクリックしてその場で変えられる
     case "deal_probability": return <TableCell><InlineBadgeSelect project={p} field="deal_probability" /></TableCell>;
-    case "phase": return <TableCell><InlineBadgeSelect project={p} field="phase" /></TableCell>;
     case "status": return <TableCell><InlineBadgeSelect project={p} field="status" /></TableCell>;
     case "expected_revenue": return (
       <TableCell className="text-right text-sm tabular-nums">{yen(p.expected_revenue)}</TableCell>
@@ -110,7 +109,7 @@ function ProjectCell({ col, p }) {
   }
 }
 
-// 案件一覧（標準）の最初の状態の絞り込み: 未・進行中・完了（失注・取消は隠す）
+// 案件一覧（標準）の最初の進捗の絞り込み: 未着手・着手中・納品済（失注は隠す）
 const DEFAULT_STATUS_FILTER = [PROJECT_STATUS_MAP.pending.label, PROJECT_STATUS_MAP.open.label, PROJECT_STATUS_MAP.completed.label];
 // 並び順の言い方（日付は新しい順／古い順、金額は大きい順／小さい順、文字は昇順／降順）
 const DATE_KEYS = ["registered_at", "due_date", "payment_due_date"];
@@ -127,7 +126,7 @@ const sameSet = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => 
 export default function ProjectList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { dealProbabilityOptions, phaseOptions, fiscalYearStartMonth } = useSystemSettings();
+  const { dealProbabilityOptions, fiscalYearStartMonth } = useSystemSettings();
 
   const currentFy = fiscalYearOf(todayString(), fiscalYearStartMonth);
   // 期の絞り込みは最初「すべての期」（標準・速報デイリーで共通。期を選ぶとその期だけ）
@@ -142,8 +141,8 @@ export default function ProjectList() {
     setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("q"); return n; }, { replace: true });
   }, [searchParams, setSearch, setSearchParams]);
   const [period, setPeriod] = useSessionState("projects.period", () => emptyPeriod("registered_at")); // 期間（登録日・完了予定・入金予定のどれかで）
-  // 既定では未・進行中・完了の案件を表示する（失注・取消は隠す）
-  const [columnFilters, setColumnFilters] = useSessionState("projects.columnFilters", { status: DEFAULT_STATUS_FILTER });
+  // 既定では未着手・着手中・納品済の案件を表示する（失注は隠す）
+  const [columnFilters, setColumnFilters] = useSessionState("projects.columnFilters.progress", { status: DEFAULT_STATUS_FILTER }); // 進捗にまとめたので、以前の絞り込み（状態・フェーズの名前）は読まない
   const [sortConfig, setSortConfig] = useSessionState("projects.sort", { key: "registered_at", direction: "desc" });
   const [createOpen, setCreateOpen] = useState(false);
   // 表示ビュー（標準／速報デイリー／案件別ネクストアクション）。URL の ?view= で共有できる
@@ -159,7 +158,7 @@ export default function ProjectList() {
       : db.entities.Project.listAll("-registered_at"),
   });
 
-  // ネクストアクションは期に関係なくすべての案件を読み、タブの中で状態を絞り込む（最初は未・進行中・完了）
+  // ネクストアクションは期に関係なくすべての案件を読み、タブの中で進捗を絞り込む（最初は未着手・着手中・納品済）
   const { data: nextProjects = [], isLoading: nextLoading } = useQuery({
     queryKey: ["projects", "all", "next"],
     queryFn: () => db.entities.Project.list("due_date"),
@@ -191,8 +190,7 @@ export default function ProjectList() {
     client_name: { label: "クライアント", getValue: (p) => p.client_name || "" },
     name: { label: "案件名", getValue: (p) => p.name || "" },
     deal_probability: { label: "受注確度", getValue: (p) => p.deal_probability || "", master: dealProbabilityOptions },
-    phase: { label: "フェーズ", getValue: (p) => p.phase || "", master: phaseOptions },
-    status: { label: "状態", getValue: (p) => PROJECT_STATUS_MAP[p.status]?.label || p.status || "", master: Object.values(PROJECT_STATUS_MAP).map((v) => v.label) },
+    status: { label: "進捗", getValue: (p) => PROJECT_STATUS_MAP[p.status]?.label || p.status || "", master: Object.values(PROJECT_STATUS_MAP).map((v) => v.label) },
     expected_revenue: { label: "受注見込（税別）", getValue: (p) => yen(p.expected_revenue) },
     expected_gross_profit: { label: "粗利見込（税別）", getValue: (p) => yen(p.expected_gross_profit) },
     due_date: { label: "完了予定", getValue: (p) => p.due_date || "" },
@@ -200,9 +198,9 @@ export default function ProjectList() {
     registered_at: { label: "登録日", getValue: (p) => p.registered_at || "" },
     subsidy: { label: "補助金", getValue: (p) => (p.uses_subsidy ? "補助金の案件" : "補助金なし"), master: ["補助金の案件", "補助金なし"] },
     delivery: { label: "納品・請求", getValue: (p) => DELIVERY_STATE[projectDelivery(p, deliveryIndex.byProject).state].label, master: DELIVERY_STATE_ORDER.map((k) => DELIVERY_STATE[k].label) },
-  }), [dealProbabilityOptions, phaseOptions, deliveryIndex]);
+  }), [dealProbabilityOptions, deliveryIndex]);
 
-  const FILTERABLE_KEYS = ["client_name", "deal_probability", "phase", "status", "subsidy"];
+  const FILTERABLE_KEYS = ["client_name", "deal_probability", "status", "subsidy"];
 
   const columnOptions = useMemo(() => {
     const result = {};
@@ -210,7 +208,7 @@ export default function ProjectList() {
       const def = columnDefs[key];
       const fromData = new Set(projects.map(def.getValue));
       const merged = Array.from(new Set([...(def.master || []), ...fromData]));
-      // 状態・納品請求は決まった順、ほかは 50 音順
+      // 進捗・納品請求は決まった順、ほかは 50 音順
       result[key] = key === "status" || key === "delivery" || key === "subsidy" ? merged : merged.sort((a, b) => a.localeCompare(b, "ja"));
     }
     return result;
@@ -237,7 +235,7 @@ export default function ProjectList() {
      
   }, [projects, search, columnFilters, columnDefs, period]);
 
-  // 状態の絞り込みで隠れている案件の数（状態ごと。検索・ほかの列の絞り込みは効かせたうえで数える）
+  // 進捗の絞り込みで隠れている案件の数（進捗ごと。検索・ほかの列の絞り込みは効かせたうえで数える）
   const hiddenByStatus = useMemo(() => {
     const selected = columnFilters.status;
     if (!selected) return [];
@@ -294,7 +292,7 @@ export default function ProjectList() {
     if (!q) return true;
     return [p.project_number, p.client_name, p.name, p.notes, p.next_action].filter(Boolean).join(" ").toLowerCase().includes(q);
   };
-  // 速報デイリー: 取消・失注は含めない
+  // 速報デイリー: 失注（以前の取消も）は含めない
   const dailyRows = useMemo(() => projects.filter((p) => p.status !== "cancelled" && p.status !== "lost").filter(matchesSearch), [projects, search]);
   const nextRows = useMemo(() => nextProjects.filter(matchesSearch), [nextProjects, search]);
 
@@ -373,7 +371,7 @@ export default function ProjectList() {
           </button>
         ))}
         <span className="ml-auto text-[11px] text-muted-foreground pr-1">
-          {view === "daily" ? "昨日を先頭に表示。上に戻ると前の日（取消・失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（期をまたいで表示）" : view === "monthend" ? "完了予定がその月の案件と、前の月までで請求が済んでいない案件を担当者ごとに" : ""}
+          {view === "daily" ? "昨日を先頭に表示。上に戻ると前の日（失注は含まない）" : view === "next" ? "今月を先頭に表示。上に戻ると期限を過ぎたもの（期をまたいで表示）" : view === "monthend" ? "完了予定がその月の案件と、前の月までで請求が済んでいない案件を担当者ごとに" : ""}
         </span>
       </div>
 
@@ -395,7 +393,7 @@ export default function ProjectList() {
           <span>{fiscalYear === ALL_YEARS ? "すべての期" : fiscalYearLabel(Number(fiscalYear), fiscalYearStartMonth)}</span>
           {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={() => setSearch("")} />}
           {periodActive(period) && <CondChip label="期間" value={periodLabel(period, PERIOD_FIELDS)} onClear={() => setPeriod(emptyPeriod(period.field))} />}
-          {/* 並び順 → 受注確度 → 状態 の順（そのほかの列の絞り込みは間に入る）。札をクリックするとその場で変えられる */}
+          {/* 並び順 → 受注確度 → 進捗 の順（そのほかの列の絞り込みは間に入る）。札をクリックするとその場で変えられる */}
           <CondChip
             label="並び順"
             value={sortConfig ? `${columnDefs[sortConfig.key]?.label || sortConfig.key}（${sortWord(sortConfig)}）` : "なし（登録順）"}
@@ -411,14 +409,14 @@ export default function ProjectList() {
           {CHIP_ORDER.map((key) => {
             const v = columnFilters[key];
             const editor = () => <CheckListEditor options={columnOptions[key]} selected={v ?? null} onChange={(next) => setColumnFilter(key, next)} />;
-            if (key === "status" && !v) return <CondChip key={key} label="状態" value="すべて" editor={editor} />;
+            if (key === "status" && !v) return <CondChip key={key} label="進捗" value="すべて" editor={editor} />;
             if (!v) return null;
             return <CondChip key={key} label={columnDefs[key].label} value={joinValues(v)} title={v.join("・")} onClear={() => setColumnFilter(key, null)} editor={editor} />;
           })}
           {hiddenByStatus.length > 0 && <span>（非表示：{hiddenByStatus.map(([label, n]) => `${label} ${n}件`).join("・")}）</span>}
           <span className="ml-1 flex items-center gap-2">
-            {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">状態を未・進行中・完了に戻す</button>}
-            {columnFilters.status && <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての状態を表示</button>}
+            {!statusIsDefault && <button type="button" onClick={() => setColumnFilter("status", DEFAULT_STATUS_FILTER)} className="text-primary hover:underline">進捗を未着手・着手中・納品済に戻す</button>}
+            {columnFilters.status && <button type="button" onClick={() => setColumnFilter("status", null)} className="text-primary hover:underline">すべての進捗を表示</button>}
             {/* 補助金の案件だけに絞る（もう一度押すと外す） */}
             <button type="button" onClick={() => setColumnFilter("subsidy", columnFilters.subsidy ? null : ["補助金の案件"])} className={`inline-flex items-center gap-1 rounded border px-1.5 ${columnFilters.subsidy ? "border-orange-300 bg-orange-50 text-orange-800" : "text-muted-foreground hover:bg-muted/50"}`} data-testid="subsidy-filter">
               {columnFilters.subsidy ? "補助金の案件だけ表示中（外す）" : "補助金の案件だけ"}

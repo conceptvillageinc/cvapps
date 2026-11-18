@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP } from "@/lib/constants";
+import { getDealProbabilityColor, PROJECT_STATUS_MAP } from "@/lib/constants";
 import { todayString, fiscalYearOf, fiscalYearLabel } from "@/lib/fiscal";
 import { useSystemSettings } from "@/lib/useSystemSettings";
 import { autoDailyTarget, countBusinessDays } from "@/lib/dailyTarget";
@@ -77,10 +77,11 @@ function Empty({ text }) {
 }
 
 /* ------------------------------------------------------------------------ */
-/* 並べ替え（受注確度・フェーズ）。システム設定の選択肢の順で並ぶ                 */
+/* 並べ替え（受注確度）。システム設定の選択肢の順で並ぶ                 */
 /* ------------------------------------------------------------------------ */
 
-const SORTABLE = { deal_probability: "dealProbabilityOptions", phase: "phaseOptions" };
+// フェーズは「進捗」（状態）にまとめたので、並べ替え・値の絞り込みは受注確度だけ
+const SORTABLE = { deal_probability: "dealProbabilityOptions" };
 
 /** 見出しクリックで 昇順 → 降順 → 解除 */
 function useColumnSort(storeKey) {
@@ -158,7 +159,8 @@ function filterCandidates(key, projects, settings) {
 }
 
 function applyFilters(projects, filters) {
-  const keys = Object.keys(filters).filter((k) => filters[k]);
+  // 以前の「フェーズ」の絞り込みが残っていても効かせない（並べ替え・絞り込みのできる列だけ）
+  const keys = Object.keys(filters).filter((k) => filters[k] && k in SORTABLE);
   if (keys.length === 0) return projects;
   return projects.filter((p) => keys.every((k) => filters[k].includes(p[k] || EMPTY_VALUE)));
 }
@@ -336,7 +338,7 @@ function DailyTargetCard({ dt }) {
             {showDetail && auto.hasTarget && <p className="text-[10.5px] text-muted-foreground mt-1">自動計算なら {auto.gap > 0 ? yen(auto.daily) : "目標到達済み"}（残り {yen(Math.max(0, auto.gap))} ÷ {auto.days}営業日）</p>}
           </>
         )}
-        {showDetail && <p className="text-[10px] text-muted-foreground mt-1">実績に計上するのは、状態が進行中・完了で受注確度が A・要注意（A）・A（定期売上）の案件と、有効な定期売上の粗利（見込）です（売上粗利管理表と同じ条件）</p>}
+        {showDetail && <p className="text-[10px] text-muted-foreground mt-1">実績に計上するのは、進捗が着手中・納品済で受注確度が A・要注意（A）・A（定期売上）の案件と、有効な定期売上の粗利（見込）です（売上粗利管理表と同じ条件）</p>}
       </CardContent>
     </Card>
   );
@@ -344,8 +346,8 @@ function DailyTargetCard({ dt }) {
 
 /**
  * 粗利目標に計上する案件（売上粗利管理表の着地見込と同じ条件）:
- *   状態が「進行中」「完了」で、受注確度が A／要注意（A）／A（定期売上）のいずれか（フェーズは見ない）
- *   定期売上の案件は、定期売上一覧のひな形が「有効」なら（受注確度・フェーズは見ない）
+ *   進捗が「着手中」「納品済」で、受注確度が A／要注意（A）／A（定期売上）のいずれか
+ *   定期売上の案件は、定期売上一覧のひな形が「有効」なら（受注確度・進捗は見ない）
  */
 /** 受注確度が A・要注意（A）・A（定期売上）のどれか */
 export function isForecastProb(p) {
@@ -361,8 +363,8 @@ export function countsTowardTarget(p, templateActive) {
   return FORECAST_STATUSES.includes(p.status || "open") && isForecastProb(p);
 }
 const sumBy = (rows, key, counts) => rows.reduce((s, p) => s + (counts(p) ? Number(p[key] || 0) : 0), 0);
-const FORECAST_RULE = "売上見込・粗利見込: 状態が進行中・完了で、受注確度が A・要注意（A）・A（定期売上）の案件と、有効な定期売上だけを合計（売上粗利管理表と同じ条件）";
-const TARGET_RULE = "計上: 状態が進行中・完了で、受注確度が A・要注意（A）・A（定期売上）の案件と、有効な定期売上の粗利（見込）";
+const FORECAST_RULE = "売上見込・粗利見込: 進捗が着手中・納品済で、受注確度が A・要注意（A）・A（定期売上）の案件と、有効な定期売上だけを合計（売上粗利管理表と同じ条件）";
+const TARGET_RULE = "計上: 進捗が着手中・納品済で、受注確度が A・要注意（A）・A（定期売上）の案件と、有効な定期売上の粗利（見込）";
 
 /** 粗利（見込）が目標に届いているか */
 function TargetBadge({ gross, target }) {
@@ -385,7 +387,7 @@ const DAILY_COLS = [
   { key: "client_name", label: "顧客名称" },
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度" },
-  { key: "phase", label: "フェーズ" },
+  { key: "status", label: "進捗" },
   { key: "expected_revenue", label: "売上見込（税別）", num: true },
   { key: "expected_gross_profit", label: "粗利(見込)", num: true },
   { key: "actual_gross_profit", label: "粗利(実績)", num: true },
@@ -449,7 +451,7 @@ export function DailyView({ projects, isLoading }) {
     // 今日・昨日の案件が無くても、そのまとまりは出す（0 件・目標未達が分かるように。開いたときは昨日から見せる）
     for (const d of [yesterday, today]) if (!out.some((g) => g.date === d)) out.push({ date: d, rows: [], revenue: 0, gross: 0, actual: 0, counted: 0, countedCount: 0 });
     out.sort((a, b) => a.date.localeCompare(b.date));
-    // 受注確度・フェーズで並べ替えるときは、日ごとのまとまりはそのままで中の行だけ並べ替える
+    // 受注確度で並べ替えるときは、日ごとのまとまりはそのままで中の行だけ並べ替える
     const cmp = optionComparator(sort, settings);
     if (cmp) for (const g of out) g.rows.sort(cmp);
     return out;
@@ -559,7 +561,7 @@ function GroupRows({ group: g, target, isToday, isYesterday, counts }) {
             <span className="block text-[10px] font-mono text-muted-foreground">{p.project_number}</span>
           </TableCell>
           <TableCell>{p.deal_probability && <Badge className={`text-[10px] whitespace-nowrap ${getDealProbabilityColor(p.deal_probability)}`}>{p.deal_probability}</Badge>}</TableCell>
-          <TableCell>{p.phase && <Badge className={`text-[10px] whitespace-nowrap ${getPhaseColor(p.phase)}`}>{p.phase}</Badge>}</TableCell>
+          <TableCell><InlineBadgeSelect project={p} field="status" /></TableCell>
           <TableCell className="text-right text-sm tabular-nums whitespace-nowrap">{yen(p.expected_revenue)}</TableCell>
           <TableCell className={`text-right text-sm tabular-nums whitespace-nowrap ${Number(p.expected_gross_profit) < 0 ? "text-destructive" : ""}`}>
             {counts(p) && <span className="mr-1 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-semibold text-emerald-800 align-middle" title={TARGET_RULE}>計上</span>}
@@ -587,8 +589,7 @@ const NEXT_COLS = [
   { key: "confirmed_revenue", label: "納品確定金額(税別)", head: <>納品確定<br />(税別)</>, num: true },
   { key: "name", label: "案件名称" },
   { key: "deal_probability", label: "受注確度", head: <>受注<br />確度</> },
-  { key: "phase", label: "フェーズ" },
-  { key: "status", label: "状態" },
+  { key: "status", label: "進捗" },
   { key: "expected_revenue", label: "受注見込", head: <>受注<br />見込</>, num: true },
   { key: "expected_cost", label: "発注見込", head: <>発注<br />見込</>, num: true },
   { key: "confirmed_cost", label: "仕入合計(税別)", head: <>仕入合計<br />(税別)</>, num: true },
@@ -598,7 +599,7 @@ const NEXT_COLS = [
 
 const sameStatus = (a, b) => !!a && !!b && a.length === b.length && a.every((x) => b.includes(x));
 
-// 案件別ネクストアクションの状態の絞り込み（最初は未・進行中・完了）
+// 案件別ネクストアクションの進捗の絞り込み（最初は未着手・着手中・納品済）
 const NEXT_STATUS_KEYS = Object.keys(PROJECT_STATUS_MAP);
 const NEXT_DEFAULT_STATUS = ["pending", "open", "completed"];
 
@@ -653,7 +654,7 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
   return (
     <div className="flex flex-col h-full min-h-0 gap-3">
       {/* 今の条件を 1 行で（案件一覧の標準と同じ見た目） */}
-      {/* 並び順 → 受注確度 → 状態 の順（フェーズは間に入る）。札をクリックするとその場で変えられる */}
+      {/* 並び順 → 受注確度 → 進捗 の順。札をクリックするとその場で変えられる */}
       <ConditionsRow className="-mt-2">
         <span>すべての期</span>
         {search.trim() && <CondChip label="検索" value={`「${search.trim()}」`} onClear={onClearSearch} />}
@@ -681,13 +682,13 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
           );
         })}
         <CondChip
-          label="状態"
+          label="進捗"
           value={statusFilter ? joinValues(statusFilter.map((k) => PROJECT_STATUS_MAP[k]?.label || k)) : "すべて"}
           onClear={statusFilter ? () => setStatusFilter(null) : undefined}
           editor={() => <CheckListEditor options={NEXT_STATUS_KEYS} selected={statusFilter} onChange={setStatusFilter} labelOf={(k) => PROJECT_STATUS_MAP[k]?.label || k} />}
         />
         {onlyEmpty && <CondChip label="ネクストアクション" value="空の案件だけ" onClear={() => setOnlyEmpty(false)} />}
-        {!sameStatus(statusFilter, NEXT_DEFAULT_STATUS) && <button type="button" onClick={() => setStatusFilter(NEXT_DEFAULT_STATUS)} className="ml-1 text-primary hover:underline">状態を未・進行中・完了に戻す</button>}
+        {!sameStatus(statusFilter, NEXT_DEFAULT_STATUS) && <button type="button" onClick={() => setStatusFilter(NEXT_DEFAULT_STATUS)} className="ml-1 text-primary hover:underline">進捗を未着手・着手中・納品済に戻す</button>}
       </ConditionsRow>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground shrink-0">
         <span>
@@ -704,7 +705,7 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
           {isLoading ? (
             <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : projects.length === 0 ? (
-            <Empty text="表示する案件がありません（状態の絞り込みを確認してください）" />
+            <Empty text="表示する案件がありません（進捗の絞り込みを確認してください）" />
           ) : (
             <div>
               {/* ネクストアクションまで横スクロールなしで見えるよう、余白を詰める */}
@@ -728,7 +729,7 @@ export function NextActionView({ projects: allProjects, isLoading, search = "", 
           )}
         </CardContent>
       </Card>
-      <p className="text-[11px] text-muted-foreground shrink-0">ネクストアクションは、書いて Enter か枠の外をクリックすると保存されます。案件詳細の「進捗」にも同じ欄があります。</p>
+      <p className="text-[11px] text-muted-foreground shrink-0">ネクストアクションは、書いて Enter か枠の外をクリックすると保存されます。案件詳細の「受注確度・進捗」にも同じ欄があります。</p>
     </div>
   );
 }
@@ -754,9 +755,8 @@ function NextGroupRows({ group: g }) {
             <span className="block text-[10px] text-muted-foreground truncate">{p.client_name}</span>
             <Link to={`/projects/${p.id}?from=next`} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary" title={p.name}>{p.name}</Link>{p.is_recurring && <RecurringMark className="ml-1.5 align-middle" />}
           </TableCell>
-          {/* 受注確度・フェーズ・状態は札をクリックしてその場で変えられる */}
+          {/* 受注確度・進捗は札をクリックしてその場で変えられる */}
           <TableCell><InlineBadgeSelect project={p} field="deal_probability" /></TableCell>
-          <TableCell><InlineBadgeSelect project={p} field="phase" /></TableCell>
           <TableCell><InlineBadgeSelect project={p} field="status" /></TableCell>
           <TableCell className="text-right text-[13px] tabular-nums whitespace-nowrap">{yen(p.expected_revenue)}</TableCell>
           <TableCell className="text-right text-[13px] tabular-nums whitespace-nowrap">{yen(p.expected_cost)}</TableCell>

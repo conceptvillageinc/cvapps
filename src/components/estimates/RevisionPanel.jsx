@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { GitBranch, Loader2, Plus, ArrowRight, FolderKanban } from "lucide-react";
 import { toast } from "sonner";
-import { STATUS_MAP, getDealProbabilityColor, getPhaseColor } from "@/lib/constants";
+import { STATUS_MAP, getDealProbabilityColor, PROJECT_STATUS_MAP } from "@/lib/constants";
 import { generateEstimateNumber } from "@/lib/estimateNumber";
 import { SUBMISSION_STATUS, SUBMISSION_KEYS, submissionOf, setSubmission } from "@/lib/submission";
 import SubmissionBadge from "@/components/estimates/SubmissionBadge";
@@ -68,9 +68,9 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
     },
   });
 
-  const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
+  const { dealProbabilityOptions } = useSystemSettings();
 
-  // 案件に紐付いている見積では、受注確度・フェーズは案件の属性として扱い、
+  // 案件に紐付いている見積では、受注確度・進捗は案件の属性として扱い、
   // 変更はその場で案件に保存する（見積の保存とは独立）。
   const projectUpdate = useMutation({
     mutationFn: (updates) => db.entities.Project.update(project.id, updates),
@@ -83,9 +83,9 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
   });
 
   const currentProbability = project ? project.deal_probability : (estimate.deal_probability || "B");
-  const currentPhase = project ? project.phase : (estimate.phase || "未着手");
+  // 進捗（未着手／着手中／納品済／失注）は案件の属性。案件に紐付いていない見積では出さない
+  const currentProgress = project ? (PROJECT_STATUS_MAP[project.status] ? project.status : "open") : null;
   const probabilityChoices = [...new Set([...dealProbabilityOptions, currentProbability].filter(Boolean))];
-  const phaseChoices = [...new Set([...phaseOptions, currentPhase].filter(Boolean))];
 
   // 提出ステータス（未提出／提出済／失注）。すぐ保存する。提出済にすると、同じ見積で前に提出済だった版は失注になる
   const submission = submissionOf(estimate);
@@ -122,13 +122,10 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
     onUpdate({ deal_probability: v, ...(v !== "失注" ? { lost_reason: "" } : {}) });
   };
 
-  const updatePhase = (v) => {
-    lostWithDeal(v);
-    if (project) {
-      projectUpdate.mutate({ phase: v });
-      return;
-    }
-    onUpdate({ phase: v });
+  const updateProgress = (v) => {
+    if (!project) return;
+    lostWithDeal(v === "lost" ? "失注" : "");
+    projectUpdate.mutate({ status: v });
   };
 
   const updateLostReason = (reason) => {
@@ -200,22 +197,21 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">フェーズ</Label>
-            <Select
-              value={currentPhase}
-              onValueChange={updatePhase}
-            >
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {phaseChoices.map((label) => (
-                  <SelectItem key={label} value={label} className="text-xs">{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {project && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">進捗</Label>
+              <Select value={currentProgress} onValueChange={updateProgress}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PROJECT_STATUS_MAP).map(([k, v]) => (
+                    <SelectItem key={k} value={k} className="text-xs">{v.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {(submission === "lost" || (!project && estimate.deal_probability === "失注")) && (
@@ -237,13 +233,13 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
         {project ? (
           <p className="text-[10px] text-muted-foreground -mt-1 flex items-center gap-1 flex-wrap">
             <FolderKanban className="w-3 h-3" />
-            受注確度・フェーズは案件
+            受注確度・進捗は案件
             <Link to={`/projects/${project.id}`} className="text-primary hover:underline">{project.project_number} {project.name}</Link>
             の属性です。変更するとすぐに案件へ保存されます
           </p>
         ) : (
           <p className="text-[10px] text-muted-foreground -mt-1">
-            ※ この見積は案件に紐付いていません。受注確度・フェーズは見積の自動保存で確定します。選択肢は「システム設定」画面で編集できます
+            ※ この見積は案件に紐付いていません。受注確度は見積の自動保存で確定します（進捗は案件に紐付けると選べます）。選択肢は「システム設定」画面で編集できます
           </p>
         )}
 
@@ -267,9 +263,6 @@ export default function RevisionPanel({ estimate, onUpdate, project = null }) {
                     {st && <Badge className={`text-[9px] ${st.color} shrink-0`}>{st.label}</Badge>}
                     {rev.deal_probability && (
                       <Badge className={`text-[9px] ${getDealProbabilityColor(rev.deal_probability)} shrink-0`}>{rev.deal_probability}</Badge>
-                    )}
-                    {rev.phase && (
-                      <Badge className={`text-[9px] ${getPhaseColor(rev.phase)} shrink-0`}>{rev.phase}</Badge>
                     )}
                     {rev.id === latestId && <Badge className="text-[9px] bg-blue-100 text-blue-700 shrink-0">最新版</Badge>}
                     <SubmissionBadge estimate={isSelf ? estimate : rev} size="xs" />

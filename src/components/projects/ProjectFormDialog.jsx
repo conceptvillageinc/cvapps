@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { useSystemSettings } from "@/lib/useSystemSettings";
+import { PROJECT_STATUS_MAP } from "@/lib/constants";
 import { generateProjectNumber } from "@/lib/projectNumber";
 import { nextMonthEnd, todayString } from "@/lib/fiscal";
 import ClientCombobox from "@/components/clients/ClientCombobox";
@@ -67,7 +67,7 @@ function emptyForm(defaults = {}) {
 export default function ProjectFormDialog({ open, onOpenChange, project = null, defaults = {}, onSaved }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
+  const { dealProbabilityOptions } = useSystemSettings();
   const [form, setForm] = useState(() => emptyForm(defaults));
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
   // 入金予定日を手で変えた後は、完了予定日を変えても自動で上書きしない
@@ -139,7 +139,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
         name: form.name.trim(),
         deal_probability: form.deal_probability,
         phase: form.phase,
-        ...(project ? { status: form.status } : {}),
+        status: PROJECT_STATUS_MAP[form.status] ? form.status : "open",
         expected_revenue: toNumber(form.expected_revenue),
         expected_cost: toNumber(form.expected_cost),
         other_cost: toNumber(form.other_cost),
@@ -233,12 +233,12 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">フェーズ</Label>
-              <Select value={form.phase} onValueChange={(v) => set("phase", v)}>
+              <Label className="text-xs">進捗</Label>
+              <Select value={PROJECT_STATUS_MAP[form.status] ? form.status : "open"} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[...new Set([...phaseOptions, form.phase].filter(Boolean))].map((o) => (
-                    <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                  {Object.entries(PROJECT_STATUS_MAP).map(([k, v]) => (
+                    <SelectItem key={k} value={k} className="text-xs">{v.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

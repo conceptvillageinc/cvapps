@@ -108,10 +108,8 @@ export default function SystemSettingsPage() {
 
   const [proofreadingFee, setProofreadingFee] = useState("0");
   const [dealProbabilityList, setDealProbabilityList] = useState(["A", "A（定期売上）", "要注意A", "B", "C", "失注"]);
-  const [phaseList, setPhaseList] = useState(["未着手", "着手中"]);
   const [notesTemplates, setNotesTemplates] = useState([]);
   const [newProbabilityInput, setNewProbabilityInput] = useState("");
-  const [newPhaseInput, setNewPhaseInput] = useState("");
   const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState("10");
   const [grossMarginPct, setGrossMarginPct] = useState("80");
   const skipMarginAutosave = useRef(true);
@@ -130,10 +128,6 @@ export default function SystemSettingsPage() {
       const probability = settings.find(s => s.setting_key === "deal_probability_options");
       if (probability) {
         try { setDealProbabilityList(JSON.parse(probability.setting_value)); } catch { /* ignore */ }
-      }
-      const phase = settings.find(s => s.setting_key === "phase_options");
-      if (phase) {
-        try { setPhaseList(JSON.parse(phase.setting_value)); } catch { /* ignore */ }
       }
       const fy = settings.find(s => s.setting_key === "fiscal_year_start_month");
       if (fy && Number(fy.setting_value) >= 1 && Number(fy.setting_value) <= 12) setFiscalYearStartMonth(String(Number(fy.setting_value)));
@@ -336,7 +330,7 @@ export default function SystemSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">受注確度・フェーズの選択肢<SaveBadge state={saveState.deal_probability_options || saveState.phase_options} /></CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">受注確度の選択肢<SaveBadge state={saveState.deal_probability_options} /></CardTitle>
           <CardDescription className="text-xs">見積詳細画面で選べる選択肢を管理します（上下で並び順を変更できます）</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -373,35 +367,10 @@ export default function SystemSettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs">フェーズ</Label>
-            <div className="space-y-1">
-              {phaseList.map((item, i) => (
-                <div key={item} className="flex items-center gap-1.5">
-                  <span className="flex-1 text-sm px-2.5 py-1.5 rounded border bg-muted/30">{item}</span>
-                  <button onClick={() => moveInList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", i, -1)} disabled={i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-20">
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => moveInList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", i, 1)} disabled={i === phaseList.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-20">
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => removeFromList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", i)} className="text-muted-foreground hover:text-destructive">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Input
-                value={newPhaseInput}
-                onChange={e => setNewPhaseInput(e.target.value)}
-                placeholder="新しい選択肢"
-                className="h-8 text-xs"
-                onKeyDown={e => (e.key === "Enter" && !isImeEnter(e)) && addToList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", newPhaseInput, setNewPhaseInput)}
-              />
-              <Button size="sm" variant="outline" className="h-8 gap-1 text-xs shrink-0" onClick={() => addToList(phaseList, setPhaseList, "phase_options", "フェーズの選択肢", newPhaseInput, setNewPhaseInput)}>
-                <Plus className="w-3.5 h-3.5" /> 追加
-              </Button>
-            </div>
+            <Label className="text-xs">進捗（以前のフェーズ・状態）</Label>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              案件の「フェーズ」と「状態」は「進捗」の 1 つにまとめました。選択肢は 未着手／着手中／納品済／失注 で固定です（売上粗利管理表・速報デイリーの計上や資金繰りの見込みの決まりに使うため、ここでは変えられません）。
+            </p>
           </div>
         </CardContent>
       </Card>

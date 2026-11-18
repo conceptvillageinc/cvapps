@@ -159,12 +159,15 @@ export const PHASE_COLORS = {
 export const getPhaseColor = (label) => PHASE_COLORS[label] || "bg-muted text-muted-foreground";
 
 // 案件の状態
+// 案件の進捗（以前の「フェーズ」と「状態」を 1 つにまとめたもの。データは projects.status に入る）
+//   pending=未着手 / open=着手中 / completed=納品済 / lost=失注（以前の「取消」も失注にまとめた。SQL 0061）
+//   以前の「フェーズ」（projects.phase）はデータとして残すが、画面には出さない
+export const PROGRESS_LABEL = "進捗";
 export const PROJECT_STATUS_MAP = {
-  pending: { label: "未", color: "bg-amber-50 text-amber-800" }, // まだ動き出していない（進行中の手前）
-  open: { label: "進行中", color: "bg-blue-100 text-blue-700" },
-  completed: { label: "完了", color: "bg-emerald-100 text-emerald-700" },
+  pending: { label: "未着手", color: "bg-slate-100 text-slate-600" },
+  open: { label: "着手中", color: "bg-blue-100 text-blue-700" },
+  completed: { label: "納品済", color: "bg-emerald-100 text-emerald-700" },
   lost: { label: "失注", color: "bg-red-100 text-red-700" },
-  cancelled: { label: "取消", color: "bg-slate-100 text-slate-600" },
 };
 
 // クライアントへの請求書送付方法

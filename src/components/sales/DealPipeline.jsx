@@ -228,7 +228,7 @@ function ImportDialog({ open, onOpenChange, projects, deals, tags, onImport }) {
       <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>案件一覧から取り込む</DialogTitle>
-          <DialogDescription className="text-xs">進行中の案件を「見込」の行としてコピーします。売上は見込売上、仕入は見込原価＋その他経費（いずれも税別）。コピー後に一覧側で直しても案件は変わりません。確度 A→{tags[0]?.label || "—"}、B→{tags[1]?.label || "—"}、C→{tags[2]?.label || "—"} の区分を付けます</DialogDescription>
+          <DialogDescription className="text-xs">着手中の案件を「見込」の行としてコピーします。売上は見込売上、仕入は見込原価＋その他経費（いずれも税別）。コピー後に一覧側で直しても案件は変わりません。確度 A→{tags[0]?.label || "—"}、B→{tags[1]?.label || "—"}、C→{tags[2]?.label || "—"} の区分を付けます</DialogDescription>
         </DialogHeader>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="クライアント名・件名・番号で絞る" className="h-8 text-sm" />
         <div className="rounded-md border max-h-[50vh] overflow-auto">

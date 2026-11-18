@@ -161,7 +161,7 @@ export default function ClientKarte() {
     if (tab === "projects") {
       return projects
         .filter((p) => has(p.project_number, p.name))
-        .map((p) => ({ id: p.id, number: p.project_number, date: fmtDate(p.registered_at), title: p.name || "（件名なし）", total: p.confirmed_revenue > 0 ? p.confirmed_revenue : p.expected_revenue, sub: `受注確度 ${p.deal_probability || "—"}　${p.phase || ""}`, badge: PROJECT_STATUS_MAP[p.status] ? { label: PROJECT_STATUS_MAP[p.status].label, cls: PROJECT_STATUS_MAP[p.status].color } : null, raw: p }));
+        .map((p) => ({ id: p.id, number: p.project_number, date: fmtDate(p.registered_at), title: p.name || "（件名なし）", total: p.confirmed_revenue > 0 ? p.confirmed_revenue : p.expected_revenue, sub: `受注確度 ${p.deal_probability || "—"}`, badge: PROJECT_STATUS_MAP[p.status] ? { label: PROJECT_STATUS_MAP[p.status].label, cls: PROJECT_STATUS_MAP[p.status].color } : null, raw: p }));
     }
     if (tab === "invoices") {
       return invoices
@@ -291,7 +291,7 @@ export default function ClientKarte() {
           [`${fiscalYearLabel(stats.fy, fiscalYearStartMonth).split("（")[0]}売上`, yen(stats.thisFy)],
           ["粗利（案件の合計）", `${yen(stats.gross)}${stats.grossRate != null ? ` / ${stats.grossRate}%` : ""}`],
           ["未入金", stats.unpaidCount ? `${stats.unpaidCount}件 ${yen(stats.unpaidTotal)}` : "なし"],
-          ["進行中の案件", `${stats.openProjects}件`],
+          ["着手中の案件", `${stats.openProjects}件`],
           ["最終請求日", stats.lastDate ? fmtDate(stats.lastDate) : "—"],
         ].map(([label, value]) => (
           <Card key={label}><CardContent className="pt-2.5 pb-2 px-3"><p className="text-[10px] text-muted-foreground">{label}</p><p className="text-base font-bold tabular-nums truncate">{value}</p></CardContent></Card>
@@ -569,7 +569,7 @@ function SimplePane({ tab, row }) {
   const link = tab === "projects" ? `/projects/${r.id}` : tab === "invoices" ? `/invoices/${r.id}` : `/delivery-notes/${r.id}`;
   const lines = tab === "projects" ? [] : (r.line_items || []);
   const fields = tab === "projects"
-    ? [["案件番号", r.project_number], ["登録日", fmtDate(r.registered_at)], ["完了予定日", fmtDate(r.due_date)], ["入金予定日", fmtDate(r.payment_due_date)], ["受注確度", r.deal_probability], ["フェーズ", r.phase], ["見込売上", yen(r.expected_revenue)], ["見込原価", yen(r.expected_cost)], ["確定売上", r.confirmed_revenue > 0 ? yen(r.confirmed_revenue) : "—"], ["確定原価", r.confirmed_cost > 0 ? yen(r.confirmed_cost) : "—"]]
+    ? [["案件番号", r.project_number], ["登録日", fmtDate(r.registered_at)], ["完了予定日", fmtDate(r.due_date)], ["入金予定日", fmtDate(r.payment_due_date)], ["受注確度", r.deal_probability], ["進捗", PROJECT_STATUS_MAP[r.status]?.label || (r.status === "cancelled" ? "失注" : r.status)], ["見込売上", yen(r.expected_revenue)], ["見込原価", yen(r.expected_cost)], ["確定売上", r.confirmed_revenue > 0 ? yen(r.confirmed_revenue) : "—"], ["確定原価", r.confirmed_cost > 0 ? yen(r.confirmed_cost) : "—"]]
     : tab === "invoices"
       ? [["請求書番号", r.invoice_number], ["請求日", fmtDate(r.invoice_date)], ["入金期日", fmtDate(r.due_date)], ["状態", INVOICE_STATUS_MAP[r.status]?.label], ["送付方法", INVOICE_DELIVERY_METHODS[r.delivery_method]], ["担当", r.person_in_charge]]
       : [["納品書番号", r.delivery_number], ["納品日", fmtDate(r.delivery_date)], ["状態", DELIVERY_STATUS_MAP[r.status]?.label], ["担当", r.person_in_charge]];

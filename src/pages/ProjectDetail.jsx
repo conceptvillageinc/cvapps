@@ -19,7 +19,7 @@ import { DELIVERY_STATUS_MAP, INVOICE_STATUS_MAP } from "@/lib/documents";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useSystemSettings } from "@/lib/useSystemSettings";
-import { getDealProbabilityColor, getPhaseColor, PROJECT_STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
+import { getDealProbabilityColor, PROJECT_STATUS_MAP, INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import ForecastFromEstimateDialog from "@/components/projects/ForecastFromEstimateDialog";
 import { forecastDrift, reapplyForecast, forecastSources, forecastSourceNumbers, forecastSourceLineCount } from "@/lib/projectForecast";
@@ -59,7 +59,7 @@ export default function ProjectDetail() {
   const from = ["daily", "next", "monthend"].includes(searchParams.get("from")) ? searchParams.get("from") : null;
   const listUrl = from ? `/projects?view=${from}` : "/projects";
   const queryClient = useQueryClient();
-  const { dealProbabilityOptions, phaseOptions } = useSystemSettings();
+  const { dealProbabilityOptions } = useSystemSettings();
   const [editOpen, setEditOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false); // 案件を複製
   // 定期売上の案件は、納品書・請求書の一覧を最初は折りたたむ（「月ごとの納品・請求」と同じものが並ぶため）
@@ -254,9 +254,8 @@ export default function ProjectDetail() {
             <h1 className="text-xl font-bold tracking-tight leading-tight break-words">{project.name}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">{project.client_name}</p>
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              <Badge className={`text-[10px] ${st.color}`}>{st.label}</Badge>
               <Badge className={`text-[10px] ${getDealProbabilityColor(project.deal_probability)}`}>{project.deal_probability}</Badge>
-              <Badge className={`text-[10px] ${getPhaseColor(project.phase)}`}>{project.phase}</Badge>
+              <Badge className={`text-[10px] ${st.color}`} title="進捗">{st.label}</Badge>
               {project.is_recurring && (
                 <Badge className="text-[10px] bg-rose-100 text-rose-700 hover:bg-rose-100 gap-1"><Repeat className="w-2.5 h-2.5" /> 定期売上</Badge>
               )}
@@ -338,12 +337,12 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      {/* 進捗（その場で変更できる） */}
+      {/* 受注確度・進捗（その場で変更できる） */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">進捗</CardTitle>
+          <CardTitle className="text-sm">受注確度・進捗</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">受注確度</p>
             <Select value={project.deal_probability} onValueChange={(v) => { quickUpdate.mutate({ deal_probability: v }); if (/定期/.test(v) && !isRecurringParent(project)) toast.info("定期売上にするには、右上の「定期売上にする」を押してください"); }}>
@@ -356,18 +355,7 @@ export default function ProjectDetail() {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">フェーズ</p>
-            <Select value={project.phase} onValueChange={(v) => quickUpdate.mutate({ phase: v })}>
-              <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {[...new Set([...phaseOptions, project.phase].filter(Boolean))].map((o) => (
-                  <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">状態</p>
+            <p className="text-xs text-muted-foreground">進捗 <span className="text-[10px]">（未着手／着手中／納品済／失注）</span></p>
             <Select value={project.status} onValueChange={(v) => quickUpdate.mutate({ status: v })}>
               <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -377,11 +365,11 @@ export default function ProjectDetail() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5 sm:col-span-3">
+          <div className="space-y-1.5 sm:col-span-2">
             <p className="text-xs text-muted-foreground">ネクストアクション <span className="text-[10px]">（案件一覧の「案件別ネクストアクション」にも出ます）</span></p>
             <NextActionCell project={project} tone="gray" />
           </div>
-          <div className="space-y-1.5 sm:col-span-3">
+          <div className="space-y-1.5 sm:col-span-2">
             <p className="text-xs text-muted-foreground">案件メモ <span className="text-[10px]">（この案件のページだけに出ます。改行できます）</span></p>
             <ProjectMemoField project={project} />
           </div>

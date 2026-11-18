@@ -66,7 +66,7 @@ export default function EstimateCreate() {
     enabled: !!lockedProjectId,
   });
 
-  // 進行中の案件（新しい順）。件名・クライアントの初期値に使う。
+  // 未着手・着手中の案件（新しい順）。件名・クライアントの初期値に使う。
   const { data: openProjects = [] } = useQuery({
     queryKey: ["projects", "open"],
     queryFn: () => db.entities.Project.filter({ status: ["pending", "open"] }, "-registered_at", 300),
@@ -430,7 +430,7 @@ export default function EstimateCreate() {
               <Popover open={projectPopoverOpen} onOpenChange={setProjectPopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" role="combobox" className="flex-1 justify-between font-normal">
-                    進行中の案件から選ぶ
+                    未着手・着手中の案件から選ぶ
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -464,7 +464,7 @@ export default function EstimateCreate() {
             </div>
           )}
           <p className="text-[10px] text-muted-foreground">
-            見積は案件に紐付けて管理します。受注確度・フェーズ・入金予定は案件側で持ちます
+            見積は案件に紐付けて管理します。受注確度・進捗・入金予定は案件側で持ちます
           </p>
         </CardContent>
       </Card>

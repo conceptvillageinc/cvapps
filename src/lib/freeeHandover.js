@@ -188,7 +188,7 @@ export function matchClient(clients, name) {
   return score >= 0.6 ? best : null;
 }
 
-/** 書類に合いそうな案件の順（クライアントの近さ＋件名の近さ。進行中を先に） */
+/** 書類に合いそうな案件の順（クライアントの近さ＋件名の近さ。着手中を先に） */
 export function rankProjects(projects, doc) {
   return (projects || [])
     .map((p) => {
