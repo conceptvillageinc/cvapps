@@ -101,7 +101,6 @@ export default function AiChat() {
             );
           })}
         </div>
-        <p className="border-t px-3 py-2 text-[10px] leading-snug text-muted-foreground">Claude が CVアプリの案件・見積・請求書などを、あなたの権限の範囲で読んで答えます</p>
       </aside>
 
       {/* 会話 */}
