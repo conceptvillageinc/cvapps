@@ -59,7 +59,7 @@ export default function RecordHistory({ table, record, className = "" }) {
           <DialogHeader>
             <DialogTitle className="text-base">{HISTORY_TABLE_LABEL[table] || ""}の変更の履歴</DialogTitle>
             <DialogDescription className="text-xs">
-              いつ・誰が・どの項目を変えたか（新しい順）。同じ人が 10 分以内に続けて変えた分は 1 行にまとめています。ログインした人がいない変更（メール送付の記録・毎月の自動作成など）は「システム（自動）」です
+              変更履歴の確認ができます。同じユーザーが 10 分以内に続けて変更した場合でも1行に集約されます。システム側での記録（メール送付の記録・毎月の自動作成など）は「システム（自動）」と表示されます。
             </DialogDescription>
           </DialogHeader>
           {isLoading ? (
@@ -94,7 +94,7 @@ export default function RecordHistory({ table, record, className = "" }) {
               })}
               {(!created.by || rows.length === 0) && (
                 <li className="px-1 text-[11px] text-muted-foreground">
-                  {created.at ? `${whenFull(created.at)} 作成${created.by ? `（${created.by}）` : ""}。` : ""}履歴は、変更の記録を始めた日より後の分だけです
+                  {created.at ? `${whenFull(created.at)} 作成${created.by ? `（${created.by}）` : ""}。` : ""}変更があった場合、履歴として記録されます。
                 </li>
               )}
             </ol>
