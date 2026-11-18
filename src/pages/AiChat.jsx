@@ -16,12 +16,12 @@ import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, Clipboar
 //   ・左: 自分のチャットと、招待されたチャットの一覧（新しく話した順）
 //   ・中: 会話。質問すると Claude が答える（回答は裏で作られ、届くまで読み直す）
 //         CVアプリの情報（案件・見積・書類・クライアント・売上粗利管理表）は、質問した人の権限で Claude が読む
-//   ・右: 「下書き」欄。owner・editor が一緒に直せる（同時に直したときは、あとから保存した人に知らせる）
-//   ・メンバー: owner が招待・権限の変更・外す。editor は書き込める、viewer は見るだけ
+//   ・右: 「下書き」欄。メンバー全員が一緒に直せる（同時に直したときは、あとから保存した人に知らせる）
+//   ・メンバー: 作った人（owner）が招待・外す。招待した人はみな「共同編集」（editor：質問も下書きの直しもできる）
 //   データは ai_chats / ai_chat_members / ai_chat_messages（SQL 0064。読み書きの決まりはデータベース側）
 // ============================================================================
 
-const ROLE_LABEL = { owner: "作成者", editor: "書き込める", viewer: "見るだけ" };
+const ROLE_LABEL = { owner: "作成者", editor: "共同編集" };
 const MAX_FILES = 5;
 const MAX_MB = 20;
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
@@ -278,7 +278,7 @@ function Composer({ chatId, canWrite, onSent }) {
       setSending(false);
     }
   };
-  if (!canWrite) return <p className="border-t px-4 py-3 text-center text-xs text-muted-foreground">このチャットは「見るだけ」のメンバーです（書き込みは作成者に権限を変えてもらってください）</p>;
+  if (!canWrite) return <p className="border-t px-4 py-3 text-center text-xs text-muted-foreground">このチャットには書き込めません</p>;
   return (
     <div className="border-t px-3 py-3 md:px-6" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer?.files); }}>
       <div className="mx-auto max-w-3xl rounded-xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-primary/30">
@@ -380,7 +380,7 @@ const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onCl
         </div>
       )}
       <textarea value={text} onChange={(e) => onChange(e.target.value)} readOnly={!canWrite}
-        placeholder={canWrite ? "提案書・メール文などの下書き。Claude の回答の「下書きに入れる」で取り込めます。「下書きを直して」と頼むと、Claude はこの中身を見て直します" : "（見るだけのメンバーは直せません）"}
+        placeholder={canWrite ? "提案書・メール文などの下書き。Claude の回答の「下書きに入れる」で取り込めます。「下書きを直して」と頼むと、Claude はこの中身を見て直します" : "（このチャットの下書きは直せません）"}
         className="min-h-0 flex-1 resize-none bg-background px-4 py-3 text-sm leading-relaxed outline-none" data-testid="ai-chat-draft-text" />
     </aside>
   );
@@ -389,7 +389,6 @@ const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onCl
 function MembersDialog({ open, onOpenChange, chat, myRole, users, meId, onLeft }) {
   const qc = useQueryClient();
   const [addId, setAddId] = useState("");
-  const [addRole, setAddRole] = useState("editor");
   const members = chat.ai_chat_members || [];
   const isOwner = myRole === "owner";
   const nameOf = (uid) => { const u = users.find((x) => x.id === uid); return u ? (u.full_name || u.email) : "（不明）"; };
@@ -397,13 +396,9 @@ function MembersDialog({ open, onOpenChange, chat, myRole, users, meId, onLeft }
   const refresh = () => qc.invalidateQueries({ queryKey: ["aiChats"] });
   const add = async () => {
     if (!addId) return;
-    const { error } = await supabase.from("ai_chat_members").insert({ chat_id: chat.id, user_id: addId, role: addRole });
+    const { error } = await supabase.from("ai_chat_members").insert({ chat_id: chat.id, user_id: addId, role: "editor" });
     if (error) { toast.error("招待できませんでした: " + error.message); return; }
     toast.success(`${nameOf(addId)} さんを招待しました`); setAddId(""); refresh();
-  };
-  const setRole = async (uid, role) => {
-    const { error } = await supabase.from("ai_chat_members").update({ role }).eq("chat_id", chat.id).eq("user_id", uid);
-    if (error) toast.error("変えられませんでした: " + error.message); refresh();
   };
   const remove = async (uid) => {
     const self = uid === meId;
@@ -417,18 +412,14 @@ function MembersDialog({ open, onOpenChange, chat, myRole, users, meId, onLeft }
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base">メンバー</DialogTitle>
-          <DialogDescription className="text-xs">招待した人はこのチャットを見られます。「書き込める」人は質問と下書きの直しができます。Claude が読む CVアプリの情報は、質問した人の権限の範囲です</DialogDescription>
+          <DialogDescription className="text-xs">招待した人は「共同編集」のメンバーとして、このチャットで質問したり、下書きを一緒に直したりできます。Claude が読む CVアプリの情報は、質問した人の権限の範囲です</DialogDescription>
         </DialogHeader>
         <ul className="divide-y rounded-md border" data-testid="ai-chat-members">
           {members.map((m) => (
             <li key={m.user_id} className="flex items-center gap-2 px-3 py-2 text-sm">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{nameOf(m.user_id).slice(0, 1)}</span>
               <span className="min-w-0 flex-1 truncate">{nameOf(m.user_id)}{m.user_id === meId && <span className="ml-1 text-[10px] text-muted-foreground">（あなた）</span>}</span>
-              {isOwner && m.role !== "owner" ? (
-                <select value={m.role} onChange={(e) => setRole(m.user_id, e.target.value)} className="h-7 rounded-md border bg-background px-1 text-xs">
-                  <option value="editor">書き込める</option><option value="viewer">見るだけ</option>
-                </select>
-              ) : <span className="text-xs text-muted-foreground">{ROLE_LABEL[m.role]}</span>}
+              <span className="text-xs text-muted-foreground">{ROLE_LABEL[m.role] || ROLE_LABEL.editor}</span>
               {m.role !== "owner" && (isOwner || m.user_id === meId) && (
                 <button type="button" onClick={() => remove(m.user_id)} className="text-muted-foreground hover:text-destructive" title={m.user_id === meId ? "抜ける" : "外す"} aria-label={m.user_id === meId ? "抜ける" : "外す"}>
                   {m.user_id === meId ? <LogOut className="h-4 w-4" /> : <X className="h-4 w-4" />}
@@ -443,12 +434,9 @@ function MembersDialog({ open, onOpenChange, chat, myRole, users, meId, onLeft }
               <option value="">招待する人を選ぶ</option>
               {candidates.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
             </select>
-            <select value={addRole} onChange={(e) => setAddRole(e.target.value)} className="h-8 rounded-md border bg-background px-1 text-xs">
-              <option value="editor">書き込める</option><option value="viewer">見るだけ</option>
-            </select>
             <Button size="sm" className="h-8" onClick={add} disabled={!addId} data-testid="ai-chat-invite">招待</Button>
           </div>
-        ) : <p className="text-[11px] text-muted-foreground">招待・権限の変更は、チャットを作った人ができます</p>}
+        ) : <p className="text-[11px] text-muted-foreground">招待・メンバーを外すのは、チャットを作った人ができます</p>}
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>閉じる</Button></DialogFooter>
       </DialogContent>
     </Dialog>

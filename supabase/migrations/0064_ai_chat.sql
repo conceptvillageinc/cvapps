@@ -1,7 +1,7 @@
 -- ============================================================================
 -- 0064: AI チャット（Claude）
 --   ・チャット（ai_chats）… 作った人のもの。メンバーに招待した人だけが見られる
---   ・メンバー（ai_chat_members）… owner（作った人）／editor（書き込める・下書きを直せる）／viewer（見るだけ）
+--   ・メンバー（ai_chat_members）… owner（作った人）／editor（共同編集：質問も下書きの直しもできる。招待した人はみなこれ）
 --   ・メッセージ（ai_chat_messages）… 人の質問と Claude の回答。回答はサーバー（service role）が書く
 --   ・下書き（ai_chats.draft_text）… チャットの横の「下書き」欄。owner・editor が一緒に直せる
 --   CVアプリの情報（案件・見積など）は、回答を作るときに「質問した人の権限」で読む（サーバー側）。
@@ -26,7 +26,7 @@ create index if not exists ai_chats_owner_idx on public.ai_chats (owner_id, last
 create table if not exists public.ai_chat_members (
   chat_id    uuid not null references public.ai_chats (id) on delete cascade,
   user_id    uuid not null references public.users (id) on delete cascade,
-  role       text not null default 'editor' check (role in ('owner', 'editor', 'viewer')),
+  role       text not null default 'editor' check (role in ('owner', 'editor')),
   added_by   uuid default auth.uid(),
   created_at timestamptz not null default now(),
   primary key (chat_id, user_id)
@@ -99,13 +99,13 @@ create policy ai_chats_update on public.ai_chats for update to authenticated usi
 drop policy if exists ai_chats_delete on public.ai_chats;
 create policy ai_chats_delete on public.ai_chats for delete to authenticated using (public.is_ai_chat_owner(id));
 
--- メンバー: メンバーが読む。招待・外す・権限を変えるのは owner（自分で抜けるのは本人）
+-- メンバー: メンバーが読む。招待・外すのは owner（自分で抜けるのは本人）
 drop policy if exists ai_chat_members_select on public.ai_chat_members;
 create policy ai_chat_members_select on public.ai_chat_members for select to authenticated using (public.can_read_ai_chat(chat_id));
 drop policy if exists ai_chat_members_insert on public.ai_chat_members;
-create policy ai_chat_members_insert on public.ai_chat_members for insert to authenticated with check (public.is_ai_chat_owner(chat_id) and role in ('editor', 'viewer'));
+create policy ai_chat_members_insert on public.ai_chat_members for insert to authenticated with check (public.is_ai_chat_owner(chat_id) and role = 'editor');
+-- 権限を変える操作はない（招待した人はみな共同編集）
 drop policy if exists ai_chat_members_update on public.ai_chat_members;
-create policy ai_chat_members_update on public.ai_chat_members for update to authenticated using (public.is_ai_chat_owner(chat_id) and role <> 'owner') with check (public.is_ai_chat_owner(chat_id) and role in ('editor', 'viewer'));
 drop policy if exists ai_chat_members_delete on public.ai_chat_members;
 create policy ai_chat_members_delete on public.ai_chat_members for delete to authenticated using (role <> 'owner' and (public.is_ai_chat_owner(chat_id) or user_id = auth.uid()));
 
@@ -117,7 +117,7 @@ create policy ai_chat_messages_insert on public.ai_chat_messages for insert to a
   with check (public.can_write_ai_chat(chat_id) and role = 'user' and author_id = auth.uid());
 
 comment on table public.ai_chats is 'AI チャット（Claude）。メンバーだけが見られる。draft_text は共同で直す下書き';
-comment on table public.ai_chat_members is 'AI チャットのメンバー（owner / editor / viewer）';
+comment on table public.ai_chat_members is 'AI チャットのメンバー（owner＝作った人 / editor＝共同編集）';
 comment on table public.ai_chat_messages is 'AI チャットのメッセージ（人の質問と Claude の回答。回答はサーバーが書く）';
 
 -- 確認: 3 つの表と、読み書きの決まり（ポリシー）ができたか
