@@ -185,8 +185,7 @@ function MessageList({ messages, canWrite, meId, onToDraft }) {
       {messages.length === 0 && (
         <div className="mx-auto max-w-xl space-y-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
           <p className="font-semibold text-foreground">何でも聞いてください</p>
-          <p>例：「P-2611-009 の見積を要約して」「今月の着地見込は？」「MOMIJI さんの最近の案件と請求の状況をまとめて」「この PDF を読んで提案書の構成を作って」</p>
-          <p className="text-xs">案件・見積・請求書などの情報は、あなたの権限で見られる範囲だけを Claude が読みます。</p>
+          <p>例：「MOMIJIさんの最近の案件と請求の状況をまとめて」「この PDF を読んで提案書の構成を作って」</p>
         </div>
       )}
       <div className="mx-auto max-w-3xl space-y-4">
