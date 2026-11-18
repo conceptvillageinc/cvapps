@@ -451,7 +451,7 @@ function EstimateDetail() {
                 <>
                   <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(true)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑あり DL</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(false)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑なし DL（印刷して押印する用）</DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs gap-2" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }}><Mail className="w-3.5 h-3.5" />メールで見積書を送付</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs gap-2" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }}><Mail className="w-3.5 h-3.5" />メールで見積書を送付（電子印鑑有無の選択可）</DropdownMenuItem>
                 </>
               )}
               <DropdownMenuItem className="text-xs gap-2" onClick={copyLink} title="「▼見積書_クライアント名_案件名」とこの見積の URL をコピー（CV メンバーへの共有・Asana やチャットに貼る用）"><Link2 className="w-3.5 h-3.5" />CV 共有用のタイトルと URL をコピー</DropdownMenuItem>
