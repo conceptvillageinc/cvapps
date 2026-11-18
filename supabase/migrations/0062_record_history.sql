@@ -132,11 +132,15 @@ begin
 end;
 $$;
 
--- 8 つの表に、作成者・更新者の列とトリガーを付ける
+-- 8 つの表に、作成者・更新者の列とトリガーを付ける（まだ作っていない表は飛ばす。あとで作ったら、この SQL をもう一度実行する）
 do $$
 declare t text;
 begin
   foreach t in array array['projects', 'estimates', 'delivery_notes', 'invoices', 'receipts', 'partner_orders', 'recurring_project_templates', 'clients'] loop
+    if to_regclass('public.' || t) is null then
+      raise notice '表 % がまだ無いので飛ばしました', t;
+      continue;
+    end if;
     execute format('alter table public.%I add column if not exists created_by uuid', t);
     execute format('alter table public.%I add column if not exists updated_by uuid', t);
     execute format('drop trigger if exists %I on public.%I', t || '_stamp_user', t);
@@ -146,8 +150,11 @@ begin
   end loop;
 end $$;
 
--- 確認: 8 つの表にトリガーが付いたか（_stamp_user と _history が 8 つずつ）
-select event_object_table as 表, string_agg(distinct trigger_name, '・' order by trigger_name) as トリガー
-from information_schema.triggers
-where trigger_schema = 'public' and (trigger_name like '%\_stamp\_user' or trigger_name like '%\_history')
-group by 1 order by 1;
+-- 確認: 8 つの表それぞれに、記録の仕組みが付いたか（「まだ無い表」と出たものは飛ばした表）
+select t.name as 表,
+  case when to_regclass('public.' || t.name) is null then 'まだ無い表（飛ばしました）'
+       else coalesce((select string_agg(distinct trigger_name, '・' order by trigger_name) from information_schema.triggers
+                      where trigger_schema = 'public' and event_object_table = t.name
+                        and (trigger_name like '%\_stamp\_user' or trigger_name like '%\_history')), '付いていません') end as 記録の仕組み
+from unnest(array['projects', 'estimates', 'delivery_notes', 'invoices', 'receipts', 'partner_orders', 'recurring_project_templates', 'clients']) as t(name)
+order by 1;
