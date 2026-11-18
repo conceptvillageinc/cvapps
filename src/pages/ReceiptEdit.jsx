@@ -27,6 +27,7 @@ import {
   openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
 import { stampDutyLabel } from "@/lib/stampDuty";
+import RecordHistory from "@/components/common/RecordHistory";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 
@@ -206,6 +207,7 @@ export default function ReceiptEdit() {
               {sourceLink && <Link to={sourceLink} className="text-primary hover:underline">{sourceLabel} から</Link>}
               {form.project_id && <Link to={`/projects/${form.project_id}`} className="text-primary hover:underline">案件を開く</Link>}
             </p>
+            {!isNew && <RecordHistory table="receipts" record={existing} className="mt-0.5" />}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">

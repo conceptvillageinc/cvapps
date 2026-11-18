@@ -30,6 +30,7 @@ import {
   TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
 import { refreshProjectActuals } from "@/lib/projectActuals";
+import RecordHistory from "@/components/common/RecordHistory";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -252,6 +253,7 @@ export default function PartnerOrderEdit() {
               {estimate && <Link to={`/estimates/${estimate.id}`} className="text-primary hover:underline">見積 {estimate.estimate_number} {estimate.estimate_title || ""}（{estimate.client_name}）</Link>}
               {form.project_id && <Link to={`/projects/${form.project_id}`} className="text-primary hover:underline">案件を開く</Link>}
             </p>
+            {!isNew && <RecordHistory table="partner_orders" record={existing} className="mt-0.5" />}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">

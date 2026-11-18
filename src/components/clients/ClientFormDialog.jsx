@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { isValidPostalCode, formatPostalCode, formatPostalInput, normalizePostalCode } from "@/lib/postalCode";
 import { INVOICE_DELIVERY_METHODS } from "@/lib/constants";
 import ClientImageReader from "@/components/clients/ClientImageReader";
+import RecordHistory from "@/components/common/RecordHistory";
 
 const emptyForm = { name: "", name_kana: "", contact_person: "", contact_person_kana: "", email: "", phone: "", postal_code: "", address: "", notes: "", invoice_delivery_method: "", invoice_delivery_notes: "", has_recurring_billing: false, cc_emails: ["", ""] };
 
@@ -44,6 +45,7 @@ export default function ClientFormDialog({ open, onOpenChange, editing = null, i
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "クライアント編集" : "クライアント新規追加"}</DialogTitle>
+          {editing?.id && <RecordHistory table="clients" record={editing} />}
         </DialogHeader>
         <div className="space-y-3 py-2">
           <ClientImageReader

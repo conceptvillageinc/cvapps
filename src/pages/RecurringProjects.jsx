@@ -27,6 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { recurringStatus, RECURRING_STATUS, addMonths, ymLabel } from "@/lib/recurringStatus";
 import { catchUpRecurringNotes } from "@/lib/projectNumber";
+import RecordHistory from "@/components/common/RecordHistory";
 
 const yen = (n) => `¥${Math.round(Number(n || 0)).toLocaleString()}`;
 /** 月を短く（2026-10-01 → 2026/10） */
@@ -179,6 +180,7 @@ function TemplateDialog({ open, onOpenChange, template, clients }) {
           <DialogDescription className="text-xs">
             登録すると、この内容で定期売上の案件が 1 つできます（ひな形を直すと案件にも反映）。見積・納品書・請求書はその案件に紐づきます。明細を入れておくと、毎月1日にその月の納品書の下書きを案件の中に作ります。
           </DialogDescription>
+          {template && <RecordHistory table="recurring_project_templates" record={template} />}
         </DialogHeader>
 
         <div className="space-y-4 py-1">

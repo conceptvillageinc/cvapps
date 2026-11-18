@@ -54,6 +54,7 @@ const TABLES = {
   TaskAttachment: 'task_attachments',
   Notification: 'notifications',
   SalesReportMemo: 'sales_report_memos',
+  RecordHistory: 'record_history',
 };
 
 // 書き込みを許可するカラム。

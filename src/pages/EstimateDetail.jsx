@@ -61,6 +61,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import RecordHistory from "@/components/common/RecordHistory";
 
 // 別の見積へ移ったとき（複製・改訂版・リンク）に、前の見積の入力内容を持ち越さないよう、見積ごとに作り直す
 export default function EstimateDetailPage() {
@@ -431,6 +432,7 @@ function EstimateDetail() {
                 </button>
               )}
             </p>
+            <RecordHistory table="estimates" record={estimate} className="mt-0.5" />
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">

@@ -36,6 +36,7 @@ import { computeActuals, actualsPatch } from "@/lib/projectActuals";
 import { recurringDrift, recurringPayloadFromEstimate, templateAddsMonth } from "@/lib/recurringSetup";
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 import MonthSelect from "@/components/ui/month-select";
+import RecordHistory from "@/components/common/RecordHistory";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 /** 粗利: マイナスのときは「−¥1,000」の形（「¥-1,000」にしない） */
@@ -253,6 +254,7 @@ export default function ProjectDetail() {
             <p className="text-xs font-mono text-muted-foreground">{project.project_number}</p>
             <h1 className="text-xl font-bold tracking-tight leading-tight break-words">{project.name}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">{project.client_name}</p>
+            <RecordHistory table="projects" record={project} className="mt-0.5" />
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
               <Badge className={`text-[10px] ${getDealProbabilityColor(project.deal_probability)}`}>{project.deal_probability}</Badge>
               <Badge className={`text-[10px] ${st.color}`} title="進捗">{st.label}</Badge>

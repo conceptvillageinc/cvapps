@@ -36,6 +36,7 @@ import {
   newDocItem, newDocTextItem, isTextRow, docItemsFromEstimate, computeDocTotals, generateDocumentNumber,
   companyInfoFromSettings, DELIVERY_STATUS_MAP, TAX_RATES, openBlob, openPreviewTab, showBlobInTab,
 } from "@/lib/documents";
+import RecordHistory from "@/components/common/RecordHistory";
 
 const yen = (n) => `¥${Math.round(Number(n) || 0).toLocaleString()}`;
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
@@ -309,6 +310,7 @@ export default function DeliveryNoteEdit() {
               {project && <Link to={`/projects/${project.id}`} className="text-primary hover:underline">案件 {project.project_number} {project.name}</Link>}
               {form.estimate_id && <Link to={`/estimates/${form.estimate_id}`} className="text-primary hover:underline">見積を開く</Link>}
             </p>
+            {!isNew && <RecordHistory table="delivery_notes" record={existing} className="mt-0.5" />}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

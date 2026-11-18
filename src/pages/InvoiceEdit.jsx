@@ -36,6 +36,7 @@ import {
 } from "@/lib/documents";
 import { refreshProjectActuals, projectIdsOfInvoice } from "@/lib/projectActuals";
 import RecurringMark from "@/components/projects/RecurringMark";
+import RecordHistory from "@/components/common/RecordHistory";
 
 // 納品書を 2 件以上まとめた（合算した）請求書の件名は「〇月ご請求内容」（〇＝納品日の月。10 月納品分を 11 月に請求しても「10月」）
 //   納品日の月がまたがるときは「10・11月ご請求内容」。納品日が入っていなければ請求日の月
@@ -403,6 +404,7 @@ export default function InvoiceEdit() {
               {project && <Link to={`/projects/${project.id}`} className="text-primary hover:underline">案件 {project.project_number} {project.name}</Link>}
               {form.delivery_method && <span>送付方法: {INVOICE_DELIVERY_METHODS[form.delivery_method] || form.delivery_method}</span>}
             </p>
+            {!isNew && <RecordHistory table="invoices" record={existing} className="mt-0.5" />}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
