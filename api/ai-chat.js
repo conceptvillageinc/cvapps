@@ -2,8 +2,8 @@ import { waitUntil } from '@vercel/functions';
 import { requireMember, requirePost, adminClient, userClient, bearerToken } from './_lib/guard.js';
 // Claude の SDK・資料を読む部品・CVアプリの情報を読む道具は、回答を作るとき（返事をしたあと）に読み込む。
 // 送信してから画面に返事をするまでを短くするため（サーバーが止まっていたあとの最初の 1 回が特に速くなる）
-const lazy = () => Promise.all([import('./_lib/claude.js'), import('./_lib/docText.js'), import('./_lib/aiChatTools.js')])
-  .then(([c, d, t]) => ({ ...c, ...d, ...t }));
+const lazy = () => Promise.all([import('./_lib/claude.js'), import('./_lib/docText.js'), import('./_lib/aiChatTools.js'), import('./_lib/googleTools.js')])
+  .then(([c, d, t, g]) => ({ ...c, ...d, ...t, ...g }));
 
 // ============================================================================
 // POST /api/ai-chat   AI チャット（Claude）
@@ -32,7 +32,8 @@ const SYSTEM = `あなたは株式会社コンセプト・ヴィレッジの社�
 - 道具で見つからない・見る権限がないと返ってきたときは、そのとおり伝えてください（権限のない情報を推測で補わないでください）。
 - 金額は「税抜」「税込」を明記してください。案件・見積・書類は番号（例 P-2611-009、CV-2611-027）も添えてください。
 - 下書き（提案書・メール文など）を頼まれたら、本文をそのまま使える形で書いてください。チャットの「下書き」欄の中身が渡されたときは、それを直す依頼として扱ってください。
-- このチャットは複数の社員で共有されていることがあります。発言の頭の（名前）で、誰の質問かが分かります。`;
+- このチャットは複数の社員で共有されていることがあります。発言の頭の（名前）で、誰の質問かが分かります。
+- Google ドライブ・Gmail の道具があるときは、質問した人の会社のアカウントとして読めます。CVアプリに無い資料・メールのやり取りが必要なときに使ってください。読んだファイル・メールは、名前・件名・日付を添えて答えてください。`;
 
 const jstNow = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 16);
 
@@ -150,7 +151,10 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
   const setProgress = (label) => admin.from('ai_chat_messages').update({ used_data: used.map((l) => ({ label: l })), content: label ? `（${label}）` : '' }).eq('id', pendingId);
   try {
     const lib = await lazy();
-    const { claude, TOOLS, runTool, toolLabel } = lib;
+    const { claude, TOOLS, runTool, toolLabel, GOOGLE_TOOLS, GOOGLE_TOOL_NAMES, runGoogleTool, googleToolLabel, isCompanyAccount } = lib;
+    // Google（Drive・Gmail）は、会社のアカウント（@concept-village.co.jp）でログインしている人の質問のときだけ使える
+    const google = isCompanyAccount(user.email);
+    const tools = google ? [...TOOLS, ...GOOGLE_TOOLS] : TOOLS;
     const db = userClient(token);
     const { content: fileContent, notes } = await attachmentBlocks(admin, files, lib);
     const userContent = [
@@ -164,14 +168,14 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
 
     const system = [
       { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
+      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
     let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
     let final = null;
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const resp = await createMessage(claude, {
-        model: MODEL, max_tokens: 16000, system, messages, tools: TOOLS,
+        model: MODEL, max_tokens: 16000, system, messages, tools,
         thinking: { type: 'adaptive' }, output_config: { effort: 'medium' },
       });
       usage = {
@@ -186,12 +190,16 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
       const results = [];
       for (const block of resp.content) {
         if (block.type !== 'tool_use') continue;
-        const label = toolLabel(block.name, block.input);
+        const isGoogle = GOOGLE_TOOL_NAMES.has(block.name);
+        const label = isGoogle ? googleToolLabel(block.name, block.input) : toolLabel(block.name, block.input);
         used.push(label);
         await setProgress(`${label}しています…`);
         try {
-          const out = await runTool(db, block.name, block.input || {});
-          results.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(out).slice(0, 60000) });
+          const out = isGoogle
+            ? (google ? await runGoogleTool(user.email, block.name, block.input || {}) : { error: 'Google の情報は会社のアカウントの人だけが読めます' })
+            : await runTool(db, block.name, block.input || {});
+          // ファイルの中身（PDF・画像など）は、そのまま Claude に渡す
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: out?.blocks ? out.blocks : JSON.stringify(out).slice(0, 60000) });
         } catch (e) {
           results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: `読み込みに失敗しました: ${e?.message || e}` });
         }
