@@ -72,9 +72,10 @@ async function send(req, res, user) {
   // 質問と回答の行（作成中）を 1 回で保存する（回答が質問のあとに並ぶよう、時刻を 1 ミリ秒ずらす）
   const now = Date.now();
   const { data: rows, error: e1 } = await admin.from('ai_chat_messages').insert([
-    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, created_at: new Date(now).toISOString() },
-    { chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', status: 'pending', created_at: new Date(now + 1).toISOString() },
-  ]).select('id, role');
+    // 2 行で入れる項目をそろえる（片方にしかない項目は、もう片方で空になり保存できないため）
+    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, status: 'done', used_data: [], created_at: new Date(now).toISOString() },
+    { chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', attachments: [], status: 'pending', used_data: [], created_at: new Date(now + 1).toISOString() },
+  ], { defaultToNull: false }).select('id, role');
   if (e1) throw new Error(`質問を保存できませんでした: ${e1.message}`);
   const mine = rows.find((r) => r.role === 'user');
   const pending = rows.find((r) => r.role === 'assistant');
