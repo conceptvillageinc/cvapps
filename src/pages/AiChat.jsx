@@ -9,7 +9,7 @@ import { isImeEnter } from "@/lib/ime";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import MiniMarkdown from "@/components/aiChat/MiniMarkdown";
-import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check } from "lucide-react";
+import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check, Globe, ExternalLink } from "lucide-react";
 
 // ============================================================================
 // AI チャット（Claude）
@@ -24,6 +24,13 @@ import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, Clipboar
 const ROLE_LABEL = { owner: "作成者", editor: "共同編集" };
 const MAX_FILES = 5;
 const MAX_MB = 20;
+// 回答の中の引用番号（[1](URL)）を、コピー・下書き用に「［1］」と、末尾の参照ページの一覧に変える
+const plainAnswer = (m) => {
+  const sources = (m.used_data || []).filter((u) => u.kind === "source");
+  const body = String(m.content || "").replace(/\[(\d+)\]\(https?:\/\/[^)\s]+\)/g, "［$1］");
+  return sources.length ? `${body}\n\n参照したページ：\n${sources.map((x, i) => `［${i + 1}］${x.title} ${x.url}`).join("\n")}` : body;
+};
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
 
 export default function AiChat() {
@@ -197,6 +204,9 @@ function MessageList({ messages, canWrite, meId, onToDraft }) {
             <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 ${m.author_id === meId ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
               <p className={`text-[10px] ${m.author_id === meId ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{m.author_name}・{fmt(m.created_at)}</p>
               <p className="whitespace-pre-wrap text-sm">{m.content}</p>
+              {(m.used_data || []).some((u) => u.kind === "web_on") && (
+                <span className={`mt-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${m.author_id === meId ? "bg-white/20" : "bg-background border"}`}><Globe className="h-3 w-3" />Web 検索あり</span>
+              )}
               {(m.attachments || []).length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">{m.attachments.map((f) => <AttachmentChip key={f.path} f={f} light={m.author_id === meId} />)}</div>
               )}
@@ -214,13 +224,34 @@ function MessageList({ messages, canWrite, meId, onToDraft }) {
               ) : (
                 <MiniMarkdown text={m.content} />
               )}
-              {(m.used_data || []).length > 0 && (
-                <p className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground"><Database className="h-3 w-3" />確認した情報：{m.used_data.map((u, k) => <span key={k} className="rounded bg-muted px-1.5 py-0.5">{u.label}</span>)}</p>
+              {(() => {
+                const sources = (m.used_data || []).filter((u) => u.kind === "source");
+                return sources.length > 0 && (
+                  <div className="rounded-lg border bg-muted/30 p-2" data-testid="ai-msg-sources">
+                    <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground"><Globe className="h-3.5 w-3.5" />参照したページ</p>
+                    <ol className="grid gap-1 sm:grid-cols-2">
+                      {sources.map((x, k) => (
+                        <li key={x.url}>
+                          <a href={x.url} target="_blank" rel="noreferrer" className="flex items-start gap-1.5 rounded-md bg-background px-2 py-1.5 text-xs hover:bg-muted">
+                            <span className="mt-px inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-bold text-primary">{k + 1}</span>
+                            <span className="min-w-0">
+                              <span className="line-clamp-2 font-medium text-foreground">{x.title}</span>
+                              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">{hostOf(x.url)}<ExternalLink className="h-2.5 w-2.5" /></span>
+                            </span>
+                          </a>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })()}
+              {(m.used_data || []).some((u) => !u.kind) && (
+                <p className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground"><Database className="h-3 w-3" />確認した情報：{m.used_data.filter((u) => !u.kind).map((u, k) => <span key={k} className="rounded bg-muted px-1.5 py-0.5">{u.label}</span>)}</p>
               )}
               {m.status === "done" && (
                 <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                  <button type="button" onClick={() => copy(m.content)} className="inline-flex items-center gap-1 hover:text-foreground"><Copy className="h-3 w-3" />コピー</button>
-                  {canWrite && <button type="button" onClick={() => onToDraft(m.content)} className="inline-flex items-center gap-1 hover:text-foreground" data-testid="ai-msg-to-draft"><ClipboardPaste className="h-3 w-3" />下書きに入れる</button>}
+                  <button type="button" onClick={() => copy(plainAnswer(m))} className="inline-flex items-center gap-1 hover:text-foreground"><Copy className="h-3 w-3" />コピー</button>
+                  {canWrite && <button type="button" onClick={() => onToDraft(plainAnswer(m))} className="inline-flex items-center gap-1 hover:text-foreground" data-testid="ai-msg-to-draft"><ClipboardPaste className="h-3 w-3" />下書きに入れる</button>}
                 </div>
               )}
             </div>
@@ -248,6 +279,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(0);
   const [sending, setSending] = useState(false);
+  const [web, setWeb] = useState(false); // 「Web 検索」（オンのときだけ Web も調べる。料金がかかるので、ふだんはオフ）
   const inputRef = useRef(null);
   const addFiles = async (list) => {
     const picked = Array.from(list || []).filter(Boolean);
@@ -277,7 +309,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
     const at = new Date().toISOString();
     const tmp = `sending-${Date.now()}`;
     const temps = [
-      { id: `${tmp}-q`, chat_id: chatId, role: "user", author_id: me.id, author_name: me.name, content: t, attachments: sent, status: "done", created_at: at },
+      { id: `${tmp}-q`, chat_id: chatId, role: "user", author_id: me.id, author_name: me.name, content: t, attachments: sent, status: "done", used_data: web ? [{ kind: "web_on" }] : [], created_at: at },
       { id: `${tmp}-a`, chat_id: chatId, role: "assistant", content: "", status: "pending", created_at: at },
     ];
     const dropTemps = () => {
@@ -288,7 +320,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
     optimisticRef.current = [...optimisticRef.current, ...temps];
     qc.setQueryData(key, (cur) => [...(cur || []), ...temps]);
     try {
-      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: sent });
+      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: sent, web });
       optimisticRef.current = optimisticRef.current.filter((m) => !m.id.startsWith(tmp));
       onSent();
     } catch (e) {
@@ -312,11 +344,16 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
           className="block w-full resize-none rounded-xl bg-transparent px-3 py-2.5 text-sm outline-none" data-testid="ai-chat-input" />
         <div className="flex items-center gap-2 px-2 pb-2">
           <input ref={inputRef} type="file" multiple className="hidden" accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt,.txt" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-          <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted" disabled={uploading > 0}>
+          <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted" disabled={uploading > 0}>
             {uploading > 0 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}添付
           </button>
-          <span className="hidden sm:inline text-[10px] text-muted-foreground">PDF・画像・Excel・Word など（1 回 {MAX_FILES} 個・{MAX_MB}MB まで）</span>
-          <Button size="sm" className="ml-auto h-8 gap-1" onClick={send} disabled={sending || uploading > 0 || (!text.trim() && !files.length)} data-testid="ai-chat-send">
+          <button type="button" onClick={() => setWeb((v) => !v)} aria-pressed={web} data-testid="ai-chat-web"
+            title={web ? "Web 検索：オン（押すとオフ）" : "Web 検索：オフ（押すとオン。Web も調べて、参照したページを出します）"}
+            className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${web ? "border-sky-300 bg-sky-100 text-sky-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
+            <Globe className="h-3.5 w-3.5" />Web 検索{web ? "：オン" : ""}
+          </button>
+          <span className="hidden min-w-0 truncate lg:inline text-[10px] text-muted-foreground">{web ? "Web も調べて、参照したページを出します" : `PDF・画像・Excel・Word など（1 回 ${MAX_FILES} 個・${MAX_MB}MB まで）`}</span>
+          <Button size="sm" className="ml-auto h-8 shrink-0 gap-1" onClick={send} disabled={sending || uploading > 0 || (!text.trim() && !files.length)} data-testid="ai-chat-send">
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}送信
           </Button>
         </div>
@@ -402,7 +439,7 @@ const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onCl
         </div>
       )}
       <textarea value={text} onChange={(e) => onChange(e.target.value)} readOnly={!canWrite}
-        placeholder={canWrite ? "提案書・メール文などの下書き。Claude の回答の「下書きに入れる」で取り込めます。「下書きを直して」と頼むと、Claude はこの中身を見て直します" : "（このチャットの下書きは直せません）"}
+        placeholder={canWrite ? "提案書やメール文などを、メンバーと一緒に書ける欄です。\n\n・Claude の回答の下にある「下書きに入れる」ボタンを押すと、その回答の文章がここに入ります。\n・ここに直接書き込むこともできます。\n・チャットで「下書きを直して」と頼むと、Claude がここの文章を読んで、直した文章を回答します。" : "（このチャットの下書きは直せません）"}
         className="min-h-0 flex-1 resize-none bg-background px-4 py-3 text-sm leading-relaxed outline-none" data-testid="ai-chat-draft-text" />
     </aside>
   );

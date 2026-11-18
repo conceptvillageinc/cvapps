@@ -13,7 +13,12 @@ function inline(text, keyBase = "i") {
     const t = m[0];
     if (t.startsWith("**")) out.push(<strong key={`${keyBase}${k++}`}>{t.slice(2, -2)}</strong>);
     else if (t.startsWith("`")) out.push(<code key={`${keyBase}${k++}`} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.9em]">{t.slice(1, -1)}</code>);
-    else if (t.startsWith("[")) { const label = t.slice(1, t.indexOf("]")); out.push(<a key={`${keyBase}${k++}`} href={m[2]} target="_blank" rel="noreferrer" className="text-primary underline">{label}</a>); }
+    else if (t.startsWith("[")) {
+      const label = t.slice(1, t.indexOf("]"));
+      // 数字だけのリンク（[1](URL)）は、Web の引用元の番号として小さな丸で出す
+      if (/^\d+$/.test(label)) out.push(<a key={`${keyBase}${k++}`} href={m[2]} target="_blank" rel="noreferrer" title={m[2]} className="mx-0.5 inline-flex h-4 min-w-4 -translate-y-0.5 items-center justify-center rounded-full bg-primary/10 px-1 align-middle text-[10px] font-bold text-primary no-underline hover:bg-primary/20" data-testid="cite">{label}</a>);
+      else out.push(<a key={`${keyBase}${k++}`} href={m[2]} target="_blank" rel="noreferrer" className="text-primary underline">{label}</a>);
+    }
     else out.push(<em key={`${keyBase}${k++}`}>{t.slice(1, -1)}</em>);
     last = m.index + t.length;
   }

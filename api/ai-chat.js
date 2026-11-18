@@ -52,7 +52,8 @@ export default async function handler(req, res) {
 }
 
 async function send(req, res, user) {
-  const { chat_id: chatId, message, attachments } = req.body || {};
+  const { chat_id: chatId, message, attachments, web: webRaw } = req.body || {};
+  const web = webRaw === true; // 入力欄の「Web 検索」をオンにして送ったときだけ、Web を調べる
   const text = String(message || '').trim();
   const files = (Array.isArray(attachments) ? attachments : []).filter((f) => f && typeof f.path === 'string' && f.path.startsWith(`ai-chats/${chatId}/`)).slice(0, MAX_FILES);
   if (!chatId) { res.status(400).json({ error: 'チャットが指定されていません' }); return; }
@@ -74,7 +75,7 @@ async function send(req, res, user) {
   const now = Date.now();
   const { data: rows, error: e1 } = await admin.from('ai_chat_messages').insert([
     // 2 行で入れる項目をそろえる（片方にしかない項目は、もう片方で空になり保存できないため）
-    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, status: 'done', used_data: [], created_at: new Date(now).toISOString() },
+    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, status: 'done', used_data: web ? [{ kind: 'web_on' }] : [], created_at: new Date(now).toISOString() },
     { chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', attachments: [], status: 'pending', used_data: [], created_at: new Date(now + 1).toISOString() },
   ], { defaultToNull: false }).select('id, role');
   if (e1) throw new Error(`質問を保存できませんでした: ${e1.message}`);
@@ -88,7 +89,7 @@ async function send(req, res, user) {
   if (!(history || []).length && chat.title === '新しいチャット' && text) patch.title = text.replace(/\s+/g, ' ').slice(0, 40);
   waitUntil(Promise.all([
     admin.from('ai_chats').update(patch).eq('id', chatId),
-    answer({ admin, token: bearerToken(req), user, name, chat, text, files, history: (history || []).reverse(), pendingId: pending.id }),
+    answer({ admin, token: bearerToken(req), user, name, chat, text, files, web, history: (history || []).reverse(), pendingId: pending.id }),
   ]));
 }
 
@@ -146,15 +147,67 @@ async function createMessage(claude, params) {
   }
 }
 
-async function answer({ admin, token, user, name, chat, text, files, history, pendingId }) {
+// Web 検索・Web ページの読み込み（Anthropic のサーバーで動く道具）。1 回の質問で使う回数の上限
+const WEB_TOOLS = [
+  { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+  { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5 },
+];
+const WEB_RULES = `
+【Web 検索がオンです】
+- Web の情報が必要なときは web_search・web_fetch を使ってください。URL が貼られていたら web_fetch で読んでください。
+- 検索の言葉に、社内の情報（見積・請求の金額、粗利、社内メモ、メールの本文、個人の名前・連絡先）を入れないでください。会社名・商品名・業界の言葉など、公開されている言葉だけで検索してください。
+- Web で調べた内容は、どのページの情報かが分かるように書いてください（引用元はアプリが番号付きで表示します）。`;
+const NO_WEB_RULE = `
+【Web 検索はオフです】Web の最新情報が必要な質問には、入力欄の「Web 検索」をオンにして送り直すよう、ひとこと案内してください。`;
+
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+const safeUrl = (u) => String(u || '').replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/\s/g, '%20');
+
+async function answer({ admin, token, user, name, chat, text, files, web, history, pendingId }) {
   const used = [];
-  const setProgress = (label) => admin.from('ai_chat_messages').update({ used_data: used.map((l) => ({ label: l })), content: label ? `（${label}）` : '' }).eq('id', pendingId);
+  const sources = []; // 参照した Web ページ（回答の下に番号付きで出す）
+  const sourceNo = (url, title) => {
+    let i = sources.findIndex((x) => x.url === url);
+    if (i < 0) { sources.push({ url, title: String(title || '').trim() || hostOf(url) }); i = sources.length - 1; }
+    return i + 1;
+  };
+  const usedData = () => [...[...new Set(used)].map((l) => ({ label: l })), ...sources.map((x) => ({ kind: 'source', url: x.url, title: x.title }))];
+  const setProgress = (label) => admin.from('ai_chat_messages').update({ used_data: usedData(), content: label ? `（${label}）` : '' }).eq('id', pendingId);
+  /** Web の道具を使った跡（検索の言葉・読んだページ）を拾う */
+  const webNotes = [];
+  const fetched = []; // web_fetch で読んだページ（引用されていなくても、参照したページに出す）
+  const collectWeb = (blocks) => {
+    for (const b of blocks || []) {
+      if (b.type === 'server_tool_use' && b.name === 'web_search') used.push(`Web を検索（${b.input?.query || ''}）`);
+      if (b.type === 'server_tool_use' && b.name === 'web_fetch') used.push(`Web ページを確認（${hostOf(b.input?.url || '')}）`);
+      if (b.type === 'web_fetch_tool_result' && b.content?.url && b.content?.type !== 'web_fetch_tool_result_error') fetched.push({ url: b.content.url, title: b.content?.content?.title });
+      const err = b.content?.error_code;
+      if (/_tool_result$/.test(b.type || '') && /^web_/.test(b.type) && err) webNotes.push(err === 'url_not_accessible' || err === 'url_not_allowed' ? 'Web ページを読めませんでした' : `Web 検索でエラー（${err}）`);
+    }
+  };
+  /** 回答の文に、引用元の番号（[1] など）を付ける */
+  //   Web の道具を使う前の「調べます」などの前置きは除き、最後に道具を使ったあとの文だけにする
+  const renderText = (blocks) => {
+    const all = blocks || [];
+    let lastTool = -1;
+    all.forEach((b, i) => { if (/tool_result$/.test(b.type || '') || b.type === 'server_tool_use') lastTool = i; });
+    const after = all.slice(lastTool + 1).filter((b) => b.type === 'text');
+    const textBlocks = after.length ? after : all.filter((b) => b.type === 'text');
+    const out = textBlocks.map((b) => {
+    const nums = [...new Set((b.citations || []).filter((c) => /^https?:\/\//.test(c.url || '')).map((c) => sourceNo(c.url, c.title)))];
+    return b.text + nums.map((n) => `[${n}](${safeUrl(sources[n - 1].url)})`).join('');
+    }).join('');
+    fetched.forEach((f) => sourceNo(f.url, f.title)); // 引用されていない読んだページは、番号の後ろに足す
+    return out;
+  };
   try {
     const lib = await lazy();
     const { claude, TOOLS, runTool, toolLabel, GOOGLE_TOOLS, GOOGLE_TOOL_NAMES, runGoogleTool, googleToolLabel, isCompanyAccount } = lib;
     // Google（Drive・Gmail）は、会社のアカウント（@concept-village.co.jp）でログインしている人の質問のときだけ使える
     const google = isCompanyAccount(user.email);
-    const tools = google ? [...TOOLS, ...GOOGLE_TOOLS] : TOOLS;
+    const ownTools = google ? [...TOOLS, ...GOOGLE_TOOLS] : TOOLS;
+    // Web 検索をオンにしたときだけ、Web の道具を足す（引用元を出すため、自前の道具の strict は外す）
+    const tools = web ? [...ownTools.map(({ strict, ...t }) => t), ...WEB_TOOLS] : ownTools;
     const db = userClient(token);
     const { content: fileContent, notes } = await attachmentBlocks(admin, files, lib);
     const userContent = [
@@ -168,11 +221,13 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
 
     const system = [
       { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
+      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
     let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
     let final = null;
+    let turn = []; // 今の回答の中身（Web の道具が長くかかって一度止まったときは、続きとつなぐ）
+    if (web) await setProgress('考えています（Web も調べます）…');
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const resp = await createMessage(claude, {
         model: MODEL, max_tokens: 16000, system, messages, tools,
@@ -182,9 +237,19 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
         input_tokens: usage.input_tokens + (resp.usage?.input_tokens || 0),
         output_tokens: usage.output_tokens + (resp.usage?.output_tokens || 0),
         cache_read_input_tokens: usage.cache_read_input_tokens + (resp.usage?.cache_read_input_tokens || 0),
+        web_search_requests: (usage.web_search_requests || 0) + (resp.usage?.server_tool_use?.web_search_requests || 0),
       };
       if (resp.stop_reason === 'refusal') throw new Error('この質問には AI が回答を控えました。文面を変えてお試しください');
+      collectWeb(resp.content);
+      turn.push(...resp.content);
+      if (resp.stop_reason === 'pause_turn' && round < MAX_TOOL_ROUNDS) {
+        // Web の道具が長くかかって一度止まった。そのまま送り返すと続きから再開する
+        messages.push({ role: 'assistant', content: resp.content });
+        await setProgress(used.length ? `${used[used.length - 1]}しています…` : '調べています…');
+        continue;
+      }
       if (resp.stop_reason !== 'tool_use' || round === MAX_TOOL_ROUNDS) { final = resp; break; }
+      turn = [];
       // 道具を使う（同じ回答の中の道具はまとめて実行し、結果を 1 つのメッセージで返す）
       messages.push({ role: 'assistant', content: resp.content });
       const results = [];
@@ -206,18 +271,18 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
       }
       messages.push({ role: 'user', content: results });
     }
-    const reply = (final?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim()
+    const reply = renderText(turn).trim()
       || (final?.stop_reason === 'max_tokens' ? '回答が長くなりすぎて途中で止まりました。質問を分けてお試しください。' : '回答を作れませんでした。もう一度お試しください。');
     await admin.from('ai_chat_messages').update({
-      content: reply + (notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : ''),
-      status: 'done', usage: { ...usage, model: final?.model || MODEL }, used_data: [...new Set(used)].map((l) => ({ label: l })),
+      content: reply + (notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : '') + (webNotes.length ? `\n\n（${[...new Set(webNotes)].join(' / ')}）` : ''),
+      status: 'done', usage: { ...usage, model: final?.model || MODEL, web_search_requests: usage.web_search_requests || 0 }, used_data: usedData(),
     }).eq('id', pendingId);
     await admin.from('ai_chats').update({ last_message_at: new Date().toISOString() }).eq('id', chat.id);
   } catch (err) {
     console.error('ai-chat answer failed', err);
     await admin.from('ai_chat_messages').update({
       status: 'error', content: `回答を作れませんでした：${String(err?.message || err).slice(0, 300)}\nお手数ですが、もう一度送ってください。`,
-      used_data: used.map((l) => ({ label: l })),
+      used_data: usedData(),
     }).eq('id', pendingId);
   }
 }
