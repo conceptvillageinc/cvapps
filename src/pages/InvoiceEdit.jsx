@@ -430,7 +430,7 @@ export default function InvoiceEdit() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(true)}>電子印鑑あり（メール送付用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(true)}>電子印鑑あり</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => downloadPdf(false)}>電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -231,7 +231,7 @@ export default function ReceiptEdit() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem className="text-xs" onClick={() => downloadA5(true)}>電子印鑑あり（メール送付用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs" onClick={() => downloadA5(true)}>電子印鑑あり</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs" onClick={() => downloadA5(false)}>電子印鑑なし（持参して実印を押す用）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -449,8 +449,8 @@ function EstimateDetail() {
             <DropdownMenuContent align="start">
               {formData.schema_version === 2 && (
                 <>
-                  <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(true)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑あり（メール送付用）</DropdownMenuItem>
-                  <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(false)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑なし（印刷して押印する用）</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(true)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑あり DL</DropdownMenuItem>
+                  <DropdownMenuItem className="text-xs gap-2" onClick={() => downloadPdf(false)}><FileDown className="w-3.5 h-3.5" />PDF 電子印鑑なし DL（印刷して押印する用）</DropdownMenuItem>
                   <DropdownMenuItem className="text-xs gap-2" onClick={async () => { await saveMutation.mutateAsync(formData); setMailOpen(true); }}><Mail className="w-3.5 h-3.5" />メールで見積書を送付</DropdownMenuItem>
                 </>
               )}
