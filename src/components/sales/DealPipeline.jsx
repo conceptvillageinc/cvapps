@@ -384,7 +384,7 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
       </Card>
 
       {/* シミュレーション（着地見込を書き換えた値）＋ 確定、＋ 確定 ＋ 見込 */}
-      {simTotals && [["シミュレーション＋確定", false], ["シミュレーション＋確定＋見込", true]].map(([title, withForecast]) => {
+      {simTotals && [["確定＋シミュレーション", false], ["確定＋見込＋シミュレーション", true]].map(([title, withForecast]) => {
         const c = simCombo(simTotals, summary, withForecast);
         return (
           <Card key={title} className="bg-sky-100/70 border-sky-200" data-testid={withForecast ? "sim-confirmed-forecast" : "sim-confirmed"}>
