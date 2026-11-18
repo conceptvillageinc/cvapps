@@ -1,4 +1,4 @@
-import PDFDocument from 'pdfkit';
+import PDFDocument from './pdfkit.js';
 import { registerFonts } from './docLayout.js';
 import { estimateTotals } from './estimatePdf.js';
 import { toHalfWidth } from '../../src/lib/halfWidth.js';

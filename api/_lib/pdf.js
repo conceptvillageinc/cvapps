@@ -1,4 +1,4 @@
-import PDFDocument from 'pdfkit';
+import PDFDocument from './pdfkit.js';
 import {
   PAGE_MARGINS, registerFonts, yen, fmtQty, fmtUnitPrice, fmtDate,
   drawHeader, drawTitle, drawSubjectAndMeta, drawSummary, drawBankBand,

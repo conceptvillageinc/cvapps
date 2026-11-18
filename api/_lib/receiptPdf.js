@@ -1,4 +1,4 @@
-import PDFDocument from 'pdfkit';
+import PDFDocument from './pdfkit.js';
 import { registerFonts, yen, formatPostal, textV } from './docLayout.js';
 import { toHalfWidth } from '../../src/lib/halfWidth.js';
 import { stampDuty } from '../../src/lib/stampDuty.js';
