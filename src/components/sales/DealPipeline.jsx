@@ -17,7 +17,7 @@ import { isImeEnter } from "@/lib/ime";
 // ============================================================================
 // 案件の積み上げ（確定／見込）
 //   シートの「15期（確定）」「15期見込み（未確定）」をアプリに持ってきたもの。パターンごとに保存。
-//   行ごとに区分（色）を付け、下に売上・仕入・粗利（税別／税込）、最低粗利目標との差、売上／人・粗利／人を出す。
+//   行ごとに区分（色）を付け、下に売上・仕入・粗利（税別／税込）、最低粗利・目標粗利との差、売上／人・粗利／人を出す。
 // ============================================================================
 
 const yen = (v) => (v === null || v === undefined ? "—" : `¥${Math.round(Number(v) || 0).toLocaleString()}`);
@@ -268,13 +268,14 @@ function ImportDialog({ open, onOpenChange, projects, deals, tags, onImport }) {
  * @param {object[]} p.tags             区分
  * @param {object} p.meta               { headcount, headcount_memo, per_person_sales, per_person_gross }
  * @param {(patch:object)=>void} p.onChangeMeta   区分・人数の保存（パターンをまたいで共通）
- * @param {number} p.grossMust          最低粗利目標（必達粗利の年間合計）
+ * @param {number} p.grossMust          最低粗利（必達粗利の年間合計）
+ * @param {number} [p.grossGoal]        目標粗利（目標粗利の年間合計）
  * @param {object} p.appAnnual          アプリ側の年計 { forecast: {sales, gross}（案件ベースの着地見込）, actual: {...} }
  * @param {{ sales: number, purchase: number }} [p.simTotals]  シミュレーションの年計（着地見込を書き換えた値）
  * @param {object[]} p.projects
  * @param {string} p.fiscalLabel
  */
-export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChangeMeta, grossMust, appAnnual, simTotals = null, projects, fiscalLabel, readOnly = false }) {
+export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChangeMeta, grossMust, grossGoal = 0, appAnnual, simTotals = null, projects, fiscalLabel, readOnly = false }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const projectsById = useMemo(() => Object.fromEntries((projects || []).map((p) => [p.id, p])), [projects]);
@@ -332,6 +333,10 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
   );
   const all = summary.all;
   const hc = summary.headcount;
+  // 目標粗利（目標設定の「目標粗利」の年間合計）との差
+  const goal = Number(grossGoal) || 0;
+  const goalDiff = (gross) => ({ diff: gross - goal, rate: goal > 0 ? gross / goal : null });
+  const GoalStat = ({ gross }) => { const g = goalDiff(gross); return <Stat label="目標粗利との差" value={yen(g.diff)} sub={g.rate === null ? "目標が未設定" : `達成率 ${pct(g.rate)}`} tone={g.diff < 0 ? "text-red-700" : "text-emerald-700"} />; };
   const perOk = (v, target) => (v === null ? "" : v >= target ? "text-emerald-700" : "text-red-700");
 
   return (
@@ -358,14 +363,15 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
         <CardContent className="p-3 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold">確定＋見込</span>
-            <span className="text-[11px] text-muted-foreground">最低粗利目標は目標設定の「必達粗利」の年間合計（{yen(summary.grossMust)}）</span>
+            <span className="text-[11px] text-muted-foreground">最低粗利は目標設定の「必達粗利」の年間合計（{yen(summary.grossMust)}）、目標粗利は「目標粗利」の年間合計（{yen(goal)}）</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2" data-testid="pipeline-summary">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2" data-testid="pipeline-summary">
             <Stat label="売上（税別）" value={yen(all.sales)} sub={`税込 ${yen(all.sales_tax)}`} />
             <Stat label="仕入（税別）" value={yen(all.purchase)} sub={`税込 ${yen(all.purchase_tax)}`} />
             <Stat label="粗利（税別）" value={yen(all.gross)} sub={`税込 ${yen(all.gross_tax)}`} />
             <Stat label="粗利率" value={pct(all.margin)} />
-            <Stat label="最低粗利目標との差" value={yen(all.target.diff)} sub={all.target.rate === null ? "目標が未設定" : `達成率 ${pct(all.target.rate)}`} tone={all.target.diff < 0 ? "text-red-700" : "text-emerald-700"} />
+            <Stat label="最低粗利との差" value={yen(all.target.diff)} sub={all.target.rate === null ? "目標が未設定" : `達成率 ${pct(all.target.rate)}`} tone={all.target.diff < 0 ? "text-red-700" : "text-emerald-700"} />
+            <GoalStat gross={all.gross} />
             <Stat label="確定だけの達成率" value={pct(summary.confirmed.target.rate)} sub={`確定の粗利 ${yen(summary.confirmed.gross)}`} tone={summary.confirmed.target.diff < 0 ? "text-red-700" : "text-emerald-700"} />
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -387,12 +393,13 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
                 <span className="text-sm font-semibold">{title}</span>
                 <span className="text-[11px] text-muted-foreground">シミュレーション（表の着地見込を書き換えた値）の年計 売上 {yen(c.sim_sales)}・粗利 {yen(c.sim_gross)} に、上の{withForecast ? "確定と見込" : "確定"}の行（売上 {yen(c.deals_sales)}・粗利 {yen(c.deals_gross)}）を足したもの</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
                 <Stat label="売上（税別）" value={yen(c.sales)} sub={`税込 ${yen(c.sales_tax)}`} />
                 <Stat label="仕入（税別）" value={yen(c.purchase)} sub={`税込 ${yen(c.purchase_tax)}`} />
                 <Stat label="粗利（税別）" value={yen(c.gross)} sub={`税込 ${yen(c.gross_tax)}`} />
                 <Stat label="粗利率" value={pct(c.margin)} />
-                <Stat label="最低粗利目標との差" value={yen(c.target.diff)} sub={c.target.rate === null ? "目標が未設定" : `達成率 ${pct(c.target.rate)}`} tone={c.target.diff < 0 ? "text-red-700" : "text-emerald-700"} />
+                <Stat label="最低粗利との差" value={yen(c.target.diff)} sub={c.target.rate === null ? "目標が未設定" : `達成率 ${pct(c.target.rate)}`} tone={c.target.diff < 0 ? "text-red-700" : "text-emerald-700"} />
+                <GoalStat gross={c.gross} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Stat label="売上／人" value={hc ? yen(c.per_person.sales) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonSales)}`} tone={hc ? perOk(c.per_person.sales, summary.perPersonSales) : ""} />

@@ -661,6 +661,7 @@ export default function SalesReport() {
           meta={pipelineMeta}
           onChangeMeta={({ tags, ...meta }) => persist({ ...sim, deal_tags: tags, ...meta })}
           grossMust={annual.target.gross_must}
+          grossGoal={annual.target.gross}
           appAnnual={report.annual}
           simTotals={{ sales: view.annual.forecast.sales, purchase: view.annual.forecast.cost }}
           projects={projects}

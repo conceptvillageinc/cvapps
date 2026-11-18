@@ -94,7 +94,7 @@ export function totalsOf(rows) {
  * 一覧全体のまとめ。
  * @param {object} p
  * @param {object[]} p.deals
- * @param {number} p.grossMust        最低粗利目標（必達粗利の年間合計・税別）
+ * @param {number} p.grossMust        最低粗利（必達粗利の年間合計・税別）
  * @param {number} p.headcount        人数
  * @param {number} p.perPersonSales   売上／人 の目標
  * @param {number} p.perPersonGross   粗利／人 の目標
@@ -145,7 +145,7 @@ export function pipelineToCsv({ deals, tags, summary, fiscalLabel }) {
   row("見込 計（税別）", summary.forecast);
   row("確定＋見込 計（税別）", summary.all);
   lines.push(["確定＋見込 計（税込）", "", "", summary.all.sales_tax, summary.all.purchase_tax, summary.all.gross_tax, ""]);
-  lines.push(["最低粗利目標", "", "", "", "", summary.grossMust, summary.all.target.rate === null ? "" : `達成率 ${(summary.all.target.rate * 100).toFixed(2)}%`]);
+  lines.push(["最低粗利", "", "", "", "", summary.grossMust, summary.all.target.rate === null ? "" : `達成率 ${(summary.all.target.rate * 100).toFixed(2)}%`]);
   if (summary.headcount > 0) {
     lines.push([`売上／人（${summary.headcount} 人）`, "", "", summary.all.per_person.sales, "", "", `目標 ${summary.perPersonSales}`]);
     lines.push([`粗利／人（${summary.headcount} 人）`, "", "", "", "", summary.all.per_person.gross, `目標 ${summary.perPersonGross}`]);
