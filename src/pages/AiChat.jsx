@@ -47,13 +47,16 @@ export default function AiChat() {
   const myRole = chat?.ai_chat_members?.find((m) => m.user_id === user?.id)?.role || (chat?.owner_id === user?.id ? "owner" : null);
   const canWrite = myRole === "owner" || myRole === "editor";
 
+  const optimisticRef = useRef([]);
   const { data: messages = [] } = useQuery({
     queryKey: ["aiChatMessages", id],
     enabled: !!id,
     queryFn: async () => {
       const { data, error } = await supabase.from("ai_chat_messages").select("*").eq("chat_id", id).order("created_at");
       if (error) throw error;
-      return data || [];
+      // 送信中の質問（サーバーの返事を待っているもの）は、読み直しても消えないよう後ろに付けておく
+      const sending = optimisticRef.current.filter((m) => m.chat_id === id);
+      return [...(data || []), ...sending];
     },
     // 回答を待っているあいだは 1.5 秒ごと、ほかのときも 5 秒ごとに読み直す（ほかのメンバーの書き込みも出る）
     refetchInterval: (q) => ((q.state.data || []).some((m) => m.status === "pending") ? 1500 : 5000),
@@ -115,7 +118,8 @@ export default function AiChat() {
               onDeleted={() => { qc.invalidateQueries({ queryKey: ["aiChats"] }); navigate("/ai-chat"); }} />
             <MessageList messages={messages} canWrite={canWrite} meId={user?.id}
               onToDraft={(text) => { if (!draftOpen) toggleDraft(); setTimeout(() => draftRef.current?.insert(text), 50); }} />
-            <Composer chatId={chat.id} canWrite={canWrite} onSent={() => { qc.invalidateQueries({ queryKey: ["aiChatMessages", chat.id] }); qc.invalidateQueries({ queryKey: ["aiChats"] }); }} />
+            <Composer chatId={chat.id} canWrite={canWrite} me={{ id: user?.id, name: myName }} optimisticRef={optimisticRef}
+              onSent={() => { qc.invalidateQueries({ queryKey: ["aiChatMessages", chat.id] }); qc.invalidateQueries({ queryKey: ["aiChats"] }); }} />
           </section>
           {draftOpen && <DraftPanel ref={draftRef} chat={chat} canWrite={canWrite} myName={myName} onClose={toggleDraft} />}
           <MembersDialog open={membersOpen} onOpenChange={setMembersOpen} chat={chat} myRole={myRole} users={users} meId={user?.id}
@@ -238,7 +242,8 @@ function AttachmentChip({ f, light, onRemove }) {
     : <a href={url || "#"} target="_blank" rel="noreferrer" className={`${cls} hover:underline`}>{body}</a>;
 }
 
-function Composer({ chatId, canWrite, onSent }) {
+function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
+  const qc = useQueryClient();
   const [text, setText] = useState("");
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(0);
@@ -266,11 +271,30 @@ function Composer({ chatId, canWrite, onSent }) {
     const t = text.trim();
     if ((!t && !files.length) || sending || uploading) return;
     setSending(true);
+    // 押したらすぐ、入力欄を空にして、質問と「考えています…」を出す（サーバーの返事は待たない）
+    const sent = files;
+    const key = ["aiChatMessages", chatId];
+    const at = new Date().toISOString();
+    const tmp = `sending-${Date.now()}`;
+    const temps = [
+      { id: `${tmp}-q`, chat_id: chatId, role: "user", author_id: me.id, author_name: me.name, content: t, attachments: sent, status: "done", created_at: at },
+      { id: `${tmp}-a`, chat_id: chatId, role: "assistant", content: "", status: "pending", created_at: at },
+    ];
+    const dropTemps = () => {
+      optimisticRef.current = optimisticRef.current.filter((m) => !m.id.startsWith(tmp));
+      qc.setQueryData(key, (cur) => (cur || []).filter((m) => !String(m.id).startsWith(tmp)));
+    };
+    setText(""); setFiles([]);
+    optimisticRef.current = [...optimisticRef.current, ...temps];
+    qc.setQueryData(key, (cur) => [...(cur || []), ...temps]);
     try {
-      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: files });
-      setText(""); setFiles([]);
+      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: sent });
+      optimisticRef.current = optimisticRef.current.filter((m) => !m.id.startsWith(tmp));
       onSent();
     } catch (e) {
+      dropTemps();
+      // 送れなかったときは、書いた文と添付を入力欄に戻す
+      setText((cur) => (cur.trim() ? cur : t)); setFiles((cur) => (cur.length ? cur : sent));
       toast.error("送れませんでした: " + (e?.message || "不明なエラー"));
     } finally {
       setSending(false);

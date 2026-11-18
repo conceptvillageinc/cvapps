@@ -1,8 +1,9 @@
 import { waitUntil } from '@vercel/functions';
 import { requireMember, requirePost, adminClient, userClient, bearerToken } from './_lib/guard.js';
-import { claude, fileBlock } from './_lib/claude.js';
-import { extractText, isNativeFile } from './_lib/docText.js';
-import { TOOLS, runTool, toolLabel } from './_lib/aiChatTools.js';
+// Claude の SDK・資料を読む部品・CVアプリの情報を読む道具は、回答を作るとき（返事をしたあと）に読み込む。
+// 送信してから画面に返事をするまでを短くするため（サーバーが止まっていたあとの最初の 1 回が特に速くなる）
+const lazy = () => Promise.all([import('./_lib/claude.js'), import('./_lib/docText.js'), import('./_lib/aiChatTools.js')])
+  .then(([c, d, t]) => ({ ...c, ...d, ...t }));
 
 // ============================================================================
 // POST /api/ai-chat   AI チャット（Claude）
@@ -57,30 +58,36 @@ async function send(req, res, user) {
   if (!text && !files.length) { res.status(400).json({ error: '質問を入力してください' }); return; }
 
   const admin = adminClient();
-  const { data: member } = await admin.from('ai_chat_members').select('role').eq('chat_id', chatId).eq('user_id', user.id).maybeSingle();
+  const name = (user.full_name || '').trim() || user.email;
+  // メンバーか・チャット・前のやり取り（新しい方から）を、同時に読む
+  const [{ data: member }, { data: chat }, { data: history }] = await Promise.all([
+    admin.from('ai_chat_members').select('role').eq('chat_id', chatId).eq('user_id', user.id).maybeSingle(),
+    admin.from('ai_chats').select('*').eq('id', chatId).maybeSingle(),
+    admin.from('ai_chat_messages').select('role, author_name, content, attachments, status')
+      .eq('chat_id', chatId).order('created_at', { ascending: false }).limit(HISTORY_LIMIT),
+  ]);
   if (!member || !['owner', 'editor'].includes(member.role)) { res.status(403).json({ error: 'このチャットに書き込む権限がありません' }); return; }
-  const { data: chat } = await admin.from('ai_chats').select('*').eq('id', chatId).maybeSingle();
   if (!chat) { res.status(404).json({ error: 'チャットが見つかりません' }); return; }
-  const { data: profile } = await admin.from('users').select('full_name, email').eq('id', user.id).maybeSingle();
-  const name = (profile?.full_name || '').trim() || user.email;
 
-  // 前のやり取り（新しい方から）
-  const { data: history } = await admin.from('ai_chat_messages').select('role, author_name, content, attachments, status')
-    .eq('chat_id', chatId).order('created_at', { ascending: false }).limit(HISTORY_LIMIT);
-
-  const { data: mine, error: e1 } = await admin.from('ai_chat_messages')
-    .insert({ chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files }).select().single();
+  // 質問と回答の行（作成中）を 1 回で保存する（回答が質問のあとに並ぶよう、時刻を 1 ミリ秒ずらす）
+  const now = Date.now();
+  const { data: rows, error: e1 } = await admin.from('ai_chat_messages').insert([
+    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, created_at: new Date(now).toISOString() },
+    { chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', status: 'pending', created_at: new Date(now + 1).toISOString() },
+  ]).select('id, role');
   if (e1) throw new Error(`質問を保存できませんでした: ${e1.message}`);
-  const { data: pending, error: e2 } = await admin.from('ai_chat_messages')
-    .insert({ chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', status: 'pending' }).select().single();
-  if (e2) throw new Error(`回答の準備ができませんでした: ${e2.message}`);
-  // 最初の質問なら、その文をチャットの名前にする
-  const patch = { last_message_at: new Date().toISOString() };
-  if (!(history || []).length && chat.title === '新しいチャット' && text) patch.title = text.replace(/\s+/g, ' ').slice(0, 40);
-  await admin.from('ai_chats').update(patch).eq('id', chatId);
+  const mine = rows.find((r) => r.role === 'user');
+  const pending = rows.find((r) => r.role === 'assistant');
 
   res.status(202).json({ ok: true, message_id: mine.id, answer_id: pending.id });
-  waitUntil(answer({ admin, token: bearerToken(req), user, name, chat, text, files, history: (history || []).reverse(), pendingId: pending.id }));
+
+  // 最初の質問なら、その文をチャットの名前にする（返事をしたあとで）
+  const patch = { last_message_at: new Date(now).toISOString() };
+  if (!(history || []).length && chat.title === '新しいチャット' && text) patch.title = text.replace(/\s+/g, ' ').slice(0, 40);
+  waitUntil(Promise.all([
+    admin.from('ai_chats').update(patch).eq('id', chatId),
+    answer({ admin, token: bearerToken(req), user, name, chat, text, files, history: (history || []).reverse(), pendingId: pending.id }),
+  ]));
 }
 
 /** 前のやり取りを Claude に渡す形に（同じ役が続くときはつなぐ） */
@@ -102,7 +109,7 @@ function historyMessages(history) {
 }
 
 /** 添付ファイルを読む（PDF・画像はそのまま、Word・Excel などは本文を取り出す） */
-async function attachmentBlocks(admin, files) {
+async function attachmentBlocks(admin, files, { fileBlock, extractText, isNativeFile }) {
   const content = [];
   const notes = [];
   let total = 0;
@@ -128,7 +135,7 @@ async function attachmentBlocks(admin, files) {
 }
 
 /** 拒否のときに別のモデルで答え直す（server-side fallback）。使えない環境ではそのまま送り直す */
-async function createMessage(params) {
+async function createMessage(claude, params) {
   try {
     return await claude().beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
   } catch (err) {
@@ -141,8 +148,10 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
   const used = [];
   const setProgress = (label) => admin.from('ai_chat_messages').update({ used_data: used.map((l) => ({ label: l })), content: label ? `（${label}）` : '' }).eq('id', pendingId);
   try {
+    const lib = await lazy();
+    const { claude, TOOLS, runTool, toolLabel } = lib;
     const db = userClient(token);
-    const { content: fileContent, notes } = await attachmentBlocks(admin, files);
+    const { content: fileContent, notes } = await attachmentBlocks(admin, files, lib);
     const userContent = [
       ...fileContent,
       { type: 'text', text: `（${name}）${text || '添付資料を読んで要点をまとめてください。'}${notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : ''}` },
@@ -160,7 +169,7 @@ async function answer({ admin, token, user, name, chat, text, files, history, pe
     let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
     let final = null;
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      const resp = await createMessage({
+      const resp = await createMessage(claude, {
         model: MODEL, max_tokens: 16000, system, messages, tools: TOOLS,
         thinking: { type: 'adaptive' }, output_config: { effort: 'medium' },
       });

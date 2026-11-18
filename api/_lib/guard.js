@@ -66,7 +66,7 @@ export async function requireMember(req, res) {
   // 認証が通っていても、利用者として登録されていなければ拒否する
   const { data: profile } = await admin
     .from('users')
-    .select('id, role')
+    .select('id, role, full_name')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -75,7 +75,7 @@ export async function requireMember(req, res) {
     return null;
   }
 
-  return { id: user.id, email: user.email, role: profile.role };
+  return { id: user.id, email: user.email, role: profile.role, full_name: profile.full_name || '' };
 }
 
 /** POST 以外を弾く。 */
