@@ -82,6 +82,13 @@ function Empty({ text }) {
 
 // フェーズは「進捗」（状態）にまとめたので、並べ替え・値の絞り込みは受注確度だけ
 const SORTABLE = { deal_probability: "dealProbabilityOptions" };
+// 速報デイリーでは、進捗でも並べ替え・絞り込みができる（ネクストアクションは別に進捗の絞り込みを持つ）
+const DAILY_SORTABLE = { ...SORTABLE, status: "__progress" };
+const PROGRESS_ORDER = Object.keys(PROJECT_STATUS_MAP); // 未着手 → 着手中 → 納品済 → 失注
+/** 並べ替え・絞り込みの選択肢（受注確度はシステム設定、進捗は決まった順） */
+const optionsFor = (key, settings) => (key === "status" ? PROGRESS_ORDER : settings[SORTABLE[key]] || []);
+/** 絞り込みの候補の見え方（進捗はラベルに） */
+const candidateLabel = (key, v) => (v === EMPTY_VALUE ? "（空欄）" : key === "status" ? (PROJECT_STATUS_MAP[v]?.label || v) : v);
 
 /** 見出しクリックで 昇順 → 降順 → 解除 */
 function useColumnSort(storeKey) {
@@ -93,7 +100,7 @@ function useColumnSort(storeKey) {
 /** 選択肢の順で並べる比較関数。空は最後。並べ替えが無ければ null */
 function optionComparator(sort, settings) {
   if (!sort) return null;
-  const options = settings[SORTABLE[sort.key]] || [];
+  const options = optionsFor(sort.key, settings);
   const rank = (v) => { const i = options.indexOf(v || ""); return i < 0 ? (v ? options.length : options.length + 1) : i; };
   return (a, b) => {
     const d = rank(a[sort.key]) - rank(b[sort.key]) || String(a[sort.key] || "").localeCompare(String(b[sort.key] || ""), "ja");
@@ -152,21 +159,21 @@ const PlainTable = ({ children, className = "" }) => <table className={`w-full c
 
 /** 絞り込みに使う値の候補: システム設定の選択肢 + 実際に入っている値 + 空欄 */
 function filterCandidates(key, projects, settings) {
-  const options = settings[SORTABLE[key]] || [];
+  const options = optionsFor(key, settings);
   const present = new Set(projects.map((p) => p[key] || ""));
   const extra = [...present].filter((v) => v && !options.includes(v)).sort((a, b) => a.localeCompare(b, "ja"));
   return [...options, ...extra, EMPTY_VALUE];
 }
 
-function applyFilters(projects, filters) {
+function applyFilters(projects, filters, sortable = SORTABLE) {
   // 以前の「フェーズ」の絞り込みが残っていても効かせない（並べ替え・絞り込みのできる列だけ）
-  const keys = Object.keys(filters).filter((k) => filters[k] && k in SORTABLE);
+  const keys = Object.keys(filters).filter((k) => filters[k] && k in sortable);
   if (keys.length === 0) return projects;
   return projects.filter((p) => keys.every((k) => filters[k].includes(p[k] || EMPTY_VALUE)));
 }
 
-function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter, onFilter, candidates = [] }) {
-  const sortable = col.key in SORTABLE;
+function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter, onFilter, candidates = [], sortableKeys = SORTABLE }) {
+  const sortable = col.key in sortableKeys;
   const active = sort?.key === col.key;
   const selected = filter || null;
   const toggleValue = (v) => {
@@ -198,7 +205,7 @@ function SortableHead({ col, sort, onToggle, defaultMark, className = "", filter
                 {candidates.map((v) => (
                   <label key={v} className="flex items-center gap-2 text-xs py-0.5 cursor-pointer hover:bg-muted/60 rounded px-1">
                     <input type="checkbox" className="w-3.5 h-3.5" checked={!!selected?.includes(v)} onChange={() => toggleValue(v)} />
-                    <span className={v === EMPTY_VALUE ? "text-muted-foreground" : ""}>{v === EMPTY_VALUE ? "（空欄）" : v}</span>
+                    <span className={v === EMPTY_VALUE ? "text-muted-foreground" : ""}>{candidateLabel(col.key, v)}</span>
                   </label>
                 ))}
               </div>
@@ -399,7 +406,7 @@ export function DailyView({ projects, isLoading }) {
   const settings = useSystemSettings();
   const [sort, toggleSort] = useColumnSort("projects.daily");
   const [filters, setFilter] = useColumnFilters("projects.daily");
-  const filtered = useMemo(() => applyFilters(projects, filters), [projects, filters]);
+  const filtered = useMemo(() => applyFilters(projects, filters, DAILY_SORTABLE), [projects, filters]);
   const dt = useDailyTarget(today);
   const { target, holidays } = dt;
   // 定期売上のひな形の「有効／停止中」（定期売上の案件は、有効なら計上）
@@ -513,8 +520,8 @@ export function DailyView({ projects, isLoading }) {
                 <TableHeader className={STICKY_HEAD}>
                   <TableRow className="bg-slate-800 hover:bg-slate-800">
                     {DAILY_COLS.map((c) => (
-                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="registered_at"
-                        filter={filters[c.key]} onFilter={setFilter} candidates={c.key in SORTABLE ? filterCandidates(c.key, projects, settings) : []} />
+                      <SortableHead key={c.key} col={c} sort={sort} onToggle={toggleSort} defaultMark="registered_at" sortableKeys={DAILY_SORTABLE}
+                        filter={filters[c.key]} onFilter={setFilter} candidates={c.key in DAILY_SORTABLE ? filterCandidates(c.key, projects, settings) : []} />
                     ))}
                   </TableRow>
                 </TableHeader>

@@ -2,7 +2,7 @@
 // 案件の複製（過去とほぼ同じ内容の案件を作る）
 //
 //   写すもの   … クライアント・案件名・受注確度・見込みの金額（受注見込・発注見込・その他費用）・案件メモ
-//   新しくするもの … 案件番号・登録日（今日）・進捗（着手中。以前のフェーズは未着手）・完了予定などの日付
+//   新しくするもの … 案件番号・登録日（今日）・進捗（未着手）・完了予定などの日付
 //   写さないもの … 実績（受注合計・発注合計）・ネクストアクション・工程表・定期売上の設定
 //                 ・納品書・請求書・発注書・入稿記録・議事録（これらは前の案件に残る）
 //   見積        … 選んだものだけ、新しい見積番号の下書きとして写して新しい案件に紐づける
@@ -59,7 +59,7 @@ export function projectCopyPayload(project, { name, registeredAt, dueDate, copyN
     name: name || project.name,
     deal_probability: project.deal_probability || null,
     phase: "未着手",
-    status: "open",
+    status: "pending", // 複製した案件も「未着手」から
     expected_revenue: Number(project.expected_revenue) || 0,
     expected_cost: Number(project.expected_cost) || 0,
     other_cost: Number(project.other_cost) || 0,

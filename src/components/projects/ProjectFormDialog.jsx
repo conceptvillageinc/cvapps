@@ -30,7 +30,7 @@ function emptyForm(defaults = {}) {
     name: "",
     deal_probability: "C",
     phase: "未着手",
-    status: "open",
+    status: "pending", // 新しく作る案件は「未着手」から（着手中にすると売上粗利管理表・速報デイリーの計上に入る）
     expected_revenue: "",
     expected_cost: "",
     other_cost: "",
@@ -139,7 +139,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
         name: form.name.trim(),
         deal_probability: form.deal_probability,
         phase: form.phase,
-        status: PROJECT_STATUS_MAP[form.status] ? form.status : "open",
+        status: PROJECT_STATUS_MAP[form.status] ? form.status : "pending",
         expected_revenue: toNumber(form.expected_revenue),
         expected_cost: toNumber(form.expected_cost),
         other_cost: toNumber(form.other_cost),
@@ -234,7 +234,7 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">進捗</Label>
-              <Select value={PROJECT_STATUS_MAP[form.status] ? form.status : "open"} onValueChange={(v) => set("status", v)}>
+              <Select value={PROJECT_STATUS_MAP[form.status] ? form.status : "pending"} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(PROJECT_STATUS_MAP).map(([k, v]) => (
