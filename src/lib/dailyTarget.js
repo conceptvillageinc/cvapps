@@ -2,7 +2,7 @@
 // 速報デイリーの「1日あたりの粗利目標」の自動計算
 //   1日の目標 ＝（今期の粗利目標 − 今の着地見込み粗利）÷ 今日から期末までの営業日数
 //   ・今期の粗利目標 … 売上粗利管理表の「目標粗利」の 12 か月の合計（目標粗利が空なら 売上目標 − 仕入目標）
-//   ・着地見込み粗利 … 売上粗利管理表と同じ計算（請求済みの実績粗利 ＋ 状態が進行中・完了で受注確度 A・A（定期）・要注意の案件と、有効な定期売上の残りの粗利）
+//   ・着地見込み粗利 … 売上粗利管理表の「着地見込」の粗利（案件ベース: 状態が進行中・完了で受注確度 A・A（定期）・要注意の案件と、有効な定期売上の粗利見込）
 //   ・営業日 … 土日・祝日・年末年始（12/29〜1/3）・会社の休業日を除く
 //   今日の目標は朝の時点で固定する（今日登録した案件は着地見込みに入れない）。今日登録した案件で、今日の目標そのものが下がって見えないように。
 // ============================================================================
@@ -40,7 +40,7 @@ export function autoDailyTarget({ today, fiscalYear, startMonth, data, holidays 
     payablesMonthMode: data.payablesMonthMode, targets: data.targets, marginTarget,
   });
   const target = Math.round(report.annual.target.gross || 0);
-  const landing = Math.round(report.annual.total.gross || 0);
+  const landing = Math.round(report.annual.forecast.gross || 0);
   const gap = target - landing;
   const days = countBusinessDays(today, fyEnd, holidays);
   const daily = gap > 0 && days > 0 ? Math.ceil(gap / days) : 0;

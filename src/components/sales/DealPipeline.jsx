@@ -269,7 +269,7 @@ function ImportDialog({ open, onOpenChange, projects, deals, tags, onImport }) {
  * @param {object} p.meta               { headcount, headcount_memo, per_person_sales, per_person_gross }
  * @param {(patch:object)=>void} p.onChangeMeta   区分・人数の保存（パターンをまたいで共通）
  * @param {number} p.grossMust          最低粗利目標（必達粗利の年間合計）
- * @param {object} p.appAnnual          アプリ側の年計 { total: {sales, gross}, actual: {...}, forecast: {...} }
+ * @param {object} p.appAnnual          アプリ側の年計 { forecast: {sales, gross}（案件ベースの着地見込）, actual: {...} }
  * @param {{ sales: number, purchase: number }} [p.simTotals]  シミュレーションの年計（着地見込を書き換えた値）
  * @param {object[]} p.projects
  * @param {string} p.fiscalLabel
@@ -371,8 +371,8 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <Stat label="売上／人" value={hc ? yen(all.per_person.sales) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonSales)}${hc ? `　確定だけ ${yen(summary.confirmed.per_person.sales)}` : ""}`} tone={hc ? perOk(all.per_person.sales, summary.perPersonSales) : ""} />
             <Stat label="粗利／人" value={hc ? yen(all.per_person.gross) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonGross)}${hc ? `　確定だけ ${yen(summary.confirmed.per_person.gross)}` : ""}`} tone={hc ? perOk(all.per_person.gross, summary.perPersonGross) : ""} />
-            <Stat label="アプリの実績＋着地見込（売上）" value={yen(appAnnual?.total?.sales)} sub={`実績 ${yen(appAnnual?.actual?.sales)}／着地見込 ${yen(appAnnual?.forecast?.sales)}`} />
-            <Stat label="アプリの実績＋着地見込（粗利）" value={yen(appAnnual?.total?.gross)} sub="請求書と案件一覧から。一覧との差の確認用" />
+            <Stat label="アプリの着地見込（売上）" value={yen(appAnnual?.forecast?.sales)} sub={`案件ベース（参考: 実績の請求 ${yen(appAnnual?.actual?.sales)}）`} />
+            <Stat label="アプリの着地見込（粗利）" value={yen(appAnnual?.forecast?.gross)} sub="案件の受注見込・発注見込から。一覧との差の確認用" />
           </div>
         </CardContent>
       </Card>

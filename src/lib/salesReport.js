@@ -10,7 +10,8 @@
 // 見込は案件の見込から、実績は請求書（税抜）と、支払い先まとめの CV 分（税込→税抜）・カード利用明細
 // まとめの CV 分（税込→税抜）から作る。cv digital・Cool Agri 分は数えない（運営事務局として振込の
 // 情報を持つだけ）。支払い先まとめが無い月は銀行明細の出金、手入力があればそれが優先。
-// 請求済みの案件は、見込から請求済み分を差し引く（二重計上を避ける）。
+// 着地見込は案件ベース: 案件の受注見込・発注見込（＋その他費用）・粗利見込をそのまま、完了予定日の月に入れる
+// （請求済みでも引かない。実績は会計の数字との確認用に別に出す。実績＋着地見込を足すと二重になるので、足さない）
 // ============================================================================
 
 import { fiscalYearRange } from "@/lib/fiscal";
@@ -143,7 +144,7 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     recurring: Array(12).fill(0), countA: Array(12).fill(0), countA2: Array(12).fill(0),
     projectsByMonth: Array.from({ length: 12 }, () => []),
   };
-  // 定期売上の案件は、年度の月ごとに 1 件ずつに広げる（月額 − その月の分の請求済み額）
+  // 定期売上の案件は、年度の月ごとに 1 件ずつに広げる（月額。開始月は初回費用も足す）
   for (const p of forecastProjects(projects, invoices, { fromYm: from.slice(0, 7), toYm: to.slice(0, 7) })) {
     const prob = p.deal_probability || "";
     let isA, isA2;
@@ -161,15 +162,14 @@ export function buildSalesReport({ fiscalYear, startMonth, projects, invoices, b
     const k = monthKey(p.due_date || p.payment_due_date || p.registered_at);
     if (!idx.has(k)) continue;
     const i = idx.get(k);
-    const invoiced = p._invoiced.subtotal;
-    const remaining = Math.max(0, n(p.expected_revenue) - invoiced);
-    if (remaining <= 0) continue;
-    const ratio = n(p.expected_revenue) > 0 ? remaining / n(p.expected_revenue) : 1;
-    const cost = (n(p.expected_cost) + n(p.other_cost)) * ratio;
-    if (isA) { fc.salesA[i] += remaining; fc.costA[i] += cost; fc.countA[i]++; }
-    else { fc.salesA2[i] += remaining; fc.costA2[i] += cost; fc.countA2[i]++; }
-    if (p.is_recurring) fc.recurring[i] += remaining;
-    fc.projectsByMonth[i].push({ id: p.id, project_number: p.project_number, name: p.name, client_name: p.client_name, remaining, cost, prob });
+    // 案件ベース: 案件の受注見込・発注見込（＋その他費用）をそのまま入れる（請求済みの額は引かない。粗利＝案件の粗利見込）
+    const revenue = n(p.expected_revenue);
+    const cost = n(p.expected_cost) + n(p.other_cost);
+    if (revenue === 0 && cost === 0) continue;
+    if (isA) { fc.salesA[i] += revenue; fc.costA[i] += cost; fc.countA[i]++; }
+    else { fc.salesA2[i] += revenue; fc.costA2[i] += cost; fc.countA2[i]++; }
+    if (p.is_recurring) fc.recurring[i] += revenue;
+    fc.projectsByMonth[i].push({ id: p.id, project_number: p.project_number, name: p.name, client_name: p.client_name, remaining: revenue, cost, gross: revenue - cost, invoiced: n(p._invoiced?.subtotal), prob });
   }
 
   // 目標粗利: 「目標粗利」（gross_jump の欄。以前は「目標粗利（ジャンプ）」と呼んでいた）を入れていればその値、

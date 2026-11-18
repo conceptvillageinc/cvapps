@@ -489,7 +489,7 @@ export default function SalesReport() {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <CardTitle className="text-sm">{chart === "sales" ? "月別の売上（実績・見込）と目標" : `月別の粗利（${totalLabel}）と目標`}</CardTitle>
-              <CardDescription className="text-xs">税別・円。実績は請求書、見込は案件（請求済み分を除く）から</CardDescription>
+              <CardDescription className="text-xs">税別・円。実績は請求書、見込は案件の受注見込（請求済みでもそのまま）から</CardDescription>
             </div>
             <Tabs value={chart} onValueChange={setChart}>
               <TabsList className="h-8">
@@ -627,7 +627,7 @@ export default function SalesReport() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">着地見込の内訳（案件）</CardTitle>
-          <CardDescription className="text-xs">状態が進行中・完了で、受注確度 A / A（定期売上）/ 要注意（A）の案件（フェーズは見ません）と、ひな形が「有効」の定期売上（月ごと）。完了予定日の月に計上し、請求済みの金額は除きます</CardDescription>
+          <CardDescription className="text-xs">状態が進行中・完了で、受注確度 A / A（定期売上）/ 要注意（A）の案件（フェーズは見ません）と、ひな形が「有効」の定期売上（月ごと）。案件の受注見込・発注見込（＋その他費用）・粗利見込をそのまま、完了予定日の月に入れます（請求済みでも引きません）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {rows.filter((r) => r.forecast.projects.length > 0).length === 0 ? (
@@ -643,7 +643,7 @@ export default function SalesReport() {
                     <Link to={`/projects/${p.id}`} className="font-mono text-muted-foreground hover:underline">{p.project_number}</Link>
                     <Badge variant="outline" className="text-[9px] font-normal">{p.prob}</Badge>
                     <span className="truncate">{p.client_name} / {p.name}</span>
-                    <span className="ml-auto tabular-nums">¥{yen(p.remaining)}</span>
+                    <span className="ml-auto tabular-nums whitespace-nowrap">売上 ¥{yen(p.remaining)}　発注 ¥{yen(p.cost)}　<span className={p.gross < 0 ? "text-red-700" : "text-emerald-700"}>粗利 ¥{yen(p.gross)}</span>{p.invoiced > 0 && <span className="ml-1 text-[10px] text-muted-foreground">（請求済 ¥{yen(p.invoiced)}）</span>}</span>
                   </div>
                 ))}
               </div>
