@@ -389,9 +389,9 @@ export default function MeetingDetail() {
                   <Button className="bg-red-600 hover:bg-red-700 gap-1.5" onClick={() => setResumeRecording(true)}><Mic className="w-4 h-4" /> {segments.length === 0 ? "録音を始める" : "続きを録る"}</Button>
                   <Button variant="outline" onClick={async () => { if (segments.length === 0) { toast.error("保存済みの録音がありません"); return; } await db.entities.Meeting.update(id, { status: "uploaded" }); queryClient.invalidateQueries({ queryKey: ["meeting", id] }); }} disabled={segments.length === 0}>このまま議事録を作る</Button>
                   {/* スマホの画面が消えているなどで合図が届いていないだけのときのため。次にその端末が動いたときに止まる */}
-                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={stopRecording} data-testid="stop-recording-anyway" title="録音している端末の画面が消えているなどで見つからないときのため。その端末が次に動いたときに録音が止まります"><CircleStop className="h-3.5 w-3.5" /> 念のため止める合図を送る</Button>
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={stopRecording} data-testid="stop-recording-anyway" title="録音している端末の画面が消えているなどで見つからないときのため。その端末が次に動いたときに録音が止まります"><CircleStop className="h-3.5 w-3.5" /> ほかの端末で録音中なら停止する</Button>
                 </div>
-                {stopSentAt && <p className="text-xs text-red-700" data-testid="stop-sent">止める合図を送りました。録音している端末があれば、その端末が動いたときに止まります。</p>}
+                {stopSentAt && <p className="text-xs text-red-700" data-testid="stop-sent">停止の指示を送りました。ほかの端末で録音中であれば、その端末が次に動いたときに停止します。</p>}
               </>
             )}
           </CardContent>
