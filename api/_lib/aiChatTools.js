@@ -81,6 +81,23 @@ export const TOOLS = [
     description: '売上粗利管理表のメモ（着地見込のみ・実績のみ・シミュレーション）を読む。見られる人が限られている。',
     input_schema: { type: 'object', additionalProperties: false, properties: { fiscal_year: { type: 'integer', description: '期首の年。0 なら今期' } }, required: ['fiscal_year'] },
   },
+  {
+    name: 'search_ai_chats',
+    description: 'CVアプリの AI チャットのうち、質問した人がメンバーのチャットを、チャットの名前と会話の中身で検索する。中身を読むときは read_ai_chat を使う。',
+    input_schema: {
+      type: 'object', additionalProperties: false,
+      properties: {
+        keyword: { ...str, description: 'チャットの名前・会話に含まれる言葉。空なら新しい順に一覧' },
+        limit: { type: 'integer', description: '最大件数（1〜20）' },
+      },
+      required: ['keyword', 'limit'],
+    },
+  },
+  {
+    name: 'read_ai_chat',
+    description: 'CVアプリの別の AI チャットの会話（質問と回答）、資料メモ、下書き欄を読む。chat_id は search_ai_chats の結果のもの。',
+    input_schema: { type: 'object', additionalProperties: false, properties: { chat_id: { ...str, description: 'チャットの id' } }, required: ['chat_id'] },
+  },
 ].map((t) => ({ ...t, strict: true }));
 
 /** 道具を使ったことを画面に出すときの言葉 */
@@ -94,6 +111,8 @@ export function toolLabel(name, input = {}) {
     case 'get_client': return `クライアント「${input.name}」を確認`;
     case 'sales_report': return '売上粗利管理表を確認';
     case 'sales_report_memo': return '売上粗利管理表のメモを確認';
+    case 'search_ai_chats': return `AIチャットを検索${input.keyword ? `（${input.keyword}）` : ''}`;
+    case 'read_ai_chat': return '別の AIチャットを確認';
     default: return name;
   }
 }
@@ -229,6 +248,58 @@ export async function runTool(db, name, input = {}) {
       if (error || !data?.length) return { error: 'この期のメモは無いか、メモを見る権限がありません（売上粗利管理表のメモは限られた人だけが見られます）' };
       const label = { forecast: '着地見込のみ', actual: '実績のみ', simulation: 'シミュレーション' };
       return { 期: `${fy}年度`, メモ: data.map((m) => ({ 表示: label[m.mode] || m.mode, 本文: m.body, 更新: `${m.updated_at} ${m.updated_by || ''}` })) };
+    }
+    case 'search_ai_chats': {
+      // 質問した人がメンバーのチャットだけ（RLS が効く）。名前で一致したものと、会話の中身で一致したものをまとめる
+      const max = limit(input.limit, 20);
+      const kw = String(input.keyword || '').trim();
+      let chatsQ = db.from('ai_chats').select('id, title, last_message_at, draft_text').order('last_message_at', { ascending: false }).limit(kw ? 50 : max);
+      if (kw) chatsQ = chatsQ.ilike('title', like(kw));
+      const [{ data: byTitle, error: e1 }, { data: hits, error: e2 }] = await Promise.all([
+        chatsQ,
+        kw ? db.from('ai_chat_messages').select('chat_id, role, content, created_at').ilike('content', like(kw)).order('created_at', { ascending: false }).limit(200) : Promise.resolve({ data: [] }),
+      ]);
+      if (e1 || e2) throw (e1 || e2);
+      const map = new Map((byTitle || []).map((c) => [c.id, { chat_id: c.id, 名前: c.title, 最終更新: c.last_message_at, 名前で一致: true, 会話で一致した数: 0, 抜粋: '' }]));
+      const missing = [...new Set((hits || []).map((h) => h.chat_id).filter((cid) => !map.has(cid)))];
+      if (missing.length) {
+        const { data: more } = await db.from('ai_chats').select('id, title, last_message_at').in('id', missing.slice(0, 50));
+        for (const c of more || []) map.set(c.id, { chat_id: c.id, 名前: c.title, 最終更新: c.last_message_at, 名前で一致: false, 会話で一致した数: 0, 抜粋: '' });
+      }
+      for (const h of hits || []) {
+        const row = map.get(h.chat_id);
+        if (!row) continue;
+        row.会話で一致した数 += 1;
+        if (!row.抜粋) { const at = String(h.content || '').indexOf(kw); row.抜粋 = String(h.content || '').slice(Math.max(0, at - 60), at + 120); }
+      }
+      const list = [...map.values()].sort((a, b) => (b.名前で一致 - a.名前で一致) || (b.会話で一致した数 - a.会話で一致した数) || String(b.最終更新).localeCompare(String(a.最終更新))).slice(0, max);
+      return { count: list.length, chats: list };
+    }
+    case 'read_ai_chat': {
+      const chatId = String(input.chat_id || '').trim();
+      const { data: chat } = await db.from('ai_chats').select('id, title, draft_text, last_message_at').eq('id', chatId).maybeSingle();
+      if (!chat) return { error: 'このチャットは見つからないか、メンバーではないため読めません' };
+      const { data: msgs, error } = await db.from('ai_chat_messages').select('role, author_name, content, used_data, status, created_at').eq('chat_id', chatId).eq('status', 'done').order('created_at').limit(200);
+      if (error) throw error;
+      // 長いチャットは、新しい方を優先して 1 件あたり・全体の長さを抑える
+      const PER = 4000; const TOTAL = 50000;
+      const out = []; let total = 0;
+      for (const m of [...(msgs || [])].reverse()) {
+        const text = String(m.content || '').slice(0, PER);
+        if (total + text.length > TOTAL) break;
+        total += text.length;
+        out.unshift({ 日時: m.created_at, 発言: m.role === 'user' ? (m.author_name || '質問') : 'Claude', 内容: text });
+      }
+      const notes = (msgs || []).flatMap((m) => (m.used_data || []).filter((u) => u.kind === 'notes' && u.text).map((u) => u.text));
+      const designs = (msgs || []).map((m) => (m.used_data || []).find((u) => u.kind === 'design')).filter(Boolean);
+      const decks = (msgs || []).map((m) => (m.used_data || []).find((u) => u.kind === 'deck')).filter(Boolean);
+      return {
+        チャット: chat.title, 最終更新: chat.last_message_at,
+        会話: out, 省略: (msgs || []).length > out.length ? `古い ${(msgs || []).length - out.length} 件は長いため省略` : '',
+        資料メモ: notes.join('\n\n').slice(-20000),
+        下書き欄: String(chat.draft_text || '').slice(0, 20000),
+        作った資料: [...decks.map((d) => `スライド「${d.title}」`), ...designs.map((d) => `デザイン「${d.title}」（${(d.boards || []).length} 枚: ${(d.boards || []).map((b) => b.title).join('、')}）`)],
+      };
     }
     default:
       return { error: `知らない道具です: ${name}` };
