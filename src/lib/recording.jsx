@@ -21,6 +21,8 @@ import RecordingGuardPrompt from "@/components/meetings/RecordingGuardPrompt";
 // ============================================================================
 
 const SEGMENT_SEC = 5 * 60;
+// 録音していないタブから「録音を止める」を伝える通り道（同じブラウザのタブどうし）
+export const REC_CHANNEL = "cvapps:recording";
 
 function pickMime() {
   const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
@@ -84,12 +86,20 @@ export function RecordingProvider({ children }) {
   const titleRef = useRef({ original: null, timer: null });
 
   // 録音中の合図: 1 分ごとに meetings.recording_heartbeat_at を更新する（一覧の「レコーディング中」の帯に使う）
-  const beat = async () => {
+  //   録音を始めた最初の合図で「録音を止める」の合図（stop_requested_at）を消し、その後の合図で入っていたら録音を終える
+  //   （端末ごとの時計のずれに左右されないよう、時刻は比べない）
+  const beat = async (first = false) => {
     const id = sessionRef.current?.meetingId;
     if (!id) return;
-    try { await db.entities.Meeting.update(id, { recording_heartbeat_at: new Date().toISOString() }); } catch { /* 合図が送れなくても録音は続ける */ }
+    try {
+      const row = await db.entities.Meeting.update(id, { recording_heartbeat_at: new Date().toISOString(), ...(first ? { stop_requested_at: null } : {}) });
+      if (!first && row?.stop_requested_at && !finishingRef.current) {
+        toast.info("ほかの画面から「録音を止める」が押されたため、録音を終えました", { duration: 15000 });
+        finishRef.current?.();
+      }
+    } catch { /* 合図が送れなくても録音は続ける */ }
   };
-  const startHeartbeat = () => { clearInterval(heartbeatRef.current); beat(); heartbeatRef.current = setInterval(beat, 60 * 1000); };
+  const startHeartbeat = () => { clearInterval(heartbeatRef.current); beat(true); heartbeatRef.current = setInterval(() => beat(false), 60 * 1000); };
   const stopHeartbeat = () => { clearInterval(heartbeatRef.current); heartbeatRef.current = null; };
   const setStateBoth = (s) => { stateRef.current = s; setState(s); };
 
@@ -109,6 +119,23 @@ export function RecordingProvider({ children }) {
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [requestWakeLock]);
+
+  // 同じブラウザのほかのタブから: 「録音しているタブはある？」（ping）に答え、「止めて」（stop）で録音を終える
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return undefined;
+    const ch = new BroadcastChannel(REC_CHANNEL);
+    ch.onmessage = (e) => {
+      const m = e.data || {};
+      const s = sessionRef.current;
+      if (!s || m.meetingId !== s.meetingId) return;
+      if (m.type === "ping") ch.postMessage({ type: "pong", meetingId: s.meetingId, elapsed: elapsedRef.current, state: stateRef.current });
+      if (m.type === "stop" && !finishingRef.current) {
+        toast.info("ほかのタブから「録音を止める」が押されたため、録音を終えました", { duration: 15000 });
+        finishRef.current?.();
+      }
+    };
+    return () => ch.close();
+  }, []);
 
   // 録音中はタブを閉じる・再読み込みの前に確認を出す
   useEffect(() => {
@@ -417,6 +444,36 @@ export function RecordingProvider({ children }) {
       {guard && <RecordingGuardPrompt guard={guard} title={session?.title} elapsed={elapsed} onContinue={continueRecording} onFinish={() => finishRef.current?.()} />}
     </Ctx.Provider>
   );
+}
+
+/**
+ * 同じブラウザのほかのタブで、この議事録を録音しているか（10 秒ごとに確かめる）。
+ * 録音していれば { elapsed, state }、いなければ null
+ */
+export function useRecordingInOtherTab(meetingId, enabled = true) {
+  const [found, setFound] = useState(null);
+  useEffect(() => {
+    if (!enabled || !meetingId || typeof BroadcastChannel === "undefined") { setFound(null); return undefined; }
+    const ch = new BroadcastChannel(REC_CHANNEL);
+    ch.onmessage = (e) => {
+      const m = e.data || {};
+      if (m.type === "pong" && m.meetingId === meetingId) setFound({ elapsed: m.elapsed, state: m.state, at: Date.now() });
+    };
+    const ping = () => ch.postMessage({ type: "ping", meetingId });
+    ping();
+    const t = setInterval(() => { ping(); setFound((f) => (f && Date.now() - f.at > 25000 ? null : f)); }, 10000);
+    return () => { clearInterval(t); ch.close(); };
+  }, [meetingId, enabled]);
+  return found;
+}
+
+/**
+ * この議事録を録音しているタブ・端末に「録音を止めて」と伝える。
+ *   同じブラウザのタブには、すぐ伝わる。ほかの PC・スマホのタブには、1 分以内に伝わる（録音中の合図のときに見る）
+ */
+export async function requestStopRecording(meetingId) {
+  try { const ch = new BroadcastChannel(REC_CHANNEL); ch.postMessage({ type: "stop", meetingId }); ch.close(); } catch { /* 古いブラウザ */ }
+  await db.entities.Meeting.update(meetingId, { stop_requested_at: new Date().toISOString() });
 }
 
 export function useRecording() {

@@ -163,7 +163,7 @@ const WRITABLE_COLUMNS = {
   meetings: [
     'title', 'held_at', 'meeting_type', 'client_id', 'client_name', 'project_id', 'estimate_id', 'participants',
     'audio_path', 'audio_duration_sec', 'audio_size', 'source', 'status', 'error_message',
-    'transcript', 'summary', 'checkpoints', 'finalized_at', 'created_by', 'estimate_conditions', 'recording_heartbeat_at',
+    'transcript', 'summary', 'checkpoints', 'finalized_at', 'created_by', 'estimate_conditions', 'recording_heartbeat_at', 'stop_requested_at',
   ],
   meeting_segments: ['meeting_id', 'seq', 'storage_path', 'mime_type', 'duration_sec', 'size'],
   payees: ['name', 'bank_info', 'notes', 'sort_order', 'is_active'],

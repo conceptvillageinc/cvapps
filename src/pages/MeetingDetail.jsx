@@ -19,7 +19,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save, Link2, Building2 } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Copy, Trash2, RefreshCw, Search, Play, Plus, X, AlertTriangle, Mic, Save, Link2, Building2, Square, CircleStop } from "lucide-react";
 import { shareText, copyShareText } from "@/lib/shareText";
 import { toast } from "sonner";
 import MeetingRecorder from "@/components/meetings/MeetingRecorder";
@@ -28,7 +28,7 @@ import MeetingChat from "@/components/meetings/MeetingChat";
 import MeetingLinkDialog from "@/components/meetings/MeetingLinkDialog";
 import MeetingPrintSpecs from "@/components/meetings/MeetingPrintSpecs";
 import { useAuth } from "@/lib/AuthContext";
-import { useRecording } from "@/lib/recording";
+import { useRecording, useRecordingInOtherTab, requestStopRecording } from "@/lib/recording";
 import { isImeEnter } from "@/lib/ime";
 import SearchClear from "@/components/ui/search-clear";
 
@@ -148,6 +148,7 @@ export default function MeetingDetail() {
   const [linkOpen, setLinkOpen] = useState(false);
   // 録音はアプリ全体で続いているので、別の画面から戻ってきたときも録音欄を出す
   const recordingThis = useRecording().session?.meetingId === id;
+  const [stopSentAt, setStopSentAt] = useState(null); // 「録音を止める」を押した時刻（合図を送ったことを表示する）
 
   const { data: meeting, isLoading } = useQuery({
     queryKey: ["meeting", id],
@@ -156,6 +157,8 @@ export default function MeetingDetail() {
     // 処理中は 5 秒ごと、ほかのメンバーが録音中は 30 秒ごとに見直す（録音が終わったら議事録の表示に切り替わる）
     refetchInterval: (q) => (q.state.data && PROCESSING.has(q.state.data.status) ? 5000 : q.state.data?.status === "recording" ? 30000 : false),
   });
+  // 同じブラウザのほかのタブで、この議事録を録音しているか（録音中の議事録を開いているときだけ確かめる）
+  const otherTab = useRecordingInOtherTab(id, meeting?.status === "recording" && !recordingThis);
   // 紐づけた案件（共有用のタイトルに案件名を使う）
   const { data: linkedProject } = useQuery({
     queryKey: ["project", meeting?.project_id],
@@ -288,7 +291,26 @@ export default function MeetingDetail() {
 
   if (isLoading || !meeting || !summary) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
-  const st = MEETING_STATUS[meeting.status] || MEETING_STATUS.draft;
+  // 録音しているタブが見つからない（録音中の合図が 5 分以上無い・このブラウザのほかのタブでも録音していない）ときは
+  // 「レコーディング中」ではなく「録音は止まっています」と出す
+  const liveHere = recordingThis || resumeRecording;
+  const liveSomewhere = liveHere || isLiveRecording(meeting) || !!otherTab;
+  const st = meeting.status === "recording" && !liveSomewhere
+    ? { label: "録音は止まっています", color: "bg-amber-100 text-amber-800" }
+    : (MEETING_STATUS[meeting.status] || MEETING_STATUS.draft);
+  const stopRecording = async () => {
+    if (!window.confirm("この議事録を録音しているタブ（ほかの PC・スマホを含む）に「録音を止める」合図を送ります。\n止まると、それまでの録音から文字起こしと議事録が作られます。止めますか？")) return;
+    try {
+      await requestStopRecording(id);
+      setStopSentAt(Date.now());
+      toast.success("録音を止める合図を送りました");
+      // 録音しているタブが止まると状態が変わるので、少し後に読み直す
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["meeting", id] }), 5000);
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["meeting", id] }), 70000);
+    } catch (err) {
+      toast.error("合図を送れませんでした: " + (err?.message || "不明なエラー"));
+    }
+  };
   const isProcessing = PROCESSING.has(meeting.status);
   const progress = meeting.progress || {};
   // 3 分以上更新が無ければ「止まっている」とみなす（処理はブラウザから呼んで進めるため、画面を閉じると止まる）
@@ -336,20 +358,28 @@ export default function MeetingDetail() {
       {meeting.status === "recording" && (
         <Card className="border-red-200">
           <CardContent className="pt-4 space-y-3">
-            {!resumeRecording && !recordingThis && isLiveRecording(meeting) ? (
-              // ほかのメンバーが録音中（合流したとき）: 録音のボタンは出さない
+            {!resumeRecording && !recordingThis && (isLiveRecording(meeting) || otherTab) ? (
+              // ほかのタブ・ほかのメンバーが録音中: 録音のボタンは出さず、「録音を止める」だけ出す
               <div className="flex items-start gap-3" data-testid="live-by-other">
                 <span className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-600" />
-                <div className="min-w-0 space-y-0.5">
-                  <p className="text-sm font-semibold">{meeting.created_by || "メンバー"} さんが録音中です{startedAt(meeting) && <span className="ml-2 text-xs font-normal text-red-600">{fmtTime(startedAt(meeting))}〜（{elapsedMin(startedAt(meeting))} 分経過）</span>}</p>
-                  <p className="text-xs text-muted-foreground">録音が終わると、ここに文字起こしと議事録が自動でできます。この画面は開いたままで大丈夫です。</p>
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <p className="text-sm font-semibold">
+                    {otherTab ? "このブラウザの別のタブで録音中です" : `${meeting.created_by || "メンバー"} さんが録音中です`}
+                    {startedAt(meeting) && <span className="ml-2 text-xs font-normal text-red-600">{fmtTime(startedAt(meeting))}〜（{elapsedMin(startedAt(meeting))} 分経過）</span>}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {otherTab ? "どのタブで録音しているか分からないときは、ここから止められます。" : "録音が終わると、ここに文字起こしと議事録が自動でできます。この画面は開いたままで大丈夫です。"}
+                  </p>
+                  {stopSentAt && <p className="text-xs font-semibold text-red-700" data-testid="stop-sent">止める合図を送りました。{otherTab ? "まもなく止まります。" : "1 分ほどで止まります（録音している端末が開いている必要があります）。"}</p>}
                 </div>
+                <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-red-300 text-red-700 hover:bg-red-50" onClick={stopRecording} data-testid="stop-recording"><Square className="h-3.5 w-3.5 fill-current" /> 録音を止める</Button>
               </div>
             ) : (resumeRecording || recordingThis) ? (
               <MeetingRecorder meetingId={meeting.id} title={meeting.title || ""} startSeq={segments.length} baseDuration={Number(meeting.audio_duration_sec) || 0} onFinish={() => setResumeRecording(false)} />
             ) : (
               <>
                 <p className="text-sm font-semibold flex items-center gap-2"><Mic className="w-4 h-4 text-red-600" /> {segments.length === 0 ? "録音はまだ始まっていません" : "録音が途中で終わっています"}</p>
+                <p className="text-xs text-muted-foreground" data-testid="no-recorder">いまこの議事録を録音しているタブ・端末は見つかりません（録音は止まっています）。</p>
                 <p className="text-xs text-muted-foreground">
                   {segments.length === 0
                     ? "録音ボタンを押す前に画面を離れたようです。ここから録音を始めるか、右上の「削除」でこの議事録を消せます。"
@@ -358,7 +388,10 @@ export default function MeetingDetail() {
                 <div className="flex gap-2">
                   <Button className="bg-red-600 hover:bg-red-700 gap-1.5" onClick={() => setResumeRecording(true)}><Mic className="w-4 h-4" /> {segments.length === 0 ? "録音を始める" : "続きを録る"}</Button>
                   <Button variant="outline" onClick={async () => { if (segments.length === 0) { toast.error("保存済みの録音がありません"); return; } await db.entities.Meeting.update(id, { status: "uploaded" }); queryClient.invalidateQueries({ queryKey: ["meeting", id] }); }} disabled={segments.length === 0}>このまま議事録を作る</Button>
+                  {/* スマホの画面が消えているなどで合図が届いていないだけのときのため。次にその端末が動いたときに止まる */}
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={stopRecording} data-testid="stop-recording-anyway" title="録音している端末の画面が消えているなどで見つからないときのため。その端末が次に動いたときに録音が止まります"><CircleStop className="h-3.5 w-3.5" /> 念のため止める合図を送る</Button>
                 </div>
+                {stopSentAt && <p className="text-xs text-red-700" data-testid="stop-sent">止める合図を送りました。録音している端末があれば、その端末が動いたときに止まります。</p>}
               </>
             )}
           </CardContent>
