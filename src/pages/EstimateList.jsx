@@ -31,6 +31,7 @@ import { clientLines, estimateSubtotal } from "@/lib/estimateTotals";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportEstimatesCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
+import { matchesSearchText } from "@/lib/searchText";
 import SearchClear from "@/components/ui/search-clear";
 
 /** 一覧の金額は税別（明細の無い古い見積は合計金額のまま） */
@@ -147,12 +148,9 @@ export default function EstimateList() {
   };
 
   // 検索: クライアント名・見積番号・件名・印刷の種類・用途。
-  //   濁点が別の文字になっている文字（Mac のファイル名などからのコピー）でも見つかるよう、NFC にそろえて比べる
-  const norm = (v) => String(v || "").normalize("NFC").toLowerCase();
-  const q = norm(search).trim();
+  //   半角カナ・ひらがな・空白・濁点が別の文字になっているもの、などの違いは無視して探す（src/lib/searchText.js）
   const filtered = estimates.filter(est => {
-    const matchSearch = !q ||
-      [est.client_name, est.estimate_number, est.estimate_title, est.print_type, est.usage].some((v) => norm(v).includes(q));
+    const matchSearch = matchesSearchText([est.client_name, est.estimate_number, est.estimate_title, est.print_type, est.usage], search);
     if (!matchSearch) return false;
     if (submissionFilter !== "all" && submissionOf(est) !== submissionFilter) return false;
 

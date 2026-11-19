@@ -30,6 +30,7 @@ import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportProjectsCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
 import SearchClear from "@/components/ui/search-clear";
+import { matchesSearchText } from "@/lib/searchText";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 const ALL_YEARS = "all";
@@ -218,13 +219,9 @@ export default function ProjectList() {
   const setColumnFilter = (key, values) => setColumnFilters((prev) => ({ ...prev, [key]: values }));
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return projects.filter((p) => {
       if (!inPeriod(p[period.field], period)) return false;
-      if (q) {
-        const hay = [p.project_number, p.client_name, p.name, p.notes].filter(Boolean).join(" ").toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
+      if (!matchesSearchText([p.project_number, p.client_name, p.name, p.notes], search)) return false;
       for (const key of FILTERABLE_KEYS) {
         const selected = columnFilters[key];
         if (selected === null || selected === undefined) continue;
@@ -239,13 +236,12 @@ export default function ProjectList() {
   const hiddenByStatus = useMemo(() => {
     const selected = columnFilters.status;
     if (!selected) return [];
-    const q = search.trim().toLowerCase();
     const counts = new Map();
     for (const p of projects) {
       const label = columnDefs.status.getValue(p);
       if (selected.includes(label)) continue;
       if (!inPeriod(p[period.field], period)) continue;
-      if (q && ![p.project_number, p.client_name, p.name, p.notes].filter(Boolean).join(" ").toLowerCase().includes(q)) continue;
+      if (!matchesSearchText([p.project_number, p.client_name, p.name, p.notes], search)) continue;
       if (FILTERABLE_KEYS.some((key) => key !== "status" && columnFilters[key] && !columnFilters[key].includes(columnDefs[key].getValue(p)))) continue;
       counts.set(label, (counts.get(label) || 0) + 1);
     }
@@ -287,11 +283,8 @@ export default function ProjectList() {
     return list;
   }, [filtered, sortConfig, clientKanaMap]);
 
-  const matchesSearch = (p) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return [p.project_number, p.client_name, p.name, p.notes, p.next_action].filter(Boolean).join(" ").toLowerCase().includes(q);
-  };
+  // 半角カナ・ひらがな・空白などの違いは無視して探す（src/lib/searchText.js）
+  const matchesSearch = (p) => matchesSearchText([p.project_number, p.client_name, p.name, p.notes, p.next_action], search);
   // 速報デイリー: 失注（以前の取消も）は含めない
   const dailyRows = useMemo(() => projects.filter((p) => p.status !== "cancelled" && p.status !== "lost").filter(matchesSearch), [projects, search]);
   const nextRows = useMemo(() => nextProjects.filter(matchesSearch), [nextProjects, search]);
