@@ -391,7 +391,7 @@ export default function MeetingDetail() {
                   {/* スマホの画面が消えているなどで合図が届いていないだけのときのため。次にその端末が動いたときに止まる */}
                   <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={stopRecording} data-testid="stop-recording-anyway" title="録音している端末の画面が消えているなどで見つからないときのため。その端末が次に動いたときに録音が止まります"><CircleStop className="h-3.5 w-3.5" /> 録音を停止する</Button>
                 </div>
-                {stopSentAt && <p className="text-xs text-red-700" data-testid="stop-sent">録音の停止を受け付けました。録音中の端末があれば、自動で停止します。</p>}
+                {stopSentAt && <p className="text-xs text-red-700" data-testid="stop-sent">録音を停止しました。別ページで録音が続いている場合も、自動で止まります。</p>}
               </>
             )}
           </CardContent>
