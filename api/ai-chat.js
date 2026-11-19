@@ -22,7 +22,10 @@ const lazy = () => Promise.all([import('./_lib/claude.js'), import('./_lib/docTe
 // ============================================================================
 
 const MODEL = 'claude-opus-5-5';
-const HISTORY_LIMIT = 40;
+const HISTORY_LIMIT = 120;            // 読み出す会話の件数（このうち、Claude にそのまま渡すのは長さで決める）
+const HISTORY_MAX_CHARS = 150_000;    // そのまま渡す会話の長さ（新しい方から。日本語はほぼ 1 文字 1 トークン）
+const HISTORY_MAX_CHARS_WORK = 80_000; // スライド作成・デザイン作成のとき（作業の記録が積み重なるので、会話は短めに）
+const OLDER_DIGEST_MAX = 15_000;      // それより古い会話の要点の長さ
 const MAX_TOOL_ROUNDS = 8;
 const MAX_TOOL_ROUNDS_DESIGN = 16;     // デザイン作成はボードを 1 枚ずつ作るので、やり取りの回数を多めに
 const CONTINUE_AFTER_MS = Number(process.env.AI_CHAT_CONTINUE_AFTER_MS) || 200_000; // デザイン作成で、この時間を過ぎたら続きを別の呼び出しにする（1 回 5 分まで。試験のときだけ環境変数で短くする）
@@ -110,21 +113,45 @@ async function send(req, res, user) {
 }
 
 /** 前のやり取りを Claude に渡す形に（同じ役が続くときはつなぐ） */
-function historyMessages(history) {
-  const out = [];
+//   会話は「件数」ではなく「長さ」で区切る。新しい方から maxChars まではそのまま渡し、
+//   それより古い会話は、質問と回答の書き出しだけを並べた「要点」にして返す（system に入れる）
+function historyMessages(history, { maxChars = HISTORY_MAX_CHARS } = {}) {
+  const items = [];
   for (const m of history) {
     if (m.role === 'assistant' && m.status !== 'done') continue;
     const files = (m.attachments || []).map((f) => f.name).filter(Boolean);
     const body = m.role === 'user'
       ? `（${m.author_name}）${m.content || ''}${files.length ? `\n（添付: ${files.join('、')}）` : ''}`
       : (m.content || '');
-    if (!body.trim()) continue;
+    if (body.trim()) items.push({ role: m.role, body, at: m.created_at });
+  }
+  // 新しい方から、長さの上限まで
+  let used = 0;
+  let cut = items.length;
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (used + items[i].body.length > maxChars && cut < items.length) break;
+    used += items[i].body.length;
+    cut = i;
+  }
+  const recent = items.slice(cut);
+  const older = items.slice(0, cut);
+  const out = [];
+  for (const it of recent) {
     const last = out[out.length - 1];
-    if (last && last.role === m.role) last.content.push({ type: 'text', text: body });
-    else out.push({ role: m.role, content: [{ type: 'text', text: body }] });
+    if (last && last.role === it.role) last.content.push({ type: 'text', text: it.body });
+    else out.push({ role: it.role, content: [{ type: 'text', text: it.body }] });
   }
   while (out.length && out[0].role !== 'user') out.shift();
-  return out;
+  // 古い会話の要点（新しい方を優先して上限まで）
+  let digest = '';
+  for (let i = older.length - 1; i >= 0; i--) {
+    const it = older[i];
+    const head = it.body.replace(/\s+/g, ' ').slice(0, it.role === 'user' ? 200 : 400);
+    const line = `- ${it.role === 'user' ? '質問' : 'Claude'}: ${head}${it.body.length > head.length ? '…' : ''}`;
+    if (digest.length + line.length > OLDER_DIGEST_MAX) break;
+    digest = `${line}\n${digest}`;
+  }
+  return { messages: out, olderDigest: digest.trim(), olderCount: older.length };
 }
 
 /** 添付ファイルを読む（PDF・画像はそのまま、Word・Excel などは本文を取り出す） */
@@ -187,7 +214,8 @@ const NOTES_OPEN = '<<<資料メモ';
 const NOTES_CLOSE = '資料メモ>>>';
 const NOTES_MAX = 12000;      // 1 回の資料メモの上限（文字）
 const NOTES_TOTAL_MAX = 24000; // 次の回答に渡す資料メモの合計の上限（文字。新しいものを優先）
-const LATER_READ_MAX = 2;      // 資料メモがあるチャットで、1 回の回答で新しく読む回数の上限
+const LATER_READ_MAX = 5;      // 資料メモがあるチャットで、1 回の回答で新しく読む回数の上限（「新しく調べて」と頼まれたときは数えない）
+const ASK_FRESH_RE = /新しく調べ|調べ直|調べなお|再検索|もう一度(調べ|確認|読)|読み直|最新の|改めて(調べ|確認)/;
 const NOTES_RULE = `
 【資料メモ】
 - 道具（案件・見積・書類・クライアント・売上粗利管理表・Google ドライブ・Gmail・ブラウザ）で何かを読んだときは、回答の本文のあとに、次の形で「資料メモ」を付けてください。アプリが保存し、このチャットの次の回答で使います（画面には出ません）。
@@ -201,7 +229,7 @@ const laterRule = (notes) => `
 ${notes}
 
 【2 回目以降の回答の決まり】
-- 上の資料メモと会話の内容をもとに答えてください。Gmail・Google ドライブ・CVアプリ・ブラウザの道具で読み直すのは、新しく調べるよう頼まれたときや、資料メモに無い情報がどうしても必要なときだけにしてください（1 回の回答で ${LATER_READ_MAX} 回まで）。`;
+- 上の資料メモと会話の内容をもとに答えてください。Gmail・Google ドライブ・CVアプリ・ブラウザの道具で読み直すのは、新しく調べるよう頼まれたときや、資料メモに無い情報がどうしても必要なときだけにしてください（1 回の回答で ${LATER_READ_MAX} 回まで。「新しく調べて」「調べ直して」と頼まれたときは回数に関係なく調べられます）。`;
 
 // 1 回の回答で、道具（Drive・Gmail・案件など）から読み込める量のめやす（文字数。日本語はほぼ 1 文字 1 トークン）
 const READ_BUDGET = 350_000;
@@ -393,6 +421,9 @@ const safeUrl = (u) => String(u || '').replace(/\(/g, '%28').replace(/\)/g, '%29
 
 async function answer({ admin, token, user, name, chat, text, files, web, slides = false, design = false, effort = 'medium', history, pendingId, continuation = null }) {
   const startedAt = Date.now();
+  let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 }; // トークン数（エラーのときも残す）
+  let roundsDone = 0; // Claude とやり取りした回数
+  let historyChars = 0; // そのまま渡した会話の長さ
   const used = [];
   const sources = []; // 参照した Web ページ（回答の下に番号付きで出す）
   const sourceNo = (url, title) => {
@@ -502,7 +533,8 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       ...fileContent,
       { type: 'text', text: `（${name}）${text || '添付資料を読んで要点をまとめてください。'}${notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : ''}` },
     ];
-    const messages = historyMessages(history);
+    const { messages, olderDigest, olderCount } = historyMessages(history, { maxChars: (slides || design) ? HISTORY_MAX_CHARS_WORK : HISTORY_MAX_CHARS });
+    historyChars = messages.reduce((sum, m) => sum + m.content.reduce((t, b) => t + (b.text || '').length, 0), 0);
     const last = messages[messages.length - 1];
     if (last && last.role === 'user') last.content.push(...userContent);
     else messages.push({ role: 'user', content: userContent });
@@ -515,14 +547,16 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       return out.trim();
     })();
     let laterReads = 0; // 資料メモがあるとき、この回答で新しく読んだ回数
-    const overLaterLimit = () => priorNotes && laterReads >= LATER_READ_MAX;
+    // 「新しく調べて」「調べ直して」などと頼まれたときは、読み直しの回数を数えない
+    const askedFresh = ASK_FRESH_RE.test(String(text || ''));
+    const overLaterLimit = () => priorNotes && !askedFresh && laterReads >= LATER_READ_MAX;
     const system = [
       { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${design ? designRuleText : NO_DESIGN_RULE}${continuation ? CONTINUE_RULE : ''}${priorNotes ? laterRule(priorNotes) : ''}${NOTES_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
+      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${design ? designRuleText : NO_DESIGN_RULE}${continuation ? CONTINUE_RULE : ''}${priorNotes ? laterRule(priorNotes) : ''}${NOTES_RULE}${olderDigest ? `\n\n【これより前の会話の要点（長いため、${olderCount} 件は書き出しだけ。詳しい内容は資料メモを使ってください）】\n${olderDigest}` : ''}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
     let readSize = 0; // この回答で道具から読み込んだ量（おおよその文字数）
-    let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
+    usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
     let final = null;
     let turn = []; // 今の回答の中身（Web の道具が長くかかって一度止まったときは、続きとつなぐ）
     if (slides) await setProgress('スライドを作っています（数分かかります）…');
@@ -541,6 +575,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
         thinking: { type: 'adaptive' }, output_config: { effort },
         ...(slides ? { container: { ...(containerId ? { id: containerId } : {}), skills: [{ type: 'anthropic', skill_id: 'pptx', version: 'latest' }] } } : {}),
       }, slides ? SLIDE_BETAS : []);
+      roundsDone = round + 1;
       if (resp.container?.id) containerId = resp.container.id;
       if (slides) {
         collectFileIds(resp.content, fileIds);
@@ -654,6 +689,8 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
         ? '読み込んだ資料と会話が長くなりすぎて、回答を作れませんでした（Claude が一度に読める量の上限を超えました）。\n読む資料を絞って頼み直すか、「新しいチャット」で必要な内容だけを伝えて頼み直してください。'
         : `回答を作れませんでした：${String(err?.message || err).slice(0, 300)}\nお手数ですが、もう一度送ってください。`,
       used_data: usedData(),
+      // 元のエラーを裏で残す（画面には出さない。次に上限に当たったとき、何トークンだったかなどを確かめるため）
+      usage: { ...usage, effort, error: String(err?.message || err).slice(0, 1500), error_status: err?.status || null, error_at: new Date().toISOString(), rounds: roundsDone, slides, design, history_chars: historyChars },
     }).eq('id', pendingId);
   }
 }
