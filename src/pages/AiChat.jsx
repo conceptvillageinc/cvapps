@@ -9,7 +9,7 @@ import { isImeEnter } from "@/lib/ime";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import MiniMarkdown from "@/components/aiChat/MiniMarkdown";
-import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check, Globe, ExternalLink, Presentation, Download } from "lucide-react";
+import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check, Globe, ExternalLink, Presentation, Download, NotebookText, ChevronDown, ChevronUp } from "lucide-react";
 
 // ============================================================================
 // AI チャット（Claude）
@@ -31,6 +31,7 @@ const plainAnswer = (m) => {
   return sources.length ? `${body}\n\n参照したページ：\n${sources.map((x, i) => `［${i + 1}］${x.title} ${x.url}`).join("\n")}` : body;
 };
 const EFFORT_LABEL = { low: "速さ優先", medium: "標準", high: "じっくり" };
+const notesOf = (m) => (m?.used_data || []).find((u) => u.kind === "notes")?.text || "";
 const deckOf = (m) => (m?.used_data || []).find((u) => u.kind === "deck") || null;
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
@@ -215,6 +216,8 @@ function ChatHeader({ chat, myRole, canWrite, users, onMembers, draftOpen, onTog
 
 function MessageList({ messages, canWrite, meId, onToDraft, onOpenDeck }) {
   const endRef = useRef(null);
+  const [openNotes, setOpenNotes] = useState(() => new Set()); // 資料メモを開いている回答
+  const toggleNotes = (mid) => setOpenNotes((cur) => { const n = new Set(cur); n.has(mid) ? n.delete(mid) : n.add(mid); return n; });
   const lastKey = `${messages.length}:${messages[messages.length - 1]?.status}:${messages[messages.length - 1]?.content?.length}`;
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [lastKey]);
   const copy = async (text) => { try { await navigator.clipboard.writeText(text); toast.success("コピーしました"); } catch { toast.error("コピーできませんでした"); } };
@@ -292,6 +295,21 @@ function MessageList({ messages, canWrite, meId, onToDraft, onOpenDeck }) {
                 <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                   <button type="button" onClick={() => copy(plainAnswer(m))} className="inline-flex items-center gap-1 hover:text-foreground"><Copy className="h-3 w-3" />コピー</button>
                   {canWrite && <button type="button" onClick={() => onToDraft(plainAnswer(m))} className="inline-flex items-center gap-1 hover:text-foreground" data-testid="ai-msg-to-draft"><ClipboardPaste className="h-3 w-3" />下書きに入れる</button>}
+                  {notesOf(m) && (
+                    <button type="button" onClick={() => toggleNotes(m.id)} className={`inline-flex items-center gap-1 hover:text-foreground ${openNotes.has(m.id) ? "text-amber-700" : ""}`} data-testid="ai-msg-notes-toggle" aria-expanded={openNotes.has(m.id)}>
+                      <NotebookText className="h-3 w-3" />資料メモを見る{openNotes.has(m.id) ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                  )}
+                </div>
+              )}
+              {notesOf(m) && openNotes.has(m.id) && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3" data-testid="ai-msg-notes">
+                  <div className="mb-1.5 flex items-start gap-2">
+                    <p className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-amber-900"><NotebookText className="h-3.5 w-3.5" />資料メモ</p>
+                    <p className="text-[10px] text-amber-800/80">Claude が読んだ資料の要点です。このチャットの次の回答から、これをもとに答えます</p>
+                    <button type="button" onClick={() => copy(notesOf(m))} className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-amber-900/70 hover:text-amber-900"><Copy className="h-3 w-3" />コピー</button>
+                  </div>
+                  <div className="text-[13px]"><MiniMarkdown text={notesOf(m)} /></div>
                 </div>
               )}
             </div>
