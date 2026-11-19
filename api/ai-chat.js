@@ -165,6 +165,31 @@ async function createMessageRaw(claude, params, extraBetas = []) {
 
 const EFFORTS = ['low', 'medium', 'high'];
 
+// ---------------------------------------------------------------------------
+// 資料メモ: Gmail・Google ドライブ・CVアプリなどを読んだ回答では、読んだ内容の要点を Claude に「資料メモ」として書いてもらい、
+//   回答の used_data に { kind: 'notes', text } として保存する。2 回目以降の回答は資料メモをもとに答え、読み直しは 2 回までにする
+//   （チャットの最初に情報をしっかり読み、あとは読み直さずに精度を保ったまま速く・安く答えるため）
+// ---------------------------------------------------------------------------
+const NOTES_OPEN = '<<<資料メモ';
+const NOTES_CLOSE = '資料メモ>>>';
+const NOTES_MAX = 12000;      // 1 回の資料メモの上限（文字）
+const NOTES_TOTAL_MAX = 24000; // 次の回答に渡す資料メモの合計の上限（文字。新しいものを優先）
+const LATER_READ_MAX = 2;      // 資料メモがあるチャットで、1 回の回答で新しく読む回数の上限
+const NOTES_RULE = `
+【資料メモ】
+- 道具（案件・見積・書類・クライアント・売上粗利管理表・Google ドライブ・Gmail・ブラウザ）で何かを読んだときは、回答の本文のあとに、次の形で「資料メモ」を付けてください。アプリが保存し、このチャットの次の回答で使います（画面には出ません）。
+${NOTES_OPEN}
+- 読んだ内容のうち、今後の回答に必要な事実・数字・日付・固有名詞・条件を箇条書きで（出典: ファイル名・メールの件名と日付・案件番号など を添える）
+- 推測は書かない。12,000 字以内
+${NOTES_CLOSE}
+- 道具で何も読まなかったときは、資料メモは付けないでください。`;
+const laterRule = (notes) => `
+【このチャットの資料メモ（これまでに読んだ資料の要点）】
+${notes}
+
+【2 回目以降の回答の決まり】
+- 上の資料メモと会話の内容をもとに答えてください。Gmail・Google ドライブ・CVアプリ・ブラウザの道具で読み直すのは、新しく調べるよう頼まれたときや、資料メモに無い情報がどうしても必要なときだけにしてください（1 回の回答で ${LATER_READ_MAX} 回まで）。`;
+
 // 1 回の回答で、道具（Drive・Gmail・案件など）から読み込める量のめやす（文字数。日本語はほぼ 1 文字 1 トークン）
 const READ_BUDGET = 350_000;
 /** 道具の結果の大きさ（おおよその文字数）。画像は 2,000、PDF はファイルの大きさから見積もる */
@@ -304,7 +329,8 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
     return i + 1;
   };
   let deck = null; // スライド作成で作った資料
-  const usedData = () => [...[...new Set(used)].map((l) => ({ label: l })), ...sources.map((x) => ({ kind: 'source', url: x.url, title: x.title })), ...(deck ? [deck] : [])];
+  let memoNote = null; // この回答で作った資料メモ
+  const usedData = () => [...[...new Set(used)].map((l) => ({ label: l })), ...sources.map((x) => ({ kind: 'source', url: x.url, title: x.title })), ...(deck ? [deck] : []), ...(memoNote ? [memoNote] : [])];
   const setProgress = (label) => admin.from('ai_chat_messages').update({ used_data: usedData(), content: label ? `（${label}）` : '' }).eq('id', pendingId);
   /** Web の道具を使った跡（検索の言葉・読んだページ）を拾う */
   const webNotes = [];
@@ -396,9 +422,18 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
     if (last && last.role === 'user') last.content.push(...userContent);
     else messages.push({ role: 'user', content: userContent });
 
+    // これまでの回答で作った資料メモ（新しいものを優先して上限まで）
+    const priorNotes = (() => {
+      const all = history.flatMap((m) => (m.used_data || []).filter((u) => u.kind === 'notes' && u.text).map((u) => u.text));
+      let out = '';
+      for (const t of all.reverse()) { if ((out + t).length > NOTES_TOTAL_MAX) break; out = `${t}\n\n${out}`; }
+      return out.trim();
+    })();
+    let laterReads = 0; // 資料メモがあるとき、この回答で新しく読んだ回数
+    const overLaterLimit = () => priorNotes && laterReads >= LATER_READ_MAX;
     const system = [
       { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
+      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${priorNotes ? laterRule(priorNotes) : ''}${NOTES_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
     let readSize = 0; // この回答で道具から読み込んだ量（おおよその文字数）
@@ -449,8 +484,10 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
 
           if (!web) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: 'Web 検索がオフのため、ページを開けません' }); continue; }
           if (!target || !allowedUrls.has(target)) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: '開けるのは、質問に書かれた URL か、検索結果に出てきた URL だけです' }); continue; }
+          if (overLaterLimit()) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: `このチャットでは、資料メモをもとに答えてください（新しく読むのは 1 回の回答で ${LATER_READ_MAX} 回までです）` }); continue; }
           if (browsed >= BROWSE_MAX) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: `ブラウザで開けるのは 1 回の回答で ${BROWSE_MAX} ページまでです` }); continue; }
           browsed += 1;
+          laterReads += 1;
           used.push(`ブラウザでページを確認（${hostOf(target)}）`);
           await setProgress('ブラウザでページを開いています…');
           try {
@@ -468,6 +505,8 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
         }
         const isGoogle = GOOGLE_TOOL_NAMES.has(block.name);
         const label = isGoogle ? googleToolLabel(block.name, block.input) : toolLabel(block.name, block.input);
+        if (overLaterLimit()) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: `このチャットでは、資料メモをもとに答えてください（新しく読むのは 1 回の回答で ${LATER_READ_MAX} 回までです）` }); continue; }
+        laterReads += 1;
         used.push(label);
         await setProgress(`${label}しています…`);
         try {
@@ -495,7 +534,16 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       deck = await storeDeckFiles({ admin, claude, fileIds: [...fileIds], chatId: chat.id, messageId: pendingId });
     }
     if (slides && !deck) webNotes.push('PowerPoint のファイルを受け取れませんでした。もう一度お試しください');
-    const reply = renderText(turn).trim()
+    // 回答の最後の資料メモを取り出して保存する（画面に出す本文からは外す）
+    let replyText = renderText(turn);
+    const memoAt = replyText.lastIndexOf(NOTES_OPEN);
+    if (memoAt >= 0) {
+      const closeAt = replyText.indexOf(NOTES_CLOSE, memoAt);
+      const memo = replyText.slice(memoAt + NOTES_OPEN.length, closeAt >= 0 ? closeAt : undefined).replace(/\[(\d+)\]\((https?:[^)]+)\)/g, '（$2）').trim();
+      replyText = (replyText.slice(0, memoAt) + (closeAt >= 0 ? replyText.slice(closeAt + NOTES_CLOSE.length) : '')).trim();
+      if (memo) { memoNote = { kind: 'notes', text: memo.slice(0, NOTES_MAX), at: new Date().toISOString() }; used.push('資料メモに保存'); }
+    }
+    const reply = replyText.trim()
       || (final?.stop_reason === 'max_tokens' ? '回答が長くなりすぎて途中で止まりました。質問を分けてお試しください。' : '回答を作れませんでした。もう一度お試しください。');
     await admin.from('ai_chat_messages').update({
       content: reply + (notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : '') + (webNotes.length ? `\n\n（${[...new Set(webNotes)].join(' / ')}）` : ''),
