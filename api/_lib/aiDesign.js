@@ -136,17 +136,19 @@ export function finishDesign(state) {
 }
 
 /** ボードの HTML を、書き出し・表示用の 1 枚のページにする（asset:ID を本物の URL に） */
-export function boardDocument(board, assetUrls = {}) {
+export function boardDocument(board, assetUrls = {}, { pdf = false } = {}) {
   const html = String(board.html || '').replace(/asset:([A-Za-z0-9_-]+)/g, (m, id) => assetUrls[id] || m);
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#fff}body{width:${board.width}px;height:${board.height}px;overflow:hidden;font-family:'Noto Sans JP',sans-serif}</style></head><body>${html}</body></html>`;
+  const page = pdf ? `@page{size:${board.width}px ${board.height}px;margin:0}html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}` : '';
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>${page}html,body{margin:0;padding:0;background:#fff}body{width:${board.width}px;height:${board.height}px;overflow:hidden;font-family:'Noto Sans JP',sans-serif}</style></head><body>${html}</body></html>`;
 }
 
 /**
- * ボードを PNG にする。boards の全部（ZIP）か 1 枚。
+ * ボードを PNG か PDF（ベクター）にする。boards の全部（ZIP）か 1 枚。
  *   通信は Google Fonts と、画像の URL（Storage の署名付き URL）だけを通す
- * @returns {Promise<{ png?: Buffer, zip?: Buffer }>}
+ * @returns {Promise<{ file: Buffer, ext: 'png'|'pdf'|'zip', name?: string }>}
  */
-export async function renderBoards(boards, assetUrls) {
+export async function renderBoards(boards, assetUrls, format = 'png') {
+  const pdf = format === 'pdf';
   const { launchBrowser } = await import('./browser.js');
   const allowedHosts = new Set(['fonts.googleapis.com', 'fonts.gstatic.com', ...Object.values(assetUrls).map((u) => { try { return new URL(u).hostname; } catch { return ''; } })]);
   const browser = await launchBrowser();
@@ -163,16 +165,19 @@ export async function renderBoards(boards, assetUrls) {
     const out = [];
     for (const b of boards) {
       await page.setViewport({ width: b.width, height: b.height, deviceScaleFactor: 1 });
-      await page.setContent(boardDocument(b, assetUrls), { waitUntil: 'networkidle0', timeout: 20000 }).catch(() => {});
+      await page.setContent(boardDocument(b, assetUrls, { pdf }), { waitUntil: 'networkidle0', timeout: 20000 }).catch(() => {});
       await page.evaluate(() => document.fonts?.ready).catch(() => {});
-      const png = Buffer.from(await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: b.width, height: b.height } }));
-      out.push({ name: `${String(out.length + 1).padStart(2, '0')}_${b.title.replace(/[\\/:*?"<>|]/g, '_')}.png`, png });
+      // PDF（ベクター）: 文字・図形はベクターのまま、フォントも埋め込まれる（Illustrator で開いて直せる）
+      const data = pdf
+        ? Buffer.from(await page.pdf({ width: `${b.width}px`, height: `${b.height}px`, printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 }, pageRanges: '1' }))
+        : Buffer.from(await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: b.width, height: b.height } }));
+      out.push({ name: `${String(out.length + 1).padStart(2, '0')}_${b.title.replace(/[\\/:*?"<>|]/g, '_')}.${pdf ? 'pdf' : 'png'}`, data });
     }
-    if (out.length === 1) return { png: out[0].png, name: out[0].name };
+    if (out.length === 1) return { file: out[0].data, name: out[0].name, ext: pdf ? 'pdf' : 'png' };
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
-    for (const f of out) zip.file(f.name, f.png);
-    return { zip: await zip.generateAsync({ type: 'nodebuffer' }) };
+    for (const f of out) zip.file(f.name, f.data);
+    return { file: await zip.generateAsync({ type: 'nodebuffer' }), ext: 'zip' };
   } finally {
     await browser.close().catch(() => {});
   }

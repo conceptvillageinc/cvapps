@@ -687,15 +687,16 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
   const cardW = Math.floor((boxW - 24 - (cols - 1) * 16) / cols);
   const [zoom, setZoom] = useState(null); // 大きく表示しているボード
   const [busy, setBusy] = useState(null);
-  const exportPng = async (boardId = null) => {
-    setBusy(boardId || "all");
+  // 書き出し: png（画像）／pdf（ベクター。Illustrator で文字・図形を直せる）。boardId が無ければ全部を ZIP
+  const exportFile = async (format, boardId = null) => {
+    setBusy(`${format}:${boardId || "all"}`);
     try {
-      const { data } = await db.functions.invoke("aiChat", { action: "render_design", message_id: design.messageId, ...(boardId ? { board_id: boardId } : {}) });
+      const { data } = await db.functions.invoke("aiChat", { action: "render_design", message_id: design.messageId, format, ...(boardId ? { board_id: boardId } : {}) });
       if (!data?.url) throw new Error(data?.error || "書き出せませんでした");
       const a = document.createElement("a");
       a.href = data.url; a.download = data.name || ""; document.body.appendChild(a); a.click(); a.remove();
     } catch (e) {
-      toast.error("PNG を書き出せませんでした: " + (e?.message || "不明なエラー"));
+      toast.error(`${format === "pdf" ? "PDF" : "PNG"} を書き出せませんでした: ` + (e?.message || "不明なエラー"));
     } finally {
       setBusy(null);
     }
@@ -716,8 +717,11 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
             </select>
           )}
         </div>
-        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => exportPng()} disabled={!!busy || design.pending} data-testid="ai-design-export-all">
-          {busy === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PNG を全部ダウンロード（ZIP）
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => exportFile("png")} disabled={!!busy || design.pending} data-testid="ai-design-export-all" title="全部のボードを PNG（画像）にして ZIP でダウンロード">
+          {busy === "png:all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PNG（全部・ZIP）
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => exportFile("pdf")} disabled={!!busy || design.pending} data-testid="ai-design-export-pdf" title="全部のボードを PDF（ベクター）にして ZIP でダウンロード。Illustrator で開くと、文字や図形を 1 つずつ直せます">
+          {busy === "pdf:all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PDF・Illustrator 用（全部・ZIP）
         </Button>
       </div>
       <div ref={boxRef} className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -732,9 +736,11 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
               <figcaption className="mb-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={b.title}>{b.title}</span>
                 <span>{b.width}×{b.height}</span>
-                <button type="button" onClick={() => exportPng(b.id)} disabled={!!busy || design.pending} className="inline-flex items-center gap-0.5 hover:text-foreground" title="この 1 枚を PNG でダウンロード">
-                  {busy === b.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}PNG
-                </button>
+                {["png", "pdf"].map((f) => (
+                  <button key={f} type="button" onClick={() => exportFile(f, b.id)} disabled={!!busy || design.pending} className="inline-flex items-center gap-0.5 hover:text-foreground" title={`この 1 枚を ${f === "pdf" ? "PDF（ベクター・Illustrator 用）" : "PNG（画像）"} でダウンロード`}>
+                    {busy === `${f}:${b.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}{f.toUpperCase()}
+                  </button>
+                ))}
               </figcaption>
               <button type="button" onClick={() => setZoom(b)} className="block rounded-md border shadow-sm hover:ring-2 hover:ring-primary/40" aria-label={`${b.title} を大きく表示`}>
                 <BoardView board={b} assetUrls={assetUrls} width={cardW - 2} />
@@ -755,7 +761,8 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
                 <BoardView board={zoom} assetUrls={assetUrls} width={Math.min(zoom.width, 1000, Math.round(window.innerHeight * 0.7 * zoom.width / zoom.height))} />
               </div>
               <DialogFooter>
-                <Button variant="outline" size="sm" className="gap-1" onClick={() => exportPng(zoom.id)} disabled={!!busy || design.pending}>{busy === zoom.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}この 1 枚を PNG でダウンロード</Button>
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => exportFile("png", zoom.id)} disabled={!!busy || design.pending}>{busy === `png:${zoom.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PNG でダウンロード</Button>
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => exportFile("pdf", zoom.id)} disabled={!!busy || design.pending}>{busy === `pdf:${zoom.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PDF（Illustrator 用）でダウンロード</Button>
               </DialogFooter>
             </>
           )}
