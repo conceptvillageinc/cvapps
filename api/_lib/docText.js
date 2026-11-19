@@ -122,7 +122,8 @@ export async function pdfText(bytes, { maxChars = PDF_TEXT_MAX } = {}) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const base = new URL('../../node_modules/pdfjs-dist/', import.meta.url);
   const doc = await pdfjs.getDocument({
-    data: new Uint8Array(bytes),
+    // pdf.js は渡したデータを持っていってしまう（元の ArrayBuffer が空になる）ので、写しを渡す
+    data: new Uint8Array(bytes).slice(),
     cMapUrl: new URL('cmaps/', base).pathname, cMapPacked: true, // 日本語の PDF（標準の CMap を使うもの）を読むため
     standardFontDataUrl: new URL('standard_fonts/', base).pathname,
     disableFontFace: true, isEvalSupported: false, useSystemFonts: false,
