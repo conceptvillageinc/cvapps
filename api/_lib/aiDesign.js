@@ -149,6 +149,8 @@ export function boardDocument(board, assetUrls = {}, { pdf = false } = {}) {
  */
 export async function renderBoards(boards, assetUrls, format = 'png') {
   const pdf = format === 'pdf';
+  const svg = format === 'svg';
+  const ext = pdf ? 'pdf' : svg ? 'svg' : 'png';
   const { launchBrowser } = await import('./browser.js');
   const allowedHosts = new Set(['fonts.googleapis.com', 'fonts.gstatic.com', ...Object.values(assetUrls).map((u) => { try { return new URL(u).hostname; } catch { return ''; } })]);
   const browser = await launchBrowser();
@@ -168,12 +170,14 @@ export async function renderBoards(boards, assetUrls, format = 'png') {
       await page.setContent(boardDocument(b, assetUrls, { pdf }), { waitUntil: 'networkidle0', timeout: 20000 }).catch(() => {});
       await page.evaluate(() => document.fonts?.ready).catch(() => {});
       // PDF（ベクター）: 文字・図形はベクターのまま、フォントも埋め込まれる（Illustrator で開いて直せる）
-      const data = pdf
-        ? Buffer.from(await page.pdf({ width: `${b.width}px`, height: `${b.height}px`, printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 }, pageRanges: '1' }))
-        : Buffer.from(await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: b.width, height: b.height } }));
-      out.push({ name: `${String(out.length + 1).padStart(2, '0')}_${b.title.replace(/[\\/:*?"<>|]/g, '_')}.${pdf ? 'pdf' : 'png'}`, data });
+      // SVG: 図形と文字（<text>）の SVG にする（Figma で開いて直せる。フォントは Figma の Google Fonts を使う）
+      let data;
+      if (pdf) data = Buffer.from(await page.pdf({ width: `${b.width}px`, height: `${b.height}px`, printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 }, pageRanges: '1' }));
+      else if (svg) data = Buffer.from(await boardToSvg(page), 'utf8');
+      else data = Buffer.from(await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: b.width, height: b.height } }));
+      out.push({ name: `${String(out.length + 1).padStart(2, '0')}_${b.title.replace(/[\\/:*?"<>|]/g, '_')}.${ext}`, data });
     }
-    if (out.length === 1) return { file: out[0].data, name: out[0].name, ext: pdf ? 'pdf' : 'png' };
+    if (out.length === 1) return { file: out[0].data, name: out[0].name, ext };
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
     for (const f of out) zip.file(f.name, f.data);
@@ -181,4 +185,35 @@ export async function renderBoards(boards, assetUrls, format = 'png') {
   } finally {
     await browser.close().catch(() => {});
   }
+}
+
+/** 開いているボードを SVG の文字列にする（dom-to-svg。画像は SVG の中に埋め込み、URL の期限切れで消えないようにする） */
+async function boardToSvg(page) {
+  const path = await import('node:path');
+  await page.addScriptTag({ path: path.join(process.cwd(), 'api', '_lib', 'vendor', 'dom-to-svg.iife.js') });
+  return page.evaluate(async () => {
+    // 斜めのしま模様（写真の仮置き）など、繰り返しのグラデーションは SVG にできないので、最初の色の塗りにする
+    for (const el of document.querySelectorAll('*')) {
+      const bg = getComputedStyle(el).backgroundImage || '';
+      if (!/repeating-(linear|radial)-gradient/.test(bg)) continue;
+      const first = bg.match(/rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}/);
+      el.style.backgroundImage = 'none';
+      if (first) el.style.backgroundColor = first[0];
+    }
+    const svgDoc = window.CVDomToSvg.elementToSVG(document.body);
+    const root = svgDoc.documentElement;
+    root.setAttribute('width', String(document.body.offsetWidth));
+    root.setAttribute('height', String(document.body.offsetHeight));
+    for (const img of [...root.querySelectorAll('image')]) {
+      const href = img.getAttribute('href') || img.getAttribute('xlink:href') || '';
+      if (!/^https?:/.test(href)) continue;
+      try {
+        const blob = await (await fetch(href)).blob();
+        const dataUrl = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(blob); });
+        img.setAttribute('href', dataUrl);
+        img.removeAttribute('xlink:href');
+      } catch { /* 読めない画像はそのまま */ }
+    }
+    return new XMLSerializer().serializeToString(svgDoc);
+  });
 }

@@ -696,7 +696,7 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
       const a = document.createElement("a");
       a.href = data.url; a.download = data.name || ""; document.body.appendChild(a); a.click(); a.remove();
     } catch (e) {
-      toast.error(`${format === "pdf" ? "PDF" : "PNG"} を書き出せませんでした: ` + (e?.message || "不明なエラー"));
+      toast.error(`${format.toUpperCase()} を書き出せませんでした: ` + (e?.message || "不明なエラー"));
     } finally {
       setBusy(null);
     }
@@ -723,6 +723,9 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
         <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => exportFile("pdf")} disabled={!!busy || design.pending} data-testid="ai-design-export-pdf" title="全部のボードを PDF（ベクター）にして ZIP でダウンロード。Illustrator で開くと、文字や図形を 1 つずつ直せます">
           {busy === "pdf:all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PDF・Illustrator 用（全部・ZIP）
         </Button>
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => exportFile("svg")} disabled={!!busy || design.pending} data-testid="ai-design-export-svg" title="全部のボードを SVG にして ZIP でダウンロード。Figma に読み込むと、文字や図形を 1 つずつ直せます">
+          {busy === "svg:all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}SVG・Figma 用（全部・ZIP）
+        </Button>
       </div>
       <div ref={boxRef} className="min-h-0 flex-1 overflow-y-auto p-3">
         {(design.notes || []).length > 0 && (
@@ -736,8 +739,8 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
               <figcaption className="mb-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={b.title}>{b.title}</span>
                 <span>{b.width}×{b.height}</span>
-                {["png", "pdf"].map((f) => (
-                  <button key={f} type="button" onClick={() => exportFile(f, b.id)} disabled={!!busy || design.pending} className="inline-flex items-center gap-0.5 hover:text-foreground" title={`この 1 枚を ${f === "pdf" ? "PDF（ベクター・Illustrator 用）" : "PNG（画像）"} でダウンロード`}>
+                {["png", "pdf", "svg"].map((f) => (
+                  <button key={f} type="button" onClick={() => exportFile(f, b.id)} disabled={!!busy || design.pending} className="inline-flex items-center gap-0.5 hover:text-foreground" title={`この 1 枚を ${{ pdf: "PDF（ベクター・Illustrator 用）", svg: "SVG（Figma 用）", png: "PNG（画像）" }[f]} でダウンロード`}>
                     {busy === `${f}:${b.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}{f.toUpperCase()}
                   </button>
                 ))}
@@ -763,6 +766,7 @@ function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
               <DialogFooter>
                 <Button variant="outline" size="sm" className="gap-1" onClick={() => exportFile("png", zoom.id)} disabled={!!busy || design.pending}>{busy === `png:${zoom.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PNG でダウンロード</Button>
                 <Button variant="outline" size="sm" className="gap-1" onClick={() => exportFile("pdf", zoom.id)} disabled={!!busy || design.pending}>{busy === `pdf:${zoom.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PDF（Illustrator 用）でダウンロード</Button>
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => exportFile("svg", zoom.id)} disabled={!!busy || design.pending}>{busy === `svg:${zoom.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}SVG（Figma 用）でダウンロード</Button>
               </DialogFooter>
             </>
           )}

@@ -278,7 +278,7 @@ async function storeDeckFiles({ admin, claude, fileIds, chatId, messageId }) {
 /** デザインのボードを PNG で書き出す（board_id があればその 1 枚、無ければ全部を ZIP）。{ url } */
 async function renderDesign(req, res, user) {
   const { message_id: messageId, board_id: boardId, format: formatRaw } = req.body || {};
-  const format = formatRaw === 'pdf' ? 'pdf' : 'png'; // png: 画像 / pdf: ベクター（Illustrator 用）
+  const format = ['pdf', 'svg'].includes(formatRaw) ? formatRaw : 'png'; // png: 画像 / pdf: ベクター（Illustrator 用）/ svg: Figma 用
   const admin = adminClient();
   const { data: msg } = await admin.from('ai_chat_messages').select('chat_id, used_data').eq('id', messageId).maybeSingle();
   if (!msg) { res.status(404).json({ error: 'デザインが見つかりません' }); return; }
@@ -296,7 +296,7 @@ async function renderDesign(req, res, user) {
   const safe = (t) => String(t || 'デザイン').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
   const fileName = out.ext === 'zip' ? `${safe(design.title)}_${format.toUpperCase()}.zip` : out.name;
   const path = `ai-chats/${msg.chat_id}/designs/${messageId}/${Date.now()}.${out.ext}`;
-  const contentType = { png: 'image/png', pdf: 'application/pdf', zip: 'application/zip' }[out.ext];
+  const contentType = { png: 'image/png', pdf: 'application/pdf', svg: 'image/svg+xml', zip: 'application/zip' }[out.ext];
   const { error } = await admin.storage.from('uploads').upload(path, out.file, { contentType, upsert: true });
   if (error) throw new Error(`書き出したファイルを保存できませんでした: ${error.message}`);
   const { data: signed } = await admin.storage.from('uploads').createSignedUrl(path, 600, { download: fileName });
