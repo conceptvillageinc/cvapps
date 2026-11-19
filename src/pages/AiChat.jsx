@@ -9,7 +9,7 @@ import { isImeEnter } from "@/lib/ime";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import MiniMarkdown from "@/components/aiChat/MiniMarkdown";
-import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check, Globe, ExternalLink, Presentation, Download, NotebookText, ChevronDown, ChevronUp } from "lucide-react";
+import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check, Globe, ExternalLink, Presentation, Download, NotebookText, ChevronDown, ChevronUp, Palette, Maximize2 } from "lucide-react";
 
 // ============================================================================
 // AI チャット（Claude）
@@ -32,6 +32,8 @@ const plainAnswer = (m) => {
 };
 const EFFORT_LABEL = { low: "速さ優先", medium: "標準", high: "じっくり" };
 const notesOf = (m) => (m?.used_data || []).find((u) => u.kind === "notes")?.text || "";
+const designOf = (m) => (m?.used_data || []).find((u) => u.kind === "design" && u.boards?.length) || null;
+const NOTE_COLOR = { yellow: "bg-yellow-100 border-yellow-300", orange: "bg-orange-100 border-orange-300", green: "bg-emerald-100 border-emerald-300", blue: "bg-sky-100 border-sky-300", pink: "bg-pink-100 border-pink-300", gray: "bg-slate-100 border-slate-300" };
 const deckOf = (m) => (m?.used_data || []).find((u) => u.kind === "deck") || null;
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
@@ -90,6 +92,29 @@ export default function AiChat() {
   const [deckId, setDeckId] = useState(null);
   const decks = useMemo(() => messages.filter((m) => m.role === "assistant" && m.status === "done" && deckOf(m)).map((m) => ({ messageId: m.id, at: m.updated_at || m.created_at, ...deckOf(m) })), [messages]);
   const openDeck = (mid) => { setDeckId(mid); setSide("slides"); if (!draftOpen) toggleDraft(); };
+  // デザイン（作りかけも含む。作っている途中のボードも見られる）
+  const [designId, setDesignId] = useState(null);
+  const designs = useMemo(() => messages.filter((m) => m.role === "assistant" && designOf(m)).map((m) => ({ messageId: m.id, at: m.updated_at || m.created_at, pending: m.status === "pending", ...designOf(m) })), [messages]);
+  const openDesign = (mid) => { setDesignId(mid); setSide("design"); if (!draftOpen) toggleDraft(); };
+  const lastDesignRef = useRef({ chat: null, id: null });
+  useEffect(() => {
+    if (!messagesLoaded) return;
+    const last = designs.filter((d) => !d.pending).pop()?.messageId || null;
+    const prev = lastDesignRef.current;
+    if (prev.chat === id && last && last !== prev.id) openDesign(last);
+    lastDesignRef.current = { chat: id, id: last };
+  }, [designs, id, messagesLoaded]);
+  // デザイン作成が時間切れで止まったら、質問した本人の画面から続きを頼む（同じ印には 1 回だけ）
+  const continuedRef = useRef(new Set());
+  useEffect(() => {
+    for (const m of messages) {
+      if (m.role !== "assistant" || m.status !== "pending" || m.author_id !== user?.id) continue;
+      const mark = (m.used_data || []).find((u) => u.kind === "continue");
+      if (!mark || continuedRef.current.has(mark.token)) continue;
+      continuedRef.current.add(mark.token);
+      db.functions.invoke("aiChat", { action: "continue", message_id: m.id }).catch(() => continuedRef.current.delete(mark.token));
+    }
+  }, [messages, user?.id]);
   // 新しい資料ができたら、右の欄にプレビューを開く（チャットを開いたときにすでにある資料では開かない）
   const lastDeckRef = useRef({ chat: null, id: null });
   useEffect(() => {
@@ -99,21 +124,22 @@ export default function AiChat() {
     if (prev.chat === id && last && last !== prev.id) openDeck(last);
     lastDeckRef.current = { chat: id, id: last };
   }, [decks, id, messagesLoaded]);
-  useEffect(() => { setSide("draft"); setDeckId(null); }, [id]);
-  const panelTabs = decks.length > 0 ? (
+  useEffect(() => { setSide("draft"); setDeckId(null); setDesignId(null); }, [id]);
+  const panelTabs = decks.length > 0 || designs.length > 0 ? (
     <div className="flex rounded-md border bg-background p-0.5 text-xs" data-testid="ai-side-tabs">
-      {[["draft", "下書き"], ["slides", `スライド（${decks.length}）`]].map(([k, label]) => (
+      {[["draft", "下書き"], ...(decks.length ? [["slides", `スライド（${decks.length}）`]] : []), ...(designs.length ? [["design", `デザイン（${designs.length}）`]] : [])].map(([k, label]) => (
         <button key={k} type="button" onClick={() => setSide(k)} className={`rounded px-2 py-0.5 ${side === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{label}</button>
       ))}
     </div>
   ) : null;
   const showSlides = draftOpen && side === "slides" && decks.length > 0;
+  const showDesign = draftOpen && side === "design" && designs.length > 0;
 
   return (
     <div className="-m-4 lg:-m-6 flex h-[calc(100dvh-3.5rem)] lg:h-[100dvh] min-h-0 bg-background" data-testid="ai-chat">
       {/* チャットの一覧 */}
       {/* スライドのプレビューを開いているあいだは、広い画面（1536px 以上）でだけ一覧を出す（会話の幅を確保する） */}
-      <aside className={`${id ? (showSlides ? "hidden 2xl:flex" : "hidden md:flex") : "flex"} w-full md:w-64 shrink-0 flex-col border-r bg-muted/30`}>
+      <aside className={`${id ? (showSlides || showDesign ? "hidden 2xl:flex" : "hidden md:flex") : "flex"} w-full md:w-64 shrink-0 flex-col border-r bg-muted/30`}>
         <div className="flex items-center gap-2 border-b px-3 py-3">
           <Bot className="h-5 w-5 text-primary" />
           <span className="whitespace-nowrap text-sm font-bold">AIチャット</span>
@@ -148,16 +174,17 @@ export default function AiChat() {
       ) : (
         <>
           <section className="flex min-w-0 flex-1 flex-col">
-            <ChatHeader chat={chat} myRole={myRole} canWrite={canWrite} users={users} onMembers={() => setMembersOpen(true)} draftOpen={draftOpen} onToggleDraft={toggleDraft} hasDecks={decks.length > 0}
+            <ChatHeader chat={chat} myRole={myRole} canWrite={canWrite} users={users} onMembers={() => setMembersOpen(true)} draftOpen={draftOpen} onToggleDraft={toggleDraft} hasDecks={decks.length > 0 || designs.length > 0}
               onDeleted={() => { qc.invalidateQueries({ queryKey: ["aiChats"] }); navigate("/ai-chat"); }} />
-            <MessageList messages={messages} canWrite={canWrite} meId={user?.id} onOpenDeck={openDeck}
+            <MessageList messages={messages} canWrite={canWrite} meId={user?.id} onOpenDeck={openDeck} onOpenDesign={openDesign}
               onToDraft={(text) => { if (!draftOpen) toggleDraft(); setTimeout(() => draftRef.current?.insert(text), 50); }} />
             <Composer chatId={chat.id} canWrite={canWrite} me={{ id: user?.id, name: myName }} optimisticRef={optimisticRef}
               onSent={() => { qc.invalidateQueries({ queryKey: ["aiChatMessages", chat.id] }); qc.invalidateQueries({ queryKey: ["aiChats"] }); }} />
           </section>
           {/* 下書きは、スライドを見ているあいだも書きかけが消えないよう、隠すだけにする */}
-          {draftOpen && <DraftPanel ref={draftRef} chat={chat} canWrite={canWrite} myName={myName} onClose={toggleDraft} tabs={panelTabs} hidden={showSlides} />}
+          {draftOpen && <DraftPanel ref={draftRef} chat={chat} canWrite={canWrite} myName={myName} onClose={toggleDraft} tabs={panelTabs} hidden={showSlides || showDesign} />}
           {showSlides && <SlidesPanel decks={decks} deckId={deckId} onPick={setDeckId} tabs={panelTabs} onClose={toggleDraft} />}
+          {showDesign && <DesignPanel designs={designs} designId={designId} onPick={setDesignId} tabs={panelTabs} onClose={toggleDraft} />}
           <MembersDialog open={membersOpen} onOpenChange={setMembersOpen} chat={chat} myRole={myRole} users={users} meId={user?.id}
             onLeft={() => { qc.invalidateQueries({ queryKey: ["aiChats"] }); navigate("/ai-chat"); }} />
         </>
@@ -214,7 +241,7 @@ function ChatHeader({ chat, myRole, canWrite, users, onMembers, draftOpen, onTog
   );
 }
 
-function MessageList({ messages, canWrite, meId, onToDraft, onOpenDeck }) {
+function MessageList({ messages, canWrite, meId, onToDraft, onOpenDeck, onOpenDesign }) {
   const endRef = useRef(null);
   const [openNotes, setOpenNotes] = useState(() => new Set()); // 資料メモを開いている回答
   const toggleNotes = (mid) => setOpenNotes((cur) => { const n = new Set(cur); n.has(mid) ? n.delete(mid) : n.add(mid); return n; });
@@ -241,6 +268,9 @@ function MessageList({ messages, canWrite, meId, onToDraft, onOpenDeck }) {
               {(m.used_data || []).some((u) => u.kind === "slides_on") && (
                 <span className={`mt-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${m.author_id === meId ? "bg-white/20" : "bg-background border"}`}><Presentation className="h-3 w-3" />スライド作成</span>
               )}
+              {(m.used_data || []).some((u) => u.kind === "design_on") && (
+                <span className={`mt-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${m.author_id === meId ? "bg-white/20" : "bg-background border"}`}><Palette className="h-3 w-3" />デザイン作成</span>
+              )}
               {(m.attachments || []).length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">{m.attachments.map((f) => <AttachmentChip key={f.path} f={f} light={m.author_id === meId} />)}</div>
               )}
@@ -257,6 +287,15 @@ function MessageList({ messages, canWrite, meId, onToDraft, onOpenDeck }) {
                 <p className="flex items-start gap-1.5 whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{m.content}</p>
               ) : (
                 <MiniMarkdown text={m.content} />
+              )}
+              {designOf(m) && (
+                <button type="button" onClick={() => onOpenDesign(m.id)} className="flex w-full max-w-md items-center gap-3 rounded-xl border bg-muted/40 px-3 py-2.5 text-left hover:bg-muted" data-testid="ai-msg-design">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pink-100 text-pink-700"><Palette className="h-4.5 w-4.5" /></span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{designOf(m).title}</span>
+                    <span className="block text-[11px] text-muted-foreground">デザイン・{designOf(m).boards.length} 枚{m.status === "pending" ? "（作成中）" : ""}・押すと右に表示</span>
+                  </span>
+                </button>
               )}
               {deckOf(m) && (
                 <button type="button" onClick={() => onOpenDeck(m.id)} className="flex w-full max-w-md items-center gap-3 rounded-xl border bg-muted/40 px-3 py-2.5 text-left hover:bg-muted" data-testid="ai-msg-deck">
@@ -339,6 +378,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
   const [sending, setSending] = useState(false);
   const [web, setWeb] = useState(false); // 「Web 検索」（オンのときだけ Web も調べる。料金がかかるので、ふだんはオフ）
   const [slides, setSlides] = useState(false); // 「スライド作成」（オンのときだけ PowerPoint を作る。数分かかる）
+  const [design, setDesign] = useState(false); // 「デザイン作成」（オンのときだけ、商品画像・バナーなどのボードを作る。スライド作成とはどちらか 1 つ）
   const [effort, setEffort] = useState("medium"); // 速さ優先（low）／標準（medium）／じっくり（high）。送るたびに選べる
   const inputRef = useRef(null);
   const addFiles = async (list) => {
@@ -369,8 +409,8 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
     const at = new Date().toISOString();
     const tmp = `sending-${Date.now()}`;
     const temps = [
-      { id: `${tmp}-q`, chat_id: chatId, role: "user", author_id: me.id, author_name: me.name, content: t, attachments: sent, status: "done", used_data: [...(web ? [{ kind: "web_on" }] : []), ...(slides ? [{ kind: "slides_on" }] : [])], created_at: at },
-      { id: `${tmp}-a`, chat_id: chatId, role: "assistant", content: slides ? "スライドを作っています（数分かかります）…" : "", status: "pending", usage: { effort }, created_at: at },
+      { id: `${tmp}-q`, chat_id: chatId, role: "user", author_id: me.id, author_name: me.name, content: t, attachments: sent, status: "done", used_data: [...(web ? [{ kind: "web_on" }] : []), ...(slides ? [{ kind: "slides_on" }] : []), ...(design ? [{ kind: "design_on" }] : [])], created_at: at },
+      { id: `${tmp}-a`, chat_id: chatId, role: "assistant", content: slides ? "スライドを作っています（数分かかります）…" : design ? "デザインを作っています（数分かかります）…" : "", status: "pending", usage: { effort }, created_at: at },
     ];
     const dropTemps = () => {
       optimisticRef.current = optimisticRef.current.filter((m) => !m.id.startsWith(tmp));
@@ -380,7 +420,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
     optimisticRef.current = [...optimisticRef.current, ...temps];
     qc.setQueryData(key, (cur) => [...(cur || []), ...temps]);
     try {
-      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: sent, web, slides, effort });
+      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: sent, web, slides, design, effort });
       optimisticRef.current = optimisticRef.current.filter((m) => !m.id.startsWith(tmp));
       onSent();
     } catch (e) {
@@ -412,7 +452,12 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
             className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${web ? "border-sky-300 bg-sky-100 text-sky-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
             <Globe className="h-3.5 w-3.5" />Web 検索{web ? "：オン" : ""}
           </button>
-          <button type="button" onClick={() => setSlides((v) => !v)} aria-pressed={slides} data-testid="ai-chat-slides-toggle"
+          <button type="button" onClick={() => { setDesign((v) => !v); setSlides(false); }} aria-pressed={design} data-testid="ai-chat-design-toggle"
+            title={design ? "デザイン作成：オン（押すとオフ）" : "デザイン作成：オフ（押すとオン。商品画像・バナー・チラシなどのデザインを作って右に表示します。数分かかります）"}
+            className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${design ? "border-pink-300 bg-pink-100 text-pink-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
+            <Palette className="h-3.5 w-3.5" />デザイン作成{design ? "：オン" : ""}
+          </button>
+          <button type="button" onClick={() => { setSlides((v) => !v); setDesign(false); }} aria-pressed={slides} data-testid="ai-chat-slides-toggle"
             title={slides ? "スライド作成：オン（押すとオフ）" : "スライド作成：オフ（押すとオン。PowerPoint を作って右にプレビューを出します。数分かかります）"}
             className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${slides ? "border-orange-300 bg-orange-100 text-orange-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
             <Presentation className="h-3.5 w-3.5" />スライド作成{slides ? "：オン" : ""}
@@ -596,6 +641,126 @@ function SlidesPanel({ decks, deckId, onPick, tabs, onClose }) {
           {!isLoading && total === 0 && !urls?.pdf && <p className="p-4 text-sm text-muted-foreground">プレビューを作れませんでした。「ダウンロード」で PowerPoint を開いてください。</p>}
         </div>
       </div>
+    </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// デザイン（ボードを並べたキャンバス）。ボードは scripts を動かさない iframe で表示する。
+//   ボードを押すと大きく表示。PNG で書き出し（1 枚・全部を ZIP）はサーバーのブラウザで作る
+// ---------------------------------------------------------------------------
+/** ボードの HTML を、表示用の 1 枚のページにする（asset:ID を画像の URL に置き換える） */
+function boardSrcDoc(board, assetUrls) {
+  const html = String(board.html || "").replace(/asset:([A-Za-z0-9_-]+)/g, (m, aid) => assetUrls[aid] || m);
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#fff}body{width:${board.width}px;height:${board.height}px;overflow:hidden;font-family:'Noto Sans JP',sans-serif}</style></head><body>${html}</body></html>`;
+}
+
+/** ボード 1 枚を、横幅 width に縮めて表示する */
+function BoardView({ board, assetUrls, width }) {
+  const scale = width / board.width;
+  return (
+    <div className="relative overflow-hidden bg-white" style={{ width, height: Math.round(board.height * scale) }}>
+      <iframe title={board.title} sandbox="" srcDoc={boardSrcDoc(board, assetUrls)} scrolling="no" tabIndex={-1}
+        style={{ width: board.width, height: board.height, border: 0, transform: `scale(${scale})`, transformOrigin: "0 0", pointerEvents: "none" }} />
+    </div>
+  );
+}
+
+function DesignPanel({ designs, designId, onPick, tabs, onClose }) {
+  const design = designs.find((d) => d.messageId === designId) || designs.filter((d) => !d.pending).pop() || designs[designs.length - 1];
+  const { data: assetUrls = {} } = useQuery({
+    queryKey: ["aiDesignAssets", design.messageId, (design.assets || []).map((a) => a.path).join(",")],
+    queryFn: async () => Object.fromEntries(await Promise.all((design.assets || []).map(async (a) => [a.id, await db.storage.signedUrl(a.path, 3600).catch(() => "")]))),
+    staleTime: 50 * 60 * 1000,
+  });
+  const boxRef = useRef(null);
+  const [boxW, setBoxW] = useState(600);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(() => setBoxW(el.clientWidth));
+    ro.observe(el);
+    setBoxW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const cols = boxW >= 640 ? 2 : 1;
+  const cardW = Math.floor((boxW - 24 - (cols - 1) * 16) / cols);
+  const [zoom, setZoom] = useState(null); // 大きく表示しているボード
+  const [busy, setBusy] = useState(null);
+  const exportPng = async (boardId = null) => {
+    setBusy(boardId || "all");
+    try {
+      const { data } = await db.functions.invoke("aiChat", { action: "render_design", message_id: design.messageId, ...(boardId ? { board_id: boardId } : {}) });
+      if (!data?.url) throw new Error(data?.error || "書き出せませんでした");
+      const a = document.createElement("a");
+      a.href = data.url; a.download = data.name || ""; document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) {
+      toast.error("PNG を書き出せませんでした: " + (e?.message || "不明なエラー"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <aside className="fixed inset-0 z-40 flex flex-col bg-background lg:static lg:z-auto lg:w-[52%] lg:max-w-[900px] lg:shrink-0 lg:border-l lg:bg-muted/20" data-testid="ai-chat-design">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
+        {tabs}
+        <button type="button" onClick={onClose} className="ml-auto text-muted-foreground hover:text-foreground" aria-label="閉じる"><X className="h-4 w-4" /></button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-b bg-background px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold" title={design.title}>{design.title}<span className="ml-1.5 text-xs font-normal text-muted-foreground">・{design.boards.length} 枚{design.pending ? "（作成中）" : ""}</span></p>
+          {designs.length > 1 && (
+            <select value={design.messageId} onChange={(e) => onPick(e.target.value)} className="mt-0.5 h-6 rounded border bg-background px-1 text-[11px]" data-testid="ai-design-version">
+              {designs.map((d, i) => <option key={d.messageId} value={d.messageId}>第 {i + 1} 版（{fmt(d.at)}）{d.pending ? "・作成中" : i === designs.length - 1 ? "・最新" : ""}</option>)}
+            </select>
+          )}
+        </div>
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => exportPng()} disabled={!!busy || design.pending} data-testid="ai-design-export-all">
+          {busy === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}PNG を全部ダウンロード（ZIP）
+        </Button>
+      </div>
+      <div ref={boxRef} className="min-h-0 flex-1 overflow-y-auto p-3">
+        {(design.notes || []).length > 0 && (
+          <div className="mb-4 grid gap-2 sm:grid-cols-2" data-testid="ai-design-notes">
+            {design.notes.map((n, i) => <p key={i} className={`whitespace-pre-wrap rounded-md border p-2.5 text-[12px] leading-relaxed text-slate-800 shadow-sm ${NOTE_COLOR[n.color] || NOTE_COLOR.yellow}`}>{n.text}</p>)}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-4">
+          {design.boards.map((b) => (
+            <figure key={b.id} className="m-0" style={{ width: cardW }} data-testid="ai-design-board">
+              <figcaption className="mb-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={b.title}>{b.title}</span>
+                <span>{b.width}×{b.height}</span>
+                <button type="button" onClick={() => exportPng(b.id)} disabled={!!busy || design.pending} className="inline-flex items-center gap-0.5 hover:text-foreground" title="この 1 枚を PNG でダウンロード">
+                  {busy === b.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}PNG
+                </button>
+              </figcaption>
+              <button type="button" onClick={() => setZoom(b)} className="block rounded-md border shadow-sm hover:ring-2 hover:ring-primary/40" aria-label={`${b.title} を大きく表示`}>
+                <BoardView board={b} assetUrls={assetUrls} width={cardW - 2} />
+              </button>
+            </figure>
+          ))}
+        </div>
+      </div>
+      <Dialog open={!!zoom} onOpenChange={(o) => !o && setZoom(null)}>
+        <DialogContent className="max-w-[min(96vw,1100px)]">
+          {zoom && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base"><Maximize2 className="h-4 w-4" />{zoom.title}<span className="text-xs font-normal text-muted-foreground">{zoom.width}×{zoom.height}</span></DialogTitle>
+                <DialogDescription className="text-xs">直したいところは、チャットで「{zoom.title} の見出しをもっと大きく」のように頼んでください</DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-center overflow-auto">
+                <BoardView board={zoom} assetUrls={assetUrls} width={Math.min(zoom.width, 1000, Math.round(window.innerHeight * 0.7 * zoom.width / zoom.height))} />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => exportPng(zoom.id)} disabled={!!busy || design.pending}>{busy === zoom.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}この 1 枚を PNG でダウンロード</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

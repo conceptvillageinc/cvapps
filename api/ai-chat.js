@@ -2,6 +2,9 @@ import { waitUntil } from '@vercel/functions';
 import { requireMember, requirePost, adminClient, userClient, bearerToken } from './_lib/guard.js';
 // Claude の SDK・資料を読む部品・CVアプリの情報を読む道具は、回答を作るとき（返事をしたあと）に読み込む。
 // 送信してから画面に返事をするまでを短くするため（サーバーが止まっていたあとの最初の 1 回が特に速くなる）
+import { DESIGN_TOOLS, DESIGN_TOOL_NAMES, designRules, startDesign, applyDesignTool, designLabel, finishDesign, renderBoards } from './_lib/aiDesign.js';
+import crypto from 'node:crypto';
+
 const lazy = () => Promise.all([import('./_lib/claude.js'), import('./_lib/docText.js'), import('./_lib/aiChatTools.js'), import('./_lib/googleTools.js')])
   .then(([c, d, t, g]) => ({ ...c, ...d, ...t, ...g }));
 
@@ -21,6 +24,12 @@ const lazy = () => Promise.all([import('./_lib/claude.js'), import('./_lib/docTe
 const MODEL = 'claude-opus-5-5';
 const HISTORY_LIMIT = 40;
 const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_ROUNDS_DESIGN = 16;     // デザイン作成はボードを 1 枚ずつ作るので、やり取りの回数を多めに
+const CONTINUE_AFTER_MS = Number(process.env.AI_CHAT_CONTINUE_AFTER_MS) || 200_000; // デザイン作成で、この時間を過ぎたら続きを別の呼び出しにする（1 回 5 分まで。試験のときだけ環境変数で短くする）
+const NO_DESIGN_RULE = `
+【デザイン作成はオフです】商品画像・バナー・チラシなどのデザインを頼まれたら、構成と文案を文章で作り、最後に「入力欄の「デザイン作成」をオンにして送ると、デザインのボードを作って右側に表示できます」とひとこと案内してください。`;
+const CONTINUE_RULE = `
+【続きの作業です】前の回答は時間の都合で途中まで作って止まりました。【今のデザイン】に、すでに作ったボードがあります。同じ依頼の残りのボードだけを作り、最後に set_design_info で名前と付せんを決めてください。回答の本文には、全体（前の分も含む）のボード一覧と確認点を書いてください。`;
 const MAX_FILES = 5;
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -45,6 +54,8 @@ export default async function handler(req, res) {
   try {
     if (action === 'send') return await send(req, res, user);
     if (action === 'save_to_drive') return await saveToDrive(req, res, user);
+    if (action === 'render_design') return await renderDesign(req, res, user);
+    if (action === 'continue') return await continueAnswer(req, res, user);
     res.status(400).json({ error: '不明な操作です' });
   } catch (err) {
     console.error('ai-chat failed', err);
@@ -55,7 +66,8 @@ export default async function handler(req, res) {
 async function send(req, res, user) {
   const { chat_id: chatId, message, attachments, web: webRaw, slides: slidesRaw, effort: effortRaw } = req.body || {};
   const web = webRaw === true; // 入力欄の「Web 検索」をオンにして送ったときだけ、Web を調べる
-  const slides = slidesRaw === true; // 「スライド作成」をオンにして送ったときだけ、PowerPoint を作る
+  const design = req.body?.design === true; // 「デザイン作成」をオンにして送ったときだけ、デザインのボードを作る
+  const slides = slidesRaw === true && !design; // 「スライド作成」をオンにして送ったときだけ、PowerPoint を作る（デザイン作成と同時には使わない）
   const effort = EFFORTS.includes(effortRaw) ? effortRaw : 'medium'; // 速さ優先（low）／標準（medium）／じっくり（high）
   const text = String(message || '').trim();
   const files = (Array.isArray(attachments) ? attachments : []).filter((f) => f && typeof f.path === 'string' && f.path.startsWith(`ai-chats/${chatId}/`)).slice(0, MAX_FILES);
@@ -78,7 +90,7 @@ async function send(req, res, user) {
   const now = Date.now();
   const { data: rows, error: e1 } = await admin.from('ai_chat_messages').insert([
     // 2 行で入れる項目をそろえる（片方にしかない項目は、もう片方で空になり保存できないため）
-    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, status: 'done', used_data: [...(web ? [{ kind: 'web_on' }] : []), ...(slides ? [{ kind: 'slides_on' }] : [])], usage: null, created_at: new Date(now).toISOString() },
+    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, status: 'done', used_data: [...(web ? [{ kind: 'web_on' }] : []), ...(slides ? [{ kind: 'slides_on' }] : []), ...(design ? [{ kind: 'design_on' }] : [])], usage: null, created_at: new Date(now).toISOString() },
     { chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', attachments: [], status: 'pending', used_data: [], usage: { effort }, created_at: new Date(now + 1).toISOString() },
   ], { defaultToNull: false }).select('id, role');
   if (e1) throw new Error(`質問を保存できませんでした: ${e1.message}`);
@@ -92,7 +104,7 @@ async function send(req, res, user) {
   if (!(history || []).length && chat.title === '新しいチャット' && text) patch.title = text.replace(/\s+/g, ' ').slice(0, 40);
   waitUntil(Promise.all([
     admin.from('ai_chats').update(patch).eq('id', chatId),
-    answer({ admin, token: bearerToken(req), user, name, chat, text, files, web, slides, effort, history: (history || []).reverse(), pendingId: pending.id }),
+    answer({ admin, token: bearerToken(req), user, name, chat, text, files, web, slides, design, effort, history: (history || []).reverse(), pendingId: pending.id }),
   ]));
 }
 
@@ -263,6 +275,62 @@ async function storeDeckFiles({ admin, claude, fileIds, chatId, messageId }) {
   return { kind: 'deck', title: pptx.name.replace(/\.pptx$/i, ''), pptx: { path: pptx.path, name: pptx.name, size: pptx.size }, pdf: pdf ? { path: pdf.path } : null, pages };
 }
 
+/** デザインのボードを PNG で書き出す（board_id があればその 1 枚、無ければ全部を ZIP）。{ url } */
+async function renderDesign(req, res, user) {
+  const { message_id: messageId, board_id: boardId } = req.body || {};
+  const admin = adminClient();
+  const { data: msg } = await admin.from('ai_chat_messages').select('chat_id, used_data').eq('id', messageId).maybeSingle();
+  if (!msg) { res.status(404).json({ error: 'デザインが見つかりません' }); return; }
+  const { data: member } = await admin.from('ai_chat_members').select('role').eq('chat_id', msg.chat_id).eq('user_id', user.id).maybeSingle();
+  if (!member) { res.status(403).json({ error: 'このチャットのメンバーではありません' }); return; }
+  const design = (msg.used_data || []).find((u) => u.kind === 'design');
+  const boards = (design?.boards || []).filter((b) => !boardId || b.id === boardId);
+  if (!boards.length) { res.status(404).json({ error: 'ボードが見つかりません' }); return; }
+  const assetUrls = {};
+  for (const a of design.assets || []) {
+    const { data } = await admin.storage.from('uploads').createSignedUrl(a.path, 600);
+    if (data?.signedUrl) assetUrls[a.id] = data.signedUrl;
+  }
+  const out = await renderBoards(boards, assetUrls);
+  const safe = (t) => String(t || 'デザイン').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
+  const fileName = out.png ? out.name : `${safe(design.title)}.zip`;
+  const path = `ai-chats/${msg.chat_id}/designs/${messageId}/${Date.now()}.${out.png ? 'png' : 'zip'}`;
+  const { error } = await admin.storage.from('uploads').upload(path, out.png || out.zip, { contentType: out.png ? 'image/png' : 'application/zip', upsert: true });
+  if (error) throw new Error(`書き出したファイルを保存できませんでした: ${error.message}`);
+  const { data: signed } = await admin.storage.from('uploads').createSignedUrl(path, 600, { download: fileName });
+  res.status(200).json({ url: signed?.signedUrl, name: fileName });
+}
+
+/** 時間切れで止まったデザイン作成の続きを作る（質問した本人の画面が呼ぶ。同時に 2 つ動かないよう、印を消せた 1 回だけが続ける） */
+async function continueAnswer(req, res, user) {
+  const { message_id: messageId } = req.body || {};
+  const admin = adminClient();
+  const { data: msg } = await admin.from('ai_chat_messages').select('*').eq('id', messageId).maybeSingle();
+  if (!msg || msg.role !== 'assistant') { res.status(404).json({ error: '回答が見つかりません' }); return; }
+  if (msg.author_id !== user.id) { res.status(403).json({ error: '続きは、質問した本人の画面から作ります' }); return; }
+  const marker = (msg.used_data || []).find((u) => u.kind === 'continue');
+  if (msg.status !== 'pending' || !marker) { res.status(200).json({ ok: false }); return; }
+  const rest = msg.used_data.filter((u) => u.kind !== 'continue');
+  const { data: took } = await admin.from('ai_chat_messages').update({ used_data: rest, content: '（デザインの続きを作っています…）' })
+    .eq('id', messageId).filter('used_data', 'cs', JSON.stringify([{ kind: 'continue', token: marker.token }])).select('id');
+  if (!took?.length) { res.status(200).json({ ok: false }); return; }
+  const [{ data: chat }, { data: before }] = await Promise.all([
+    admin.from('ai_chats').select('*').eq('id', msg.chat_id).maybeSingle(),
+    admin.from('ai_chat_messages').select('role, author_id, author_name, content, attachments, status, used_data, created_at')
+      .eq('chat_id', msg.chat_id).lt('created_at', msg.created_at).order('created_at', { ascending: false }).limit(HISTORY_LIMIT + 1),
+  ]);
+  const question = (before || []).find((m) => m.role === 'user');
+  if (!chat || !question) { await admin.from('ai_chat_messages').update({ status: 'error', content: '続きを作れませんでした（元の質問が見つかりません）' }).eq('id', messageId); res.status(200).json({ ok: false }); return; }
+  const history = (before || []).filter((m) => m !== question).reverse();
+  const flags = new Set((question.used_data || []).map((u) => u.kind));
+  res.status(202).json({ ok: true });
+  waitUntil(answer({
+    admin, token: bearerToken(req), user, name: question.author_name || user.email, chat, text: question.content || '', files: question.attachments || [],
+    web: flags.has('web_on'), slides: false, design: true, effort: msg.usage?.effort || 'medium', history, pendingId: messageId,
+    continuation: { design: rest.find((u) => u.kind === 'design') || null },
+  }));
+}
+
 /** Google ドライブに保存（本人の会社アカウントの Drive に、Google スライドとして）。{ url } を返す */
 async function saveToDrive(req, res, user) {
   const { message_id: messageId } = req.body || {};
@@ -320,7 +388,8 @@ const NO_WEB_RULE = `
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
 const safeUrl = (u) => String(u || '').replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/\s/g, '%20');
 
-async function answer({ admin, token, user, name, chat, text, files, web, slides = false, effort = 'medium', history, pendingId }) {
+async function answer({ admin, token, user, name, chat, text, files, web, slides = false, design = false, effort = 'medium', history, pendingId, continuation = null }) {
+  const startedAt = Date.now();
   const used = [];
   const sources = []; // 参照した Web ページ（回答の下に番号付きで出す）
   const sourceNo = (url, title) => {
@@ -330,7 +399,8 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
   };
   let deck = null; // スライド作成で作った資料
   let memoNote = null; // この回答で作った資料メモ
-  const usedData = () => [...[...new Set(used)].map((l) => ({ label: l })), ...sources.map((x) => ({ kind: 'source', url: x.url, title: x.title })), ...(deck ? [deck] : []), ...(memoNote ? [memoNote] : [])];
+  let designState = null; // デザイン作成の作業中のデザイン
+  const usedData = () => [...[...new Set(used)].map((l) => ({ label: l })), ...sources.map((x) => ({ kind: 'source', url: x.url, title: x.title })), ...(deck ? [deck] : []), ...(memoNote ? [memoNote] : []), ...(designState?.boards.length ? [finishDesign(designState)] : [])];
   const setProgress = (label) => admin.from('ai_chat_messages').update({ used_data: usedData(), content: label ? `（${label}）` : '' }).eq('id', pendingId);
   /** Web の道具を使った跡（検索の言葉・読んだページ）を拾う */
   const webNotes = [];
@@ -384,7 +454,19 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       ...((web || slides) ? ownTools.map(({ strict, ...t }) => t) : ownTools),
       ...(web ? webTools : []),
       ...(slides ? [{ type: 'code_execution_20260521', name: 'code_execution' }] : []),
+      ...(design ? DESIGN_TOOLS : []),
     ];
+    // デザイン作成: 前のデザイン（続きのときは作りかけ）と、使える画像（チャットに添付した画像）
+    let designRuleText = '';
+    if (design) {
+      const prior = continuation?.design || [...history].reverse().map((m) => (m.used_data || []).find((u) => u.kind === 'design')).find(Boolean) || null;
+      const assets = [...(prior?.assets || [])];
+      for (const f of files.filter((x) => /^image\//.test(x.type || '') || /\.(png|jpe?g|webp|gif)$/i.test(x.name || ''))) {
+        if (!assets.some((a) => a.path === f.path)) assets.push({ id: `A${assets.length + 1}`, path: f.path, name: f.name });
+      }
+      designState = startDesign(prior, assets);
+      designRuleText = designRules(prior, assets);
+    }
     const db = userClient(token);
     const { content: fileContent, notes } = await attachmentBlocks(admin, files, lib);
     // スライド作成のときは、添付の PowerPoint・Excel・Word を作業場所にも置く（デザインを合わせる・表の数字を使うため）
@@ -433,7 +515,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
     const overLaterLimit = () => priorNotes && laterReads >= LATER_READ_MAX;
     const system = [
       { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${priorNotes ? laterRule(priorNotes) : ''}${NOTES_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
+      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${design ? designRuleText : NO_DESIGN_RULE}${continuation ? CONTINUE_RULE : ''}${priorNotes ? laterRule(priorNotes) : ''}${NOTES_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
     let readSize = 0; // この回答で道具から読み込んだ量（おおよその文字数）
@@ -444,7 +526,13 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
     else if (web) await setProgress('考えています（Web も調べます）…');
     let containerId = null; // スライド作成の作業場所（続きの呼び出しでも同じ場所を使う）
     const fileIds = new Set();
-    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    const maxRounds = design ? MAX_TOOL_ROUNDS_DESIGN : MAX_TOOL_ROUNDS;
+    for (let round = 0; round <= maxRounds; round++) {
+      // デザイン作成で時間が足りなくなったら、ここまでを保存して、続きを別の呼び出しで作る（1 回の呼び出しは 5 分まで）
+      if (design && round > 0 && Date.now() - startedAt > CONTINUE_AFTER_MS) {
+        await admin.from('ai_chat_messages').update({ content: '（デザインの続きを作っています…）', used_data: [...usedData(), { kind: 'continue', token: crypto.randomUUID(), at: new Date().toISOString() }] }).eq('id', pendingId);
+        return;
+      }
       const resp = await createMessage(claude, {
         model: MODEL, max_tokens: 16000, system, messages, tools,
         thinking: { type: 'adaptive' }, output_config: { effort },
@@ -472,13 +560,19 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
         await setProgress(used.length ? `${used[used.length - 1]}しています…` : '調べています…');
         continue;
       }
-      if (resp.stop_reason !== 'tool_use' || round === MAX_TOOL_ROUNDS) { final = resp; break; }
+      if (resp.stop_reason !== 'tool_use' || round === maxRounds) { final = resp; break; }
       turn = [];
       // 道具を使う（同じ回答の中の道具はまとめて実行し、結果を 1 つのメッセージで返す）
       messages.push({ role: 'assistant', content: resp.content });
       const results = [];
       for (const block of resp.content) {
         if (block.type !== 'tool_use') continue;
+        if (DESIGN_TOOL_NAMES.has(block.name)) {
+          const out = design && designState ? applyDesignTool(designState, block.name, block.input || {}) : { error: 'デザイン作成がオフです' };
+          if (out.ok) { used.push(block.name === 'put_board' ? 'デザインを作成' : designLabel(block.name, block.input)); await setProgress(`${designLabel(block.name, block.input)}しています…（${designState.boards.length} 枚）`); }
+          results.push({ type: 'tool_result', tool_use_id: block.id, ...(out.error ? { is_error: true, content: out.error } : { content: out.message }) });
+          continue;
+        }
         if (block.name === 'browse_page') {
           const target = normUrl(block.input?.url);
 
