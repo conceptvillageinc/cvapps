@@ -236,7 +236,28 @@ const WEB_RULES = `
 【Web 検索がオンです】
 - Web の情報が必要なときは web_search・web_fetch を使ってください。URL が貼られていたら web_fetch で読んでください。
 - 検索の言葉に、社内の情報（見積・請求の金額、粗利、社内メモ、メールの本文、個人の名前・連絡先）を入れないでください。会社名・商品名・業界の言葉など、公開されている言葉だけで検索してください。
-- Web で調べた内容は、どのページの情報かが分かるように書いてください（引用元はアプリが番号付きで表示します）。`;
+- Web で調べた内容は、どのページの情報かが分かるように書いてください（引用元はアプリが番号付きで表示します）。
+- web_fetch で読めなかったとき（読み込みを断られた・中身が空・「読み込み中」しか無い）や、web_fetch が無いときは、browse_page でブラウザで開いて読んでください。`;
+
+// ブラウザで開いて読む道具（Claude の web_fetch で読めないページ用。サーバーのヘッドレス Chrome で開く）
+//   開けるのは、質問に書かれた URL か、この回答の検索結果に出てきた URL だけ（読んだページの指示で、ほかの URL に情報を送らないため）
+const BROWSE_TOOL = {
+  name: 'browse_page',
+  description: 'Web ページをブラウザで開いて、表示された本文とスクリーンショットを読む。web_fetch で読めなかったとき（読み込みを断られた・中身が空・開いたあとに中身を組み立てるページ）に使う。開けるのは、質問に書かれた URL か、検索結果に出てきた URL だけ。',
+  input_schema: { type: 'object', additionalProperties: false, properties: { url: { type: 'string', description: '開く URL（http/https）' } }, required: ['url'] },
+};
+const BROWSE_MAX = 3; // 1 回の回答でブラウザで開くのは 3 ページまで
+/** URL を比べやすい形に（# 以降を外し、末尾の / をそろえる） */
+const normUrl = (u) => {
+  try {
+    const x = new URL(String(u).trim());
+    x.hash = '';
+    x.hostname = x.hostname.toLowerCase();
+    if (x.pathname.length > 1) x.pathname = x.pathname.replace(/\/+$/, '');
+    return x.toString();
+  } catch { return ''; }
+};
+const URL_RE = /https?:\/\/[^\s<>"'）」』】、。]+/g;
 const NO_SLIDE_RULE = `
 【スライド作成はオフです】スライド・企画書・提案書・PowerPoint を頼まれたら、ページごとの見出しと本文（箇条書き）を文章で作ってください。最後に「入力欄の「スライド作成」をオンにして送ると、PowerPoint で作って右側にプレビューを出せます」とひとこと案内してください。`;
 const NO_WEB_RULE = `
@@ -259,8 +280,13 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
   /** Web の道具を使った跡（検索の言葉・読んだページ）を拾う */
   const webNotes = [];
   const fetched = []; // web_fetch で読んだページ（引用されていなくても、参照したページに出す）
+  const allowedUrls = new Set(); // browse_page で開いてよい URL（質問の中の URL・検索結果の URL）
+  const allowUrl = (u) => { const n = normUrl(u); if (n) allowedUrls.add(n); };
   const collectWeb = (blocks) => {
     for (const b of blocks || []) {
+      if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) b.content.forEach((r) => r?.url && allowUrl(r.url));
+      if (b.type === 'web_fetch_tool_result' && b.content?.url) allowUrl(b.content.url);
+      if (b.type === 'text') (b.citations || []).forEach((c) => c?.url && allowUrl(c.url));
       if (b.type === 'server_tool_use' && b.name === 'web_search') used.push(`Web を検索（${b.input?.query || ''}）`);
       if (b.type === 'server_tool_use' && b.name === 'web_fetch') used.push(`Web ページを確認（${hostOf(b.input?.url || '')}）`);
       if (b.type === 'web_fetch_tool_result' && b.content?.url && b.content?.type !== 'web_fetch_tool_result_error') fetched.push({ url: b.content.url, title: b.content?.content?.title });
@@ -292,9 +318,13 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
     // Web 検索をオンにしたときだけ、Web の道具を足す（引用元を出すため、自前の道具の strict は外す）
     // スライド作成のときは PowerPoint を作る道具（code_execution）を足す。Web 検索も一緒のときは、動的フィルタの無い版の Web の道具にする
     //   （code_execution と動的フィルタ付きの Web の道具を一緒にすると、作業場所が 2 つになって迷うため）
+    //   スライド作成と一緒のときは Web ページの読み込みに browse_page を使う（古い版の web_fetch は別の申請が要るため入れない）
     const webTools = slides
-      ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }, { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5 }]
-      : WEB_TOOLS;
+      ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }, BROWSE_TOOL]
+      : [...WEB_TOOLS, BROWSE_TOOL];
+    // 質問（これまでの質問も含む）に書かれた URL は、ブラウザで開いてよい
+    for (const m of [...history.filter((h) => h.role === 'user'), { content: text }]) (String(m.content || '').match(URL_RE) || []).forEach(allowUrl);
+    let browsed = 0;
     const tools = [
       ...((web || slides) ? ownTools.map(({ strict, ...t }) => t) : ownTools),
       ...(web ? webTools : []),
@@ -384,6 +414,28 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       const results = [];
       for (const block of resp.content) {
         if (block.type !== 'tool_use') continue;
+        if (block.name === 'browse_page') {
+          const target = normUrl(block.input?.url);
+
+          if (!web) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: 'Web 検索がオフのため、ページを開けません' }); continue; }
+          if (!target || !allowedUrls.has(target)) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: '開けるのは、質問に書かれた URL か、検索結果に出てきた URL だけです' }); continue; }
+          if (browsed >= BROWSE_MAX) { results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: `ブラウザで開けるのは 1 回の回答で ${BROWSE_MAX} ページまでです` }); continue; }
+          browsed += 1;
+          used.push(`ブラウザでページを確認（${hostOf(target)}）`);
+          await setProgress('ブラウザでページを開いています…');
+          try {
+            const { browsePage } = await import('./_lib/browser.js');
+            const page = await browsePage(target);
+            sourceNo(page.url || target, page.title);
+            results.push({ type: 'tool_result', tool_use_id: block.id, content: [
+              { type: 'text', text: `【ブラウザで開いたページ】${page.title || ''}\n${page.url || target}（HTTP ${page.status || '不明'}）\n\n${page.text || '（本文の文字はありませんでした。スクリーンショットを見てください）'}` },
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: page.jpeg.toString('base64') } },
+            ] });
+          } catch (e) {
+            results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: `ページを開けませんでした: ${e?.message || e}` });
+          }
+          continue;
+        }
         const isGoogle = GOOGLE_TOOL_NAMES.has(block.name);
         const label = isGoogle ? googleToolLabel(block.name, block.input) : toolLabel(block.name, block.input);
         used.push(label);
