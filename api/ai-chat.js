@@ -237,6 +237,8 @@ const WEB_RULES = `
 - Web の情報が必要なときは web_search・web_fetch を使ってください。URL が貼られていたら web_fetch で読んでください。
 - 検索の言葉に、社内の情報（見積・請求の金額、粗利、社内メモ、メールの本文、個人の名前・連絡先）を入れないでください。会社名・商品名・業界の言葉など、公開されている言葉だけで検索してください。
 - Web で調べた内容は、どのページの情報かが分かるように書いてください（引用元はアプリが番号付きで表示します）。`;
+const NO_SLIDE_RULE = `
+【スライド作成はオフです】スライド・企画書・提案書・PowerPoint を頼まれたら、ページごとの見出しと本文（箇条書き）を文章で作ってください。最後に「入力欄の「スライド作成」をオンにして送ると、PowerPoint で作って右側にプレビューを出せます」とひとこと案内してください。`;
 const NO_WEB_RULE = `
 【Web 検索はオフです】Web の最新情報が必要な質問には、入力欄の「Web 検索」をオンにして送り直すよう、ひとこと案内してください。`;
 
@@ -337,7 +339,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
 
     const system = [
       { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : ''}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
+      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
     let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
