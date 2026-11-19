@@ -146,12 +146,13 @@ export default function EstimateList() {
     setColumnFilters(prev => ({ ...prev, [key]: values }));
   };
 
+  // 検索: クライアント名・見積番号・件名・印刷の種類・用途。
+  //   濁点が別の文字になっている文字（Mac のファイル名などからのコピー）でも見つかるよう、NFC にそろえて比べる
+  const norm = (v) => String(v || "").normalize("NFC").toLowerCase();
+  const q = norm(search).trim();
   const filtered = estimates.filter(est => {
-    const matchSearch = !search ||
-      est.client_name?.toLowerCase().includes(search.toLowerCase()) ||
-      est.estimate_number?.toLowerCase().includes(search.toLowerCase()) ||
-      est.print_type?.toLowerCase().includes(search.toLowerCase()) ||
-      est.usage?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !q ||
+      [est.client_name, est.estimate_number, est.estimate_title, est.print_type, est.usage].some((v) => norm(v).includes(q));
     if (!matchSearch) return false;
     if (submissionFilter !== "all" && submissionOf(est) !== submissionFilter) return false;
 
@@ -308,7 +309,7 @@ export default function EstimateList() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="クライアント名・見積番号・商品名で検索"
+          placeholder="クライアント名・見積番号・件名で検索"
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="pl-9 pr-8"
