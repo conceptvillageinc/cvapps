@@ -115,7 +115,7 @@ function historyMessages(history) {
 }
 
 /** 添付ファイルを読む（PDF・画像はそのまま、Word・Excel などは本文を取り出す） */
-async function attachmentBlocks(admin, files, { fileBlock, extractText, isNativeFile }) {
+async function attachmentBlocks(admin, files, { fileBlock, extractText, isNativeFile, pdfBlocks }) {
   const content = [];
   const notes = [];
   let total = 0;
@@ -128,8 +128,9 @@ async function attachmentBlocks(admin, files, { fileBlock, extractText, isNative
     try {
       if (isNativeFile(blob.type || f.type, f.name)) {
         const type = blob.type && blob.type !== 'application/octet-stream' ? blob.type : (f.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : f.type);
-        content.push({ type: 'text', text: `【添付資料: ${f.name}】` });
-        content.push(fileBlock({ bytes, contentType: type }));
+        // PDF はページ数が多ければ文字だけにする（そのまま渡すと上限の 100 万トークンを超えることがある）
+        if (type === 'application/pdf') content.push(...await pdfBlocks(bytes, `【添付資料: ${f.name}】`));
+        else { content.push({ type: 'text', text: `【添付資料: ${f.name}】` }); content.push(fileBlock({ bytes, contentType: type })); }
       } else {
         content.push({ type: 'text', text: `【添付資料: ${f.name}】\n${await extractText(bytes, { type: f.type, name: f.name })}` });
       }
@@ -142,6 +143,16 @@ async function attachmentBlocks(admin, files, { fileBlock, extractText, isNative
 
 /** 拒否のときに別のモデルで答え直す（server-side fallback）。使えない環境ではそのまま送り直す */
 async function createMessage(claude, params, extraBetas = []) {
+  // まず古い道具の結果の自動片付けを付けて送る。この機能が使えない組み合わせのときは、外して送り直す
+  try {
+    return await createMessageRaw(claude, { ...params, context_management: CONTEXT_MANAGEMENT }, [...extraBetas, CONTEXT_BETA]);
+  } catch (err) {
+    if (err?.status === 400 && /context.?management|clear_tool_uses/i.test(String(err?.message || ''))) return createMessageRaw(claude, params, extraBetas);
+    throw err;
+  }
+}
+
+async function createMessageRaw(claude, params, extraBetas = []) {
   try {
     return await claude().beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01', ...extraBetas], fallbacks: 'default' });
   } catch (err) {
@@ -153,6 +164,24 @@ async function createMessage(claude, params, extraBetas = []) {
 }
 
 const EFFORTS = ['low', 'medium', 'high'];
+
+// 1 回の回答で、道具（Drive・Gmail・案件など）から読み込める量のめやす（文字数。日本語はほぼ 1 文字 1 トークン）
+const READ_BUDGET = 350_000;
+/** 道具の結果の大きさ（おおよその文字数）。画像は 2,000、PDF はファイルの大きさから見積もる */
+function contentSize(content) {
+  if (typeof content === 'string') return content.length;
+  return (content || []).reduce((sum, b) => sum + (b.type === 'text' ? (b.text || '').length
+    : b.type === 'image' ? 2000
+    : b.type === 'document' ? Math.max(3000, Math.round((b.source?.data?.length || 0) / 20))
+    : 0), 0);
+}
+
+// 長くなった会話の、古い道具の結果を Anthropic 側で自動で片付ける（context editing）。
+//   入力が 40 万トークンを超えたら、直近 4 回分を残して古い道具の結果を消す
+const CONTEXT_BETA = 'context-management-2025-06-27';
+const CONTEXT_MANAGEMENT = {
+  edits: [{ type: 'clear_tool_uses_20250919', trigger: { type: 'input_tokens', value: 400000 }, keep: { type: 'tool_uses', value: 4 }, clear_at_least: { type: 'input_tokens', value: 50000 } }],
+};
 
 // ---------------------------------------------------------------------------
 // スライド作成（Anthropic の PowerPoint スキル。Claude が作業用の場所で .pptx を作る）
@@ -372,6 +401,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
+    let readSize = 0; // この回答で道具から読み込んだ量（おおよその文字数）
     let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
     let final = null;
     let turn = []; // 今の回答の中身（Web の道具が長くかかって一度止まったときは、続きとつなぐ）
@@ -450,6 +480,14 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
           results.push({ type: 'tool_result', tool_use_id: block.id, is_error: true, content: `読み込みに失敗しました: ${e?.message || e}` });
         }
       }
+      // 1 回の回答で読み込む量に上限を設ける（上限 100 万トークンを超えて答えられなくなるのを防ぐ）
+      for (const r of results) {
+        const size = contentSize(r.content);
+        if (readSize + size > READ_BUDGET) {
+          r.content = `この回答で読み込める量の上限に達したため、この結果は読み込みませんでした（約 ${Math.round(size / 1000)} 千字分）。ここまでに読んだ内容で答えるか、資料を絞って調べ直してください。`;
+          r.is_error = true;
+        } else readSize += size;
+      }
       messages.push({ role: 'user', content: results });
     }
     if (slides && fileIds.size) {
@@ -467,7 +505,9 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
   } catch (err) {
     console.error('ai-chat answer failed', err);
     await admin.from('ai_chat_messages').update({
-      status: 'error', content: `回答を作れませんでした：${String(err?.message || err).slice(0, 300)}\nお手数ですが、もう一度送ってください。`,
+      status: 'error', content: /prompt is too long|too many tokens/i.test(String(err?.message || ''))
+        ? '読み込んだ資料と会話が長くなりすぎて、回答を作れませんでした（Claude が一度に読める量の上限を超えました）。\n読む資料を絞って頼み直すか、「新しいチャット」で必要な内容だけを伝えて頼み直してください。'
+        : `回答を作れませんでした：${String(err?.message || err).slice(0, 300)}\nお手数ですが、もう一度送ってください。`,
       used_data: usedData(),
     }).eq('id', pendingId);
   }

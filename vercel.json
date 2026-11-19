@@ -68,7 +68,7 @@
     "api/ai-chat.js": {
       "maxDuration": 300,
       "memory": 2048,
-      "includeFiles": "api/_lib/fonts/**"
+      "includeFiles": "{api/_lib/fonts/**,node_modules/pdfjs-dist/cmaps/**,node_modules/pdfjs-dist/standard_fonts/**}"
     },
     "api/print-specs.js": {
       "maxDuration": 60

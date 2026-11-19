@@ -108,3 +108,57 @@ export async function extractText(bytes, { type = '', name = '' } = {}) {
   return text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n…（長いため以降は省略）` : text;
 }
 
+
+// ---------------------------------------------------------------------------
+// PDF: ページ数が少なければ Claude にそのまま渡し（図・表も読める）、多ければ文字だけを取り出して渡す。
+//   長い PDF をそのまま渡すと、1 ページで数千トークンになり、AI チャットの上限（100 万トークン）を超えることがあるため
+// ---------------------------------------------------------------------------
+export const PDF_DIRECT_MAX_PAGES = 20;          // これ以下のページ数なら、そのまま渡す
+export const PDF_DIRECT_MAX_BYTES = 8 * 1024 * 1024;
+const PDF_TEXT_MAX = 40000;                      // 文字だけにするときの上限（文字）
+
+/** PDF のページ数と、文字（maxChars まで）を返す。読めない PDF は Error */
+export async function pdfText(bytes, { maxChars = PDF_TEXT_MAX } = {}) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const base = new URL('../../node_modules/pdfjs-dist/', import.meta.url);
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(bytes),
+    cMapUrl: new URL('cmaps/', base).pathname, cMapPacked: true, // 日本語の PDF（標準の CMap を使うもの）を読むため
+    standardFontDataUrl: new URL('standard_fonts/', base).pathname,
+    disableFontFace: true, isEvalSupported: false, useSystemFonts: false,
+  }).promise;
+  const out = [];
+  let total = 0;
+  let readPages = 0;
+  for (let i = 1; i <= doc.numPages && total < maxChars; i++) {
+    const page = await doc.getPage(i);
+    const tc = await page.getTextContent();
+    const line = tc.items.map((it) => `${it.str || ''}${it.hasEOL ? '\n' : ''}`).join('').replace(/[ \t]+\n/g, '\n').trim();
+    const block = `--- ${i} ページ ---\n${line}`;
+    out.push(block);
+    total += block.length;
+    readPages = i;
+  }
+  await doc.destroy().catch(() => {});
+  const text = out.join('\n\n');
+  return { pages: doc.numPages, readPages, text: text.length > maxChars ? `${text.slice(0, maxChars)}\n…（長いため以降は省略）` : text };
+}
+
+/**
+ * PDF を Claude に渡す形にする。ページ数が少なければ document ブロック、多ければ文字だけ。
+ * @returns {Promise<Array>} content ブロックの配列
+ */
+export async function pdfBlocks(bytes, label) {
+  let info = null;
+  try { info = await pdfText(bytes, { maxChars: PDF_TEXT_MAX }); } catch { /* ページ数が分からないときは大きさだけで決める */ }
+  const small = bytes.byteLength <= PDF_DIRECT_MAX_BYTES && (!info || info.pages <= PDF_DIRECT_MAX_PAGES);
+  if (small) {
+    return [
+      { type: 'text', text: label },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(bytes).toString('base64') } },
+    ];
+  }
+  if (!info) throw new Error('PDF が大きく、文字も取り出せませんでした');
+  const note = `（全 ${info.pages} ページと長いため、文字だけを読みました${info.readPages < info.pages ? `。${info.readPages} ページ目まで` : ''}。図や表の見た目が必要なら、ページを絞った PDF を添付してください）`;
+  return [{ type: 'text', text: `${label}${note}\n${info.text || '（文字がありませんでした。画像だけの PDF かもしれません）'}` }];
+}

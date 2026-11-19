@@ -1,5 +1,5 @@
 import { getAccessToken } from './gmail.js';
-import { extractText } from './docText.js';
+import { extractText, pdfBlocks } from './docText.js';
 
 // ============================================================================
 // AI チャットから、会社の Google ワークスペース（Drive・Gmail）を読む道具
@@ -151,7 +151,8 @@ export async function runGoogleTool(email, name, input = {}) {
     const bytes = await (await gfetch(token, `https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`, { raw: true })).arrayBuffer();
     const data = Buffer.from(bytes).toString('base64');
     if (meta.mimeType === 'application/pdf') {
-      return { blocks: [{ type: 'text', text: head }, { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }] };
+      // ページ数が多い PDF は文字だけにする（そのまま渡すと AI チャットの上限を超えることがある）
+      return { blocks: await pdfBlocks(bytes, head) };
     }
     if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(meta.mimeType)) {
       return { blocks: [{ type: 'text', text: head }, { type: 'image', source: { type: 'base64', media_type: meta.mimeType, data } }] };
