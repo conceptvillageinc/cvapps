@@ -9,7 +9,7 @@ import { isImeEnter } from "@/lib/ime";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import MiniMarkdown from "@/components/aiChat/MiniMarkdown";
-import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check, Globe, ExternalLink } from "lucide-react";
+import { Bot, Plus, Send, Loader2, Paperclip, X, Users, FileText, Copy, ClipboardPaste, Trash2, PanelRightOpen, PanelRightClose, Database, AlertTriangle, LogOut, Pencil, Check, Globe, ExternalLink, Presentation, Download } from "lucide-react";
 
 // ============================================================================
 // AI チャット（Claude）
@@ -30,6 +30,8 @@ const plainAnswer = (m) => {
   const body = String(m.content || "").replace(/\[(\d+)\]\(https?:\/\/[^)\s]+\)/g, "［$1］");
   return sources.length ? `${body}\n\n参照したページ：\n${sources.map((x, i) => `［${i + 1}］${x.title} ${x.url}`).join("\n")}` : body;
 };
+const EFFORT_LABEL = { low: "速さ優先", medium: "標準", high: "じっくり" };
+const deckOf = (m) => (m?.used_data || []).find((u) => u.kind === "deck") || null;
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
 
@@ -55,7 +57,7 @@ export default function AiChat() {
   const canWrite = myRole === "owner" || myRole === "editor";
 
   const optimisticRef = useRef([]);
-  const { data: messages = [] } = useQuery({
+  const { data: messages = [], isSuccess: messagesLoaded } = useQuery({
     queryKey: ["aiChatMessages", id],
     enabled: !!id,
     queryFn: async () => {
@@ -82,11 +84,35 @@ export default function AiChat() {
   const toggleDraft = () => setDraftOpen((v) => { if (wide()) { try { localStorage.setItem("cvapps:aiChatDraftOpen", v ? "0" : "1"); } catch { /* 覚えられなくても動く */ } } return !v; });
   const [membersOpen, setMembersOpen] = useState(false);
   const draftRef = useRef(null);
+  // 右の欄は「下書き」と「スライド」（作った資料のプレビュー）を切り替える
+  const [side, setSide] = useState("draft");
+  const [deckId, setDeckId] = useState(null);
+  const decks = useMemo(() => messages.filter((m) => m.role === "assistant" && m.status === "done" && deckOf(m)).map((m) => ({ messageId: m.id, at: m.updated_at || m.created_at, ...deckOf(m) })), [messages]);
+  const openDeck = (mid) => { setDeckId(mid); setSide("slides"); if (!draftOpen) toggleDraft(); };
+  // 新しい資料ができたら、右の欄にプレビューを開く（チャットを開いたときにすでにある資料では開かない）
+  const lastDeckRef = useRef({ chat: null, id: null });
+  useEffect(() => {
+    if (!messagesLoaded) return;
+    const last = decks[decks.length - 1]?.messageId || null;
+    const prev = lastDeckRef.current;
+    if (prev.chat === id && last && last !== prev.id) openDeck(last);
+    lastDeckRef.current = { chat: id, id: last };
+  }, [decks, id, messagesLoaded]);
+  useEffect(() => { setSide("draft"); setDeckId(null); }, [id]);
+  const panelTabs = decks.length > 0 ? (
+    <div className="flex rounded-md border bg-background p-0.5 text-xs" data-testid="ai-side-tabs">
+      {[["draft", "下書き"], ["slides", `スライド（${decks.length}）`]].map(([k, label]) => (
+        <button key={k} type="button" onClick={() => setSide(k)} className={`rounded px-2 py-0.5 ${side === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{label}</button>
+      ))}
+    </div>
+  ) : null;
+  const showSlides = draftOpen && side === "slides" && decks.length > 0;
 
   return (
     <div className="-m-4 lg:-m-6 flex h-[calc(100dvh-3.5rem)] lg:h-[100dvh] min-h-0 bg-background" data-testid="ai-chat">
       {/* チャットの一覧 */}
-      <aside className={`${id ? "hidden md:flex" : "flex"} w-full md:w-64 shrink-0 flex-col border-r bg-muted/30`}>
+      {/* スライドのプレビューを開いているあいだは、広い画面（1536px 以上）でだけ一覧を出す（会話の幅を確保する） */}
+      <aside className={`${id ? (showSlides ? "hidden 2xl:flex" : "hidden md:flex") : "flex"} w-full md:w-64 shrink-0 flex-col border-r bg-muted/30`}>
         <div className="flex items-center gap-2 border-b px-3 py-3">
           <Bot className="h-5 w-5 text-primary" />
           <span className="whitespace-nowrap text-sm font-bold">AIチャット</span>
@@ -121,14 +147,16 @@ export default function AiChat() {
       ) : (
         <>
           <section className="flex min-w-0 flex-1 flex-col">
-            <ChatHeader chat={chat} myRole={myRole} canWrite={canWrite} users={users} onMembers={() => setMembersOpen(true)} draftOpen={draftOpen} onToggleDraft={toggleDraft}
+            <ChatHeader chat={chat} myRole={myRole} canWrite={canWrite} users={users} onMembers={() => setMembersOpen(true)} draftOpen={draftOpen} onToggleDraft={toggleDraft} hasDecks={decks.length > 0}
               onDeleted={() => { qc.invalidateQueries({ queryKey: ["aiChats"] }); navigate("/ai-chat"); }} />
-            <MessageList messages={messages} canWrite={canWrite} meId={user?.id}
+            <MessageList messages={messages} canWrite={canWrite} meId={user?.id} onOpenDeck={openDeck}
               onToDraft={(text) => { if (!draftOpen) toggleDraft(); setTimeout(() => draftRef.current?.insert(text), 50); }} />
             <Composer chatId={chat.id} canWrite={canWrite} me={{ id: user?.id, name: myName }} optimisticRef={optimisticRef}
               onSent={() => { qc.invalidateQueries({ queryKey: ["aiChatMessages", chat.id] }); qc.invalidateQueries({ queryKey: ["aiChats"] }); }} />
           </section>
-          {draftOpen && <DraftPanel ref={draftRef} chat={chat} canWrite={canWrite} myName={myName} onClose={toggleDraft} />}
+          {/* 下書きは、スライドを見ているあいだも書きかけが消えないよう、隠すだけにする */}
+          {draftOpen && <DraftPanel ref={draftRef} chat={chat} canWrite={canWrite} myName={myName} onClose={toggleDraft} tabs={panelTabs} hidden={showSlides} />}
+          {showSlides && <SlidesPanel decks={decks} deckId={deckId} onPick={setDeckId} tabs={panelTabs} onClose={toggleDraft} />}
           <MembersDialog open={membersOpen} onOpenChange={setMembersOpen} chat={chat} myRole={myRole} users={users} meId={user?.id}
             onLeft={() => { qc.invalidateQueries({ queryKey: ["aiChats"] }); navigate("/ai-chat"); }} />
         </>
@@ -137,7 +165,7 @@ export default function AiChat() {
   );
 }
 
-function ChatHeader({ chat, myRole, canWrite, users, onMembers, draftOpen, onToggleDraft, onDeleted }) {
+function ChatHeader({ chat, myRole, canWrite, users, onMembers, draftOpen, onToggleDraft, onDeleted, hasDecks = false }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
@@ -178,14 +206,14 @@ function ChatHeader({ chat, myRole, canWrite, users, onMembers, draftOpen, onTog
         <Users className="h-3.5 w-3.5" /><span className="hidden sm:inline">メンバー</span>（{members.length}）
       </button>
       <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={onToggleDraft} data-testid="ai-chat-draft-toggle">
-        {draftOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}下書き
+        {draftOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}{hasDecks ? "下書き・スライド" : "下書き"}
       </Button>
       {myRole === "owner" && <button type="button" onClick={remove} className="text-muted-foreground hover:text-destructive" title="チャットを削除" aria-label="チャットを削除"><Trash2 className="h-4 w-4" /></button>}
     </div>
   );
 }
 
-function MessageList({ messages, canWrite, meId, onToDraft }) {
+function MessageList({ messages, canWrite, meId, onToDraft, onOpenDeck }) {
   const endRef = useRef(null);
   const lastKey = `${messages.length}:${messages[messages.length - 1]?.status}:${messages[messages.length - 1]?.content?.length}`;
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [lastKey]);
@@ -205,7 +233,10 @@ function MessageList({ messages, canWrite, meId, onToDraft }) {
               <p className={`text-[10px] ${m.author_id === meId ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{m.author_name}・{fmt(m.created_at)}</p>
               <p className="whitespace-pre-wrap text-sm">{m.content}</p>
               {(m.used_data || []).some((u) => u.kind === "web_on") && (
-                <span className={`mt-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${m.author_id === meId ? "bg-white/20" : "bg-background border"}`}><Globe className="h-3 w-3" />Web 検索あり</span>
+                <span className={`mt-1 mr-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${m.author_id === meId ? "bg-white/20" : "bg-background border"}`}><Globe className="h-3 w-3" />Web 検索あり</span>
+              )}
+              {(m.used_data || []).some((u) => u.kind === "slides_on") && (
+                <span className={`mt-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${m.author_id === meId ? "bg-white/20" : "bg-background border"}`}><Presentation className="h-3 w-3" />スライド作成</span>
               )}
               {(m.attachments || []).length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">{m.attachments.map((f) => <AttachmentChip key={f.path} f={f} light={m.author_id === meId} />)}</div>
@@ -216,13 +247,22 @@ function MessageList({ messages, canWrite, meId, onToDraft }) {
           <div key={m.id} className="flex gap-2.5" data-testid="ai-msg-assistant">
             <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-700"><Bot className="h-4 w-4" /></span>
             <div className="min-w-0 flex-1 space-y-1.5">
-              <p className="text-[10px] text-muted-foreground">Claude・{fmt(m.updated_at || m.created_at)}</p>
+              <p className="text-[10px] text-muted-foreground">Claude・{fmt(m.updated_at || m.created_at)}{EFFORT_LABEL[m.usage?.effort] && <span data-testid="ai-msg-effort">・{EFFORT_LABEL[m.usage.effort]}</span>}</p>
               {m.status === "pending" ? (
                 <p className="flex items-center gap-1.5 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{m.content || "考えています…"}</p>
               ) : m.status === "error" ? (
                 <p className="flex items-start gap-1.5 whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{m.content}</p>
               ) : (
                 <MiniMarkdown text={m.content} />
+              )}
+              {deckOf(m) && (
+                <button type="button" onClick={() => onOpenDeck(m.id)} className="flex w-full max-w-md items-center gap-3 rounded-xl border bg-muted/40 px-3 py-2.5 text-left hover:bg-muted" data-testid="ai-msg-deck">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700"><Presentation className="h-4.5 w-4.5" /></span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{deckOf(m).title}</span>
+                    <span className="block text-[11px] text-muted-foreground">PowerPoint{deckOf(m).pages?.length ? `・${deckOf(m).pages.length} ページ` : ""}・押すと右にプレビュー</span>
+                  </span>
+                </button>
               )}
               {(() => {
                 const sources = (m.used_data || []).filter((u) => u.kind === "source");
@@ -280,6 +320,8 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
   const [uploading, setUploading] = useState(0);
   const [sending, setSending] = useState(false);
   const [web, setWeb] = useState(false); // 「Web 検索」（オンのときだけ Web も調べる。料金がかかるので、ふだんはオフ）
+  const [slides, setSlides] = useState(false); // 「スライド作成」（オンのときだけ PowerPoint を作る。数分かかる）
+  const [effort, setEffort] = useState("medium"); // 速さ優先（low）／標準（medium）／じっくり（high）。送るたびに選べる
   const inputRef = useRef(null);
   const addFiles = async (list) => {
     const picked = Array.from(list || []).filter(Boolean);
@@ -309,8 +351,8 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
     const at = new Date().toISOString();
     const tmp = `sending-${Date.now()}`;
     const temps = [
-      { id: `${tmp}-q`, chat_id: chatId, role: "user", author_id: me.id, author_name: me.name, content: t, attachments: sent, status: "done", used_data: web ? [{ kind: "web_on" }] : [], created_at: at },
-      { id: `${tmp}-a`, chat_id: chatId, role: "assistant", content: "", status: "pending", created_at: at },
+      { id: `${tmp}-q`, chat_id: chatId, role: "user", author_id: me.id, author_name: me.name, content: t, attachments: sent, status: "done", used_data: [...(web ? [{ kind: "web_on" }] : []), ...(slides ? [{ kind: "slides_on" }] : [])], created_at: at },
+      { id: `${tmp}-a`, chat_id: chatId, role: "assistant", content: slides ? "スライドを作っています（数分かかります）…" : "", status: "pending", usage: { effort }, created_at: at },
     ];
     const dropTemps = () => {
       optimisticRef.current = optimisticRef.current.filter((m) => !m.id.startsWith(tmp));
@@ -320,7 +362,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
     optimisticRef.current = [...optimisticRef.current, ...temps];
     qc.setQueryData(key, (cur) => [...(cur || []), ...temps]);
     try {
-      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: sent, web });
+      await db.functions.invoke("aiChat", { action: "send", chat_id: chatId, message: t, attachments: sent, web, slides, effort });
       optimisticRef.current = optimisticRef.current.filter((m) => !m.id.startsWith(tmp));
       onSent();
     } catch (e) {
@@ -342,7 +384,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
           onPaste={(e) => { const fs = Array.from(e.clipboardData?.items || []).filter((it) => it.kind === "file").map((it) => it.getAsFile()).filter(Boolean); if (fs.length) { e.preventDefault(); addFiles(fs); } }}
           placeholder="質問を入力（Enter で送信・Shift+Enter で改行）。資料はドラッグ＆ドロップ・貼り付けでも添付できます"
           className="block w-full resize-none rounded-xl bg-transparent px-3 py-2.5 text-sm outline-none" data-testid="ai-chat-input" />
-        <div className="flex items-center gap-2 px-2 pb-2">
+        <div className="flex flex-wrap items-center gap-2 px-2 pb-2">
           <input ref={inputRef} type="file" multiple className="hidden" accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.docx,.doc,.pptx,.ppt,.txt" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
           <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted" disabled={uploading > 0}>
             {uploading > 0 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}添付
@@ -352,7 +394,16 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
             className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${web ? "border-sky-300 bg-sky-100 text-sky-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
             <Globe className="h-3.5 w-3.5" />Web 検索{web ? "：オン" : ""}
           </button>
-          <span className="hidden min-w-0 truncate lg:inline text-[10px] text-muted-foreground">{web ? "Web も調べて、参照したページを出します" : `PDF・画像・Excel・Word など（1 回 ${MAX_FILES} 個・${MAX_MB}MB まで）`}</span>
+          <button type="button" onClick={() => setSlides((v) => !v)} aria-pressed={slides} data-testid="ai-chat-slides-toggle"
+            title={slides ? "スライド作成：オン（押すとオフ）" : "スライド作成：オフ（押すとオン。PowerPoint を作って右にプレビューを出します。数分かかります）"}
+            className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${slides ? "border-orange-300 bg-orange-100 text-orange-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
+            <Presentation className="h-3.5 w-3.5" />スライド作成{slides ? "：オン" : ""}
+          </button>
+          <select value={effort} onChange={(e) => setEffort(e.target.value)} data-testid="ai-chat-effort" aria-label="考える深さ"
+            title="速さ優先：すぐ答える／標準：ふだんはこれ／じっくり：時間と料金は増えるが、よく考えて答える"
+            className={`h-7 shrink-0 rounded-md border bg-background px-1.5 text-xs ${effort === "medium" ? "text-muted-foreground" : "border-violet-300 text-violet-800"}`}>
+            {Object.entries(EFFORT_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
           <Button size="sm" className="ml-auto h-8 shrink-0 gap-1" onClick={send} disabled={sending || uploading > 0 || (!text.trim() && !files.length)} data-testid="ai-chat-send">
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}送信
           </Button>
@@ -365,7 +416,7 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
 // ---------------------------------------------------------------------------
 // 下書き（共同で直す）。入力が落ち着いたら保存（版 draft_version で、ほかの人の保存と重ならないか確かめる）
 // ---------------------------------------------------------------------------
-const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onClose }, ref) {
+const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onClose, tabs = null, hidden = false }, ref) {
   const qc = useQueryClient();
   const [text, setText] = useState(chat.draft_text || "");
   const [baseVersion, setBaseVersion] = useState(chat.draft_version || 0);
@@ -420,10 +471,9 @@ const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onCl
   const keepMine = () => { const v = conflict.version; setConflict(null); save(textRef.current, v); };
 
   return (
-    <aside className="fixed inset-0 z-40 flex flex-col bg-background lg:static lg:z-auto lg:w-[38%] lg:max-w-[560px] lg:shrink-0 lg:border-l lg:bg-muted/20" data-testid="ai-chat-draft">
+    <aside className={`${hidden ? "hidden" : "flex"} fixed inset-0 z-40 flex-col bg-background lg:static lg:z-auto lg:w-[38%] lg:max-w-[560px] lg:shrink-0 lg:border-l lg:bg-muted/20`} data-testid="ai-chat-draft">
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <FileText className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-semibold">下書き</span>
+        {tabs || <><FileText className="h-4 w-4 text-muted-foreground" /><span className="text-sm font-semibold">下書き</span></>}
         <span className="text-[10px] text-muted-foreground">
           {saving ? "保存中…" : dirty ? "入力中…" : chat.draft_updated_at ? <span className="inline-flex items-center gap-0.5"><Check className="h-3 w-3 text-emerald-600" />{fmt(chat.draft_updated_at)} {chat.draft_updated_by}</span> : "メンバーと一緒に直せます"}
         </span>
@@ -444,6 +494,107 @@ const DraftPanel = forwardRef(function DraftPanel({ chat, canWrite, myName, onCl
     </aside>
   );
 });
+
+// ---------------------------------------------------------------------------
+// スライド（作った PowerPoint のプレビュー）。ページの画像を縦に並べ、今のページ番号を出す。
+//   ダウンロード（.pptx）・Google ドライブに保存（本人の Drive に Google スライドとして）
+// ---------------------------------------------------------------------------
+function SlidesPanel({ decks, deckId, onPick, tabs, onClose }) {
+  const deck = decks.find((d) => d.messageId === deckId) || decks[decks.length - 1];
+  const { data: urls, isLoading } = useQuery({
+    queryKey: ["aiDeckUrls", deck.messageId, deck.pptx?.path],
+    queryFn: async () => {
+      const [pages, pptx, pdf] = await Promise.all([
+        Promise.all((deck.pages || []).map((p) => db.storage.signedUrl(p, 3600).catch(() => null))),
+        deck.pptx?.path ? db.storage.signedUrl(deck.pptx.path, 3600).catch(() => null) : null,
+        deck.pdf?.path ? db.storage.signedUrl(deck.pdf.path, 3600).catch(() => null) : null,
+      ]);
+      return { pages, pptx, pdf };
+    },
+    staleTime: 50 * 60 * 1000,
+  });
+  const scrollRef = useRef(null);
+  const [page, setPage] = useState(1);
+  const total = (deck.pages || []).length;
+  useEffect(() => { setPage(1); scrollRef.current?.scrollTo(0, 0); }, [deck.messageId]);
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const imgs = [...el.querySelectorAll("[data-page]")];
+    const top = el.scrollTop + el.clientHeight / 3; // 画面の上 3 分の 1 にあるページを「今のページ」とする
+    let cur = 1;
+    for (const img of imgs) if (img.offsetTop <= top) cur = Number(img.dataset.page);
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) cur = imgs.length || cur; // いちばん下まで来たら最後のページ
+    setPage(cur);
+  };
+  const [saving, setSaving] = useState(false);
+  const saveToDrive = async () => {
+    const w = window.open("", "_blank"); // 待っているあいだにポップアップが止められないよう、先に開いておく
+    setSaving(true);
+    try {
+      const { data } = await db.functions.invoke("aiChat", { action: "save_to_drive", message_id: deck.messageId });
+      if (!data?.url) throw new Error(data?.error || "保存先が分かりませんでした");
+      if (w) w.location.href = data.url; else window.open(data.url, "_blank");
+      toast.success("Google ドライブに保存しました（Google スライドで開きます）");
+    } catch (e) {
+      w?.close();
+      toast.error("Google ドライブに保存できませんでした: " + (e?.message || "不明なエラー"));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const downloadHref = urls?.pptx ? `${urls.pptx}${urls.pptx.includes("?") ? "&" : "?"}download=${encodeURIComponent(deck.pptx?.name || "資料.pptx")}` : null;
+
+  return (
+    <aside className="fixed inset-0 z-40 flex flex-col bg-background lg:static lg:z-auto lg:w-[48%] lg:max-w-[820px] lg:shrink-0 lg:border-l lg:bg-muted/20" data-testid="ai-chat-slides">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
+        {tabs}
+        <button type="button" onClick={onClose} className="ml-auto text-muted-foreground hover:text-foreground" aria-label="閉じる"><X className="h-4 w-4" /></button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-b bg-background px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold" title={deck.title}>{deck.title}<span className="ml-1.5 text-xs font-normal text-muted-foreground">・PPTX</span></p>
+          {decks.length > 1 && (
+            <select value={deck.messageId} onChange={(e) => onPick(e.target.value)} className="mt-0.5 h-6 rounded border bg-background px-1 text-[11px]" data-testid="ai-deck-version">
+              {decks.map((d, i) => <option key={d.messageId} value={d.messageId}>第 {i + 1} 版（{fmt(d.at)}）{i === decks.length - 1 ? "・最新" : ""}</option>)}
+            </select>
+          )}
+        </div>
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={saveToDrive} disabled={saving} data-testid="ai-deck-drive" title="自分の Google ドライブに Google スライドとして保存して開きます">
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GoogleDriveMark />}Google ドライブに保存
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" asChild disabled={!downloadHref}>
+          <a href={downloadHref || undefined} download={deck.pptx?.name || true} data-testid="ai-deck-download"><Download className="h-3.5 w-3.5" />ダウンロード</a>
+        </Button>
+      </div>
+      <div className="relative min-h-0 flex-1">
+        {total > 0 && <span className="pointer-events-none absolute right-4 top-3 z-10 rounded-md bg-slate-700/80 px-2.5 py-1 text-xs text-white" data-testid="ai-deck-page">{page} / {total} ページ</span>}
+        <div ref={scrollRef} onScroll={onScroll} className="h-full space-y-3 overflow-y-auto p-3">
+          {isLoading && <p className="flex items-center gap-1.5 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />プレビューを読み込んでいます…</p>}
+          {!isLoading && total > 0 && urls?.pages.map((u, i) => (
+            <img key={i} data-page={i + 1} src={u || undefined} alt={`${i + 1} ページ`} className="w-full rounded-md border bg-white shadow-sm" loading="lazy" />
+          ))}
+          {!isLoading && total === 0 && urls?.pdf && <iframe title="プレビュー" src={urls.pdf} className="h-full min-h-[70vh] w-full rounded-md border bg-white" />}
+          {!isLoading && total === 0 && !urls?.pdf && <p className="p-4 text-sm text-muted-foreground">プレビューを作れませんでした。「ダウンロード」で PowerPoint を開いてください。</p>}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/** Google ドライブの印（4 色の三角） */
+function GoogleDriveMark() {
+  return (
+    <svg viewBox="0 0 87.3 78" className="h-3.5 w-3.5" aria-hidden="true">
+      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
+      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47" />
+      <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335" />
+      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
+      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
+      <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
+    </svg>
+  );
+}
 
 function MembersDialog({ open, onOpenChange, chat, myRole, users, meId, onLeft }) {
   const qc = useQueryClient();

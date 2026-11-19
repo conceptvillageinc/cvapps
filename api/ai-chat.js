@@ -44,6 +44,7 @@ export default async function handler(req, res) {
   const { action } = req.body || {};
   try {
     if (action === 'send') return await send(req, res, user);
+    if (action === 'save_to_drive') return await saveToDrive(req, res, user);
     res.status(400).json({ error: '不明な操作です' });
   } catch (err) {
     console.error('ai-chat failed', err);
@@ -52,8 +53,10 @@ export default async function handler(req, res) {
 }
 
 async function send(req, res, user) {
-  const { chat_id: chatId, message, attachments, web: webRaw } = req.body || {};
+  const { chat_id: chatId, message, attachments, web: webRaw, slides: slidesRaw, effort: effortRaw } = req.body || {};
   const web = webRaw === true; // 入力欄の「Web 検索」をオンにして送ったときだけ、Web を調べる
+  const slides = slidesRaw === true; // 「スライド作成」をオンにして送ったときだけ、PowerPoint を作る
+  const effort = EFFORTS.includes(effortRaw) ? effortRaw : 'medium'; // 速さ優先（low）／標準（medium）／じっくり（high）
   const text = String(message || '').trim();
   const files = (Array.isArray(attachments) ? attachments : []).filter((f) => f && typeof f.path === 'string' && f.path.startsWith(`ai-chats/${chatId}/`)).slice(0, MAX_FILES);
   if (!chatId) { res.status(400).json({ error: 'チャットが指定されていません' }); return; }
@@ -65,7 +68,7 @@ async function send(req, res, user) {
   const [{ data: member }, { data: chat }, { data: history }] = await Promise.all([
     admin.from('ai_chat_members').select('role').eq('chat_id', chatId).eq('user_id', user.id).maybeSingle(),
     admin.from('ai_chats').select('*').eq('id', chatId).maybeSingle(),
-    admin.from('ai_chat_messages').select('role, author_name, content, attachments, status')
+    admin.from('ai_chat_messages').select('role, author_name, content, attachments, status, used_data')
       .eq('chat_id', chatId).order('created_at', { ascending: false }).limit(HISTORY_LIMIT),
   ]);
   if (!member || !['owner', 'editor'].includes(member.role)) { res.status(403).json({ error: 'このチャットに書き込む権限がありません' }); return; }
@@ -75,8 +78,8 @@ async function send(req, res, user) {
   const now = Date.now();
   const { data: rows, error: e1 } = await admin.from('ai_chat_messages').insert([
     // 2 行で入れる項目をそろえる（片方にしかない項目は、もう片方で空になり保存できないため）
-    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, status: 'done', used_data: web ? [{ kind: 'web_on' }] : [], created_at: new Date(now).toISOString() },
-    { chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', attachments: [], status: 'pending', used_data: [], created_at: new Date(now + 1).toISOString() },
+    { chat_id: chatId, role: 'user', author_id: user.id, author_name: name, content: text, attachments: files, status: 'done', used_data: [...(web ? [{ kind: 'web_on' }] : []), ...(slides ? [{ kind: 'slides_on' }] : [])], usage: null, created_at: new Date(now).toISOString() },
+    { chat_id: chatId, role: 'assistant', author_id: user.id, author_name: 'Claude', content: '', attachments: [], status: 'pending', used_data: [], usage: { effort }, created_at: new Date(now + 1).toISOString() },
   ], { defaultToNull: false }).select('id, role');
   if (e1) throw new Error(`質問を保存できませんでした: ${e1.message}`);
   const mine = rows.find((r) => r.role === 'user');
@@ -89,7 +92,7 @@ async function send(req, res, user) {
   if (!(history || []).length && chat.title === '新しいチャット' && text) patch.title = text.replace(/\s+/g, ' ').slice(0, 40);
   waitUntil(Promise.all([
     admin.from('ai_chats').update(patch).eq('id', chatId),
-    answer({ admin, token: bearerToken(req), user, name, chat, text, files, web, history: (history || []).reverse(), pendingId: pending.id }),
+    answer({ admin, token: bearerToken(req), user, name, chat, text, files, web, slides, effort, history: (history || []).reverse(), pendingId: pending.id }),
   ]));
 }
 
@@ -138,13 +141,90 @@ async function attachmentBlocks(admin, files, { fileBlock, extractText, isNative
 }
 
 /** 拒否のときに別のモデルで答え直す（server-side fallback）。使えない環境ではそのまま送り直す */
-async function createMessage(claude, params) {
+async function createMessage(claude, params, extraBetas = []) {
   try {
-    return await claude().beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
+    return await claude().beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01', ...extraBetas], fallbacks: 'default' });
   } catch (err) {
-    if (err?.status === 400 && /fallback/i.test(String(err?.message || ''))) return claude().messages.create(params);
+    if (err?.status === 400 && /fallback/i.test(String(err?.message || ''))) {
+      return extraBetas.length ? claude().beta.messages.create({ ...params, betas: extraBetas }) : claude().messages.create(params);
+    }
     throw err;
   }
+}
+
+const EFFORTS = ['low', 'medium', 'high'];
+
+// ---------------------------------------------------------------------------
+// スライド作成（Anthropic の PowerPoint スキル。Claude が作業用の場所で .pptx を作る）
+//   できたファイル（.pptx・.pdf・各ページの画像）は Files API から受け取り、Storage の
+//   ai-chats/{チャット}/decks/{回答}/ に置く。回答の used_data に { kind: 'deck', ... } として残す。
+// ---------------------------------------------------------------------------
+const SLIDE_BETAS = ['code-execution-2025-08-25'];
+const SLIDE_RULES = `
+【スライド作成がオンです】
+- 依頼に沿って PowerPoint（.pptx）を作ってください。pptx スキルを使い、16:9 で、見出し・本文・数字・表・グラフを読みやすく配置してください。
+- 会社の資料なので、右上か下に「concept-village inc.」と入れてください。添付に .pptx があれば、そのデザイン（色・フォント・配置）に合わせてください。
+- できあがったら、次の 3 種類を /mnt/user-data/outputs/ に保存してください（プレビューに使います）。
+  1. 資料本体: 「資料名.pptx」
+  2. 同じ内容の PDF: LibreOffice（soffice --headless --convert-to pdf）で書き出した「資料名.pdf」
+  3. 各ページの画像: PDF から幅 1600px の PNG を作り「page-01.png」「page-02.png」…
+- 書き出した画像を見て、文字のはみ出し・重なりがあれば直してから保存してください。
+- 回答の本文には、ファイルの置き場所やコードは書かず、資料の構成（各ページの見出し）と、確認が必要な点だけを短く書いてください。
+- 前の回答で作った資料を直す依頼のときは、直した版を新しく作ってください（ファイル名は同じでかまいません）。`;
+
+/** 返ってきた中身から、作られたファイルの ID を全部拾う（入れ子の file_id） */
+function collectFileIds(node, out = new Set()) {
+  if (Array.isArray(node)) node.forEach((n) => collectFileIds(n, out));
+  else if (node && typeof node === 'object') {
+    if (typeof node.file_id === 'string') out.add(node.file_id);
+    Object.values(node).forEach((v) => collectFileIds(v, out));
+  }
+  return out;
+}
+
+/** 作られたファイルを Files API から受け取り、Storage に置く。{ title, pptx, pdf, pages } */
+async function storeDeckFiles({ admin, claude, fileIds, chatId, messageId }) {
+  const saved = [];
+  for (const id of fileIds) {
+    try {
+      const meta = await claude().beta.files.retrieveMetadata(id, { betas: ['files-api-2025-04-14'] });
+      const name = String(meta?.filename || id).split('/').pop();
+      if (!/\.(pptx|pdf|png)$/i.test(name)) continue;
+      const resp = await claude().beta.files.download(id, { betas: ['files-api-2025-04-14'] });
+      const bytes = Buffer.from(await resp.arrayBuffer());
+      const ext = name.split('.').pop().toLowerCase();
+      const path = `ai-chats/${chatId}/decks/${messageId}/${Date.now()}-${saved.length}.${ext}`;
+      const type = ext === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : ext === 'pdf' ? 'application/pdf' : 'image/png';
+      const { error } = await admin.storage.from('uploads').upload(path, bytes, { contentType: type, upsert: true });
+      if (error) throw error;
+      saved.push({ name, ext, path, size: bytes.length });
+    } catch (e) {
+      console.error('deck file failed', id, e?.message);
+    }
+  }
+  const pptx = saved.filter((f) => f.ext === 'pptx').pop();
+  if (!pptx) return null;
+  const pdf = saved.filter((f) => f.ext === 'pdf').pop() || null;
+  const pages = saved.filter((f) => f.ext === 'png').sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })).map((f) => f.path);
+  return { kind: 'deck', title: pptx.name.replace(/\.pptx$/i, ''), pptx: { path: pptx.path, name: pptx.name, size: pptx.size }, pdf: pdf ? { path: pdf.path } : null, pages };
+}
+
+/** Google ドライブに保存（本人の会社アカウントの Drive に、Google スライドとして）。{ url } を返す */
+async function saveToDrive(req, res, user) {
+  const { message_id: messageId } = req.body || {};
+  const admin = adminClient();
+  const { data: msg } = await admin.from('ai_chat_messages').select('chat_id, used_data').eq('id', messageId).maybeSingle();
+  if (!msg) { res.status(404).json({ error: '資料が見つかりません' }); return; }
+  const { data: member } = await admin.from('ai_chat_members').select('role').eq('chat_id', msg.chat_id).eq('user_id', user.id).maybeSingle();
+  if (!member) { res.status(403).json({ error: 'このチャットのメンバーではありません' }); return; }
+  const deck = (msg.used_data || []).find((u) => u.kind === 'deck');
+  if (!deck?.pptx?.path) { res.status(404).json({ error: 'この回答には資料がありません' }); return; }
+  const { isCompanyAccount, uploadToDriveAsSlides } = await import('./_lib/googleTools.js');
+  if (!isCompanyAccount(user.email)) { res.status(403).json({ error: 'Google ドライブへの保存は、会社のアカウントでログインしている人だけが使えます' }); return; }
+  const { data: blob, error } = await admin.storage.from('uploads').download(deck.pptx.path);
+  if (error || !blob) { res.status(500).json({ error: '資料のファイルを読み込めませんでした' }); return; }
+  const out = await uploadToDriveAsSlides(user.email, { name: deck.title || '資料', bytes: Buffer.from(await blob.arrayBuffer()) });
+  res.status(200).json({ url: out.url });
 }
 
 // Web 検索・Web ページの読み込み（Anthropic のサーバーで動く道具）。1 回の質問で使う回数の上限
@@ -163,7 +243,7 @@ const NO_WEB_RULE = `
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
 const safeUrl = (u) => String(u || '').replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/\s/g, '%20');
 
-async function answer({ admin, token, user, name, chat, text, files, web, history, pendingId }) {
+async function answer({ admin, token, user, name, chat, text, files, web, slides = false, effort = 'medium', history, pendingId }) {
   const used = [];
   const sources = []; // 参照した Web ページ（回答の下に番号付きで出す）
   const sourceNo = (url, title) => {
@@ -171,7 +251,8 @@ async function answer({ admin, token, user, name, chat, text, files, web, histor
     if (i < 0) { sources.push({ url, title: String(title || '').trim() || hostOf(url) }); i = sources.length - 1; }
     return i + 1;
   };
-  const usedData = () => [...[...new Set(used)].map((l) => ({ label: l })), ...sources.map((x) => ({ kind: 'source', url: x.url, title: x.title }))];
+  let deck = null; // スライド作成で作った資料
+  const usedData = () => [...[...new Set(used)].map((l) => ({ label: l })), ...sources.map((x) => ({ kind: 'source', url: x.url, title: x.title })), ...(deck ? [deck] : [])];
   const setProgress = (label) => admin.from('ai_chat_messages').update({ used_data: usedData(), content: label ? `（${label}）` : '' }).eq('id', pendingId);
   /** Web の道具を使った跡（検索の言葉・読んだページ）を拾う */
   const webNotes = [];
@@ -207,9 +288,44 @@ async function answer({ admin, token, user, name, chat, text, files, web, histor
     const google = isCompanyAccount(user.email);
     const ownTools = google ? [...TOOLS, ...GOOGLE_TOOLS] : TOOLS;
     // Web 検索をオンにしたときだけ、Web の道具を足す（引用元を出すため、自前の道具の strict は外す）
-    const tools = web ? [...ownTools.map(({ strict, ...t }) => t), ...WEB_TOOLS] : ownTools;
+    // スライド作成のときは PowerPoint を作る道具（code_execution）を足す。Web 検索も一緒のときは、動的フィルタの無い版の Web の道具にする
+    //   （code_execution と動的フィルタ付きの Web の道具を一緒にすると、作業場所が 2 つになって迷うため）
+    const webTools = slides
+      ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }, { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5 }]
+      : WEB_TOOLS;
+    const tools = [
+      ...((web || slides) ? ownTools.map(({ strict, ...t }) => t) : ownTools),
+      ...(web ? webTools : []),
+      ...(slides ? [{ type: 'code_execution_20260521', name: 'code_execution' }] : []),
+    ];
     const db = userClient(token);
     const { content: fileContent, notes } = await attachmentBlocks(admin, files, lib);
+    // スライド作成のときは、添付の PowerPoint・Excel・Word を作業場所にも置く（デザインを合わせる・表の数字を使うため）
+    if (slides) {
+      const { toFile } = await import('@anthropic-ai/sdk');
+      for (const f of files.filter((x) => /\.(pptx|xlsx|docx)$/i.test(x.name || ''))) {
+        try {
+          const { data: blob } = await admin.storage.from('uploads').download(f.path);
+          if (!blob) continue;
+          const up = await claude().beta.files.upload({ file: await toFile(Buffer.from(await blob.arrayBuffer()), f.name) }, { betas: ['files-api-2025-04-14'] });
+          fileContent.push({ type: 'container_upload', file_id: up.id });
+        } catch (e) {
+          notes.push(`「${f.name}」を作業場所に置けませんでした: ${e.message}`);
+        }
+      }
+      // 前に作った資料（いちばん新しいもの）も置く。「3 枚目を短く」などの直しに使う
+      const prev = [...history].reverse().map((m) => (m.used_data || []).find((u) => u.kind === 'deck')).find(Boolean);
+      if (prev?.pptx?.path) {
+        try {
+          const { data: blob } = await admin.storage.from('uploads').download(prev.pptx.path);
+          if (blob) {
+            const up = await claude().beta.files.upload({ file: await toFile(Buffer.from(await blob.arrayBuffer()), prev.pptx.name || 'deck.pptx') }, { betas: ['files-api-2025-04-14'] });
+            fileContent.push({ type: 'text', text: `【前の回答で作った資料: ${prev.pptx.name}（直す依頼のときはこれをもとにしてください）】` });
+            fileContent.push({ type: 'container_upload', file_id: up.id });
+          }
+        } catch (e) { console.error('prev deck upload failed', e?.message); }
+      }
+    }
     const userContent = [
       ...fileContent,
       { type: 'text', text: `（${name}）${text || '添付資料を読んで要点をまとめてください。'}${notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : ''}` },
@@ -221,18 +337,29 @@ async function answer({ admin, token, user, name, chat, text, files, web, histor
 
     const system = [
       { type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
+      { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : ''}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
     let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
     let final = null;
     let turn = []; // 今の回答の中身（Web の道具が長くかかって一度止まったときは、続きとつなぐ）
-    if (web) await setProgress('考えています（Web も調べます）…');
+    if (slides) await setProgress('スライドを作っています（数分かかります）…');
+    else if (web) await setProgress('考えています（Web も調べます）…');
+    let containerId = null; // スライド作成の作業場所（続きの呼び出しでも同じ場所を使う）
+    const fileIds = new Set();
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const resp = await createMessage(claude, {
         model: MODEL, max_tokens: 16000, system, messages, tools,
-        thinking: { type: 'adaptive' }, output_config: { effort: 'medium' },
-      });
+        thinking: { type: 'adaptive' }, output_config: { effort },
+        ...(slides ? { container: { ...(containerId ? { id: containerId } : {}), skills: [{ type: 'anthropic', skill_id: 'pptx', version: 'latest' }] } } : {}),
+      }, slides ? SLIDE_BETAS : []);
+      if (resp.container?.id) containerId = resp.container.id;
+      if (slides) {
+        collectFileIds(resp.content, fileIds);
+        // 作業の様子（コードを動かした回数）を出す
+        const runs = resp.content.filter((b) => b.type === 'server_tool_use' && /code_execution/.test(b.name || '')).length;
+        if (runs) { used.push('PowerPoint を作成'); await setProgress(`スライドを作っています（作業 ${round + 1} 回目）…`); }
+      }
       usage = {
         input_tokens: usage.input_tokens + (resp.usage?.input_tokens || 0),
         output_tokens: usage.output_tokens + (resp.usage?.output_tokens || 0),
@@ -271,11 +398,16 @@ async function answer({ admin, token, user, name, chat, text, files, web, histor
       }
       messages.push({ role: 'user', content: results });
     }
+    if (slides && fileIds.size) {
+      await setProgress('できた資料を保存しています…');
+      deck = await storeDeckFiles({ admin, claude, fileIds: [...fileIds], chatId: chat.id, messageId: pendingId });
+    }
+    if (slides && !deck) webNotes.push('PowerPoint のファイルを受け取れませんでした。もう一度お試しください');
     const reply = renderText(turn).trim()
       || (final?.stop_reason === 'max_tokens' ? '回答が長くなりすぎて途中で止まりました。質問を分けてお試しください。' : '回答を作れませんでした。もう一度お試しください。');
     await admin.from('ai_chat_messages').update({
       content: reply + (notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : '') + (webNotes.length ? `\n\n（${[...new Set(webNotes)].join(' / ')}）` : ''),
-      status: 'done', usage: { ...usage, model: final?.model || MODEL, web_search_requests: usage.web_search_requests || 0 }, used_data: usedData(),
+      status: 'done', usage: { ...usage, model: final?.model || MODEL, effort, web_search_requests: usage.web_search_requests || 0 }, used_data: usedData(),
     }).eq('id', pendingId);
     await admin.from('ai_chats').update({ last_message_at: new Date().toISOString() }).eq('id', chat.id);
   } catch (err) {

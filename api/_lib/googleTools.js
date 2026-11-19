@@ -221,3 +221,27 @@ function attachmentNames(payload) {
   walk(payload);
   return out;
 }
+
+/**
+ * PowerPoint を、本人（会社アカウント）の Google ドライブに Google スライドとして保存する。{ id, url }
+ *   保存先はマイドライブの直下。AI チャットの「Google ドライブに保存」で使う
+ */
+export async function uploadToDriveAsSlides(email, { name, bytes }) {
+  if (!isCompanyAccount(email)) throw new Error(`Google ドライブへの保存は @${COMPANY_DOMAIN} のアカウントの人だけが使えます`);
+  const token = await getAccessToken(email, DRIVE_SCOPE);
+  const boundary = `cvapps${Date.now()}`;
+  const meta = JSON.stringify({ name: String(name || '資料').slice(0, 200), mimeType: 'application/vnd.google-apps.presentation' });
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation\r\n\r\n`),
+    Buffer.from(bytes),
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Google ドライブに保存できませんでした（${data.error?.message || res.status}）`);
+  return { id: data.id, url: data.webViewLink || `https://docs.google.com/presentation/d/${data.id}/edit` };
+}
