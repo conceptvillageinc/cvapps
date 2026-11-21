@@ -469,7 +469,7 @@ export default function SalesReport() {
           [`売上（${totalLabel}）`, annualTotal.sales, `目標 ${man(annual.target.sales)}`],
           [`粗利（${totalLabel}）`, annualTotal.gross, `目標 ${man(annual.target.gross)} / 必達 ${man(annual.target.gross_must)}`],
           ["粗利率", annualTotal.margin, null, "pct"],
-          ["必要粗利（目標まで）", annualTotal.need_gross, annualTotal.need_gross >= 0 ? "達成" : "不足"],
+          ["目標粗利との差", annualTotal.need_gross, annualTotal.need_gross >= 0 ? "達成" : "不足"],
         ].map(([label, value, sub, kind]) => (
           <Card key={label}>
             <CardContent className="pt-4 pb-3">
