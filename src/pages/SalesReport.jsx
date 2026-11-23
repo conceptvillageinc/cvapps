@@ -580,14 +580,19 @@ export default function SalesReport() {
                     ]],
                     ["計", [
                       ["売上", "total", "sales"], ["仕入", "total", "purchase"], ["粗利", "total", "gross"], ["粗利率", "total", "margin", "pct"],
-                      ["必要売上（目標）", "total", "need_sales"], ["必要粗利（目標）", "total", "need_gross"], ["必要粗利（必達）", "total", "need_gross_must"],
+                      // 「小計」は期の始まりの月からその月までの合計（例: 12 月なら 10〜12 月の合計）
+                      ["必要売上（目標／単月）", "total", "need_sales"], ["必要売上（目標／小計）", "total", "need_sales", "yen", false, true],
+                      ["必要粗利（目標／単月）", "total", "need_gross"], ["必要粗利（目標／小計）", "total", "need_gross", "yen", false, true],
+                      ["必要粗利（必達／単月）", "total", "need_gross_must"], ["必要粗利（必達／小計）", "total", "need_gross_must", "yen", false, true],
                     ]],
-                  ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false], i) => (
-                    <tr key={`${block}-${key}`} className={`border-t ${i === 0 ? "border-t-2 border-t-slate-300" : ""} ${block === "計" ? "bg-muted/30" : ""}`}>
+                  ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false, cum = false], i) => (
+                    <tr key={`${block}-${key}${cum ? "-cum" : ""}`} className={`border-t ${i === 0 ? "border-t-2 border-t-slate-300" : ""} ${block === "計" ? "bg-muted/30" : ""}`}>
                       <td className="px-1.5 py-1 font-medium text-muted-foreground whitespace-nowrap align-top">{i === 0 ? block : ""}</td>
                       <td className="px-1.5 py-1 leading-tight">{label}</td>
                       {rows.map((r, mi) => {
-                        const v = b === "total" ? totalOf(r)[key] : r[b][key];
+                        const v = cum
+                          ? rows.slice(0, mi + 1).reduce((sum, x) => sum + (Number(totalOf(x)[key]) || 0), 0)
+                          : b === "total" ? totalOf(r)[key] : r[b][key];
                         const isMargin = kind === "pct";
                         if (isSim && active && b === "forecast" && SIM_KEYS.includes(key)) {
                           return (
