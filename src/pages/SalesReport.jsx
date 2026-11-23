@@ -41,11 +41,11 @@ const man = (v) => `${Math.round(Number(v) / 10000).toLocaleString()}万`;
 const pct = (v) => (v === null || v === undefined ? "—" : `${(Number(v) * 100).toFixed(1)}%`);
 const noSpinner = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-function Cell({ v, kind = "yen", warn, ok, muted }) {
+function Cell({ v, kind = "yen", warn, ok, muted, strong }) {
   const text = kind === "pct" ? pct(v) : yen(v);
   const neg = kind === "yen" && Number(v) < 0;
   const cls = warn ? "text-red-700 font-medium" : ok ? "text-emerald-700 font-medium" : neg ? "text-red-700" : muted ? "text-muted-foreground" : "";
-  return <td className={`px-1 py-1 text-right tabular-nums whitespace-nowrap ${cls}`}>{text}</td>;
+  return <td className={`px-1 py-1 text-right tabular-nums whitespace-nowrap ${cls} ${strong ? "font-semibold" : ""}`}>{text}</td>;
 }
 
 /** 保存されているシミュレーションを { scenarios, active_id } の形にそろえる（初期版の「値だけ」の形も読む） */
@@ -581,14 +581,26 @@ export default function SalesReport() {
                     ["計", [
                       ["売上", "total", "sales"], ["仕入", "total", "purchase"], ["粗利", "total", "gross"], ["粗利率", "total", "margin", "pct"],
                       // 「小計」は期の始まりの月からその月までの合計（例: 12 月なら 10〜12 月の合計）
-                      ["必要売上（目標／単月）", "total", "need_sales"], ["必要売上（目標／小計）", "total", "need_sales", "yen", false, true],
-                      ["必要粗利（目標／単月）", "total", "need_gross"], ["必要粗利（目標／小計）", "total", "need_gross", "yen", false, true],
-                      ["必要粗利（必達／単月）", "total", "need_gross_must"], ["必要粗利（必達／小計）", "total", "need_gross_must", "yen", false, true],
+                      ["必要売上（目標）", "total", "need_sales", "yen", false, "month"], ["必要売上（目標）", "total", "need_sales", "yen", false, "cum"],
+                      ["必要粗利（目標）", "total", "need_gross", "yen", false, "month"], ["必要粗利（目標）", "total", "need_gross", "yen", false, "cum"],
+                      ["必要粗利（必達）", "total", "need_gross_must", "yen", false, "month"], ["必要粗利（必達）", "total", "need_gross_must", "yen", false, "cum"],
                     ]],
-                  ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false, cum = false], i) => (
-                    <tr key={`${block}-${key}${cum ? "-cum" : ""}`} className={`border-t ${i === 0 ? "border-t-2 border-t-slate-300" : ""} ${block === "計" ? "bg-muted/30" : ""}`}>
+                  ].map(([block, defs]) => defs.map(([label, b, key, kind = "yen", muted = false, pair = null], i) => {
+                    const cum = pair === "cum";
+                    // 単月と小計は 2 行で 1 組: 組の上に線、組の中は点線。小計の行は薄い青で、ラベルは字下げ
+                    const rowCls = i === 0 ? "border-t-2 border-t-slate-300"
+                      : pair === "month" ? "border-t border-t-slate-300"
+                      : cum ? "border-t border-dashed border-t-slate-200" : "border-t";
+                    return (
+                    <tr key={`${block}-${key}${cum ? "-cum" : ""}`} className={`${rowCls} ${cum ? "bg-sky-50/70" : block === "計" ? "bg-muted/30" : ""}`}>
                       <td className="px-1.5 py-1 font-medium text-muted-foreground whitespace-nowrap align-top">{i === 0 ? block : ""}</td>
-                      <td className="px-1.5 py-1 leading-tight">{label}</td>
+                      <td className="px-1.5 py-1 leading-tight">
+                        {pair === "month" ? (
+                          <span className="flex items-center justify-between gap-1">{label}<span className="text-[0.85em] text-muted-foreground">単月</span></span>
+                        ) : cum ? (
+                          <span className="flex items-center justify-end gap-1 text-sky-800"><span className="text-[0.85em]">小計（{fiscalYearStartMonth}月〜）</span></span>
+                        ) : label}
+                      </td>
                       {rows.map((r, mi) => {
                         const v = cum
                           ? rows.slice(0, mi + 1).reduce((sum, x) => sum + (Number(totalOf(x)[key]) || 0), 0)
@@ -607,17 +619,18 @@ export default function SalesReport() {
                         }
                         return (
                           <Cell
-                            key={r.key} v={v} kind={kind} muted={muted}
+                            key={r.key} v={v} kind={kind} muted={muted} strong={cum}
                             warn={isMargin && v !== null && v < grossMarginTarget}
                             ok={isMargin && v !== null && v >= grossMarginTarget}
                           />
                         );
                       })}
                       {(() => { const v = b === "total" ? annualTotal[key] : annual[b][key]; const isMargin = kind === "pct"; return (
-                        <Cell v={v} kind={kind} muted={muted} warn={isMargin && v !== null && v < grossMarginTarget} ok={isMargin && v !== null && v >= grossMarginTarget} />
+                        <Cell v={v} kind={kind} muted={muted} strong={cum} warn={isMargin && v !== null && v < grossMarginTarget} ok={isMargin && v !== null && v >= grossMarginTarget} />
                       ); })()}
                     </tr>
-                  )))}
+                    );
+                  }))}
                 </tbody>
               </table>
             </div>
