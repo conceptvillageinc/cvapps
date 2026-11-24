@@ -27,6 +27,7 @@ function Visibility({ task }) {
 /**
  * タスク名（押すとその場で直せる。Enter か外を押すと保存、Esc でやめる）
  *   Enter で保存すると名前に青い枠が付き、もう一度 Enter ですぐ下に新しいタスクの行ができる（↑↓ で枠を上下のタスクへ動かせる）
+ *   直している途中に ↓／↑ を押すと、保存して下／上のタスクを直す状態になる
  *   行のほかの場所を押すと、これまでどおり詳細が開く
  */
 function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, onFocusMove, onFocusLeave }) {
@@ -35,17 +36,22 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
   const textRef = useRef(null);
   useEffect(() => { if (editing) { setV(task.name || ""); ended.current = false; } }, [editing]);
   useEffect(() => { if (focused && !editing) textRef.current?.focus(); }, [focused, editing]);
-  const end = (save, byEnter = false) => {
+  const end = (save, how = null) => {
     if (ended.current) return; // Enter のあとの「外れた」で二重に保存しない
     ended.current = true;
     const name = v.trim();
-    onEnd(save && name && name !== task.name ? name : null, byEnter);
+    onEnd(save && name && name !== task.name ? name : null, how);
   };
   const isTypingEnter = isTypingEnterKey;
   if (editing) {
     return (
       <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onFocus={(e) => e.target.select()}
-        onKeyDown={(e) => { if (isTypingEnter(e)) { e.preventDefault(); end(true, true); } if (e.key === "Escape") end(false); }}
+        onKeyDown={(e) => {
+          const typing = !e.nativeEvent.isComposing && e.keyCode !== 229; // 変換候補を ↓ で選んでいるときは動かない
+          if (isTypingEnter(e)) { e.preventDefault(); end(true, "enter"); }
+          else if (typing && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); end(true, e.key === "ArrowDown" ? "down" : "up"); }
+          if (e.key === "Escape") end(false);
+        }}
         onBlur={() => end(true)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="タスク名" data-testid="task-name-inline" />
     );
   }
@@ -294,10 +300,15 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
     editing: renaming === t.id,
     focused: nameFocus === t.id,
     onStart: () => { setNameFocus(null); setRenaming(t.id); },
-    onEnd: (name, byEnter) => {
-      setRenaming(null);
+    onEnd: (name, how) => {
       if (name) rename(t, name);
-      setNameFocus(byEnter ? t.id : null);
+      if (how === "down" || how === "up") {
+        const n = neighborOf(t.id, how === "down" ? 1 : -1);
+        setRenaming(n); setNameFocus(n ? null : t.id); // いちばん端なら、枠を付けて止まる
+        return;
+      }
+      setRenaming(null);
+      setNameFocus(how === "enter" ? t.id : null);
     },
     onFocusEnter: () => { setNameFocus(null); setInserting(t.id); },
     onFocusMove: (dir) => { const n = neighborOf(t.id, dir); if (n) setNameFocus(n); },
