@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2, PanelRightOpen } from "lucide-react";
-import { MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
+import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Plus, Lock, Users, Loader2, Trash2, PanelRightOpen, X, FolderInput } from "lucide-react";
+import { MODES, groupIntoSections, orderAt, ordersAt } from "@/lib/taskSections";
 import { subtasksOf, isPrivateTask, PRIORITY, choiceCls } from "@/lib/tasks";
 import { UserAvatar, TaskCheck, TaskPlaceChip, DueLabel } from "@/components/tasks/parts";
 import { useTaskWrites } from "@/lib/useTaskData";
@@ -28,9 +28,10 @@ function Visibility({ task }) {
  * タスク名（押すとその場で直せる。Enter か外を押すと保存、Esc でやめる）
  *   Enter で保存すると名前に青い枠が付き、もう一度 Enter ですぐ下に新しいタスクの行ができる（↑↓ で枠を上下のタスクへ動かせる）
  *   直している途中に ↓／↑ を押すと、保存して下／上のタスクを直す状態になる
+ *   Shift＋↓／↑ で、保存して複数選ぶ（枠の状態からでも同じ）
  *   行のほかの場所を押すと、これまでどおり詳細が開く
  */
-function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, onFocusMove, onFocusLeave }) {
+function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, onFocusMove, onFocusLeave, onFocusEscape }) {
   const [v, setV] = useState(task.name || "");
   const ended = useRef(false);
   const textRef = useRef(null);
@@ -49,7 +50,7 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
         onKeyDown={(e) => {
           const typing = !e.nativeEvent.isComposing && e.keyCode !== 229; // 変換候補を ↓ で選んでいるときは動かない
           if (isTypingEnter(e)) { e.preventDefault(); end(true, "enter"); }
-          else if (typing && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); end(true, e.key === "ArrowDown" ? "down" : "up"); }
+          else if (typing && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); end(true, (e.shiftKey ? "select-" : "") + (e.key === "ArrowDown" ? "down" : "up")); }
           if (e.key === "Escape") end(false);
         }}
         onBlur={() => end(true)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="タスク名" data-testid="task-name-inline" />
@@ -59,8 +60,8 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
     <span ref={textRef} tabIndex={-1} onClick={(e) => { e.stopPropagation(); onStart(); }} onBlur={onFocusLeave}
       onKeyDown={(e) => {
         if (isTypingEnter(e)) { e.preventDefault(); e.stopPropagation(); onFocusEnter(); }
-        else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); onFocusMove(e.key === "ArrowDown" ? 1 : -1); }
-        else if (e.key === "Escape") e.currentTarget.blur();
+        else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); onFocusMove(e.key === "ArrowDown" ? 1 : -1, e.shiftKey); }
+        else if (e.key === "Escape") { onFocusEscape?.(); e.currentTarget.blur(); }
       }}
       title={focused ? "Enter ですぐ下に新しいタスクを足せます（↑↓ で上下のタスクへ・押すと名前を直せます）" : "押すと名前を直せます"}
       className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text outline-none hover:ring-1 hover:ring-slate-300 hover:bg-white ${focused ? "ring-2 ring-primary/50 bg-primary/5" : ""} ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
@@ -265,6 +266,8 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   const [over, setOver] = useState(null); // { key, index }
   const [noneCollapsed, setNoneCollapsed] = useState(false);
   const [added, setAdded] = useState(null); // 足したばかりのタスク（少しのあいだ色を付ける）
+  // 一覧に見えている順のタスク（たたんだ見出しの中は飛ばす）
+  const visibleIds = () => groups.flatMap((g) => ((g.section ? g.section.collapsed : noneCollapsed) ? [] : g.tasks.map((t) => t.id)));
   const addTo = async (g, name) => {
     const row = await onAdd(g.section?.id || null, name, orderAt(g.tasks, g.tasks.length, mode));
     if (row?.id) { setAdded(row.id); setTimeout(() => setAdded((x) => (x === row.id ? null : x)), 2500); }
@@ -273,9 +276,19 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   const groups = groupIntoSections(tasks, sections, mode);
   const keyOf = (g) => g.section?.id || "none";
   const hoursOf = (list) => list.reduce((s, t) => s + (Number(t.estimated_hours) || 0), 0);
+  // 選んでいるタスク（ドラッグ・Shift＋↑↓・Shift／⌘＋クリックで複数）。つまみをドラッグすると、まとめて動く
+  const [selected, setSelected] = useState(() => new Set());
+  const [selAnchor, setSelAnchor] = useState(null);
+  const clearSel = () => { setSelected(new Set()); setSelAnchor(null); };
+  // 動かすタスク（選んだ中のタスクをつかんだら、選んだ全部を一覧の順で）
+  const movingOf = (id) => (selected.has(id) && selected.size > 1 ? visibleIds().filter((x) => selected.has(x)) : [id]);
+  const moveMany = (ids, g, index) => {
+    const list = ids.map((id) => data.byId.tasks.get(id)).filter(Boolean);
+    const orders = ordersAt(g.tasks, index, mode, ids, list.length);
+    list.forEach((t, k) => onMove(t, g.section?.id || null, orders[k]));
+  };
   const drop = (g) => {
-    const t = data.byId.tasks.get(drag);
-    if (t && over) onMove(t, g.section?.id || null, orderAt(g.tasks, over.index, mode, t.id));
+    if (drag && over) moveMany(movingOf(drag), g, over.index);
     setDrag(null); setOver(null);
   };
   const rowDragOver = (e, g, i) => {
@@ -293,15 +306,21 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   const rename = (t, name) => writes.update(t, { name }).catch((e) => toast.error("名前を変えられませんでした: " + (e?.message || "")));
   const save = (t, patch) => writes.update(t, patch).catch((e) => toast.error("保存できませんでした: " + (e?.message || "")));
 
-  // 一覧に見えている順のタスク（たたんだ見出しの中は飛ばす）
-  const visibleIds = () => groups.flatMap((g) => ((g.section ? g.section.collapsed : noneCollapsed) ? [] : g.tasks.map((t) => t.id)));
   const neighborOf = (id, dir) => { const ids = visibleIds(); const i = ids.indexOf(id); return i < 0 ? null : ids[i + dir] ?? null; };
+  const rangeOf = (a, b) => { const ids = visibleIds(); let i = ids.indexOf(a); let j = ids.indexOf(b); if (i < 0) i = j; if (i > j) [i, j] = [j, i]; return new Set(ids.slice(i, j + 1)); };
+  // Shift＋↑↓：起点（はじめに選んだタスク）から、枠のタスクまでを選ぶ
+  const extendSel = (from, dir) => {
+    const anchor = selAnchor && selected.has(from) ? selAnchor : from;
+    const n = neighborOf(from, dir) || from;
+    setSelAnchor(anchor); setSelected(rangeOf(anchor, n)); setNameFocus(n);
+  };
   const nameProps = (t) => ({
     editing: renaming === t.id,
     focused: nameFocus === t.id,
     onStart: () => { setNameFocus(null); setRenaming(t.id); },
     onEnd: (name, how) => {
       if (name) rename(t, name);
+      if (how === "select-down" || how === "select-up") { setRenaming(null); extendSel(t.id, how === "select-down" ? 1 : -1); return; }
       if (how === "down" || how === "up") {
         const n = neighborOf(t.id, how === "down" ? 1 : -1);
         setRenaming(n); setNameFocus(n ? null : t.id); // いちばん端なら、枠を付けて止まる
@@ -311,7 +330,11 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
       setNameFocus(how === "enter" ? t.id : null);
     },
     onFocusEnter: () => { setNameFocus(null); setInserting(t.id); },
-    onFocusMove: (dir) => { const n = neighborOf(t.id, dir); if (n) setNameFocus(n); },
+    onFocusMove: (dir, shift) => {
+      if (shift) { extendSel(t.id, dir); return; }
+      clearSel(); const n = neighborOf(t.id, dir); if (n) setNameFocus(n);
+    },
+    onFocusEscape: clearSel,
     onFocusLeave: () => setNameFocus((x) => (x === t.id ? null : x)),
   });
 
@@ -323,6 +346,67 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
       setAdded(row.id); setTimeout(() => setAdded((x) => (x === row.id ? null : x)), 2500);
       if (byEnter) setNameFocus(row.id); // 続けて Enter で、さらに下に新しい行
     }
+  };
+
+  // マウスで行を押したまま上下になぞると、そのあいだを選ぶ（つまみ・ボタン・入力欄から始めたときは選ばない）
+  const sweep = useRef(null); // { anchor, moved }
+  const swept = useRef(false); // なぞって選んだ直後のクリックは、詳細を開かない
+  useEffect(() => {
+    const up = () => {
+      const s = sweep.current; sweep.current = null;
+      if (!s) return;
+      document.body.classList.remove("select-none");
+      if (s.moved) { swept.current = true; setTimeout(() => { swept.current = false; }, 0); } // 離した直後のクリックだけ止める
+    };
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
+  // 選んでいるときは Esc で外す
+  useEffect(() => {
+    if (!selected.size) return undefined;
+    const key = (e) => { if (e.key === "Escape") clearSel(); };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [selected]);
+  const rowMouseDown = (e, t) => {
+    if (e.button !== 0 || e.shiftKey || e.metaKey || e.ctrlKey) return;
+    if (e.target.closest("button, input, a, [role=combobox], [data-grip]")) return;
+    sweep.current = { anchor: t.id, moved: false };
+  };
+  const rowMouseEnter = (t) => {
+    const s = sweep.current;
+    if (!s || (!s.moved && t.id === s.anchor)) return;
+    if (!s.moved) { s.moved = true; document.body.classList.add("select-none"); window.getSelection?.().removeAllRanges(); }
+    setSelAnchor(s.anchor); setSelected(rangeOf(s.anchor, t.id));
+  };
+  // Shift＋クリックで範囲、⌘／Ctrl＋クリックで 1 件ずつ足す・外す。ふつうのクリックは選びを外して、これまでどおり
+  const rowClickCapture = (e, t) => {
+    if (swept.current) { swept.current = false; e.stopPropagation(); e.preventDefault(); return; }
+    if (e.target.closest("button, input, [role=combobox], [data-grip]")) return;
+    if (e.shiftKey) {
+      e.stopPropagation(); e.preventDefault(); window.getSelection?.().removeAllRanges();
+      const anchor = selAnchor || nameFocus || t.id;
+      setSelAnchor(anchor); setSelected(rangeOf(anchor, t.id));
+    } else if (e.metaKey || e.ctrlKey) {
+      e.stopPropagation(); e.preventDefault();
+      setSelected((old) => { const n = new Set(old); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; });
+      setSelAnchor(t.id);
+    } else if (selected.size) clearSel();
+  };
+  const gripDragStart = (e, t) => {
+    if (!selected.has(t.id)) clearSel();
+    setDrag(t.id);
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", t.name || ""); } catch { /* 古いブラウザ */ }
+    const row = e.currentTarget.closest("[data-testid=task-row]");
+    if (row) e.dataTransfer.setDragImage(row, 20, row.offsetHeight / 2);
+  };
+  const selCount = [...selected].filter((id) => data.byId.tasks.has(id)).length;
+  const moveSelTo = (g) => {
+    const ids = visibleIds().filter((x) => selected.has(x));
+    moveMany(ids, g, g.tasks.length);
+    toast.success(`${ids.length} 件を「${g.section?.name || MODES[mode].noneLabel}」へ移しました`);
+    clearSel();
   };
 
   if (view === "board") {
@@ -375,6 +459,22 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto" data-testid="task-list">
       <div className="min-w-[900px]">
+        {selCount > 0 && (
+          // 画面の下に浮かべる（一覧の上に出すと行がずれて、なぞって選ぶ範囲が変わるため）
+          <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-xl border border-primary/30 bg-white px-4 py-2.5 text-xs shadow-lg ring-4 ring-primary/10" data-testid="selection-bar">
+            <span className="font-semibold text-primary">{selCount} 件を選んでいます</span>
+            <span className="hidden md:inline text-slate-500">つまみ（<GripVertical className="inline w-3 h-3 -mt-0.5" />）をドラッグすると、まとめて動かせます</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50" data-testid="selection-move"><FolderInput className="w-3.5 h-3.5" />見出しへ移す</button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {groups.map((g) => <DropdownMenuItem key={keyOf(g)} className="text-xs" onClick={() => moveSelTo(g)}>{g.section?.name || MODES[mode].noneLabel}</DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button type="button" onClick={clearSel} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100" data-testid="selection-clear"><X className="w-3.5 h-3.5" />選択を外す（Esc）</button>
+          </div>
+        )}
         <div style={grid} className="sticky top-0 z-10 grid items-center border-b border-slate-200 bg-slate-50/90 backdrop-blur px-2 text-[11px] font-medium text-slate-500">
           <span className="py-2 pl-9">タスク名</span><span className="text-right pr-3">予定時間</span>{showPlace && <span>紐づけ先</span>}<span>公開範囲</span><span>優先度</span><span>期日</span>{showAssignee && <span>担当</span>}
         </div>
@@ -393,10 +493,16 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                     return (
                       <div key={t.id} className="relative">
                         {isOver(g, i) && <div className="absolute inset-x-2 -top-px h-0.5 bg-primary z-10" />}
-                        <div draggable={renaming !== t.id} onDragStart={() => setDrag(t.id)} onDragEnd={() => { setDrag(null); setOver(null); }} onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => renaming !== t.id && onOpen(t.id)}
-                          style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 hover:bg-slate-50 cursor-pointer transition-colors duration-700 ${added === t.id ? "bg-emerald-50" : ""} ${drag === t.id ? "opacity-40" : ""}`} data-testid="task-row">
+                        <div onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => renaming !== t.id && onOpen(t.id)}
+                          onMouseDown={(e) => rowMouseDown(e, t)} onMouseEnter={() => rowMouseEnter(t)} onClickCapture={(e) => rowClickCapture(e, t)}
+                          style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 cursor-pointer transition-colors duration-700 ${selected.has(t.id) ? "bg-primary/10 hover:bg-primary/15" : added === t.id ? "bg-emerald-50" : "hover:bg-slate-50"} ${drag && movingOf(drag).includes(t.id) ? "opacity-40" : ""}`} data-testid="task-row" data-selected={selected.has(t.id) || undefined}>
                           <div className="flex items-center gap-1.5 min-w-0 py-2">
-                            <GripVertical className="w-3.5 h-3.5 shrink-0 text-slate-300 opacity-0 group-hover/row:opacity-100 cursor-grab" />
+                            {/* つまみ：ここをドラッグすると動かす（選んでいる行なら、選んだ全部） */}
+                            <span data-grip draggable={renaming !== t.id} onDragStart={(e) => gripDragStart(e, t)} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={(e) => e.stopPropagation()}
+                              title={selected.has(t.id) && selCount > 1 ? `ドラッグで選んだ ${selCount} 件をまとめて動かす` : "ドラッグで動かす"}
+                              className={`-ml-1 shrink-0 rounded p-0.5 cursor-grab active:cursor-grabbing hover:bg-slate-200/70 ${selected.has(t.id) ? "text-primary/70 opacity-100" : "text-slate-300 opacity-0 group-hover/row:opacity-100"}`} data-testid="task-grip">
+                              <GripVertical className="w-3.5 h-3.5" />
+                            </span>
                             <TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={17} />
                             <InlineTaskName task={t} {...nameProps(t)} />
                             {subs.length > 0 && <span className="shrink-0 rounded bg-slate-100 px-1 text-[10px] text-slate-500 tabular-nums" title="サブタスク">{subs.filter((s) => s.completed).length}/{subs.length}</span>}
