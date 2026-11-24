@@ -731,18 +731,18 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
                   ))}
               </div>
 
-              {/* 取り込む（インポート）: 色を変えて「取り込み」だと分かるように。1 行に収める（4 等分） */}
+              {/* 取り込む（インポート）: 色を変えて「取り込み」だと分かるように。1 行に収める（4 等分。狭くても折り返さない） */}
               <div className="rounded-md border border-sky-200 bg-sky-50/70 px-2 py-1.5 -mx-0.5 space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold text-sky-800 w-16 shrink-0 inline-flex items-center gap-1"><Download className="w-3 h-3" /> 取り込む</span>
-                  <div className="flex-1 flex flex-wrap gap-1.5 min-w-0">
-                    <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("cv_estimate")} title="以前に作った CV の見積書（PDF・スクショ）を読み取って、明細をそのまま取り込みます">CV既存見積</AddChip>
+                  <div className="flex-1 flex flex-nowrap gap-1.5 min-w-0 [&>button]:basis-0 [&>button]:min-w-0 [&>button]:px-1 max-[1599px]:[&>button>svg]:hidden max-[1599px]:[&>button]:whitespace-normal max-[1599px]:[&>button]:h-auto max-[1599px]:[&>button]:min-h-8 max-[1599px]:[&>button]:py-1 max-[1599px]:[&>button]:leading-tight">
                     <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("web_price")} title="ネット印刷の価格ページを読み取って明細にします">ネット印刷</AddChip>
                     <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("vendor_quote")} title="仕入先の見積書（PDF・画像）を読み取って明細にします">仕入先見積</AddChip>
                     <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("sheet_import")} title="スプレッドシートの内容を読み取って明細にします">スプレッドシート</AddChip>
+                    <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("cv_estimate")} title="以前に作った CV の見積書（PDF・スクショ）を読み取って、明細をそのまま取り込みます">CV既存見積</AddChip>
                   </div>
                 </div>
-                <p className="text-[10px] text-sky-700 pl-[72px]">CVの見積書・価格ページ・仕入先の見積書・シートの内容を読み取って明細にします</p>
+                <p className="text-[10px] text-sky-700 pl-[72px]">価格ページ・仕入先の見積書・シート・CVの見積書の内容を読み取って明細にします</p>
               </div>
 
               {/* その他 */}
