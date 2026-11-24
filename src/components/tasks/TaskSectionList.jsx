@@ -72,7 +72,7 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
 const isTypingEnterKey = (e) => e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229;
 
 /**
- * タスクのすぐ下に足す新しいタスクの行（名前を打って Enter で保存。空のまま Enter・Esc で消える）
+ * タスクのすぐ下に足す新しいタスクの行（名前を打って Enter で保存。空のまま Enter で消えて下のタスクを直す状態に、Esc で消える）
  */
 function InsertTaskRow({ grid, onSubmit, onCancel }) {
   const [v, setV] = useState("");
@@ -81,7 +81,7 @@ function InsertTaskRow({ grid, onSubmit, onCancel }) {
   const finish = async (byEnter) => {
     if (done.current) return;
     const name = v.trim();
-    if (!name) { done.current = true; onCancel(byEnter); return; }
+    if (!name) { done.current = true; onCancel(byEnter ? "enter" : null); return; }
     done.current = true; setBusy(true);
     try { await onSubmit(name, byEnter); } catch (err) { done.current = false; setBusy(false); toast.error("追加できませんでした: " + (err?.message || "")); }
   };
@@ -91,7 +91,7 @@ function InsertTaskRow({ grid, onSubmit, onCancel }) {
         <span className="w-3.5 shrink-0" />
         <span className="inline-block h-[17px] w-[17px] shrink-0 rounded-full border-2 border-slate-300" />
         <input autoFocus value={v} disabled={busy} onChange={(e) => setV(e.target.value)} placeholder="新しいタスクの名前（Enter で保存・Esc でやめる）"
-          onKeyDown={(e) => { if (isTypingEnterKey(e)) { e.preventDefault(); finish(true); } if (e.key === "Escape") { done.current = true; onCancel(true); } }}
+          onKeyDown={(e) => { if (isTypingEnterKey(e)) { e.preventDefault(); finish(true); } if (e.key === "Escape") { done.current = true; onCancel("esc"); } }}
           onBlur={() => finish(false)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="新しいタスクの名前" data-testid="task-insert-input" />
         {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
       </div>
@@ -527,7 +527,12 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                         </div>
                         {inserting === t.id && (
                           <InsertTaskRow grid={grid} onSubmit={(name, byEnter) => insertBelow(g, i, name, byEnter)}
-                            onCancel={(byEnter) => { setInserting(null); setNameFocus(byEnter ? t.id : null); }} />
+                            onCancel={(how) => {
+                              setInserting(null);
+                              // 空のまま Enter：すぐ下のタスクを直す状態に（下が無ければ枠を付けて止まる）。Esc：枠を付けて止まる
+                              const n = how === "enter" ? neighborOf(t.id, 1) : null;
+                              if (n) { setNameFocus(null); setRenaming(n); } else setNameFocus(how ? t.id : null);
+                            }} />
                         )}
                       </div>
                     );
