@@ -145,6 +145,14 @@ export async function pdfText(bytes, { maxChars = PDF_TEXT_MAX } = {}) {
   return { pages: doc.numPages, readPages, text: text.length > maxChars ? `${text.slice(0, maxChars)}\n…（長いため以降は省略）` : text };
 }
 
+// PDF をそのまま渡すと、1 ページが「画像（最大 約 4,800 トークン）＋文字」になる。読み込む量を見積もるときの 1 ページ分
+export const PDF_PAGE_TOKENS = 6000;
+/**
+ * そのまま渡す PDF の document ブロックごとに、{ tokens: 見積もり, text: 文字だけにした版 } を覚えておく
+ * （AI チャットで、読み込める量が足りないときに文字だけに切り替えるため。API には送られない）
+ */
+export const pdfBlockInfo = new WeakMap();
+
 /**
  * PDF を Claude に渡す形にする。ページ数が少なければ document ブロック、多ければ文字だけ。
  * @returns {Promise<Array>} content ブロックの配列
@@ -154,10 +162,12 @@ export async function pdfBlocks(bytes, label) {
   try { info = await pdfText(bytes, { maxChars: PDF_TEXT_MAX }); } catch { /* ページ数が分からないときは大きさだけで決める */ }
   const small = bytes.byteLength <= PDF_DIRECT_MAX_BYTES && (!info || info.pages <= PDF_DIRECT_MAX_PAGES);
   if (small) {
-    return [
-      { type: 'text', text: label },
-      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(bytes).toString('base64') } },
-    ];
+    const doc = { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(bytes).toString('base64') } };
+    pdfBlockInfo.set(doc, {
+      tokens: (info?.pages || PDF_DIRECT_MAX_PAGES) * PDF_PAGE_TOKENS,
+      text: info ? `（読み込める量が足りないため、この PDF は文字だけを読みました。図や表の見た目は読めていません）\n${info.text || '（文字がありませんでした。画像だけの PDF かもしれません）'}` : null,
+    });
+    return [{ type: 'text', text: label }, doc];
   }
   if (!info) throw new Error('PDF が大きく、文字も取り出せませんでした');
   const note = `（全 ${info.pages} ページと長いため、文字だけを読みました${info.readPages < info.pages ? `。${info.readPages} ページ目まで` : ''}。図や表の見た目が必要なら、ページを絞った PDF を添付してください）`;

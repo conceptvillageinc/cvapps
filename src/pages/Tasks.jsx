@@ -165,7 +165,7 @@ function MyTasksView({ data, me, today, onOpen, onOpenNew }) {
         : <TaskSectionList key={editId || "x"} mode="my" view={effective} tasks={list} sections={sections.map((s) => (s.id === editId ? { ...s, _edit: true } : s))} data={data} today={today} onOpen={onOpen} ops={ops}
             onMove={(t, sid, order) => writes.update(t, movePatch("my", sid, order))}
             onAdd={(sid, name, order) => writes.create({ name, assignee_id: me.id, ...placePatch, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("my", sid, order) })} />}
-      {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクはドラッグで並べ替え・ほかの見出しへ移せます。足したタスクは最初「自分だけ」です（案件・プロジェクトに紐づけると共有されます）</p>}
+      {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクは左のつまみ（⋮⋮）をドラッグで並べ替え・ほかの見出しへ移せます（行をなぞる・Shift＋↑↓で複数選んでまとめて動かせます）。足したタスクは最初「自分だけ」です（案件・プロジェクトに紐づけると共有されます）</p>}
     </div>
   );
 }
