@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,32 @@ function YenInput({ value, onChange, className = "", ...rest }) {
       onKeyDown={(e) => { if ((e.key === "Enter" && !isImeEnter(e))) e.currentTarget.blur(); }}
       inputMode="numeric"
       className={`h-7 text-xs text-right tabular-nums px-1.5 ${className}`}
+      {...rest}
+    />
+  );
+}
+
+/** 折り返して全体を出す文字の入力欄（中身に合わせて高さが伸びる。改行は入れない） */
+function WrapInput({ value, onChange, className = "", ...rest }) {
+  const ref = useRef(null);
+  const fit = () => { const el = ref.current; if (!el) return; el.style.height = "auto"; el.style.height = `${el.scrollHeight + 2}px`; };
+  useLayoutEffect(fit, [value]);
+  useLayoutEffect(() => {
+    // 列の幅が変わったとき（画面の幅を変えたときなど）も高さを合わせ直す
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value.replace(/[\r\n]+/g, " "))}
+      onKeyDown={(e) => { if (e.key === "Enter" && !isImeEnter(e)) { e.preventDefault(); e.currentTarget.blur(); } }}
+      className={`block w-full min-h-7 resize-none overflow-hidden rounded-md border border-input px-1.5 py-1 text-xs leading-snug [overflow-wrap:anywhere] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${className}`}
       {...rest}
     />
   );
@@ -104,7 +130,7 @@ function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, on
                     <td className="px-0.5 py-1"><TagSelect value={d.tag} tags={tags} onChange={(v) => onPatch(d.id, { tag: v })} /></td>
                     <td className="px-0.5 py-1">
                       <div className="flex items-center gap-1">
-                        <Input value={d.name} onChange={(e) => onPatch(d.id, { name: e.target.value })} className="h-7 text-xs bg-background/70 px-1.5" aria-label="クライアント名・件名" readOnly={readOnly} title={d.name} />
+                        <WrapInput value={d.name} onChange={(v) => onPatch(d.id, { name: v })} className="bg-background/70" aria-label="クライアント名・件名" readOnly={readOnly} />
                         {proj && <Link to={`/projects/${proj.id}`} className="text-muted-foreground hover:text-primary shrink-0" title={`案件 ${proj.project_number || ""} を開く`}><ExternalLink className="w-3.5 h-3.5" /></Link>}
                       </div>
                     </td>
