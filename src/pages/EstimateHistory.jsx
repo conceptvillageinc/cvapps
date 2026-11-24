@@ -12,6 +12,7 @@ import { PRINT_TYPES } from "@/lib/constants";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import SearchClear from "@/components/ui/search-clear";
+import { matchesSearchText, matchesEstimateNumber } from "@/lib/searchText";
 
 export default function EstimateHistory() {
   const navigate = useNavigate();
@@ -30,9 +31,9 @@ export default function EstimateHistory() {
   );
 
   const filtered = approvedEstimates.filter(est => {
-    const matchSearch = !search ||
-      est.client_name?.toLowerCase().includes(search.toLowerCase()) ||
-      est.print_type?.includes(search);
+    // 見積一覧と同じ探し方（半角カナ・ひらがな・濁点の違いを無視。見積番号はハイフン・頭の 0 を省いても見つかる）
+    const matchSearch = matchesSearchText([est.client_name, est.estimate_number, est.estimate_title, est.print_type, est.usage], search)
+      || matchesEstimateNumber(est.estimate_number, search);
     const matchType = typeFilter === "all" || est.print_type === typeFilter;
     const matchDateFrom = !dateFrom || est.created_date >= dateFrom;
     const matchDateTo = !dateTo || est.created_date <= dateTo + "T23:59:59";
@@ -69,7 +70,7 @@ export default function EstimateHistory() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="クライアント名・印刷物名で検索"
+            placeholder="クライアント名・見積番号・件名・印刷物名で検索"
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-9 pr-8"
