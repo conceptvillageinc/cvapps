@@ -26,10 +26,10 @@ function Visibility({ task }) {
 
 /**
  * タスク名（押すとその場で直せる。Enter か外を押すと保存、Esc でやめる）
- *   Enter で保存すると、下のタスクの名前に枠が移り、もう一度 Enter でそのタスクを直せる（↑↓ で枠を動かせる）
+ *   Enter で保存すると名前に青い枠が付き、もう一度 Enter ですぐ下に新しいタスクの行ができる（↑↓ で枠を上下のタスクへ動かせる）
  *   行のほかの場所を押すと、これまでどおり詳細が開く
  */
-function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusMove, onFocusLeave }) {
+function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, onFocusMove, onFocusLeave }) {
   const [v, setV] = useState(task.name || "");
   const ended = useRef(false);
   const textRef = useRef(null);
@@ -41,8 +41,7 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusMove, o
     const name = v.trim();
     onEnd(save && name && name !== task.name ? name : null, byEnter);
   };
-  // 日本語の変換を確定する Enter は数えない（Safari は isComposing が付かないので keyCode も見る）
-  const isTypingEnter = (e) => e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229;
+  const isTypingEnter = isTypingEnterKey;
   if (editing) {
     return (
       <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onFocus={(e) => e.target.select()}
@@ -53,12 +52,43 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusMove, o
   return (
     <span ref={textRef} tabIndex={-1} onClick={(e) => { e.stopPropagation(); onStart(); }} onBlur={onFocusLeave}
       onKeyDown={(e) => {
-        if (isTypingEnter(e)) { e.preventDefault(); e.stopPropagation(); onStart(); }
+        if (isTypingEnter(e)) { e.preventDefault(); e.stopPropagation(); onFocusEnter(); }
         else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); onFocusMove(e.key === "ArrowDown" ? 1 : -1); }
         else if (e.key === "Escape") e.currentTarget.blur();
       }}
-      title={focused ? "Enter で名前を直せます（↑↓ で上下のタスクへ）" : "押すと名前を直せます"}
+      title={focused ? "Enter ですぐ下に新しいタスクを足せます（↑↓ で上下のタスクへ・押すと名前を直せます）" : "押すと名前を直せます"}
       className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text outline-none hover:ring-1 hover:ring-slate-300 hover:bg-white ${focused ? "ring-2 ring-primary/50 bg-primary/5" : ""} ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
+  );
+}
+
+// 日本語の変換を確定する Enter は数えない（Safari は isComposing が付かないので keyCode も見る）
+const isTypingEnterKey = (e) => e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229;
+
+/**
+ * タスクのすぐ下に足す新しいタスクの行（名前を打って Enter で保存。空のまま Enter・Esc で消える）
+ */
+function InsertTaskRow({ grid, onSubmit, onCancel }) {
+  const [v, setV] = useState("");
+  const [busy, setBusy] = useState(false);
+  const done = useRef(false);
+  const finish = async (byEnter) => {
+    if (done.current) return;
+    const name = v.trim();
+    if (!name) { done.current = true; onCancel(byEnter); return; }
+    done.current = true; setBusy(true);
+    try { await onSubmit(name, byEnter); } catch (err) { done.current = false; setBusy(false); toast.error("追加できませんでした: " + (err?.message || "")); }
+  };
+  return (
+    <div style={grid} className="grid items-center border-b border-slate-100 bg-primary/5 px-2" data-testid="task-insert-row">
+      <div className="flex items-center gap-1.5 min-w-0 py-2">
+        <span className="w-3.5 shrink-0" />
+        <span className="inline-block h-[17px] w-[17px] shrink-0 rounded-full border-2 border-slate-300" />
+        <input autoFocus value={v} disabled={busy} onChange={(e) => setV(e.target.value)} placeholder="新しいタスクの名前（Enter で保存・Esc でやめる）"
+          onKeyDown={(e) => { if (isTypingEnterKey(e)) { e.preventDefault(); finish(true); } if (e.key === "Escape") { done.current = true; onCancel(true); } }}
+          onBlur={() => finish(false)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="新しいタスクの名前" data-testid="task-insert-input" />
+        {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+      </div>
+    </div>
   );
 }
 
@@ -252,7 +282,8 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   const isOver = (g, i) => drag && over && over.key === keyOf(g) && over.index === i;
   const toggleDone = (t, v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null });
   const [renaming, setRenaming] = useState(null); // 名前を直しているタスク（そのあいだは行をドラッグさせない）
-  const [nameFocus, setNameFocus] = useState(null); // Enter で保存したあと、次に直す候補のタスク（枠が付く）
+  const [nameFocus, setNameFocus] = useState(null); // Enter で保存したタスク（青い枠。もう一度 Enter ですぐ下に新しい行）
+  const [inserting, setInserting] = useState(null); // すぐ下に新しい行を出しているタスクの id
   const rename = (t, name) => writes.update(t, { name }).catch((e) => toast.error("名前を変えられませんでした: " + (e?.message || "")));
   const save = (t, patch) => writes.update(t, patch).catch((e) => toast.error("保存できませんでした: " + (e?.message || "")));
 
@@ -266,11 +297,22 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
     onEnd: (name, byEnter) => {
       setRenaming(null);
       if (name) rename(t, name);
-      setNameFocus(byEnter ? neighborOf(t.id, 1) : null);
+      setNameFocus(byEnter ? t.id : null);
     },
+    onFocusEnter: () => { setNameFocus(null); setInserting(t.id); },
     onFocusMove: (dir) => { const n = neighborOf(t.id, dir); if (n) setNameFocus(n); },
     onFocusLeave: () => setNameFocus((x) => (x === t.id ? null : x)),
   });
+
+  // すぐ下に足す（見出しと並び順は、上のタスクと次のタスクのあいだ）
+  const insertBelow = async (g, i, name, byEnter) => {
+    const row = await onAdd(g.section?.id || null, name, orderAt(g.tasks, i + 1, mode));
+    setInserting(null);
+    if (row?.id) {
+      setAdded(row.id); setTimeout(() => setAdded((x) => (x === row.id ? null : x)), 2500);
+      if (byEnter) setNameFocus(row.id); // 続けて Enter で、さらに下に新しい行
+    }
+  };
 
   if (view === "board") {
     return (
@@ -366,6 +408,10 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                           <span onClick={(e) => e.stopPropagation()}><DuePicker task={t} today={today} onChange={(patch) => save(t, patch)} /></span>
                           {showAssignee && <span><UserAvatar user={data.byId.users.get(t.assignee_id)} size={22} /></span>}
                         </div>
+                        {inserting === t.id && (
+                          <InsertTaskRow grid={grid} onSubmit={(name, byEnter) => insertBelow(g, i, name, byEnter)}
+                            onCancel={(byEnter) => { setInserting(null); setNameFocus(byEnter ? t.id : null); }} />
+                        )}
                       </div>
                     );
                   })}
