@@ -684,6 +684,8 @@ export default function SalesReport() {
           grossGoal={annual.target.gross}
           appAnnual={report.annual}
           simTotals={{ sales: view.annual.forecast.sales, purchase: view.annual.forecast.cost }}
+          simMonths={rows.map((r) => ({ key: r.key, label: r.label, sales: r.forecast.sales, purchase: r.forecast.cost, target: r.target }))}
+          marginTarget={grossMarginTarget}
           projects={projects}
           fiscalLabel={fiscalYearLabel(fy, fiscalYearStartMonth)}
         />

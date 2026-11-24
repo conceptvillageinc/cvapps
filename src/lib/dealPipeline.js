@@ -1,6 +1,7 @@
 // ============================================================================
 // 案件の積み上げ（確定／見込）: 売上粗利管理表のシミュレーションのパターンごとに持つ、手入力の一覧。
-//   行 = { id, section: "confirmed"|"forecast", name, sales, purchase, memo, tag, project_id, sort }
+//   行 = { id, section: "confirmed"|"forecast", name, sales, purchase, memo, tag, project_id, sort, start_month, end_month }
+//   start_month / end_month: 計上月（"yyyy-MM"）。開始月〜終了月に売上・仕入を均等に割る。空なら「月未定」
 //   金額は税別・円。税込は ×1.1 で見せるだけ。
 //   区分（色と意味）と人数・1 人あたりの目標は、期のシミュレーション文書（fiscal_targets.simulation）の
 //   トップレベルに持つ（パターンをまたいで共通）。
@@ -62,13 +63,45 @@ export function normalizeDeals(raw) {
       memo: String(d.memo || ""),
       tag: d.tag ? String(d.tag) : "",
       project_id: d.project_id || null,
+      start_month: ymOrEmpty(d.start_month),
+      end_month: ymOrEmpty(d.end_month),
       sort: Number.isFinite(Number(d.sort)) ? Number(d.sort) : i,
     }))
     .sort((a, b) => a.sort - b.sort);
 }
 
 export function newDeal(section, patch = {}) {
-  return { id: crypto.randomUUID(), section, name: "", sales: 0, purchase: 0, memo: "", tag: "", project_id: null, sort: 0, ...patch };
+  return { id: crypto.randomUUID(), section, name: "", sales: 0, purchase: 0, memo: "", tag: "", project_id: null, sort: 0, start_month: "", end_month: "", ...patch };
+}
+
+function ymOrEmpty(v) {
+  const s = String(v || "").slice(0, 7);
+  return /^\d{4}-\d{2}$/.test(s) ? s : "";
+}
+
+/**
+ * 行の売上・仕入を、計上月（開始月〜終了月）に均等に割って月ごとに足す。
+ * 割り切れない端数は最初の月に入れる。月が無い行・期の外の行は「月未定」に入れる。
+ * @param {object[]} deals
+ * @param {string[]} monthKeys  期の 12 か月（"yyyy-MM"）
+ * @returns {{ sales: number[], purchase: number[], undated: { sales: number, purchase: number, count: number } }}
+ */
+export function spreadDeals(deals, monthKeys) {
+  const sales = monthKeys.map(() => 0);
+  const purchase = monthKeys.map(() => 0);
+  const undated = { sales: 0, purchase: 0, count: 0 };
+  const split = (total, count) => { const base = Math.floor(total / count); return Array.from({ length: count }, (_, i) => base + (i === 0 ? total - base * count : 0)); };
+  for (const d of deals || []) {
+    let a = ymOrEmpty(d.start_month) || ymOrEmpty(d.end_month);
+    let b = ymOrEmpty(d.end_month) || a;
+    if (a && b < a) [a, b] = [b, a];
+    const idx = a ? monthKeys.map((k, i) => (k >= a && k <= b ? i : -1)).filter((i) => i >= 0) : [];
+    if (idx.length === 0) { undated.sales += n(d.sales); undated.purchase += n(d.purchase); undated.count++; continue; }
+    const s = split(n(d.sales), idx.length);
+    const p = split(n(d.purchase), idx.length);
+    idx.forEach((mi, j) => { sales[mi] += s[j]; purchase[mi] += p[j]; });
+  }
+  return { sales, purchase, undated };
 }
 
 /** 並び順を 0,1,2… に振り直す（区分ごと） */
@@ -127,6 +160,9 @@ export function dealFromProject(p, tags) {
     memo: [prob ? `確度 ${prob}` : "", p.project_number || ""].filter(Boolean).join("・"),
     tag: tag || "",
     project_id: p.id,
+    // 計上月は案件の完了予定日の月（無ければ入金予定日の月）
+    start_month: ymOrEmpty(p.due_date || p.payment_due_date),
+    end_month: ymOrEmpty(p.due_date || p.payment_due_date),
   });
 }
 
@@ -135,9 +171,9 @@ const csvCell = (v) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) ? 
 /** CSV（Excel で開ける BOM 付き）。確定・見込の行と、まとめ */
 export function pipelineToCsv({ deals, tags, summary, fiscalLabel }) {
   const tagLabel = (id) => tags.find((t) => t.id === id)?.label || "";
-  const lines = [["区分", "分類", "クライアント名・件名", "売上（税別）", "仕入（税別）", "粗利（税別）", "備考"]];
+  const lines = [["区分", "分類", "クライアント名・件名", "売上（税別）", "仕入（税別）", "粗利（税別）", "備考", "計上月（開始）", "計上月（終了）"]];
   for (const [key, label] of SECTIONS) {
-    for (const d of deals.filter((x) => x.section === key)) lines.push([label, tagLabel(d.tag), d.name, d.sales, d.purchase, d.sales - d.purchase, d.memo]);
+    for (const d of deals.filter((x) => x.section === key)) lines.push([label, tagLabel(d.tag), d.name, d.sales, d.purchase, d.sales - d.purchase, d.memo, d.start_month || "", d.end_month || d.start_month || ""]);
   }
   lines.push([]);
   const row = (label, t) => lines.push([label, "", "", t.sales, t.purchase, t.gross, t.margin === null ? "" : `粗利率 ${(t.margin * 100).toFixed(2)}%`]);
