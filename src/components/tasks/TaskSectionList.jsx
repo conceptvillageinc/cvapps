@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -26,26 +26,39 @@ function Visibility({ task }) {
 
 /**
  * タスク名（押すとその場で直せる。Enter か外を押すと保存、Esc でやめる）
+ *   Enter で保存すると、下のタスクの名前に枠が移り、もう一度 Enter でそのタスクを直せる（↑↓ で枠を動かせる）
  *   行のほかの場所を押すと、これまでどおり詳細が開く
  */
-function InlineTaskName({ task, onSave, onEditing }) {
-  const [editing, setEditing] = useState(false);
+function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusMove, onFocusLeave }) {
   const [v, setV] = useState(task.name || "");
-  const start = (e) => { e.stopPropagation(); setV(task.name || ""); setEditing(true); onEditing?.(true); };
-  const end = (save) => {
-    setEditing(false); onEditing?.(false);
+  const ended = useRef(false);
+  const textRef = useRef(null);
+  useEffect(() => { if (editing) { setV(task.name || ""); ended.current = false; } }, [editing]);
+  useEffect(() => { if (focused && !editing) textRef.current?.focus(); }, [focused, editing]);
+  const end = (save, byEnter = false) => {
+    if (ended.current) return; // Enter のあとの「外れた」で二重に保存しない
+    ended.current = true;
     const name = v.trim();
-    if (save && name && name !== task.name) onSave(name);
+    onEnd(save && name && name !== task.name ? name : null, byEnter);
   };
+  // 日本語の変換を確定する Enter は数えない（Safari は isComposing が付かないので keyCode も見る）
+  const isTypingEnter = (e) => e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229;
   if (editing) {
     return (
       <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onFocus={(e) => e.target.select()}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); end(true); } if (e.key === "Escape") end(false); }}
+        onKeyDown={(e) => { if (isTypingEnter(e)) { e.preventDefault(); end(true, true); } if (e.key === "Escape") end(false); }}
         onBlur={() => end(true)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="タスク名" data-testid="task-name-inline" />
     );
   }
   return (
-    <span onClick={start} title="押すと名前を直せます" className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text hover:ring-1 hover:ring-slate-300 hover:bg-white ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
+    <span ref={textRef} tabIndex={-1} onClick={(e) => { e.stopPropagation(); onStart(); }} onBlur={onFocusLeave}
+      onKeyDown={(e) => {
+        if (isTypingEnter(e)) { e.preventDefault(); e.stopPropagation(); onStart(); }
+        else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); onFocusMove(e.key === "ArrowDown" ? 1 : -1); }
+        else if (e.key === "Escape") e.currentTarget.blur();
+      }}
+      title={focused ? "Enter で名前を直せます（↑↓ で上下のタスクへ）" : "押すと名前を直せます"}
+      className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text outline-none hover:ring-1 hover:ring-slate-300 hover:bg-white ${focused ? "ring-2 ring-primary/50 bg-primary/5" : ""} ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
   );
 }
 
@@ -239,8 +252,25 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
   const isOver = (g, i) => drag && over && over.key === keyOf(g) && over.index === i;
   const toggleDone = (t, v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null });
   const [renaming, setRenaming] = useState(null); // 名前を直しているタスク（そのあいだは行をドラッグさせない）
+  const [nameFocus, setNameFocus] = useState(null); // Enter で保存したあと、次に直す候補のタスク（枠が付く）
   const rename = (t, name) => writes.update(t, { name }).catch((e) => toast.error("名前を変えられませんでした: " + (e?.message || "")));
   const save = (t, patch) => writes.update(t, patch).catch((e) => toast.error("保存できませんでした: " + (e?.message || "")));
+
+  // 一覧に見えている順のタスク（たたんだ見出しの中は飛ばす）
+  const visibleIds = () => groups.flatMap((g) => ((g.section ? g.section.collapsed : noneCollapsed) ? [] : g.tasks.map((t) => t.id)));
+  const neighborOf = (id, dir) => { const ids = visibleIds(); const i = ids.indexOf(id); return i < 0 ? null : ids[i + dir] ?? null; };
+  const nameProps = (t) => ({
+    editing: renaming === t.id,
+    focused: nameFocus === t.id,
+    onStart: () => { setNameFocus(null); setRenaming(t.id); },
+    onEnd: (name, byEnter) => {
+      setRenaming(null);
+      if (name) rename(t, name);
+      setNameFocus(byEnter ? neighborOf(t.id, 1) : null);
+    },
+    onFocusMove: (dir) => { const n = neighborOf(t.id, dir); if (n) setNameFocus(n); },
+    onFocusLeave: () => setNameFocus((x) => (x === t.id ? null : x)),
+  });
 
   if (view === "board") {
     return (
@@ -315,7 +345,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                           <div className="flex items-center gap-1.5 min-w-0 py-2">
                             <GripVertical className="w-3.5 h-3.5 shrink-0 text-slate-300 opacity-0 group-hover/row:opacity-100 cursor-grab" />
                             <TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={17} />
-                            <InlineTaskName task={t} onSave={(name) => rename(t, name)} onEditing={(on) => setRenaming(on ? t.id : null)} />
+                            <InlineTaskName task={t} {...nameProps(t)} />
                             {subs.length > 0 && <span className="shrink-0 rounded bg-slate-100 px-1 text-[10px] text-slate-500 tabular-nums" title="サブタスク">{subs.filter((s) => s.completed).length}/{subs.length}</span>}
                             {/* ボタン一つで削除（すぐ消して、少しのあいだ「元に戻す」を出す） */}
                             <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(t.id); }} className="ml-auto shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-slate-100 hover:text-slate-700 focus:opacity-100" title="詳細を開く" aria-label="詳細を開く" data-testid="task-open"><PanelRightOpen className="w-3.5 h-3.5" /></button>
