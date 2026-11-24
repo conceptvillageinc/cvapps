@@ -72,7 +72,7 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
 const isTypingEnterKey = (e) => e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229;
 
 /**
- * タスクのすぐ下に足す新しいタスクの行（名前を打って Enter で保存。空のまま Enter・Esc で消える）
+ * タスクのすぐ下に足す新しいタスクの行（名前を打って Enter で保存。空のまま Enter で消えて下のタスクを直す状態に、Esc で消える）
  */
 function InsertTaskRow({ grid, onSubmit, onCancel }) {
   const [v, setV] = useState("");
@@ -81,7 +81,7 @@ function InsertTaskRow({ grid, onSubmit, onCancel }) {
   const finish = async (byEnter) => {
     if (done.current) return;
     const name = v.trim();
-    if (!name) { done.current = true; onCancel(byEnter); return; }
+    if (!name) { done.current = true; onCancel(byEnter ? "enter" : null); return; }
     done.current = true; setBusy(true);
     try { await onSubmit(name, byEnter); } catch (err) { done.current = false; setBusy(false); toast.error("追加できませんでした: " + (err?.message || "")); }
   };
@@ -91,7 +91,7 @@ function InsertTaskRow({ grid, onSubmit, onCancel }) {
         <span className="w-3.5 shrink-0" />
         <span className="inline-block h-[17px] w-[17px] shrink-0 rounded-full border-2 border-slate-300" />
         <input autoFocus value={v} disabled={busy} onChange={(e) => setV(e.target.value)} placeholder="新しいタスクの名前（Enter で保存・Esc でやめる）"
-          onKeyDown={(e) => { if (isTypingEnterKey(e)) { e.preventDefault(); finish(true); } if (e.key === "Escape") { done.current = true; onCancel(true); } }}
+          onKeyDown={(e) => { if (isTypingEnterKey(e)) { e.preventDefault(); finish(true); } if (e.key === "Escape") { done.current = true; onCancel("esc"); } }}
           onBlur={() => finish(false)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="新しいタスクの名前" data-testid="task-insert-input" />
         {busy && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
       </div>
@@ -183,13 +183,14 @@ function InlineHours({ task, onSave }) {
 }
 
 /** 見出し（名前はその場で直す・メニューで並べ替え・消す） */
-function SectionHeader({ group, count, hours, mode, collapsed, onToggle, ops, isFirst, isLast, dragProps, board = false }) {
+function SectionHeader({ group, count, hours, mode, collapsed, onToggle, ops, isFirst, isLast, dragProps, board = false, grip = null }) {
   const [editing, setEditing] = useState(!!group.section?._edit); // 足したばかりの見出しは、すぐ名前を入れられるように
   const [name, setName] = useState(group.section?.name || "");
   const label = group.section ? group.section.name : MODES[mode].noneLabel;
   const commit = () => { setEditing(false); ops.doneEditing?.(group.section); const v = name.trim(); if (v && v !== group.section.name) ops.rename(group.section, v); else setName(group.section.name); };
   return (
     <div className={`group/sec flex items-center gap-1.5 ${board ? "px-1 pb-2" : "px-2 pt-4 pb-1.5"}`} {...dragProps} data-testid="task-section">
+      {grip}
       {!board && <button type="button" onClick={onToggle} className="rounded p-0.5 text-slate-500 hover:bg-slate-100" aria-label={collapsed ? "開く" : "閉じる"}>{collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>}
       {editing ? (
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) commit(); if (e.key === "Escape") { setName(group.section.name); setEditing(false); } }}
@@ -287,8 +288,46 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
     const orders = ordersAt(g.tasks, index, mode, ids, list.length);
     list.forEach((t, k) => onMove(t, g.section?.id || null, orders[k]));
   };
-  const drop = (g) => {
-    if (drag && over) moveMany(movingOf(drag), g, over.index);
+  // 見出しのドラッグ（つまみを持って動かす。中のタスクは見出しについて一緒に動く）
+  const [secDrag, setSecDrag] = useState(null); // 動かしている見出しの id
+  const [secOver, setSecOver] = useState(null); // 見出しの並び（見出しなしを除く）での入れる位置
+  const secList = sections.filter(Boolean).slice().sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+  const secDragOver = (e, g) => {
+    if (!secDrag) return false;
+    e.preventDefault();
+    let index = 0;
+    if (g.section) {
+      const k = secList.findIndex((x) => x.id === g.section.id);
+      const r = e.currentTarget.getBoundingClientRect();
+      index = e.clientY > r.top + r.height / 2 ? k + 1 : k;
+    }
+    if (secOver !== index) setSecOver(index);
+    return true;
+  };
+  const secDrop = () => {
+    const s = secList.find((x) => x.id === secDrag);
+    const from = secList.findIndex((x) => x.id === secDrag);
+    if (s && secOver !== null && secOver !== from && secOver !== from + 1) {
+      const rest = secList.filter((x) => x.id !== secDrag);
+      const at = secOver > from ? secOver - 1 : secOver;
+      const p = rest[at - 1] ? Number(rest[at - 1].sort_order) : null; const n = rest[at] ? Number(rest[at].sort_order) : null;
+      const order = p !== null && n !== null ? (p + n) / 2 : p !== null ? p + 1 : n !== null ? n - 1 : 1;
+      ops.reorder?.(s, order);
+    }
+    setSecDrag(null); setSecOver(null);
+  };
+  const secGrip = (g) => (!g.section || !ops.reorder ? <span className="invisible -ml-1 shrink-0 p-0.5" aria-hidden><GripVertical className="w-3.5 h-3.5" /></span> : (
+    <span draggable onDragStart={(e) => { setSecDrag(g.section.id); clearSel(); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", g.section.name || ""); } catch { /* 古いブラウザ */ } const el = e.currentTarget.closest("section"); if (el) e.dataTransfer.setDragImage(el, 20, 20); }}
+      onDragEnd={() => { setSecDrag(null); setSecOver(null); }}
+      title="ドラッグで見出しを動かす（中のタスクも一緒に動きます）" className="-ml-1 shrink-0 rounded p-0.5 text-slate-300 opacity-0 group-hover/sec:opacity-100 cursor-grab active:cursor-grabbing hover:bg-slate-200/70 hover:text-slate-500" data-testid="section-grip">
+      <GripVertical className="w-3.5 h-3.5" />
+    </span>
+  ));
+  // 離したところ：最後に線を出した位置（over）へ入れる（行の上でなく、すき間や「タスクを追加」の上で離しても動く）
+  const drop = () => {
+    if (secDrag) { secDrop(); return; }
+    const g = over && groups.find((x) => keyOf(x) === over.key);
+    if (drag && g) moveMany(movingOf(drag), g, over.index);
     setDrag(null); setOver(null);
   };
   const rowDragOver = (e, g, i) => {
@@ -414,7 +453,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
       <div className="flex gap-3 overflow-x-auto pb-4 items-start" data-testid="task-board">
         {groups.map((g, gi) => (
           <div key={keyOf(g)} className={`w-72 shrink-0 rounded-xl bg-slate-100/80 p-2 ${drag && over?.key === keyOf(g) ? "ring-2 ring-primary/30" : ""}`}
-            onDragOver={(e) => { if (!drag) return; e.preventDefault(); if (over?.key !== keyOf(g)) setOver({ key: keyOf(g), index: g.tasks.length }); }} onDrop={(e) => { e.preventDefault(); drop(g); }} data-testid="board-column">
+            onDragOver={(e) => { if (!drag) return; e.preventDefault(); if (over?.key !== keyOf(g)) setOver({ key: keyOf(g), index: g.tasks.length }); }} onDrop={(e) => { e.preventDefault(); drop(); }} data-testid="board-column">
             <SectionHeader board group={g} count={g.tasks.length} hours={hoursOf(g.tasks)} mode={mode} ops={ops} isFirst={gi <= 1} isLast={gi === groups.length - 1} />
             <div className="space-y-2 min-h-8">
               {g.tasks.map((t, i) => {
@@ -457,7 +496,8 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
 
   const grid = gridOf({ place: showPlace, assignee: showAssignee });
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto" data-testid="task-list">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto" data-testid="task-list"
+      onDragOver={(e) => { if (drag || secDrag) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); drop(); }}>
       <div className="min-w-[900px]">
         {selCount > 0 && (
           // 画面の下に浮かべる（一覧の上に出すと行がずれて、なぞって選ぶ範囲が変わるため）
@@ -482,8 +522,18 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
           const collapsed = g.section ? !!g.section.collapsed : noneCollapsed;
           if (!g.section && g.tasks.length === 0 && groups.length > 1) return null; // 見出しなしが空なら出さない
           return (
-            <section key={keyOf(g)} onDragOver={(e) => { if (drag && g.tasks.length === 0) { e.preventDefault(); setOver({ key: keyOf(g), index: 0 }); } }} onDrop={(e) => { e.preventDefault(); drop(g); }}>
-              <SectionHeader group={g} count={g.tasks.length} hours={hoursOf(g.tasks)} mode={mode} collapsed={collapsed} ops={ops} isFirst={gi <= 1} isLast={gi === groups.length - 1}
+            <section key={keyOf(g)} onDragOverCapture={(e) => { if (secDragOver(e, g)) e.stopPropagation(); }} onDragOver={(e) => {
+                // 行・見出しの上でないところ（「タスクを追加」・すき間）では、この見出しの一番下に入れる
+                if (!drag || e.defaultPrevented) return;
+                e.preventDefault();
+                const index = collapsed ? 0 : g.tasks.length;
+                if (over?.key !== keyOf(g) || over?.index !== index) setOver({ key: keyOf(g), index });
+              }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); drop(); }}
+              className={`relative ${secDrag && secDrag === g.section?.id ? "opacity-40" : ""}`}>
+              {/* 見出しを入れる位置の線 */}
+              {secDrag && g.section && secOver === secList.findIndex((x) => x.id === g.section.id) && <div className="pointer-events-none absolute inset-x-2 top-0 z-10 h-1 rounded-full bg-primary" data-testid="section-drop-line" />}
+              {secDrag && g.section && secOver === secList.length && secList[secList.length - 1]?.id === g.section.id && <div className="pointer-events-none absolute inset-x-2 bottom-0 z-10 h-1 rounded-full bg-primary" data-testid="section-drop-line" />}
+              <SectionHeader group={g} count={g.tasks.length} hours={hoursOf(g.tasks)} mode={mode} collapsed={collapsed} ops={ops} isFirst={gi <= 1} isLast={gi === groups.length - 1} grip={secGrip(g)}
                 onToggle={() => (g.section ? ops.toggle(g.section) : setNoneCollapsed((v) => !v))}
                 dragProps={{ onDragOver: (e) => { if (!drag) return; e.preventDefault(); setOver({ key: keyOf(g), index: 0 }); } }} />
               {!collapsed && (
@@ -492,7 +542,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                     const subs = subtasksOf(data.tasks, t.id);
                     return (
                       <div key={t.id} className="relative">
-                        {isOver(g, i) && <div className="absolute inset-x-2 -top-px h-0.5 bg-primary z-10" />}
+                        {isOver(g, i) && <div className="pointer-events-none absolute inset-x-2 -top-px h-0.5 bg-primary z-10" />}
                         <div onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => renaming !== t.id && onOpen(t.id)}
                           onMouseDown={(e) => rowMouseDown(e, t)} onMouseEnter={() => rowMouseEnter(t)} onClickCapture={(e) => rowClickCapture(e, t)}
                           style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 cursor-pointer transition-colors duration-700 ${selected.has(t.id) ? "bg-primary/10 hover:bg-primary/15" : added === t.id ? "bg-emerald-50" : "hover:bg-slate-50"} ${drag && movingOf(drag).includes(t.id) ? "opacity-40" : ""}`} data-testid="task-row" data-selected={selected.has(t.id) || undefined}>
@@ -527,12 +577,17 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                         </div>
                         {inserting === t.id && (
                           <InsertTaskRow grid={grid} onSubmit={(name, byEnter) => insertBelow(g, i, name, byEnter)}
-                            onCancel={(byEnter) => { setInserting(null); setNameFocus(byEnter ? t.id : null); }} />
+                            onCancel={(how) => {
+                              setInserting(null);
+                              // 空のまま Enter：すぐ下のタスクを直す状態に（下が無ければ枠を付けて止まる）。Esc：枠を付けて止まる
+                              const n = how === "enter" ? neighborOf(t.id, 1) : null;
+                              if (n) { setNameFocus(null); setRenaming(n); } else setNameFocus(how ? t.id : null);
+                            }} />
                         )}
                       </div>
                     );
                   })}
-                  {isOver(g, g.tasks.length) && <div className="mx-2 h-0.5 bg-primary" />}
+                  {isOver(g, g.tasks.length) && <div className="pointer-events-none mx-2 h-0.5 bg-primary" />}
                   <AddLine onAdd={(name) => addTo(g, name)} testId="list-add" />
                 </div>
               )}

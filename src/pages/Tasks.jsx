@@ -45,6 +45,12 @@ function useSections(mode, ownerId) {
       await Promise.all([db.entities.TaskSection.update(a.id, { sort_order: b.sort_order }), db.entities.TaskSection.update(b.id, { sort_order: a.sort_order })]);
       reload();
     },
+    /** ドラッグで見出しを動かす（中のタスクは見出しについて一緒に動く） */
+    async reorder(s, order) {
+      qc.setQueryData(key, (old) => (old || []).map((x) => (x.id === s.id ? { ...x, sort_order: order } : x)));
+      try { await db.entities.TaskSection.update(s.id, { sort_order: order }); } catch (e) { toast.error("見出しを動かせませんでした: " + (e?.message || "")); }
+      reload();
+    },
     async remove(s) {
       if (!window.confirm(`見出し「${s.name}」を消しますか？（中のタスクは「${MODES[mode].noneLabel}」に移ります。タスクは消えません）`)) return;
       await db.entities.TaskSection.delete(s.id); reload();
