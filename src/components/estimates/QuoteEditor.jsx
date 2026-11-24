@@ -45,6 +45,7 @@ import VendorQuoteImport from "@/components/estimates/VendorQuoteImport";
 import WebPriceImport from "@/components/estimates/WebPriceImport";
 import PastEstimateImport from "@/components/estimates/PastEstimateImport";
 import SheetImport from "@/components/estimates/SheetImport";
+import CvEstimateImport from "@/components/estimates/CvEstimateImport";
 
 const CATEGORY_ICONS = { design: Palette, print_paper: Printer, print_nonpaper: Printer, build: Hammer, system: Cpu, other: Plus };
 
@@ -730,17 +731,18 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
                   ))}
               </div>
 
-              {/* 取り込む（インポート）: 色を変えて「取り込み」だと分かるように。1 行に収める（3 等分） */}
+              {/* 取り込む（インポート）: 色を変えて「取り込み」だと分かるように。1 行に収める（4 等分） */}
               <div className="rounded-md border border-sky-200 bg-sky-50/70 px-2 py-1.5 -mx-0.5 space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold text-sky-800 w-16 shrink-0 inline-flex items-center gap-1"><Download className="w-3 h-3" /> 取り込む</span>
                   <div className="flex-1 flex flex-wrap gap-1.5 min-w-0">
+                    <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("cv_estimate")} title="以前に作った CV の見積書（PDF・スクショ）を読み取って、明細をそのまま取り込みます">CV既存見積</AddChip>
                     <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("web_price")} title="ネット印刷の価格ページを読み取って明細にします">ネット印刷</AddChip>
                     <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("vendor_quote")} title="仕入先の見積書（PDF・画像）を読み取って明細にします">仕入先見積</AddChip>
                     <AddChip kind="menu" tone="sky" onClick={() => setAddPanel("sheet_import")} title="スプレッドシートの内容を読み取って明細にします">スプレッドシート</AddChip>
                   </div>
                 </div>
-                <p className="text-[10px] text-sky-700 pl-[72px]">価格ページ・見積書PDF・シートの内容を読み取って明細にします</p>
+                <p className="text-[10px] text-sky-700 pl-[72px]">CVの見積書・価格ページ・仕入先の見積書・シートの内容を読み取って明細にします</p>
               </div>
 
               {/* その他 */}
@@ -849,10 +851,12 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
 
       {/* カテゴリ別の選択ダイアログ */}
       <Dialog open={!!addPanel} onOpenChange={(open) => !open && closeAddPanel()}>
-        <DialogContent className={`${addPanel === "past_estimate" ? "max-w-6xl" : addPanel === "vendor_quote" || addPanel === "web_price" || addPanel === "sheet_import" ? "max-w-4xl" : "max-w-lg"} max-h-[85vh] overflow-y-auto`}>
+        <DialogContent className={`${addPanel === "past_estimate" ? "max-w-6xl" : addPanel === "vendor_quote" || addPanel === "web_price" || addPanel === "sheet_import" || addPanel === "cv_estimate" ? "max-w-4xl" : "max-w-lg"} max-h-[85vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
-              {addPanel === "vendor_quote"
+              {addPanel === "cv_estimate"
+                ? "CVの既存見積から明細を取り込む"
+                : addPanel === "vendor_quote"
                 ? "仕入先見積から明細を読み込む"
                 : addPanel === "web_price"
                   ? "ネット印刷の価格ページから取り込む"
@@ -866,6 +870,10 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
 
           {addPanel === "vendor_quote" && (
             <VendorQuoteImport onAdd={addItems} onClose={closeAddPanel} />
+          )}
+
+          {addPanel === "cv_estimate" && (
+            <CvEstimateImport onAdd={addItems} onAppendNotes={appendNoteTemplate} onClose={closeAddPanel} />
           )}
 
           {addPanel === "sheet_import" && (
