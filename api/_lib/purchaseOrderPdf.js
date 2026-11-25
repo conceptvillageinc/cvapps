@@ -9,7 +9,7 @@ import { toHalfWidth } from '../../src/lib/halfWidth.js';
 //   宛先   = CV（自社）。社名のみで「御中」は付けない（クライアントの要望）
 //   発行元 = クライアント（クライアント一覧の住所・担当者を入れ、空欄は手書きできるように罫線）
 //   内容   = 見積の明細（税抜・消費税・税込）と「上記のとおり発注いたします」の文言
-//   署名欄 = 発注日／会社名／ご担当者／ご署名（印）
+//   署名欄 = 付けない（発注日・会社名・ご担当者・ご署名の枠は不要との要望）
 //   印影は押さない（クライアントが記入する書類のため）
 // 番号は「見積番号-PO」。
 // ============================================================================
@@ -205,19 +205,8 @@ function draw(pdf, { estimate, client, company }) {
   pdf.fillColor('#000').text(estimate.desired_delivery_date ? `希望納期: ${fmtDate(estimate.desired_delivery_date)}` : '', MARGIN + 6, y + 16, { width: CONTENT_W - 12, lineBreak: false });
   y += notesH + 14;
 
-  // ---- 署名欄 ----
-  const sigH = 70;
-  ensure(sigH + 10);
+  // ---- 発注の文言（署名欄は付けない） ----
+  ensure(14);
   pdf.font('jp').fontSize(8).fillColor('#555').text('上記のとおり発注いたします。', MARGIN, y, { lineBreak: false });
-  y += 12;
-  const sigX = PAGE.width - MARGIN - 300;
-  pdf.rect(sigX, y, 300, sigH).stroke('#94a3b8');
-  const rows = [['発注日', '　　　年　　月　　日'], ['会社名', estimate.client_name || ''], ['ご担当者', client.contact_person || ''], ['ご署名（印）', '']];
-  rows.forEach(([k, v], i) => {
-    const ry2 = y + 4 + i * 16;
-    pdf.font('jp').fontSize(8).fillColor('#555').text(k, sigX + 6, ry2, { width: 70, lineBreak: false });
-    pdf.fillColor('#000').text(v, sigX + 80, ry2, { width: 210, lineBreak: false });
-    if (i < rows.length - 1) pdf.moveTo(sigX + 76, ry2 + 12).lineTo(sigX + 294, ry2 + 12).lineWidth(0.5).stroke('#cbd5e1');
-  });
   pdf.fillColor('#000');
 }
