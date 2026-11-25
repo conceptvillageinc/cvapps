@@ -97,7 +97,7 @@ export default function SheetImport({ onAdd, onClose }) {
     };
     for (const r of visible) {
       if (r.kind === "heading") {
-        if (headings) { flush(); groupName = r.name; out.push({ row_type: "text", text: r.name }); }
+        if (headings) { flush(); groupName = r.name; out.push({ row_type: "text", text: r.name, bold: true }); }
         continue;
       }
       if (excluded.has(r.i)) continue;
@@ -173,7 +173,7 @@ export default function SheetImport({ onAdd, onClose }) {
             <p key={i} className="text-xs text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> {w}</p>
           ))}
           <div className="flex flex-wrap items-center gap-4 text-xs">
-            <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={headings} onCheckedChange={(v) => setHeadings(!!v)} /> 見出し行も追加する（テキスト行）</label>
+            <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={headings} onCheckedChange={(v) => setHeadings(!!v)} /> 見出し行も追加する（タイトル行・太字）</label>
             <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={subtotals} onCheckedChange={(v) => setSubtotals(!!v)} /> 見出しごとに小計行を付ける</label>
             <label className="flex items-center gap-1.5 cursor-pointer" title="備考にURLがある行は、そのページをサーバーで開いてスクショを撮り、明細に付けます。1行あたり5〜15秒かかります">
               <Checkbox checked={captureShots} onCheckedChange={(v) => setCaptureShots(!!v)} /> URLのある行はスクショも撮る{included.filter((r) => /https?:\/\//.test(String(r.notes || ""))).length > 0 && `（${included.filter((r) => /https?:\/\//.test(String(r.notes || ""))).length}行）`}

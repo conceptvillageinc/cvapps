@@ -433,7 +433,7 @@ export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
     if (row.kind === 'subtotal') drawSeparators(h, widths.length - 1);
     pdf.fillColor(BLACK);
     if (row.kind === 'text') {
-      // 見積書・納品書・請求書とも bold: false（普通の太さ）。指定が無ければ太字
+      // 見積書・納品書・請求書とも、テキスト行は普通の太さ・タイトル行（bold: true）は太字。指定が無ければ太字
       const bold = row.bold !== false;
       if (units > 1) paragraphV(pdf, row.text, MARGIN + 6, ry + 2, CONTENT_W - 12, h - 4, { size: 8.5, bold });
       else textV(pdf, row.text, MARGIN + 6, ry, CONTENT_W - 12, h, { size: 8.5, bold });

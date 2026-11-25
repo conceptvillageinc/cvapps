@@ -89,7 +89,7 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
 
   const rows = items.map((li) => {
     // テキスト行は明細と同じ 8.5pt・太字なし（納品書・請求書と同じ）
-    if (li.row_type === 'text') return { kind: 'text', text: String(li.text || ''), bold: false };
+    if (li.row_type === 'text') return { kind: 'text', text: String(li.text || ''), bold: !!li.bold }; // タイトル行は太字
     if (li.row_type === 'subtotal') return { kind: 'subtotal', name: li.name || '小計', amount: li.amount };
     const name = `${li.name || ''}${Number(li.tax_rate) === 8 ? '（軽減8%）' : ''}`;
     const qty = `${fmtQty(li.quantity)} ${li.unit || ''}`.trim();
