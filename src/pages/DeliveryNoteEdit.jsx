@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
+import TitleToggle from "@/components/documents/TitleToggle";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,6 +189,8 @@ export default function DeliveryNoteEdit() {
   }));
   const addItem = () => set("line_items", [...form.line_items, newDocItem()]);
   const addTextItem = () => set("line_items", [...form.line_items, newDocTextItem()]);
+  // タイトル行: 太字で出るテキスト行（まとまりの見出し）
+  const addTitleItem = () => set("line_items", [...form.line_items, newDocTextItem("", { bold: true })]);
   const removeItem = (itemId) => set("line_items", form.line_items.filter((li) => li.id !== itemId));
   const importFromEstimate = (est) => {
     const items = docItemsFromEstimate(est, { withText: true });
@@ -470,7 +473,8 @@ export default function DeliveryNoteEdit() {
                 </Select>
               )}
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addItem} disabled={locked}><Plus className="w-3.5 h-3.5" /> 行を追加</Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addTextItem} disabled={locked} data-testid="add-text-row"><Plus className="w-3.5 h-3.5" /> テキスト行</Button>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addTitleItem} disabled={locked} data-testid="add-title-row"><Plus className="w-3.5 h-3.5" /> タイトル行</Button>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addTextItem} disabled={locked} data-testid="add-text-row"><Plus className="w-3.5 h-3.5" /> テキスト行</Button>
             </div>
           </div>
         </CardHeader>
@@ -498,8 +502,8 @@ export default function DeliveryNoteEdit() {
                     <td className="pl-2 py-1 align-middle w-6"><RowHandle {...drag.handleProps(li, idx)} disabled={locked} /></td>
                     <td className="px-2 py-1" colSpan={6}>
                       <div className="flex items-center gap-2">
-                        <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">テキスト</span>
-                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし。空のままなら 1 行分の余白）" className="h-8 text-xs" disabled={locked} />
+                        <TitleToggle bold={!!li.bold} onToggle={() => setItem(li.id, { bold: !li.bold })} disabled={locked} />
+                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder={li.bold ? "タイトル（例:【(1) ブランドコンセプトの制作】）" : "見出し・注記（金額なし。空のままなら 1 行分の余白）"} className={`h-8 text-xs ${li.bold ? "font-bold" : ""}`} disabled={locked} />
                       </div>
                     </td>
                     <td className="px-1 py-1">
