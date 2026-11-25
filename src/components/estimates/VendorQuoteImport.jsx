@@ -138,7 +138,9 @@ export default function VendorQuoteImport({ onAdd, onClose, defaultVendor = "" }
       const unitPrice = sellingPrice(row);
       return {
         category: categoryLabel,
-        name: lineName({ item_name: row.name }, draft.vendorName),
+        // 見積書（クライアント向け）には仕入先の社名を出さない。社名は社内メモに残す
+        name: lineName({ item_name: row.name }),
+        ...(draft.vendorName ? { memo: `仕入先: ${draft.vendorName}` } : {}),
         quantity,
         unit: "枚",
         unit_price: unitPrice,

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useRecurringAlerts } from "@/lib/recurringStatus";
 import {
   LayoutDashboard, FileText, Plus, History, Settings, Users, Layers, LayoutTemplate,
-  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, Printer, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft, ListTodo, Inbox, FileCheck2, Bot
+  LogOut, Menu, X, Building2, ChevronDown, UserSquare, Tag, HelpCircle, FolderKanban, Truck, Landmark, FileSpreadsheet, BarChart3, CalendarClock, Palette, UserCircle, Mic, PanelLeftClose, PanelLeftOpen, HandCoins, ReceiptJapaneseYen, Wallet, ReceiptText, ClipboardList, Repeat, ArrowRightLeft, ListTodo, Inbox, FileCheck2, Bot
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { db } from "@/api/db";
@@ -55,8 +55,8 @@ const navItems = [
 const adminItems = [
   { path: "/proof-forms", label: "校了フォーム登録", icon: FileCheck2 },
   { path: "/vendors", label: "印刷所情報", icon: Building2 },
-  { path: "/print-types", label: "印刷種別マスタ", icon: Printer },
-  { path: "/price-master", label: "価格マスタ", icon: Tag },
+  // 価格マスタと印刷種別マスタは 1 つのメニュー（画面の上のタブで切り替え）
+  { path: "/price-master", also: ["/print-types"], label: "価格・印刷種別マスタ", icon: Tag },
   { path: "/design-fee-master", label: "デザイン費マスタ", icon: Palette },
   { path: "/sales-category-master", label: "売上カテゴリーマスタ", icon: Layers },
   { path: "/schedule-templates", label: "工程表テンプレート", icon: LayoutTemplate },
@@ -103,7 +103,7 @@ export default function Layout() {
   const NavLink = ({ item, onClick }) => {
     const matches = (path) => location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
     // いちばん長く一致するメニューだけを選んだ状態にする（/projects/recurring で「案件一覧」まで光らないように）
-    const isActive = matches(item.path) && ![...navItems, ...adminItems].some((o) => o.path.length > item.path.length && matches(o.path));
+    const isActive = (matches(item.path) || (item.also || []).some(matches)) && ![...navItems, ...adminItems].some((o) => o.path.length > item.path.length && matches(o.path));
     return (
       <Link
         to={item.path}
