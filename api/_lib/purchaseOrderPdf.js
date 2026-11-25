@@ -7,7 +7,7 @@ import { toHalfWidth } from '../../src/lib/halfWidth.js';
 // 発注書の雛形（A4縦）。見積書の内容から作り、クライアントが CV へ発注するときに使う。
 //
 //   宛先   = CV（自社）。社名のみで「御中」は付けない（クライアントの要望）
-//   発行元 = クライアント（クライアント一覧の住所・担当者を入れ、空欄は手書きできるように罫線）
+//   発行元 = クライアント（クライアント一覧の住所・担当者を入れ、空欄は手書きできるように罫線。tel は載せない）
 //   内容   = 見積の明細（税抜・消費税・税込）と「上記のとおり発注いたします」の文言
 //   署名欄 = 付けない（発注日・会社名・ご担当者・ご署名の枠は不要との要望）
 //   印影は押さない（クライアントが記入する書類のため）
@@ -116,7 +116,6 @@ function draw(pdf, { estimate, client, company }) {
   const rline = (t) => { pdf.text(t, rx, ry, { width: rw, align: 'right' }); ry += pdf.heightOfString(t, { width: rw }) + 1; };
   rline(addr || '住所: ____________________________');
   rline(client.contact_person ? `ご担当: ${client.contact_person}` : 'ご担当: ______________');
-  rline(client.phone ? `tel ${client.phone}` : 'tel ______________');
   pdf.fillColor('#000');
 
   y = Math.max(leftBottom, ry) + 8;
