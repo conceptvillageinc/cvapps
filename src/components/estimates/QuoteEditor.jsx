@@ -480,7 +480,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
                   </td>
                 </tr>
               )}
-              {/* 行の背景は PDF と同じく、グレーと白の互い違い（1 行目がグレー。提出しない行は数えない） */}
+              {/* 行の背景は PDF と同じく、グレーと白の互い違い（1 行目がグレー。提出しない行は数えない）。文字の大きさも PDF と同じく、見出し・小計・明細でそろえる */}
               {(() => { let n = 0; return lineItems.filter(li => showInternal || !isInternalLine(li)).map(li => ({ li, stripe: isInternalLine(li) ? "" : (n++ % 2 === 0 ? "bg-neutral-100" : "bg-white") })); })().map(({ li, stripe }) => isInternalLine(li) ? (
                   // 提出しない明細: 社内確認用のときだけ薄く出す（提出用・印刷・PDF には出ない）
                   <tr key={li.id} className="border-b border-dashed text-muted-foreground/70 bg-amber-50/40" data-testid="preview-internal-line">
@@ -498,11 +498,11 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
                 ) : (
                 li.row_type === "text" ? (
                   <tr key={li.id} className={stripe} data-testid="preview-row">
-                    <td colSpan={5} className="px-3 py-1.5 text-xs">{li.text || "\u00a0"}</td>
+                    <td colSpan={5} className="px-3 py-1.5">{li.text || "\u00a0"}</td>
                   </tr>
                 ) : li.row_type === "subtotal" ? (
                   <tr key={li.id} className={`${stripe} border-t border-slate-400`} data-testid="preview-row">
-                    <td colSpan={4} className="px-3 py-1.5 text-right text-xs font-semibold">{li.name || "小計"}</td>
+                    <td colSpan={4} className="px-3 py-1.5 text-right font-semibold">{li.name || "小計"}</td>
                     <td className="px-3 py-1.5 text-right font-semibold">{yen(li.amount)}</td>
                   </tr>
                 ) : (
