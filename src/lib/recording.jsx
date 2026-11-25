@@ -32,6 +32,8 @@ function pickMime() {
 const extOf = (mime) => (mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm");
 
 export const recordingSupported = () => typeof window !== "undefined" && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia;
+// オンライン会議（Meet・Zoom）の相手の声も録れるか（PC のブラウザの「画面共有」で、タブやパソコンの音を受け取る）
+export const callAudioSupported = () => typeof window !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia && !/iPhone|iPad|Android/i.test(navigator.userAgent || "");
 
 const Ctx = createContext(null);
 
@@ -57,6 +59,8 @@ export function RecordingProvider({ children }) {
   // 録音の実体
   const sessionRef = useRef(null);
   const streamRef = useRef(null);
+  const sourceTracksRef = useRef([]); // マイクと画面共有の元の音（録音を終えたら止める）
+  const [callAudio, setCallAudio] = useState(false); // 相手の声（画面共有の音）も録っているか
   const recRef = useRef(null);
   const seqRef = useRef(0);
   const segStartRef = useRef(0);
@@ -298,6 +302,9 @@ export function RecordingProvider({ children }) {
     cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    sourceTracksRef.current.forEach((t) => { try { t.stop(); } catch { /* noop */ } });
+    sourceTracksRef.current = [];
+    setCallAudio(false);
     try { ctxRef.current?.close(); } catch { /* noop */ }
     ctxRef.current = null;
     analyserRef.current = null;
@@ -312,16 +319,39 @@ export function RecordingProvider({ children }) {
    *   startSeq      すでに保存済みの断片数（続きを録るとき）
    *   baseDuration  すでに録れている秒数（続きを録るとき）
    *   onFinish      終えたときに画面側で追加でやること（任意）
+   *   withCallAudio オンライン会議の相手の声も録る（画面共有で Meet・Zoom のタブやパソコンの音を受け取り、マイクと混ぜる）
    */
-  const start = useCallback(async ({ meetingId, title = "", startSeq = 0, baseDuration = 0, onFinish = null }) => {
+  const start = useCallback(async ({ meetingId, title = "", startSeq = 0, baseDuration = 0, onFinish = null, withCallAudio = false }) => {
     if (sessionRef.current) { toast.error("別の議事録を録音中です。先にそちらを終えてください"); return false; }
     setError(null);
+    // 画面共有は「ボタンを押した直後」でないと開けないので、マイクより先に聞く
+    let display = null;
+    if (withCallAudio) {
+      try {
+        display = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          systemAudio: "include",
+          selfBrowserSurface: "exclude",
+          surfaceSwitching: "include",
+        });
+      } catch (err) {
+        setError(err.name === "NotAllowedError"
+          ? "共有がキャンセルされたため、録音を始めませんでした。もう一度押して、Meet・Zoom のタブ（または画面全体）を選んでください。相手の声が要らないときは「相手の声も録る」をオフにしてください"
+          : `共有を始められませんでした: ${err.message}`);
+        return false;
+      }
+      if (display.getAudioTracks().length === 0) {
+        display.getTracks().forEach((t) => t.stop());
+        setError("共有に音が入っていませんでした。もう一度押して、共有の画面で「タブの音声も共有する」（画面全体なら「システムの音声も共有する」）をオンにしてください");
+        return false;
+      }
+    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
       sessionRef.current = { meetingId, title, startSeq, baseDuration };
       setSession(sessionRef.current);
       onFinishRef.current = onFinish;
-      streamRef.current = stream;
       mimeRef.current = pickMime();
       seqRef.current = startSeq;
       elapsedRef.current = 0;
@@ -341,10 +371,30 @@ export function RecordingProvider({ children }) {
       closeGuard();
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       ctxRef.current = ctx;
-      const src = ctx.createMediaStreamSource(stream);
+      try { await ctx.resume(); } catch { /* noop */ }
       const an = ctx.createAnalyser();
       an.fftSize = 512;
-      src.connect(an);
+      ctx.createMediaStreamSource(mic).connect(an);
+      sourceTracksRef.current = [...mic.getTracks()];
+      if (display) {
+        // マイクと相手の声（共有の音）を 1 本に混ぜて録る
+        const dest = ctx.createMediaStreamDestination();
+        ctx.createMediaStreamSource(mic).connect(dest);
+        const callStream = new MediaStream(display.getAudioTracks());
+        const callSrc = ctx.createMediaStreamSource(callStream);
+        callSrc.connect(dest);
+        callSrc.connect(an);
+        sourceTracksRef.current.push(...display.getTracks());
+        streamRef.current = dest.stream;
+        setCallAudio(true);
+        display.getAudioTracks()[0].addEventListener("ended", () => {
+          if (!sessionRef.current || finishingRef.current) return;
+          setCallAudio(false);
+          toast.warning("共有が止められたため、相手の声は録れなくなりました。マイクの録音は続いています", { duration: 20000 });
+        });
+      } else {
+        streamRef.current = mic;
+      }
       analyserRef.current = an;
       lastLoudRef.current = Date.now();
       rafRef.current = requestAnimationFrame(meter);
@@ -356,6 +406,7 @@ export function RecordingProvider({ children }) {
       startHeartbeat();
       return true;
     } catch (err) {
+      display?.getTracks().forEach((t) => t.stop());
       sessionRef.current = null;
       setSession(null);
       setError(err.name === "NotAllowedError" ? "マイクの使用が許可されていません。ブラウザの設定でマイクを許可してください" : `録音を始められませんでした: ${err.message}`);
@@ -434,9 +485,9 @@ export function RecordingProvider({ children }) {
   };
 
   const value = useMemo(() => ({
-    session, state, elapsed, level, quiet, silentLong, segments, error, wakeLocked,
+    session, state, elapsed, level, quiet, silentLong, segments, error, wakeLocked, callAudio,
     start, pause, resume, finish, clearError: () => setError(null),
-  }), [session, state, elapsed, level, quiet, silentLong, segments, error, wakeLocked, start, pause, resume, finish]);
+  }), [session, state, elapsed, level, quiet, silentLong, segments, error, wakeLocked, callAudio, start, pause, resume, finish]);
 
   return (
     <Ctx.Provider value={value}>

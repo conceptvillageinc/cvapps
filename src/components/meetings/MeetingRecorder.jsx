@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Mic, Square, Pause, Play, Loader2, AlertTriangle, CloudUpload, Check } from "lucide-react";
+import { Mic, Square, Pause, Play, Loader2, AlertTriangle, CloudUpload, Check, MonitorSpeaker } from "lucide-react";
 import { fmtClock } from "@/lib/meetings";
-import { useRecording, recordingSupported } from "@/lib/recording";
+import { useRecording, recordingSupported, callAudioSupported } from "@/lib/recording";
+
+const CALL_AUDIO_KEY = "cv.recording.callAudio";
 
 // ============================================================================
 // 録音の画面。録音の実体はアプリ全体で持つ RecordingProvider（src/lib/recording.jsx）
@@ -22,6 +26,9 @@ export default function MeetingRecorder({ meetingId, title = "", startSeq = 0, b
   const mine = rec.session?.meetingId === meetingId;
   const state = mine ? rec.state : "idle";
   const { elapsed, level, quiet, silentLong, segments, error, wakeLocked } = rec;
+  // オンライン会議の相手の声も録る（このブラウザに覚えておく）
+  const [withCallAudio, setWithCallAudio] = useState(() => { try { return window.localStorage.getItem(CALL_AUDIO_KEY) === "1"; } catch { return false; } });
+  const toggleCallAudio = (v) => { setWithCallAudio(v); try { window.localStorage.setItem(CALL_AUDIO_KEY, v ? "1" : "0"); } catch { /* noop */ } };
 
   if (!recordingSupported()) {
     return (
@@ -44,7 +51,8 @@ export default function MeetingRecorder({ meetingId, title = "", startSeq = 0, b
 
   const uploading = segments.filter((s) => s.status === "uploading").length;
   const failed = segments.filter((s) => s.status === "error").length;
-  const start = () => rec.start({ meetingId, title, startSeq, baseDuration, onFinish });
+  const canCallAudio = callAudioSupported();
+  const start = () => rec.start({ meetingId, title, startSeq, baseDuration, onFinish, withCallAudio: canCallAudio && withCallAudio });
 
   return (
     <div className="space-y-4">
@@ -66,11 +74,27 @@ export default function MeetingRecorder({ meetingId, title = "", startSeq = 0, b
         )}
         <p className="text-[11px] text-muted-foreground">
           {state === "idle" && "赤いボタンを押すと録音が始まります"}
-          {state === "recording" && (quiet ? "録音中（10秒以上、音が小さいままです。スマホを話し手に近づけてください）" : "録音中（音を拾っています）")}
+          {state === "recording" && (quiet ? `${rec.callAudio ? "マイクと相手の声を" : ""}録音中（10秒以上、音が小さいままです。スマホを話し手に近づけてください）` : `${rec.callAudio ? "マイクと相手の声を" : ""}録音中（音を拾っています）`)}
           {state === "paused" && "一時停止中"}
           {state === "finishing" && "最後の録音を保存しています…"}
         </p>
 
+        {state === "idle" && canCallAudio && (
+          <div className="w-full max-w-md rounded-lg border bg-muted/30 px-3 py-2.5 space-y-1.5" data-testid="call-audio-option">
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <span className="flex items-center gap-2 text-sm font-medium"><MonitorSpeaker className="w-4 h-4 text-primary" /> オンライン会議（Meet・Zoom）の相手の声も録る</span>
+              <Switch checked={withCallAudio} onCheckedChange={toggleCallAudio} aria-label="相手の声も録る" />
+            </label>
+            {withCallAudio && (
+              <ol className="list-decimal pl-5 text-[11px] text-muted-foreground space-y-0.5">
+                <li>赤いボタンを押すと「共有するものを選ぶ」画面が出ます</li>
+                <li><b className="text-foreground">ブラウザの Meet・Zoom</b>：そのタブを選び、「タブの音声も共有する」をオン</li>
+                <li><b className="text-foreground">Zoom のアプリ</b>：「画面全体」を選び、「システムの音声も共有する」をオン（Mac では選べないことがあります。そのときはブラウザ版の Zoom で参加してください）</li>
+                <li>「共有」を押すと録音が始まります。相手には画面は送られません（Meet・Zoom の画面共有とは別です）</li>
+              </ol>
+            )}
+          </div>
+        )}
         {state === "idle" && (
           <button type="button" onClick={start} aria-label="録音を始める" className="w-24 h-24 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-lg">
             <Mic className="w-10 h-10" />
