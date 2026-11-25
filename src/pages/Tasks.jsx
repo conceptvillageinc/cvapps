@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useLocation, useNavigate, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, ListTodo, Layers, BarChart3, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight, Check, Search, X, Lock } from "lucide-react";
-import { useTaskData, useTaskWrites } from "@/lib/useTaskData";
+import { useTaskData, useTaskWrites, undoLastTaskAction } from "@/lib/useTaskData";
 import { MY_GROUPS, myGroupOf, myTasks, userLabel, todayYmd, dueOf, isPrivateTask, assigneesOf } from "@/lib/tasks";
 import { movePatch, nextSectionOrder, MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
 import { addDays, weekStart } from "@/lib/schedule";
@@ -43,6 +43,12 @@ function useSections(mode, ownerId) {
       if (j < 0 || j >= list.length) return;
       const a = list[i]; const b = list[j];
       await Promise.all([db.entities.TaskSection.update(a.id, { sort_order: b.sort_order }), db.entities.TaskSection.update(b.id, { sort_order: a.sort_order })]);
+      reload();
+    },
+    /** ドラッグで見出しを動かす（中のタスクは見出しについて一緒に動く） */
+    async reorder(s, order) {
+      qc.setQueryData(key, (old) => (old || []).map((x) => (x.id === s.id ? { ...x, sort_order: order } : x)));
+      try { await db.entities.TaskSection.update(s.id, { sort_order: order }); } catch (e) { toast.error("見出しを動かせませんでした: " + (e?.message || "")); }
       reload();
     },
     async remove(s) {
@@ -165,7 +171,7 @@ function MyTasksView({ data, me, today, onOpen, onOpenNew }) {
         : <TaskSectionList key={editId || "x"} mode="my" view={effective} tasks={list} sections={sections.map((s) => (s.id === editId ? { ...s, _edit: true } : s))} data={data} today={today} onOpen={onOpen} ops={ops}
             onMove={(t, sid, order) => writes.update(t, movePatch("my", sid, order))}
             onAdd={(sid, name, order) => writes.create({ name, assignee_id: me.id, ...placePatch, on_schedule: false, parties: [], status: "todo", start_date: today, end_date: today, ...movePatch("my", sid, order) })} />}
-      {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクはドラッグで並べ替え・ほかの見出しへ移せます。足したタスクは最初「自分だけ」です（案件・プロジェクトに紐づけると共有されます）</p>}
+      {isMe && effective !== "due" && <p className="text-[11px] text-slate-400">見出しの名前は押すと直せます。タスクは左のつまみ（⋮⋮）をドラッグで並べ替え・ほかの見出しへ移せます（行をなぞる・Shift＋↑↓で複数選んでまとめて動かせます）。足したタスクは最初「自分だけ」です（案件・プロジェクトに紐づけると共有されます）</p>}
     </div>
   );
 }
@@ -431,6 +437,18 @@ export default function Tasks() {
   const openTask = (id) => { const n = new URLSearchParams(params); if (id) n.set("task", id); else n.delete("task"); setParams(n); };
   const me = useMemo(() => data.byId.users.get(user?.id) || user || {}, [data.byId, user]);
   const T = TABS.find((t) => t.key === tab);
+  // ⌘Z／Ctrl＋Z で、完了・削除を元に戻す（文字を打っている欄の中では、ふつうの「打ち直し」のまま）
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z") return;
+      const el = e.target;
+      if (el?.closest?.("input, textarea, select, [contenteditable=true], [contenteditable='']")) return;
+      e.preventDefault();
+      undoLastTaskAction();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const sharedOpen = data.tasks.filter((t) => !t.completed && !isPrivateTask(t) && !t.parent_task_id).length;
 
   return (

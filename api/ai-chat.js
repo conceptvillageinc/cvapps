@@ -207,7 +207,7 @@ const EFFORTS = ['low', 'medium', 'high'];
 
 // ---------------------------------------------------------------------------
 // 資料メモ: Gmail・Google ドライブ・CVアプリなどを読んだ回答では、読んだ内容の要点を Claude に「資料メモ」として書いてもらい、
-//   回答の used_data に { kind: 'notes', text } として保存する。2 回目以降の回答は資料メモをもとに答え、読み直しは 2 回までにする
+//   回答の used_data に { kind: 'notes', text } として保存する。2 回目以降の回答は資料メモをもとに答え、読み直しは LATER_READ_MAX 回までにする
 //   （チャットの最初に情報をしっかり読み、あとは読み直さずに精度を保ったまま速く・安く答えるため）
 // ---------------------------------------------------------------------------
 const NOTES_OPEN = '<<<資料メモ';
@@ -231,16 +231,34 @@ ${notes}
 【2 回目以降の回答の決まり】
 - 上の資料メモと会話の内容をもとに答えてください。Gmail・Google ドライブ・CVアプリ・ブラウザの道具で読み直すのは、新しく調べるよう頼まれたときや、資料メモに無い情報がどうしても必要なときだけにしてください（1 回の回答で ${LATER_READ_MAX} 回まで。「新しく調べて」「調べ直して」と頼まれたときは回数に関係なく調べられます）。`;
 
-// 1 回の回答で、道具（Drive・Gmail・案件など）から読み込める量のめやす（文字数。日本語はほぼ 1 文字 1 トークン）
-const READ_BUDGET = 350_000;
-/** 道具の結果の大きさ（おおよその文字数）。画像は 2,000、PDF はファイルの大きさから見積もる */
-function contentSize(content) {
-  if (typeof content === 'string') return content.length;
-  return (content || []).reduce((sum, b) => sum + (b.type === 'text' ? (b.text || '').length
-    : b.type === 'image' ? 2000
-    : b.type === 'document' ? Math.max(3000, Math.round((b.source?.data?.length || 0) / 20))
+// 1 回の回答で、道具（Drive・Gmail・案件など）から読み込める量のめやす（トークン）
+const READ_BUDGET = 450_000;
+// Claude に送る量をこれ以下に保つ（上限は 100 万トークン。見積もりのずれの分を空けておく）
+const CONTEXT_SAFE = 900_000;
+const IMAGE_TOKENS = 5000;     // 画像 1 枚（大きい画像は 約 4,800 トークンになる）
+const TEXT_TOKEN_RATE = 1.3;   // 文字数 → トークン（日本語・記号・数字が多いと 1 文字 1 トークンより多くなる）
+/**
+ * 道具の結果・添付の大きさ（トークンの見積もり）。PDF はページ数から（pdfBlockInfo）、分からなければファイルの大きさから
+ * @param {WeakMap} [pdfInfo] docText.js の pdfBlockInfo
+ */
+function contentTokens(content, pdfInfo) {
+  if (typeof content === 'string') return Math.round(content.length * TEXT_TOKEN_RATE);
+  return (content || []).reduce((sum, b) => sum + (b.type === 'text' ? Math.round((b.text || '').length * TEXT_TOKEN_RATE)
+    : b.type === 'image' ? IMAGE_TOKENS
+    : b.type === 'document' ? (pdfInfo?.get(b)?.tokens || Math.max(60_000, Math.round((b.source?.data?.length || 0) / 10)))
     : 0), 0);
 }
+/** PDF・画像を文字だけにした結果（読み込める量が足りないとき用）。軽くできなければ null */
+function lightenContent(content, pdfInfo) {
+  if (!Array.isArray(content) || !content.some((b) => b.type === 'document' || b.type === 'image')) return null;
+  return content.map((b) => {
+    if (b.type === 'document') return { type: 'text', text: pdfInfo?.get(b)?.text || '（読み込める量が足りないため、この PDF は読みませんでした）' };
+    if (b.type === 'image') return { type: 'text', text: '（読み込める量が足りないため、この画像は読みませんでした）' };
+    return b;
+  });
+}
+const OVER_LIMIT_NOTE = (tokens) => `この回答で読み込める量の上限に達したため、この結果は読み込みませんでした（約 ${Math.round(tokens / 1000)} 千トークン分）。ここまでに読んだ内容で答えるか、資料を絞って調べ直してください。`;
+const isTooLong = (err) => /prompt is too long|too many tokens/i.test(String(err?.message || ''));
 
 // 長くなった会話の、古い道具の結果を Anthropic 側で自動で片付ける（context editing）。
 //   入力が 40 万トークンを超えたら、直近 4 回分を残して古い道具の結果を消す
@@ -424,6 +442,9 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
   let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 }; // トークン数（エラーのときも残す）
   let roundsDone = 0; // Claude とやり取りした回数
   let historyChars = 0; // そのまま渡した会話の長さ
+  let sentTokens = 0; // 直前に Claude に送った量（トークン。返事に書かれた実際の数字）
+  let lightened = 0; // 読み込める量が足りず、PDF・画像を文字だけにした数
+  let retriedTooLong = 0; // 上限を超えて、軽くして送り直した回数
   const used = [];
   const sources = []; // 参照した Web ページ（回答の下に番号付きで出す）
   const sourceNo = (url, title) => {
@@ -555,7 +576,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       { type: 'text', text: `今日（日本時間）: ${jstNow()}\n質問した人: ${name}（${user.email}）\nチャットの名前: ${chat.title}\nGoogle ワークスペース（Drive・Gmail）: ${google ? '読める（質問した人のアカウントとして）' : '読めない（会社のアカウントではないため）'}${web ? WEB_RULES : NO_WEB_RULE}${slides ? SLIDE_RULES : NO_SLIDE_RULE}${design ? designRuleText : NO_DESIGN_RULE}${continuation ? CONTINUE_RULE : ''}${priorNotes ? laterRule(priorNotes) : ''}${NOTES_RULE}${olderDigest ? `\n\n【これより前の会話の要点（長いため、${olderCount} 件は書き出しだけ。詳しい内容は資料メモを使ってください）】\n${olderDigest}` : ''}${chat.draft_text?.trim() ? `\n\n【このチャットの「下書き」欄の今の中身】\n${chat.draft_text.slice(0, 30000)}` : ''}` },
     ];
 
-    let readSize = 0; // この回答で道具から読み込んだ量（おおよその文字数）
+    let readSize = 0; // この回答で道具から読み込んだ量（トークンの見積もり）
     usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
     let final = null;
     let turn = []; // 今の回答の中身（Web の道具が長くかかって一度止まったときは、続きとつなぐ）
@@ -570,12 +591,31 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
         await admin.from('ai_chat_messages').update({ content: '（デザインの続きを作っています…）', used_data: [...usedData(), { kind: 'continue', token: crypto.randomUUID(), at: new Date().toISOString() }] }).eq('id', pendingId);
         return;
       }
-      const resp = await createMessage(claude, {
+      const send = () => createMessage(claude, {
         model: MODEL, max_tokens: 16000, system, messages, tools,
         thinking: { type: 'adaptive' }, output_config: { effort },
         ...(slides ? { container: { ...(containerId ? { id: containerId } : {}), skills: [{ type: 'anthropic', skill_id: 'pptx', version: 'latest' }] } } : {}),
       }, slides ? SLIDE_BETAS : []);
+      let resp;
+      for (let retry = 0; ; retry++) {
+        try { resp = await send(); break; } catch (err) {
+          // 上限（100 万トークン）を超えたときは、直前に読んだ道具の結果だけを軽くして送り直す
+          //   （それより前のやり取りは変えない。前の回の考えた中身が使えなくなるため）
+          const lastMsg = messages[messages.length - 1];
+          const lastIsResults = round > 0 && lastMsg?.role === 'user' && lastMsg.content.every((b) => b.type === 'tool_result');
+          if (!isTooLong(err) || !lastIsResults || retry >= 2) throw err;
+          for (const r of lastMsg.content) {
+            const light = retry === 0 ? lightenContent(r.content, lib.pdfBlockInfo) : null;
+            if (light) r.content = light;
+            else if (retry === 1 && !r.is_error) { r.content = OVER_LIMIT_NOTE(contentTokens(r.content, lib.pdfBlockInfo)); r.is_error = true; }
+          }
+          retriedTooLong += 1;
+          console.warn('ai-chat prompt too long, retrying with lighter tool results', { retry, round, message: String(err?.message || '').slice(0, 200) });
+        }
+      }
       roundsDone = round + 1;
+      // 今回 Claude に送った量（実際の数字）。次に読み込める量は、ここから決める
+      sentTokens = (resp.usage?.input_tokens || 0) + (resp.usage?.cache_read_input_tokens || 0) + (resp.usage?.cache_creation_input_tokens || 0) + (resp.usage?.output_tokens || 0);
       if (resp.container?.id) containerId = resp.container.id;
       if (slides) {
         collectFileIds(resp.content, fileIds);
@@ -652,12 +692,19 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
         }
       }
       // 1 回の回答で読み込む量に上限を設ける（上限 100 万トークンを超えて答えられなくなるのを防ぐ）
+      //   残りは「この回答で読める量」と「今回送った実際の量から、上限の手前まで」の小さい方。
+      //   入らない PDF・画像は、まず文字だけにして入れる。それでも入らなければ読まない
+      let room = Math.min(READ_BUDGET - readSize, CONTEXT_SAFE - sentTokens);
       for (const r of results) {
-        const size = contentSize(r.content);
-        if (readSize + size > READ_BUDGET) {
-          r.content = `この回答で読み込める量の上限に達したため、この結果は読み込みませんでした（約 ${Math.round(size / 1000)} 千字分）。ここまでに読んだ内容で答えるか、資料を絞って調べ直してください。`;
-          r.is_error = true;
-        } else readSize += size;
+        let size = contentTokens(r.content, lib.pdfBlockInfo);
+        if (size > room) {
+          const light = lightenContent(r.content, lib.pdfBlockInfo);
+          const lightSize = light ? contentTokens(light, lib.pdfBlockInfo) : Infinity;
+          if (lightSize <= room) { r.content = light; size = lightSize; lightened += 1; }
+          else { r.content = OVER_LIMIT_NOTE(size); r.is_error = true; size = 0; }
+        }
+        room -= size;
+        readSize += size;
       }
       messages.push({ role: 'user', content: results });
     }
@@ -666,6 +713,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       deck = await storeDeckFiles({ admin, claude, fileIds: [...fileIds], chatId: chat.id, messageId: pendingId });
     }
     if (slides && !deck) webNotes.push('PowerPoint のファイルを受け取れませんでした。もう一度お試しください');
+    if (lightened || retriedTooLong) webNotes.push('読む資料が多かったため、一部の PDF・画像は文字だけを読みました（図や表の見た目は読めていません）');
     // 回答の最後の資料メモを取り出して保存する（画面に出す本文からは外す）
     let replyText = renderText(turn);
     const memoAt = replyText.lastIndexOf(NOTES_OPEN);
@@ -679,7 +727,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
       || (final?.stop_reason === 'max_tokens' ? '回答が長くなりすぎて途中で止まりました。質問を分けてお試しください。' : '回答を作れませんでした。もう一度お試しください。');
     await admin.from('ai_chat_messages').update({
       content: reply + (notes.length ? `\n\n（読めなかった添付: ${notes.join(' / ')}）` : '') + (webNotes.length ? `\n\n（${[...new Set(webNotes)].join(' / ')}）` : ''),
-      status: 'done', usage: { ...usage, model: final?.model || MODEL, effort, web_search_requests: usage.web_search_requests || 0 }, used_data: usedData(),
+      status: 'done', usage: { ...usage, model: final?.model || MODEL, effort, web_search_requests: usage.web_search_requests || 0, sent_tokens: sentTokens, lightened, retried_too_long: retriedTooLong }, used_data: usedData(),
     }).eq('id', pendingId);
     await admin.from('ai_chats').update({ last_message_at: new Date().toISOString() }).eq('id', chat.id);
   } catch (err) {
@@ -690,7 +738,7 @@ async function answer({ admin, token, user, name, chat, text, files, web, slides
         : `回答を作れませんでした：${String(err?.message || err).slice(0, 300)}\nお手数ですが、もう一度送ってください。`,
       used_data: usedData(),
       // 元のエラーを裏で残す（画面には出さない。次に上限に当たったとき、何トークンだったかなどを確かめるため）
-      usage: { ...usage, effort, error: String(err?.message || err).slice(0, 1500), error_status: err?.status || null, error_at: new Date().toISOString(), rounds: roundsDone, slides, design, history_chars: historyChars },
+      usage: { ...usage, effort, error: String(err?.message || err).slice(0, 1500), error_status: err?.status || null, error_at: new Date().toISOString(), rounds: roundsDone, slides, design, history_chars: historyChars, sent_tokens: sentTokens, lightened, retried_too_long: retriedTooLong },
     }).eq('id', pendingId);
   }
 }

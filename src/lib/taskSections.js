@@ -39,6 +39,24 @@ export function orderAt(list, index, mode, movingId = null) {
   return (p + n) / 2;
 }
 
+/**
+ * 何件かをまとめて list の index の位置に入れるときの並び順（動かす順に、前後のあいだを等分）
+ *   index は動かすタスクも含めた list での位置
+ */
+export function ordersAt(list, index, mode, movingIds, count) {
+  const moving = new Set(movingIds);
+  const rest = list.filter((t) => !moving.has(t.id));
+  const at = list.slice(0, index).filter((t) => !moving.has(t.id)).length;
+  const prev = rest[at - 1]; const next = rest[at];
+  const p = prev ? orderOf(prev, mode) : null; const n = next ? orderOf(next, mode) : null;
+  return Array.from({ length: count }, (_, k) => {
+    if (p !== null && n !== null) return p + ((n - p) * (k + 1)) / (count + 1);
+    if (p !== null) return p + k + 1;
+    if (n !== null) return n - (count - k);
+    return k + 1;
+  });
+}
+
 /** 動かしたときに書き込む項目 */
 export const movePatch = (mode, sectionId, order) => ({ [MODES[mode].section]: sectionId || null, [MODES[mode].order]: order });
 

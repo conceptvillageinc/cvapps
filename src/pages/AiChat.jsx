@@ -452,15 +452,15 @@ function Composer({ chatId, canWrite, me, optimisticRef, onSent }) {
             className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${web ? "border-sky-300 bg-sky-100 text-sky-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
             <Globe className="h-3.5 w-3.5" />Web 検索{web ? "：オン" : ""}
           </button>
-          <button type="button" onClick={() => { setDesign((v) => !v); setSlides(false); }} aria-pressed={design} data-testid="ai-chat-design-toggle"
-            title={design ? "デザイン作成：オン（押すとオフ）" : "デザイン作成：オフ（押すとオン。商品画像・バナー・チラシなどのデザインを作って右に表示します。数分かかります）"}
-            className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${design ? "border-pink-300 bg-pink-100 text-pink-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
-            <Palette className="h-3.5 w-3.5" />デザイン作成{design ? "：オン" : ""}
-          </button>
           <button type="button" onClick={() => { setSlides((v) => !v); setDesign(false); }} aria-pressed={slides} data-testid="ai-chat-slides-toggle"
             title={slides ? "スライド作成：オン（押すとオフ）" : "スライド作成：オフ（押すとオン。PowerPoint を作って右にプレビューを出します。数分かかります）"}
             className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${slides ? "border-orange-300 bg-orange-100 text-orange-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
             <Presentation className="h-3.5 w-3.5" />スライド作成{slides ? "：オン" : ""}
+          </button>
+          <button type="button" onClick={() => { setDesign((v) => !v); setSlides(false); }} aria-pressed={design} data-testid="ai-chat-design-toggle"
+            title={design ? "デザイン作成：オン（押すとオフ）" : "デザイン作成：オフ（押すとオン。商品画像・バナー・チラシなどのデザインを作って右に表示します。数分かかります）"}
+            className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${design ? "border-pink-300 bg-pink-100 text-pink-800" : "border-transparent text-muted-foreground hover:bg-muted"}`}>
+            <Palette className="h-3.5 w-3.5" />デザイン作成{design ? "：オン" : ""}
           </button>
           <select value={effort} onChange={(e) => setEffort(e.target.value)} data-testid="ai-chat-effort" aria-label="考える深さ"
             title="速さ優先：すぐ答える／標準：ふだんはこれ／じっくり：時間と料金は増えるが、よく考えて答える"

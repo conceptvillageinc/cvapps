@@ -31,7 +31,7 @@ import { clientLines, estimateSubtotal } from "@/lib/estimateTotals";
 import CsvExportButton from "@/components/table/CsvExportButton";
 import { exportEstimatesCsv } from "@/lib/listCsv";
 import { useSessionState } from "@/hooks/use-session-state";
-import { matchesSearchText } from "@/lib/searchText";
+import { matchesSearchText, matchesEstimateNumber } from "@/lib/searchText";
 import SearchClear from "@/components/ui/search-clear";
 
 /** 一覧の金額は税別（明細の無い古い見積は合計金額のまま） */
@@ -147,10 +147,11 @@ export default function EstimateList() {
     setColumnFilters(prev => ({ ...prev, [key]: values }));
   };
 
-  // 検索: クライアント名・見積番号・件名・印刷の種類・用途。
+  // 検索: クライアント名・見積番号・件名・印刷の種類・用途。見積番号はハイフン・頭の 0 を省いても見つかる。
   //   半角カナ・ひらがな・空白・濁点が別の文字になっているもの、などの違いは無視して探す（src/lib/searchText.js）
   const filtered = estimates.filter(est => {
-    const matchSearch = matchesSearchText([est.client_name, est.estimate_number, est.estimate_title, est.print_type, est.usage], search);
+    const matchSearch = matchesSearchText([est.client_name, est.estimate_number, est.estimate_title, est.print_type, est.usage], search)
+      || matchesEstimateNumber(est.estimate_number, search); // 「Q958」「Q-958」のように区切りや頭の 0 を省いても見つける
     if (!matchSearch) return false;
     if (submissionFilter !== "all" && submissionOf(est) !== submissionFilter) return false;
 
