@@ -25,6 +25,25 @@ export function useTaskData() {
   return { tasks, users, projects, internalProjects, clients, byId, isLoading };
 }
 
+// ----------------------------------------------------------------------------
+// 元に戻す（⌘Z／Ctrl＋Z）：完了・未完了と削除を、新しい順に戻す。ページを読み直すと消える
+// ----------------------------------------------------------------------------
+const undoStack = []; // { label, run, done }
+const UNDO_MAX = 30;
+function pushUndo(entry) {
+  undoStack.push(entry);
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+  return entry;
+}
+/** いちばん新しい操作を戻す。戻せるものが無ければ false */
+export async function undoLastTaskAction() {
+  let e = undoStack.pop();
+  while (e && e.done) e = undoStack.pop(); // 「元に戻す」ボタンで戻し済みのものは飛ばす
+  if (!e) { toast("元に戻せる操作はありません"); return false; }
+  e.done = true;
+  try { await e.run(); toast.success(`元に戻しました：${e.label}`); return true; } catch (err) { toast.error("元に戻せませんでした: " + (err?.message || "")); return false; }
+}
+
 /** タスクの書き込み（画面はすぐ変え、保存できなければ読み直す） */
 export function useTaskWrites() {
   const qc = useQueryClient();
@@ -32,7 +51,13 @@ export function useTaskWrites() {
   // 一覧と、案件の工程表を読み直す
   const done = (t) => { qc.invalidateQueries({ queryKey: TASKS_KEY }); if (t?.project_id) qc.invalidateQueries({ queryKey: ["projectTasks", t.project_id] }); };
   return {
-    async update(task, patch) {
+    async update(task, patch, { undo = true } = {}) {
+      // 完了・未完了は ⌘Z で戻せるように、変える前の値を覚えておく
+      if (undo && "completed" in patch && !!patch.completed !== !!task.completed) {
+        const prev = Object.fromEntries(Object.keys(patch).map((k) => [k, task[k] ?? null]));
+        const label = `「${task.name}」を${patch.completed ? "完了" : "未完了に"}`;
+        pushUndo({ label, run: () => this.update({ ...task, ...patch }, prev, { undo: false }) });
+      }
       setLocal((list) => list.map((x) => (x.id === task.id ? { ...x, ...patch } : x)));
       try { const r = await db.entities.ProjectTask.update(task.id, patch); done({ ...task, ...patch }); return r; } catch (e) { done(task); throw e; }
     },
@@ -56,17 +81,21 @@ export function useTaskWrites() {
       const subs = (allTasks || []).filter((x) => x.parent_task_id === task.id);
       await this.remove(task);
       const strip = ({ id, created_at, updated_at, created_date, updated_date, ...rest }) => rest; // eslint-disable-line no-unused-vars
+      const restore = async () => {
+        const r = await this.create(strip(task));
+        for (const sub of subs) await this.create({ ...strip(sub), parent_task_id: r.id, pin: null });
+      };
+      // ⌘Z でも、通知の「元に戻す」でも戻せる（どちらかで戻したら、もう一方では戻さない）
+      const entry = pushUndo({ label: `「${task.name}」の削除`, run: restore });
       toast.success(`「${task.name}」を削除しました`, {
-        description: "コメント・添付は元に戻りません",
+        description: "コメント・添付は元に戻りません（⌘Z／Ctrl＋Z でも戻せます）",
         duration: 8000,
         action: {
           label: "元に戻す",
           onClick: async () => {
-            try {
-              const r = await this.create(strip(task));
-              for (const sub of subs) await this.create({ ...strip(sub), parent_task_id: r.id, pin: null });
-              toast.success("元に戻しました");
-            } catch (e) { toast.error("元に戻せませんでした: " + (e?.message || "")); }
+            if (entry.done) return;
+            entry.done = true;
+            try { await restore(); toast.success("元に戻しました"); } catch (e) { toast.error("元に戻せませんでした: " + (e?.message || "")); }
           },
         },
       });

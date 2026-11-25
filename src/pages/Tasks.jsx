@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useLocation, useNavigate, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, ListTodo, Layers, BarChart3, Loader2, Archive, LayoutList, Columns3, CalendarClock, Pencil, Building2, FolderKanban, ChevronDown, ChevronRight, Check, Search, X, Lock } from "lucide-react";
-import { useTaskData, useTaskWrites } from "@/lib/useTaskData";
+import { useTaskData, useTaskWrites, undoLastTaskAction } from "@/lib/useTaskData";
 import { MY_GROUPS, myGroupOf, myTasks, userLabel, todayYmd, dueOf, isPrivateTask, assigneesOf } from "@/lib/tasks";
 import { movePatch, nextSectionOrder, MODES, groupIntoSections, orderAt } from "@/lib/taskSections";
 import { addDays, weekStart } from "@/lib/schedule";
@@ -437,6 +437,18 @@ export default function Tasks() {
   const openTask = (id) => { const n = new URLSearchParams(params); if (id) n.set("task", id); else n.delete("task"); setParams(n); };
   const me = useMemo(() => data.byId.users.get(user?.id) || user || {}, [data.byId, user]);
   const T = TABS.find((t) => t.key === tab);
+  // ⌘Z／Ctrl＋Z で、完了・削除を元に戻す（文字を打っている欄の中では、ふつうの「打ち直し」のまま）
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z") return;
+      const el = e.target;
+      if (el?.closest?.("input, textarea, select, [contenteditable=true], [contenteditable='']")) return;
+      e.preventDefault();
+      undoLastTaskAction();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const sharedOpen = data.tasks.filter((t) => !t.completed && !isPrivateTask(t) && !t.parent_task_id).length;
 
   return (
