@@ -11,7 +11,8 @@
       "maxDuration": 120
     },
     "api/fetch-price.js": {
-      "maxDuration": 120
+      "maxDuration": 120,
+      "regions": ["hnd1"]
     },
     "api/invite.js": {
       "maxDuration": 30
@@ -42,7 +43,8 @@
     "api/capture-url.js": {
       "maxDuration": 60,
       "memory": 2048,
-      "includeFiles": "api/_lib/fonts/**"
+      "includeFiles": "api/_lib/fonts/**",
+      "regions": ["hnd1"]
     },
     "api/check-email-replies.js": {
       "maxDuration": 30
