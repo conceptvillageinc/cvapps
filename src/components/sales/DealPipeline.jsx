@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   DEAL_COLORS, DEAL_COLOR_KEYS, MAX_DEAL_TAGS, DEFAULT_PER_PERSON, SECTIONS,
-  newDeal, renumber, totalsOf, pipelineSummary, dealFromProject, pipelineToCsv, simCombo,
+  newDeal, renumber, totalsOf, pipelineSummary, dealFromProject, pipelineToCsv, simCombo, spreadDeals,
 } from "@/lib/dealPipeline";
 import { isImeEnter } from "@/lib/ime";
 
@@ -42,6 +42,131 @@ function YenInput({ value, onChange, className = "", ...rest }) {
   );
 }
 
+/** 折り返して全体を出す文字の入力欄（中身に合わせて高さが伸びる。改行は入れない） */
+function WrapInput({ value, onChange, className = "", ...rest }) {
+  const ref = useRef(null);
+  const fit = () => { const el = ref.current; if (!el) return; el.style.height = "auto"; el.style.height = `${el.scrollHeight + 2}px`; };
+  useLayoutEffect(fit, [value]);
+  useLayoutEffect(() => {
+    // 列の幅が変わったとき（画面の幅を変えたときなど）も高さを合わせ直す
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value.replace(/[\r\n]+/g, " "))}
+      onKeyDown={(e) => { if (e.key === "Enter" && !isImeEnter(e)) { e.preventDefault(); e.currentTarget.blur(); } }}
+      className={`block w-full min-h-7 resize-none overflow-hidden rounded-md border border-input px-1.5 py-1 text-xs leading-snug [overflow-wrap:anywhere] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${className}`}
+      {...rest}
+    />
+  );
+}
+
+/** 計上月（開始月〜終了月）。1 か月だけなら同じ月を選ぶ */
+function MonthRange({ start, end, months, onChange, readOnly }) {
+  const cls = "h-7 w-full min-w-0 appearance-none rounded-md border border-input bg-background/70 px-0.5 text-center text-[11px] tabular-nums cursor-pointer";
+  const opts = (<><option value="">—</option>{months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}</>);
+  const setStart = (v) => onChange({ start_month: v, end_month: !v ? "" : !end || end < v ? v : end });
+  const setEnd = (v) => onChange({ end_month: v, start_month: !v ? "" : !start || start > v ? v : start });
+  return (
+    <div className="flex items-center gap-0.5">
+      <select value={start || ""} onChange={(e) => setStart(e.target.value)} className={cls} aria-label="計上月（開始）" disabled={readOnly}>{opts}</select>
+      <span className="text-muted-foreground text-[10px] shrink-0">〜</span>
+      <select value={end || start || ""} onChange={(e) => setEnd(e.target.value)} className={cls} aria-label="計上月（終了）" disabled={readOnly}>{opts}</select>
+    </div>
+  );
+}
+
+const yenPlain = (v) => (v === null || v === undefined ? "—" : Math.round(Number(v) || 0).toLocaleString());
+
+/**
+ * シミュレーションの着地見込（月ごと）に、案件の積み上げの行を計上月で割って足した「計」の表。
+ * 管理表の「計」と同じ行（売上・仕入の単月／小計、粗利、粗利率、必要売上・必要粗利の単月／小計）。
+ */
+function MonthlyTotalTable({ title, simMonths, deals, marginTarget }) {
+  const keys = simMonths.map((m) => m.key);
+  const sp = spreadDeals(deals, keys);
+  const cols = simMonths.map((m, i) => {
+    const sales = (Number(m.sales) || 0) + sp.sales[i];
+    const purchase = (Number(m.purchase) || 0) + sp.purchase[i];
+    const gross = sales - purchase;
+    const t = m.target || {};
+    return {
+      sales, purchase, gross, margin: sales > 0 ? gross / sales : null,
+      need_sales: sales - (Number(t.sales) || 0), need_gross: gross - (Number(t.gross) || 0), need_gross_must: gross - (Number(t.gross_must) || 0),
+    };
+  });
+  const und = { sales: sp.undated.sales, purchase: sp.undated.purchase, gross: sp.undated.sales - sp.undated.purchase };
+  und.margin = und.sales > 0 ? und.gross / und.sales : null;
+  const sum = (k) => cols.reduce((a, c) => a + c[k], 0);
+  const tSum = (k) => simMonths.reduce((a, m) => a + (Number(m.target?.[k]) || 0), 0);
+  const yS = sum("sales") + und.sales; const yP = sum("purchase") + und.purchase; const yG = yS - yP;
+  const year = { sales: yS, purchase: yP, gross: yG, margin: yS > 0 ? yG / yS : null, need_sales: yS - tSum("sales"), need_gross: yG - tSum("gross"), need_gross_must: yG - tSum("gross_must") };
+  const defs = [
+    ["売上", "sales", "month"], ["売上", "sales", "cum"],
+    ["仕入", "purchase", "month"], ["仕入", "purchase", "cum"],
+    ["粗利", "gross"], ["粗利率", "margin", null, "pct"],
+    ["必要売上（目標）", "need_sales", "month"], ["必要売上（目標）", "need_sales", "cum"],
+    ["必要粗利（目標）", "need_gross", "month"], ["必要粗利（目標）", "need_gross", "cum"],
+    ["必要粗利（必達）", "need_gross_must", "month"], ["必要粗利（必達）", "need_gross_must", "cum"],
+  ];
+  const startLabel = simMonths[0]?.label || "";
+  const cell = (v, kind, strong, key) => {
+    const isPct = kind === "pct";
+    const text = isPct ? (v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`) : yenPlain(v);
+    const cls = isPct && v !== null && v !== undefined ? (v < marginTarget ? "text-red-700 font-medium" : "text-emerald-700 font-medium") : Number(v) < 0 ? "text-red-700" : "";
+    return <td key={key} className={`px-1 py-1 text-right tabular-nums whitespace-nowrap ${cls} ${strong ? "font-semibold" : ""}`}>{text}</td>;
+  };
+  return (
+    <div className="rounded-md border bg-background overflow-x-auto" data-testid="pipeline-monthly-table">
+      <table className="w-full table-fixed min-w-[1100px] text-[clamp(9px,0.66vw,11.5px)]">
+        <colgroup>
+          <col className="w-[40px]" /><col className="w-[150px]" />
+          {simMonths.map((m) => <col key={m.key} />)}
+          <col className="w-[6.5%]" /><col className="w-[8%]" />
+        </colgroup>
+        <thead>
+          <tr className="bg-slate-800 text-white">
+            <th className="px-1.5 py-1.5 text-left font-medium whitespace-nowrap" colSpan={2}>{title}</th>
+            {simMonths.map((m) => <th key={m.key} className="px-1 py-1.5 text-right font-medium whitespace-nowrap">{m.label}</th>)}
+            <th className="px-1 py-1.5 text-right font-medium whitespace-nowrap bg-amber-700/80" title="計上月を入れていない行">月未定{sp.undated.count > 0 ? `（${sp.undated.count}件）` : ""}</th>
+            <th className="px-1 py-1.5 text-right font-medium whitespace-nowrap bg-slate-700">年計</th>
+          </tr>
+        </thead>
+        <tbody>
+          {defs.map(([label, key, pair, kind], i) => {
+            const cum = pair === "cum";
+            const rowCls = i === 0 ? "" : pair === "month" || defs[i - 1]?.[2] === "cum" ? "border-t border-t-slate-300" : cum ? "border-t border-dashed border-t-slate-200" : "border-t";
+            let run = 0;
+            const undV = ["sales", "purchase", "gross", "margin"].includes(key) && !cum ? und[key] : null;
+            return (
+              <tr key={`${key}-${pair || ""}`} className={`${rowCls} ${cum ? "bg-sky-50/70" : "bg-muted/30"}`}>
+                <td className="px-1.5 py-1 font-medium text-muted-foreground whitespace-nowrap align-top">{i === 0 ? "計" : ""}</td>
+                <td className="px-1.5 py-1 leading-tight">
+                  {pair === "month" ? (
+                    <span className="flex items-center justify-between gap-1 whitespace-nowrap">{label}<span className="text-[0.85em] text-muted-foreground">単月</span></span>
+                  ) : cum ? (
+                    <span className="flex items-center justify-end gap-1 text-sky-800 whitespace-nowrap"><span className="text-[0.85em]">小計（{startLabel}〜）</span></span>
+                  ) : label}
+                </td>
+                {cols.map((c, mi) => { run += c[key] || 0; return cell(cum ? run : c[key], kind, cum, mi); })}
+                {cell(undV, kind, cum, "und")}
+                {cell(year[key], kind, cum, "year")}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TagSelect({ value, tags, onChange }) {
   const tag = tags.find((t) => t.id === value);
   const color = tag ? DEAL_COLORS[tag.color] : null;
@@ -53,7 +178,7 @@ function TagSelect({ value, tags, onChange }) {
   );
 }
 
-function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, onAdd, onRemove, onDuplicate, onSwap, drag, readOnly }) {
+function SectionTable({ sectionKey, label, rows, tags, projectsById, months = [], onPatch, onAdd, onRemove, onDuplicate, onSwap, drag, readOnly }) {
   const t = totalsOf(rows);
   const dragging = !!drag.dragId;
   const fromOther = dragging && drag.dragSection !== sectionKey;
@@ -79,15 +204,16 @@ function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, on
                 {!readOnly && <th className="w-[18px]"></th>}
                 <th className="text-left px-1.5 py-1.5 w-[76px] whitespace-nowrap">区分</th>
                 <th className="text-left px-1.5 py-1.5 whitespace-nowrap">クライアント名・件名</th>
-                <th className="text-right px-1.5 py-1.5 w-[92px] whitespace-nowrap">売上（税別）</th>
-                <th className="text-right px-1.5 py-1.5 w-[92px] whitespace-nowrap">仕入（税別）</th>
-                <th className="text-left px-1.5 py-1.5 w-[18%] whitespace-nowrap">備考</th>
+                <th className="text-right px-1.5 py-1.5 w-[86px] whitespace-nowrap">売上（税別）</th>
+                <th className="text-right px-1.5 py-1.5 w-[86px] whitespace-nowrap">仕入（税別）</th>
+                <th className="text-left px-1.5 py-1.5 w-[92px] whitespace-nowrap" title="開始月〜終了月に均等に割って月ごとの表に入れます（1か月なら同じ月）">計上月</th>
+                <th className="text-left px-1.5 py-1.5 w-[13%] whitespace-nowrap">備考</th>
                 {!readOnly && <th className="w-[60px]"></th>}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={readOnly ? 5 : 7} className="px-3 py-6 text-center text-muted-foreground">まだ行がありません{!readOnly && "。「行を追加」か「案件一覧から取り込む」から（もう一方の欄の行をつまんで、ここへ移すこともできます）"}</td></tr>
+                <tr><td colSpan={readOnly ? 6 : 8} className="px-3 py-6 text-center text-muted-foreground">まだ行がありません{!readOnly && "。「行を追加」か「案件一覧から取り込む」から（もう一方の欄の行をつまんで、ここへ移すこともできます）"}</td></tr>
               )}
               {rows.map((d) => {
                 const tag = tags.find((x) => x.id === d.tag);
@@ -104,12 +230,13 @@ function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, on
                     <td className="px-0.5 py-1"><TagSelect value={d.tag} tags={tags} onChange={(v) => onPatch(d.id, { tag: v })} /></td>
                     <td className="px-0.5 py-1">
                       <div className="flex items-center gap-1">
-                        <Input value={d.name} onChange={(e) => onPatch(d.id, { name: e.target.value })} className="h-7 text-xs bg-background/70 px-1.5" aria-label="クライアント名・件名" readOnly={readOnly} title={d.name} />
+                        <WrapInput value={d.name} onChange={(v) => onPatch(d.id, { name: v })} className="bg-background/70" aria-label="クライアント名・件名" readOnly={readOnly} />
                         {proj && <Link to={`/projects/${proj.id}`} className="text-muted-foreground hover:text-primary shrink-0" title={`案件 ${proj.project_number || ""} を開く`}><ExternalLink className="w-3.5 h-3.5" /></Link>}
                       </div>
                     </td>
                     <td className="px-0.5 py-1"><YenInput value={d.sales} onChange={(v) => onPatch(d.id, { sales: v })} aria-label="売上" className="bg-background/70" readOnly={readOnly} /></td>
                     <td className="px-0.5 py-1"><YenInput value={d.purchase} onChange={(v) => onPatch(d.id, { purchase: v })} aria-label="仕入" className="bg-background/70" readOnly={readOnly} /></td>
+                    <td className="px-0.5 py-1"><MonthRange start={d.start_month} end={d.end_month} months={months} onChange={(v) => onPatch(d.id, v)} readOnly={readOnly} /></td>
                     <td className="px-0.5 py-1"><Input value={d.memo} onChange={(e) => onPatch(d.id, { memo: e.target.value })} className="h-7 text-xs bg-background/70 px-1.5" aria-label="備考" readOnly={readOnly} title={d.memo} /></td>
                     {!readOnly && (
                       <td className="px-0.5 py-1">
@@ -125,10 +252,10 @@ function SectionTable({ sectionKey, label, rows, tags, projectsById, onPatch, on
               })}
             </tbody>
             <tfoot className="text-xs">
-              <tr className="border-t bg-muted/30 font-medium"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">売上／仕入（税別）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase)}</td><td colSpan={readOnly ? 1 : 2}></td></tr>
-              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">売上／仕入（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales_tax)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase_tax)}</td><td colSpan={readOnly ? 1 : 2}></td></tr>
-              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">粗利（税別）</td><td className="px-2 py-1 text-right tabular-nums font-semibold">{yen(t.gross)}</td><td className="px-2 py-1 text-right tabular-nums text-muted-foreground">{pct(t.margin)}</td><td colSpan={readOnly ? 1 : 2} className="px-2 py-1 text-[10px] text-muted-foreground">← 粗利率</td></tr>
-              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">粗利（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.gross_tax)}</td><td colSpan={readOnly ? 2 : 3}></td></tr>
+              <tr className="border-t bg-muted/30 font-medium"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">売上／仕入（税別）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase)}</td><td colSpan={readOnly ? 2 : 3}></td></tr>
+              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">売上／仕入（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.sales_tax)}</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.purchase_tax)}</td><td colSpan={readOnly ? 2 : 3}></td></tr>
+              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">粗利（税別）</td><td className="px-2 py-1 text-right tabular-nums font-semibold">{yen(t.gross)}</td><td className="px-2 py-1 text-right tabular-nums text-muted-foreground">{pct(t.margin)}</td><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-[10px] text-muted-foreground">← 粗利率</td></tr>
+              <tr className="bg-muted/30"><td colSpan={readOnly ? 2 : 3} className="px-2 py-1 text-right">粗利（税込）</td><td className="px-2 py-1 text-right tabular-nums">{yen(t.gross_tax)}</td><td colSpan={readOnly ? 3 : 4}></td></tr>
             </tfoot>
           </table>
         </div>
@@ -275,7 +402,8 @@ function ImportDialog({ open, onOpenChange, projects, deals, tags, onImport }) {
  * @param {object[]} p.projects
  * @param {string} p.fiscalLabel
  */
-export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChangeMeta, grossMust, grossGoal = 0, appAnnual, simTotals = null, projects, fiscalLabel, readOnly = false }) {
+export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChangeMeta, grossMust, grossGoal = 0, appAnnual, simTotals = null, simMonths = null, marginTarget = 0, projects, fiscalLabel, readOnly = false }) {
+  const months = (simMonths || []).map((m) => ({ key: m.key, label: m.label }));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const projectsById = useMemo(() => Object.fromEntries((projects || []).map((p) => [p.id, p])), [projects]);
@@ -354,7 +482,7 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
 
       <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3">
         {SECTIONS.map(([key, label]) => (
-          <SectionTable key={key} sectionKey={key} label={label} rows={deals.filter((d) => d.section === key)} tags={tags} projectsById={projectsById}
+          <SectionTable key={key} sectionKey={key} label={label} rows={deals.filter((d) => d.section === key)} tags={tags} projectsById={projectsById} months={months}
             onPatch={patch} onAdd={add} onRemove={remove} onDuplicate={duplicate} onSwap={swap} drag={drag} readOnly={readOnly} />
         ))}
       </div>
@@ -405,6 +533,14 @@ export default function DealPipeline({ deals, onChangeDeals, tags, meta, onChang
                 <Stat label="売上／人" value={hc ? yen(c.per_person.sales) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonSales)}`} tone={hc ? perOk(c.per_person.sales, summary.perPersonSales) : ""} />
                 <Stat label="粗利／人" value={hc ? yen(c.per_person.gross) : "人数が未設定"} sub={`目標 ${yen(summary.perPersonGross)}`} tone={hc ? perOk(c.per_person.gross, summary.perPersonGross) : ""} />
               </div>
+              {simMonths && simMonths.length > 0 && (
+                <MonthlyTotalTable
+                  title="月ごと"
+                  simMonths={simMonths}
+                  deals={deals.filter((d) => d.section === "confirmed" || (withForecast && d.section === "forecast"))}
+                  marginTarget={marginTarget}
+                />
+              )}
             </CardContent>
           </Card>
         );
