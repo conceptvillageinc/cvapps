@@ -131,7 +131,7 @@ export function toLineItems(rows, excluded) {
   rows.forEach((r, i) => {
     if (excluded.has(i)) return;
     if (r.kind === "heading") {
-      out.push({ row_type: "text", text: r.name });
+      out.push({ row_type: "text", text: r.name, bold: true });
     } else if (r.kind === "subtotal") {
       if (itemsSinceSubtotal > 0) out.push({ row_type: "subtotal", name: r.name, amount: 0, source_type: "subtotal" });
       itemsSinceSubtotal = 0;

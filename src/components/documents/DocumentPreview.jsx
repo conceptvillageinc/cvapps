@@ -145,7 +145,7 @@ export default function DocumentPreview({ type, doc, totals, company }) {
             {/* 行の背景は PDF と同じく、1 行目からグレー・白の互い違い */}
             {items.map((li, i) => li.row_type === "text" ? (
               <tr key={li.id || i} className={i % 2 === 0 ? "bg-neutral-100" : ""}>
-                <td colSpan={cols} className="px-1.5 py-1 break-words whitespace-pre-line">{li.name || "\u00a0"}</td>
+                <td colSpan={cols} className={`px-1.5 py-1 break-words whitespace-pre-line ${li.bold ? "font-bold" : ""}`}>{li.name || "\u00a0"}</td>
               </tr>
             ) : (
               <tr key={li.id || i} className={i % 2 === 0 ? "bg-neutral-100" : ""}>

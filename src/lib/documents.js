@@ -54,7 +54,7 @@ export function docItemsFromEstimate(estimate, { withText = false } = {}) {
       const unitPrice = inclusive ? toTaxExclusiveUnitPrice(li.unit_price, rate) : (Number(li.unit_price) || 0);
       return { li, rate, qty, unitPrice };
     })
-    .map(({ text, li, rate, qty, unitPrice }) => text ? newDocTextItem(String(li.text || ""), { source_line_id: li.id }) : newDocItem({
+    .map(({ text, li, rate, qty, unitPrice }) => text ? newDocTextItem(String(li.text || ""), { source_line_id: li.id, ...(li.bold ? { bold: true } : {}) }) : newDocItem({
       name: li.name || "",
       quantity: qty,
       unit: li.unit || "式",

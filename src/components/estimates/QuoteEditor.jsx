@@ -210,6 +210,11 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
     commitItems([...lineItems, { id: uid(), row_type: "text", text: "" }]);
   };
 
+  // タイトル行: 太字で出るテキスト行（「【(1) 〇〇】」のようなまとまりの見出し）
+  const addTitleRow = () => {
+    commitItems([...lineItems, { id: uid(), row_type: "text", text: "", bold: true }]);
+  };
+
   // 入稿先 URL だけでスクショが無い明細を、まとめて撮る（リンク切れに備える）。撮っている間の編集を消さないよう、最新の明細に当てる
   const itemsRef = useRef(lineItems);
   itemsRef.current = lineItems;
@@ -480,7 +485,7 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
                   </td>
                 </tr>
               )}
-              {/* 行の背景は PDF と同じく、グレーと白の互い違い（1 行目がグレー。提出しない行は数えない） */}
+              {/* 行の背景は PDF と同じく、グレーと白の互い違い（1 行目がグレー。提出しない行は数えない）。文字の大きさも PDF と同じく、見出し・小計・明細でそろえる */}
               {(() => { let n = 0; return lineItems.filter(li => showInternal || !isInternalLine(li)).map(li => ({ li, stripe: isInternalLine(li) ? "" : (n++ % 2 === 0 ? "bg-neutral-100" : "bg-white") })); })().map(({ li, stripe }) => isInternalLine(li) ? (
                   // 提出しない明細: 社内確認用のときだけ薄く出す（提出用・印刷・PDF には出ない）
                   <tr key={li.id} className="border-b border-dashed text-muted-foreground/70 bg-amber-50/40" data-testid="preview-internal-line">
@@ -498,11 +503,11 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
                 ) : (
                 li.row_type === "text" ? (
                   <tr key={li.id} className={stripe} data-testid="preview-row">
-                    <td colSpan={5} className="px-3 py-1.5 text-xs">{li.text || "\u00a0"}</td>
+                    <td colSpan={5} className={`px-3 py-1.5 ${li.bold ? "font-bold" : ""}`}>{li.text || "\u00a0"}</td>
                   </tr>
                 ) : li.row_type === "subtotal" ? (
                   <tr key={li.id} className={`${stripe} border-t border-slate-400`} data-testid="preview-row">
-                    <td colSpan={4} className="px-3 py-1.5 text-right text-xs font-semibold">{li.name || "小計"}</td>
+                    <td colSpan={4} className="px-3 py-1.5 text-right font-semibold">{li.name || "小計"}</td>
                     <td className="px-3 py-1.5 text-right font-semibold">{yen(li.amount)}</td>
                   </tr>
                 ) : (
@@ -751,7 +756,8 @@ export default function QuoteEditor({ estimate, onUpdate, onPreview, forecastPic
                 <div className="flex-1 flex flex-wrap gap-1.5 min-w-0">
                   <AddChip kind="menu" onClick={() => setAddPanel("past_estimate")} title="過去の見積の明細を選んで複製">過去見積から複製</AddChip>
                   <AddChip kind="menu" onClick={() => openAddPanel(LINE_ITEM_CATEGORIES.find(c => c.key === "other"))} title="名称・金額を自由に入れて追加">項目自由入力</AddChip>
-                  <AddChip kind="add" onClick={addTextRow} title="見出しや説明のための文字だけの行を追加">テキスト行を追加</AddChip>
+                  <AddChip kind="add" onClick={addTitleRow} title="まとまりの見出しになる、太字の文字だけの行を追加（例:【(1) ブランドコンセプトの制作】）">タイトル行を追加</AddChip>
+                  <AddChip kind="add" onClick={addTextRow} title="説明・注記のための文字だけの行を追加（ふつうの太さ）">テキスト行を追加</AddChip>
                   <AddChip kind="add" onClick={() => commitItems([...lineItems, { id: uid(), row_type: "subtotal", name: "小計", amount: 0, source_type: "subtotal" }])} title="直前の小計からここまでの合計を出す行を追加">小計行を追加</AddChip>
                 </div>
               </div>
@@ -1236,14 +1242,27 @@ function LineItemRow({ item, showInternal, isDragging, isFirst, isLast, onDragSt
       <tr className={`group ${isInternalLine(item) ? "bg-amber-50/70 [&_input]:text-muted-foreground [&_input]:line-through" : "bg-muted/30"} ${isDragging ? "opacity-40" : ""}`} onDragOver={onDragOver} onDrop={onDrop}>
         <td className="px-1 py-1.5 align-top">{handle}</td>
         <td colSpan={5} className="px-3 py-1.5">
+          <div className="flex items-center gap-1.5">
+          {/* テキスト ⇄ タイトル（太字）の切り替え */}
+          <button
+            type="button"
+            onClick={() => onChange({ bold: !item.bold })}
+            className={`shrink-0 rounded border px-1.5 h-6 text-[10px] leading-none ${item.bold ? "border-slate-700 bg-slate-800 text-white font-bold" : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"}`}
+            title={item.bold ? "タイトル行（太字）です。押すとふつうのテキスト行にします" : "テキスト行です。押すとタイトル行（太字）にします"}
+            aria-pressed={!!item.bold}
+            data-testid="title-toggle"
+          >
+            {item.bold ? "タイトル" : "テキスト"}
+          </button>
           <Input
             value={item.text || ""}
             onChange={e => onChange({ text: e.target.value })}
             onKeyDown={e => { if (e.key === "Enter" && !isImeEnter(e)) { e.preventDefault(); focusNextCell(e.currentTarget); } }}
             data-cell="text"
-            placeholder="見出し・注記（例: ▼ 印刷費）"
-            className="h-7 text-xs font-medium bg-transparent border-none px-0 focus-visible:ring-0"
+            placeholder={item.bold ? "タイトル（例:【(1) ブランドコンセプトの制作】）" : "見出し・注記（例: ▼ 印刷費）"}
+            className={`h-7 text-xs bg-transparent border-none px-0 focus-visible:ring-0 ${item.bold ? "font-bold text-foreground" : "font-normal"}`}
           />
+          </div>
         </td>
         <td className="px-1 py-1.5 align-top"><RowActions onDuplicate={onDuplicate} onRemove={onRemove} item={item} onChange={onChange} /></td>
       </tr>
