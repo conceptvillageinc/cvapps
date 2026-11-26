@@ -8,6 +8,7 @@ import { useTaskData } from "@/lib/useTaskData";
 import { userLabel, todayYmd, dueOf } from "@/lib/tasks";
 import { UserAvatar, TaskPlaceChip } from "@/components/tasks/parts";
 import { useAuth } from "@/lib/AuthContext";
+import { renderStrike } from "@/lib/strike";
 
 const ICON = { mention: AtSign, assigned: UserPlus, comment: MessageSquare, proof_form: FileCheck2 };
 const fmtAt = (s) => { const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
@@ -47,7 +48,7 @@ export default function Inbox() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs">{actor ? <><span className="font-semibold">{userLabel(actor)}</span> さんが</> : null}{NOTIFICATION_KIND[n.kind] || "お知らせ"}<span className="ml-2 text-muted-foreground">{fmtAt(n.created_at)}</span></p>
                 <p className="text-sm font-medium truncate">{n.title}</p>
-                {n.body && <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">{n.body}</p>}
+                {n.body && <p className="text-xs text-muted-foreground line-clamp-2 whitespace-pre-line">{renderStrike(n.body)}</p>}
                 {t && <TaskPlaceChip task={t} byId={data.byId} className="mt-1" />}
               </div>
               {!n.read_at && <span className="mt-1 h-2 w-2 rounded-full bg-primary shrink-0" />}
