@@ -107,7 +107,7 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
   ];
   // 長い名称は折り返して行を高くするので、ページ分けは高さで行う
   // 最後のページ以外は下まで使い、内訳・備考は最後のページだけ。2 ページ目以降は見出しが 1 行だけ
-  const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY, undefined, { notes: estimate.additional_notes, breakdownRows: totals.breakdown.length });
+  const { pages: pagedRows, caps, compact } = paginateRows(pdf, rows, columns, tableY, undefined, { notes: estimate.additional_notes, breakdownRows: totals.breakdown.length });
   const pages = pagedRows.length;
 
   for (let p = 0; p < pages; p++) {
@@ -142,8 +142,8 @@ function drawEstimate(pdf, { estimate, client, company, stamp, logo }) {
     const tableBottom = drawTable(pdf, y, { columns, rows: pagedRows[p], rowsPerPage: caps[p] });
 
     if (p === pages - 1) {
-      const bb = drawBreakdown(pdf, tableBottom, totals.breakdown);
-      drawNotes(pdf, bb, estimate.additional_notes);
+      const bb = drawBreakdown(pdf, tableBottom, totals.breakdown, { compact });
+      drawNotes(pdf, bb, estimate.additional_notes, { compact });
     }
     drawPageNumber(pdf, p + 1, pages);
   }
