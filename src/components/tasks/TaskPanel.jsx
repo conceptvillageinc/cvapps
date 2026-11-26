@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isStrikeShortcut, toggleStrike, renderStrike } from "@/lib/strike";
+import StrikeEditor from "@/components/tasks/StrikeEditor";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { db } from "@/api/db";
@@ -107,7 +108,6 @@ export default function TaskPanel({ taskId, data, onClose: close, onOpenTask, va
   const qc = useQueryClient();
   const [name, setName] = useState(task?.name || "");
   const [desc, setDesc] = useState(task?.description || "");
-  const [descEditing, setDescEditing] = useState(false); // 説明を入力しているあいだ（線を引いた表示から切り替える）
   const [newSub, setNewSub] = useState("");
   const [subOpen, setSubOpen] = useState(false); // サブタスクの入力欄を開いているか
   const [proof, setProof] = useState(null); // 開いている添付の id
@@ -251,19 +251,10 @@ export default function TaskPanel({ taskId, data, onClose: close, onOpenTask, va
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {/* 打ち消し線（~~ … ~~）があるときは、入力していないあいだは線を引いて見せる（押すと直せる） */}
-            {!descEditing && desc.includes("~~") ? (
-              <div role="button" tabIndex={0} onClick={() => setDescEditing(true)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setDescEditing(true); } }}
-                title="押すと直せます" className="w-full min-h-[4.5rem] cursor-text whitespace-pre-wrap break-words rounded-lg border px-3 py-2 text-sm leading-relaxed text-slate-800 hover:border-slate-300" data-testid="task-description-view">
-                {renderStrike(desc)}
-              </div>
-            ) : (
-              <textarea value={desc} autoFocus={descEditing} onChange={(e) => setDesc(e.target.value)} onFocus={() => setDescEditing(true)}
-                onBlur={() => { setDescEditing(false); if (desc !== (task.description || "")) save({ description: desc }); }}
-                onKeyDown={(e) => { if (isStrikeShortcut(e)) { e.preventDefault(); toggleStrike(e.currentTarget); } }}
-                rows={Math.min(14, Math.max(3, desc.split("\n").length + 1))}
-                placeholder="作業の内容・入稿情報・注意点など（文字を選んで Ctrl+Alt+X で打ち消し線）" className="w-full rounded-lg border px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30" data-testid="task-description" />
-            )}
+            {/* 打ち消し線は、入力中もそのまま線で見せる（Ctrl＋Alt＋X など） */}
+            <StrikeEditor value={desc} onChange={setDesc} onBlur={() => desc !== (task.description || "") && save({ description: desc })}
+              placeholder="作業の内容・入稿情報・注意点など（文字を選んで Ctrl+Alt+X で打ち消し線）"
+              className="min-h-[4.75rem] w-full rounded-lg border px-3 py-2 text-sm leading-relaxed text-slate-800 focus:ring-2 focus:ring-primary/30" testId="task-description" />
           </section>
 
           <section className="space-y-1.5">
