@@ -25,6 +25,7 @@ import { useRowDrag, RowHandle } from "@/components/documents/RowDrag";
 import DocumentPreview, { useDocPreviewPrefs, DocPreviewSwitches } from "@/components/documents/DocumentPreview";
 import ClientCombobox from "@/components/clients/ClientCombobox";
 import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
+import TitleToggle from "@/components/documents/TitleToggle";
 import { Mail } from "lucide-react";
 import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, INVOICE_DELIVERY_METHODS, roundUnitPrice, lineAmount } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
@@ -248,6 +249,8 @@ export default function InvoiceEdit() {
   }));
   const addItem = () => set("line_items", [...form.line_items, newDocItem({ transaction_date: form.invoice_date })]);
   const addTextItem = () => set("line_items", [...form.line_items, newDocTextItem()]);
+  // タイトル行: 太字で出るテキスト行（まとまりの見出し）
+  const addTitleItem = () => set("line_items", [...form.line_items, newDocTextItem("", { bold: true })]);
   const removeItem = (itemId) => set("line_items", form.line_items.filter((li) => li.id !== itemId));
 
   // 納品書 id → 納品書（件名を自動で決め直すときに使う）
@@ -603,6 +606,7 @@ export default function InvoiceEdit() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">明細（{form.line_items.length}行）</CardTitle>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addItem} disabled={locked}><Plus className="w-3.5 h-3.5" /> 行を追加</Button>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addTitleItem} disabled={locked} data-testid="add-title-row"><Plus className="w-3.5 h-3.5" /> タイトル行</Button>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addTextItem} disabled={locked}><Plus className="w-3.5 h-3.5" /> テキスト行</Button>
           </div>
         </CardHeader>
@@ -631,8 +635,8 @@ export default function InvoiceEdit() {
                     <td className="pl-2 py-1 align-middle w-6"><RowHandle {...drag.handleProps(li, idx)} disabled={locked} /></td>
                     <td className="px-2 py-1" colSpan={7}>
                       <div className="flex items-center gap-2">
-                        <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">テキスト</span>
-                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder="見出し・注記（金額なし。空のままなら 1 行分の余白）" className="h-8 text-xs" disabled={locked} />
+                        <TitleToggle bold={!!li.bold} onToggle={() => setItem(li.id, { bold: !li.bold })} disabled={locked} />
+                        <Input value={li.name || ""} onChange={(e) => setItem(li.id, { name: e.target.value })} placeholder={li.bold ? "タイトル（例:【(1) ブランドコンセプトの制作】）" : "見出し・注記（金額なし。空のままなら 1 行分の余白）"} className={`h-8 text-xs ${li.bold ? "font-bold" : ""}`} disabled={locked} />
                         {li.delivery_number && <span className="shrink-0 text-[10px] text-muted-foreground">納品書 {li.delivery_number}</span>}
                       </div>
                     </td>

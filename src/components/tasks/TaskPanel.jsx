@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { isStrikeShortcut, toggleStrike, renderStrike } from "@/lib/strike";
+import StrikeEditor from "@/components/tasks/StrikeEditor";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { db } from "@/api/db";
@@ -63,8 +65,12 @@ function CommentComposer({ users, onSend }) {
   };
   return (
     <div className="relative rounded-lg border bg-white">
-      <textarea ref={ref} value={text} onChange={onChange} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); }} rows={3}
-        placeholder="コメントを追加（@ でメンバーを呼ぶと、その人の受信トレイに届きます。Ctrl+Enter で送信）" className="w-full resize-none rounded-lg px-3 py-2 text-sm focus:outline-none" data-testid="comment-input" />
+      <textarea ref={ref} value={text} onChange={onChange} rows={3}
+        onKeyDown={(e) => {
+          if (isStrikeShortcut(e)) { e.preventDefault(); toggleStrike(e.currentTarget); return; }
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
+        }}
+        placeholder="コメントを追加（@ でメンバーを呼ぶと、その人の受信トレイに届きます。Ctrl+Enter で送信。文字を選んで Ctrl+Alt+X で打ち消し線）" className="w-full resize-none rounded-lg px-3 py-2 text-sm focus:outline-none" data-testid="comment-input" />
       {candidates.length > 0 && (
         <div className="absolute left-2 bottom-full mb-1 w-64 rounded-lg border bg-white shadow-lg py-1 z-10" data-testid="mention-list">
           {candidates.map((u) => (
@@ -83,9 +89,10 @@ function CommentComposer({ users, onSend }) {
 
 const highlight = (body, users) => {
   const names = users.flatMap((u) => [u.full_name, u.short_name].filter(Boolean)).sort((a, b) => b.length - a.length).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  if (!names.length) return body;
+  if (!names.length) return renderStrike(body);
   const re = new RegExp(`([@＠](?:${names.join("|")}))`, "g");
-  return String(body).split(re).map((part, i) => (re.test(part) ? <span key={i} className="rounded bg-blue-50 px-0.5 font-medium text-blue-700">{part}</span> : part));
+  const mark = (text) => String(text).split(re).map((part, i) => (re.test(part) ? <span key={i} className="rounded bg-blue-50 px-0.5 font-medium text-blue-700">{part}</span> : part));
+  return renderStrike(body, mark); // 打ち消し線（~~ … ~~）の中でも @ の色は付ける
 };
 
 /**
@@ -244,8 +251,10 @@ export default function TaskPanel({ taskId, data, onClose: close, onOpenTask, va
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={() => desc !== (task.description || "") && save({ description: desc })} rows={Math.min(14, Math.max(3, desc.split("\n").length + 1))}
-              placeholder="作業の内容・入稿情報・注意点など" className="w-full rounded-lg border px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30" data-testid="task-description" />
+            {/* 打ち消し線は、入力中もそのまま線で見せる（Ctrl＋Alt＋X など） */}
+            <StrikeEditor value={desc} onChange={setDesc} onBlur={() => desc !== (task.description || "") && save({ description: desc })}
+              placeholder="作業の内容・入稿情報・注意点など（文字を選んで Ctrl+Alt+X で打ち消し線）"
+              className="min-h-[4.75rem] w-full rounded-lg border px-3 py-2 text-sm leading-relaxed text-slate-800 focus:ring-2 focus:ring-primary/30" testId="task-description" />
           </section>
 
           <section className="space-y-1.5">

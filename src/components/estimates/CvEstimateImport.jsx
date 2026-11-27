@@ -108,7 +108,7 @@ export default function CvEstimateImport({ onAdd, onAppendNotes, onClose }) {
       <div className="space-y-3" data-testid="cv-estimate-import">
         <p className="text-xs text-muted-foreground">
           以前に作った CV の見積書（PDF・スクショ）を選ぶと、明細を AI が読み取って<strong>書かれているとおりに</strong>取り込みます。
-          金額はそのまま単価・金額になり、見出しはテキスト行、小計は小計行になります（消費税・合計はこの画面で計算し直します）。
+          金額はそのまま単価・金額になり、見出しはタイトル行（太字）、小計は小計行になります（消費税・合計はこの画面で計算し直します）。
         </p>
 
         <input ref={fileRef} type="file" accept={ACCEPT} multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
@@ -211,7 +211,7 @@ export default function CvEstimateImport({ onAdd, onAppendNotes, onClose }) {
                     <td colSpan={6} className="px-2 py-1">
                       <div className="flex items-center gap-1.5">
                         <Input value={r.name} onChange={(e) => patchRow(i, { name: e.target.value })} className="h-7 text-xs font-medium" />
-                        <Badge variant="outline" className="text-[9px] font-normal shrink-0">{r.kind === "subtotal" ? "小計行" : "テキスト行"}</Badge>
+                        <Badge variant="outline" className="text-[9px] font-normal shrink-0">{r.kind === "subtotal" ? "小計行" : "タイトル行"}</Badge>
                       </div>
                     </td>
                   </tr>

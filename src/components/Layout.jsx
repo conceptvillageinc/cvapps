@@ -27,9 +27,9 @@ import {
 const navItems = [
   { path: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { path: "/ai-chat", label: "AIチャット", icon: Bot, isNew: true },
-  { path: "/tasks", label: "タスク", icon: ListTodo, guest: true, trial: true },
-  { path: "/workload", label: "ワークロード", icon: BarChart3, trial: true },
-  { path: "/inbox", label: "受信トレイ", icon: Inbox, guest: true, trial: true },
+  { path: "/tasks", label: "タスク", icon: ListTodo, guest: true },
+  { path: "/workload", label: "ワークロード", icon: BarChart3 },
+  { path: "/inbox", label: "受信トレイ", icon: Inbox, guest: true },
   { path: "/meetings", label: "議事録", icon: Mic },
   { path: "/projects", label: "案件一覧", icon: FolderKanban },
   { path: "/clients", label: "クライアント一覧", icon: UserSquare },

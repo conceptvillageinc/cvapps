@@ -113,14 +113,43 @@ export function parseTable(text) {
   return rows;
 }
 
-// カテゴリ名から明細の大カテゴリを推定する
+// 明細の名前（または見出し・カテゴリ名）から大カテゴリを推定する
+//   ・大カテゴリの名前そのものが書かれていれば、それを使う
+//   ・「構築」だけでは web にしない（「ブランド構築」はデザイン）。web はサイト・ホームページ・コーディングなどがあるときだけ
+//   ・「ロゴ」「ガイドライン」「意匠」などはデザイン費
+//   ・決めきれないものは「自由入力」（呼ぶ側で、見出しのカテゴリに任せる）
+const CATEGORY_NAMES = ["デザイン費", "印刷費（紙）", "印刷費（紙以外）", "システム構築費", "web構築費", "自由入力"];
+const DESIGN_RE = /デザイン|ロゴ|意匠|ガイドライン|ピクトグラム|イラスト|撮影|写真|コピーライティング|キャッチコピー|ネーミング|校正|編集|DTP|版下|レイアウト/i;
+const SYSTEM_RE = /システム|アプリ|要件定義|API|データベース|\bDB\b|生成AI|AI導入/i;
+const WEB_RE = /web|ウェブ|ホームページ|サイト|LP|ランディングページ|コーディング|CMS|WordPress|ワードプレス|サーバー|ドメイン|フロントエンド|トップページ|下層ページ|SEO/i;
+const PRINT_RE = /印刷|刷り|プリント|出力/;
+const NON_PAPER_RE = /パッケージ|ラベル|シール|ステッカー|のぼり|パネル|看板|横断幕|タペストリー|布|Tシャツ|タオル|缶|箱/;
+const PLAN_RE = /ブランド|コンセプト|ディレクション/;
 export function guessCategory(text) {
-  const s = String(text ?? "");
-  if (/デザイン/.test(s)) return "デザイン費";
-  if (/システム|開発|要件定義|API|DB|データベース/.test(s)) return "システム構築費";
-  if (/構築|コーディング|CMS|実装|フロントエンド|移行/.test(s)) return "web構築費";
-  if (/印刷/.test(s)) return /パッケージ|ラベル|のぼり|パネル/.test(s) ? "印刷費（紙以外）" : "印刷費（紙）";
+  const s = String(text ?? "").normalize("NFKC").trim();
+  if (!s) return "自由入力";
+  const exact = exactCategory(s);
+  if (exact) return exact;
+  if (DESIGN_RE.test(s)) return "デザイン費";
+  if (SYSTEM_RE.test(s)) return "システム構築費";
+  if (WEB_RE.test(s)) return "web構築費";
+  if (PRINT_RE.test(s)) return NON_PAPER_RE.test(s) ? "印刷費（紙以外）" : "印刷費（紙）";
+  if (PLAN_RE.test(s)) return "デザイン費";
+  if (/構築|開発/.test(s)) return /システム/.test(s) ? "システム構築費" : "自由入力";
   return "自由入力";
+}
+
+const exactCategory = (text) => {
+  const s = String(text ?? "").normalize("NFKC").trim().toLowerCase();
+  return s ? CATEGORY_NAMES.find((c) => c.normalize("NFKC").toLowerCase() === s) : undefined;
+};
+
+/** 明細 1 行の大カテゴリ。カテゴリ列に大カテゴリの名前が書かれていればそれ。次に明細の名前、決まらなければ見出しから */
+export function guessItemCategory(name, group) {
+  const written = exactCategory(group);
+  if (written) return written;
+  const own = guessCategory(name);
+  return own !== "自由入力" ? own : guessCategory(group);
 }
 
 /**
@@ -184,7 +213,7 @@ export function parseSheetItems(text) {
     const pctMatch = (nameOnly || label).match(/(\d+(?:\.\d+)?)\s*[%％]/);
     rows.push({
       kind: "item", level,
-      category: guessCategory(currentCategory || label),
+      category: guessItemCategory(name || label, currentCategory),
       group: currentCategory,
       name: name || label,
       quantity: q, unit: unit || "式", unit_price: up, amount: amt,
