@@ -11,7 +11,8 @@ import RangeCalendar from "@/components/tasks/RangeCalendar";
 import PlacePicker, { moveTaskPlace } from "@/components/tasks/PlacePicker";
 
 // 表の列（タスク名・予定時間・紐づけ先・公開範囲・優先度・期日・担当）
-const gridOf = ({ place, assignee }) => ({ gridTemplateColumns: ["minmax(18rem,1fr)", "4.5rem", place && "minmax(8rem,13rem)", "6rem", "4.5rem", "6.5rem", assignee && "3rem"].filter(Boolean).join(" ") });
+// 期日は「11/20〜11/26」が入る幅だけにして、そのぶん紐づけ先（案件名）を広く見せる
+const gridOf = ({ place, assignee }) => ({ gridTemplateColumns: ["minmax(18rem,1fr)", "4.5rem", place && "minmax(8rem,14.5rem)", "6rem", "4.5rem", "5rem", assignee && "3rem"].filter(Boolean).join(" ") });
 
 function Pill({ map, value }) {
   const v = map[value];
