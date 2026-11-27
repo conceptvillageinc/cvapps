@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Printer, Plus, Trash2, ArrowUp, ArrowDown, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { usePrintTypes, useSavePrintTypes, PAPER_GROUPS, defaultPrintTypes } from "@/lib/printTypes";
+import PriceMasterTabs from "@/components/masters/PriceMasterTabs";
 
 /**
  * 印刷種別マスタ: 印刷物種別（印刷費の大カテゴリ）の追加・削除・表示順・紙／紙以外の区分。
@@ -49,7 +50,8 @@ export default function PrintTypeMaster() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="max-w-6xl mx-auto space-y-5">
+      <PriceMasterTabs />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Printer className="w-6 h-6" /> 印刷種別マスタ</h1>

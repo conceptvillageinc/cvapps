@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Link2, FileUp, AlertTriangle, Check, Globe, Save, ArrowLeft, ArrowRight, Image as ImageIcon } from "lucide-react";
+import { Loader2, Link2, FileUp, AlertTriangle, Check, Globe, Save, ArrowLeft, Plus, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { WEB_VENDORS, applyMarkup, lineAmount } from "@/lib/constants";
-import { usePrintTypes } from "@/lib/printTypes";
+import { usePrintTypes, useSavePrintTypes, PAPER_GROUPS } from "@/lib/printTypes";
 import { usePricingRules, markupRateFor } from "@/lib/pricing";
 import { todayString } from "@/lib/fiscal";
 import { shotsPatch } from "@/lib/lineShots";
@@ -63,9 +63,8 @@ function guessVendor(url, printVendors) {
 
 
 const STEPS = [
-  { n: 1, label: "価格ページの URL" },
-  { n: 2, label: "読み取り方法を選ぶ" },
-  { n: 3, label: "確認して明細に追加" },
+  { n: 1, label: "価格ページの URL と読み取り方法" },
+  { n: 2, label: "確認して明細に追加" },
 ];
 
 /** 上部のステップ表示 */
@@ -94,10 +93,10 @@ function StepBar({ current }) {
 /**
  * ネット印刷のページから価格表を読み取り、価格マスタに登録しつつ、選んだセルを見積の明細に入れる。
  *
- * 3 ステップ:
- *   1. 価格ページの URL（必須。読み取りに使わなくても価格の根拠として保存する）と、大カテゴリ・参照メーカー・税表示
- *   2. 読み取り方法（URL から自動 / スクショ・PDF）を選ぶ
- *   3. 読み取った価格表を確認し、明細に入れるセルを選んで登録
+ * 2 ステップ（1 ページ目で URL から読み取りまで済ませる）:
+ *   1. 価格ページの URL（必須。読み取りに使わなくても価格の根拠として保存する）と、大カテゴリ・参照メーカー・税表示。
+ *      その下で読み取り方法（URL から自動 / スクショ・PDF）を選んで、そのまま読み取る
+ *   2. 読み取った価格表を確認し、明細に入れるセルを選んで登録
  *
  * props:
  *   defaultCategory  印刷仕様タブの種別などから渡す初期値
@@ -105,7 +104,8 @@ function StepBar({ current }) {
  *   onClose()
  */
 export default function WebPriceImport({ defaultCategory = "", onAdd, onClose }) {
-  const { names: printTypeNames, groupOf } = usePrintTypes();
+  const { types: printTypes, names: printTypeNames, groupOf, row: printTypesRow } = usePrintTypes();
+  const savePrintTypes = useSavePrintTypes();
   const queryClient = useQueryClient();
   const { rules } = usePricingRules();
   const fileInputRef = useRef(null);
@@ -128,6 +128,9 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
   const [error, setError] = useState(null);
   const [picked, setPicked] = useState([]); // [{ rowIdx, cellIdx }]
   const [taxMode, setTaxMode] = useState(null); // null = メーカーの設定に従う
+  // 大カテゴリをこの画面から増やす（印刷種別マスタに保存される）
+  const [newType, setNewType] = useState(null); // null | { name, paper_group }
+  const [addingType, setAddingType] = useState(false);
 
   const { data: printVendors = [] } = useQuery({
     queryKey: ["printVendors"],
@@ -177,12 +180,29 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
     if (!vendorTouched) setVendorName(guessVendor(value, printVendors));
   };
 
-  const goStep2 = () => {
-    if (!urlValid) { toast.error("価格ページの URL を入力してください（https:// から）"); return; }
-    if (!category) { toast.error("大カテゴリ（印刷物種別）を選んでください"); return; }
-    if (!vendorName.trim()) { toast.error("参照メーカーを入力してください"); return; }
-    setError(null);
-    setStep(2);
+  // 読み取りを始める前に、上の欄がそろっているか確かめる
+  const checkInputs = () => {
+    if (!urlValid) { toast.error("価格ページの URL を入力してください（https:// から）"); return false; }
+    if (!category) { toast.error("大カテゴリ（印刷物種別）を選んでください"); return false; }
+    if (!vendorName.trim()) { toast.error("参照メーカーを入力してください"); return false; }
+    return true;
+  };
+
+  const addPrintType = async () => {
+    const n = (newType?.name || "").trim();
+    if (!n) return;
+    if (printTypes.some((t) => t.name === n)) { setCategory(n); setNewType(null); return; }
+    setAddingType(true);
+    try {
+      await savePrintTypes(printTypesRow, [...printTypes, { name: n, paper_group: newType.paper_group }]);
+      setCategory(n);
+      setNewType(null);
+      toast.success(`大カテゴリ「${n}」を追加しました（印刷種別マスタにも入りました）`);
+    } catch (err) {
+      toast.error("追加できませんでした: " + err.message);
+    } finally {
+      setAddingType(false);
+    }
   };
 
   const applyResult = (data, method) => {
@@ -191,7 +211,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
     if (data.spec_summary && !specSummary) setSpecSummary(data.spec_summary);
     setPicked([]);
     setReadMethod(method);
-    setStep(3);
+    setStep(2);
     toast.success(`価格表を${(data.price_grid || []).length}行読み取りました。明細に入れるマスを選んでください`);
   };
 
@@ -205,11 +225,12 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
   };
 
   const runUrl = async () => {
+    if (!checkInputs()) return;
     setLoading("url"); setError(null);
     startPageShot(url.trim());
     try {
       const res = await db.functions.invoke("fetchPriceFromUrl", { url: url.trim(), spec_summary: specSummary });
-      if (res?.data?.error) setError(res.data.error);
+      if (res?.data?.error) setError(`${res.data.error}（B のスクショ／PDF なら読み取れます）`);
       else if (!res?.data?.price_grid?.length) setError("URL から価格表を読み取れませんでした。B のスクショ／PDF をお試しください。");
       else applyResult(res.data, "url");
     } catch (err) {
@@ -360,12 +381,26 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">大カテゴリ（印刷物種別） <span className="text-destructive">*</span></Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="選択" /></SelectTrigger>
-                <SelectContent>
-                  {printTypeNames.map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {newType ? (
+                <div className="space-y-1.5 rounded-md border border-primary/40 bg-primary/5 p-2" data-testid="new-print-type">
+                  <Input value={newType.name} onChange={(e) => setNewType({ ...newType, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPrintType(); } }} placeholder="例: 封筒印刷" className="h-8 text-xs" autoFocus aria-label="新しい大カテゴリの名前" />
+                  <div className="flex items-center gap-1.5">
+                    <select value={newType.paper_group} onChange={(e) => setNewType({ ...newType, paper_group: e.target.value })} className="h-8 flex-1 min-w-0 rounded-md border bg-background px-1.5 text-xs" aria-label="印刷費の区分">
+                      {PAPER_GROUPS.map((g) => <option key={g} value={g}>印刷費（{g}）</option>)}
+                    </select>
+                    <Button type="button" size="sm" className="h-8 px-2.5 text-xs" onClick={addPrintType} disabled={addingType || !newType.name.trim()}>{addingType ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "追加"}</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setNewType(null)} disabled={addingType}>やめる</Button>
+                  </div>
+                </div>
+              ) : (
+                <Select value={category} onValueChange={(v) => (v === "__new__" ? setNewType({ name: "", paper_group: "紙" }) : setCategory(v))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="選択" /></SelectTrigger>
+                  <SelectContent>
+                    {printTypeNames.map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
+                    <SelectItem value="__new__" className="text-xs font-semibold text-primary border-t mt-1 pt-2"><span className="inline-flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> 新しい大カテゴリを追加</span></SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">参照メーカー <span className="text-destructive">*</span></Label>
@@ -384,26 +419,12 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t pt-4">
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Globe className="w-3 h-3" /> URL は価格マスタに保存されます</span>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>キャンセル</Button>
-              <Button onClick={goStep2} className="gap-1.5">次へ：読み取り方法を選ぶ <ArrowRight className="w-4 h-4" /></Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ---- ステップ 2: 読み取り方法 ---- */}
-      {step === 2 && (
-        <div className="space-y-4">
-          {summaryBadge}
-          <p className="text-xs font-semibold">価格表をどの方法で読み取りますか？</p>
+          <p className="text-xs font-semibold border-t pt-4">価格表をどの方法で読み取りますか？</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-3 rounded-xl border-2 p-4">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Link2 className="w-5 h-5 text-primary" /></div>
               <p className="text-sm font-semibold">A. URL から自動で読み取る</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">ステップ 1 の URL のページを取得して、枚数×納期の価格表を AI が読み取ります。ボタンを押すだけで済みます。</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">上の URL のページを取得して、枚数×納期の価格表を AI が読み取ります。ボタンを押すだけで済みます。</p>
               <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 leading-relaxed">グラフィックなど一部のサイトは、サーバーからのアクセスを遮断したり価格表を後から描画するため、読み取れないことがあります。その場合は B へ。</p>
               <Button onClick={runUrl} disabled={!!loading} className="mt-auto self-start gap-1.5" size="sm">
                 {loading === "url" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />} URL から読み込む
@@ -416,21 +437,21 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
               <p className="text-xs text-muted-foreground leading-relaxed">ブラウザで価格表を全部表示した状態のスクリーンショット（または PDF）を選びます。画像から AI が価格表を読み取ります。</p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">画像は価格マスタに保存され、後から見返せます。表が長い場合はページ全体のスクショで OK。</p>
               <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={runFile} />
-              <Button onClick={() => fileInputRef.current?.click()} disabled={!!loading} className="mt-auto self-start gap-1.5" size="sm">
+              <Button onClick={() => { if (checkInputs()) fileInputRef.current?.click(); }} disabled={!!loading} className="mt-auto self-start gap-1.5" size="sm">
                 {loading === "file" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />} ファイルを選ぶ
               </Button>
             </div>
           </div>
           {loading && <p className="text-xs text-muted-foreground">AI が価格表を読み取っています。30 秒ほどかかることがあります…</p>}
           <div className="flex items-center justify-between border-t pt-4">
-            <Button variant="outline" onClick={() => { setError(null); setStep(1); }} className="gap-1.5" disabled={!!loading}><ArrowLeft className="w-4 h-4" /> 戻る（URL を直す）</Button>
-            <span className="text-[10px] text-muted-foreground">読み取り結果は次のステップで確認してから明細に入れます</span>
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Globe className="w-3 h-3" /> URL は価格マスタに保存されます。読み取り結果は次の画面で確認してから明細に入れます</span>
+            <Button variant="outline" onClick={onClose} disabled={!!loading}>キャンセル</Button>
           </div>
         </div>
       )}
 
-      {/* ---- ステップ 3: 確認して登録 ---- */}
-      {step === 3 && (
+      {/* ---- ステップ 2: 確認して登録 ---- */}
+      {step === 2 && (
         <div className="space-y-4">
           {summaryBadge}
           {optionsNote && (
@@ -517,7 +538,7 @@ export default function WebPriceImport({ defaultCategory = "", onAdd, onClose })
               </div>
             )}
           <div className="flex items-center justify-between border-t pt-4">
-            <Button variant="outline" onClick={() => { setError(null); setStep(2); }} className="gap-1.5" disabled={!!loading}><ArrowLeft className="w-4 h-4" /> 戻る（読み直す）</Button>
+            <Button variant="outline" onClick={() => { setError(null); setStep(1); }} className="gap-1.5" disabled={!!loading}><ArrowLeft className="w-4 h-4" /> 戻る（読み直す）</Button>
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted-foreground">選択中 <strong className="text-foreground">{pickedCells.length} パターン</strong>{pickedCells.length > 0 && <>　出し値 合計 ¥{pickedCells.reduce((s, c) => s + c.amount, 0).toLocaleString()}</>}</span>
               <Button onClick={save} disabled={!!loading || pickedCells.length === 0} className="gap-1.5">

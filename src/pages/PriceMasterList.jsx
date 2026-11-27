@@ -15,6 +15,7 @@ import {
   ExternalLink, Sparkles, Grid3x3, Save,
 } from "lucide-react";
 import { toast } from "sonner";
+import PriceMasterTabs from "@/components/masters/PriceMasterTabs";
 
 const UPDATE_DUE_DAYS = 90;
 const OTHER_VENDOR = "__other__";
@@ -604,6 +605,7 @@ export default function PriceMasterList() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
+      <PriceMasterTabs />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
