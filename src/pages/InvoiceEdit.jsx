@@ -26,6 +26,7 @@ import DocumentPreview, { useDocPreviewPrefs, DocPreviewSwitches } from "@/compo
 import ClientCombobox from "@/components/clients/ClientCombobox";
 import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
 import TitleToggle from "@/components/documents/TitleToggle";
+import CopyShareLinkButton from "@/components/documents/CopyShareLinkButton";
 import { Mail } from "lucide-react";
 import { PERSON_IN_CHARGE_OPTIONS, EMAIL_TO_PERSON_MAP, INVOICE_DELIVERY_METHODS, roundUnitPrice, lineAmount } from "@/lib/constants";
 import { todayString } from "@/lib/fiscal";
@@ -440,6 +441,7 @@ export default function InvoiceEdit() {
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}>
                 <Mail className="w-3.5 h-3.5" /> メール送付
               </Button>
+              <CopyShareLinkButton kind="請求書" clientName={form.client_name} title={form.title || project?.name} path={`/invoices/${id}`} />
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={async () => { try { await save.mutateAsync(); } catch { return; } navigate(`/receipts/new?invoice=${id}`); }} title="この請求書の明細から領収書を作ります">
                 <ReceiptText className="w-3.5 h-3.5" /> 領収書を発行{receipts.length > 0 ? `（${receipts.length}）` : ""}
               </Button>

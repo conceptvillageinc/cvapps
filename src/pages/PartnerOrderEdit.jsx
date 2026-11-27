@@ -5,6 +5,7 @@ import { db } from "@/api/db";
 import { partnerOrderFilename } from "@/lib/docFilename";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
+import CopyShareLinkButton from "@/components/documents/CopyShareLinkButton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -263,6 +264,7 @@ export default function PartnerOrderEdit() {
               <Button size="sm" className="gap-1.5 text-xs" onClick={previewPdf} disabled={pdfLoading}>{pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileOutput className="w-3.5 h-3.5" />} 印刷用に新しいタブで開く</Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={downloadPdf} disabled={pdfLoading}><FileDown className="w-3.5 h-3.5" /> PDF保存</Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}><Mail className="w-3.5 h-3.5" /> 連携先へメール送付</Button>
+              <CopyShareLinkButton kind="発注書" clientName={form.partner_name} title={form.title} path={`/partner-orders/${id}`} />
               <AlertDialog>
                 <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /> 削除</Button></AlertDialogTrigger>
                 <AlertDialogContent>

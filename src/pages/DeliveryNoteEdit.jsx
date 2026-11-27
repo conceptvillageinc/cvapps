@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import SalesCategorySelect from "@/components/estimates/SalesCategorySelect";
 import TitleToggle from "@/components/documents/TitleToggle";
+import CopyShareLinkButton from "@/components/documents/CopyShareLinkButton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -344,6 +345,7 @@ export default function DeliveryNoteEdit() {
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setMailOpen(true)}>
                 <Mail className="w-3.5 h-3.5" /> メール送付
               </Button>
+              <CopyShareLinkButton kind="納品書" clientName={form.client_name} title={form.title} path={`/delivery-notes/${id}`} />
               {form.invoice_id ? (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate(`/invoices/${form.invoice_id}`)}>
                   <Receipt className="w-3.5 h-3.5" /> 請求書を開く
