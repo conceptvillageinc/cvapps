@@ -37,6 +37,7 @@ import { recurringDrift, recurringPayloadFromEstimate, templateAddsMonth } from 
 import { isRecurringParent, invoiceShareFor } from "@/lib/projectInvoicing";
 import MonthSelect from "@/components/ui/month-select";
 import RecordHistory from "@/components/common/RecordHistory";
+import { MarginBadge, MarginBar } from "@/components/projects/GrossMargin";
 
 const yen = (n) => (n === null || n === undefined ? "—" : `¥${Math.round(Number(n)).toLocaleString()}`);
 /** 粗利: マイナスのときは「−¥1,000」の形（「¥-1,000」にしない） */
@@ -430,14 +431,13 @@ export default function ProjectDetail() {
                 <Field label="発注見込"><span className="tabular-nums" data-testid="expected-cost">{Number(project.expected_cost) > 0 ? "−" : ""}{yen(project.expected_cost)}</span></Field>
                 <Field label="その他費用"><span className="tabular-nums" data-testid="other-cost">{Number(project.other_cost) > 0 ? "−" : ""}{yen(project.other_cost)}</span></Field>
                 <Field label="粗利見込">
-                  <span className={`tabular-nums font-medium ${expectedGross < 0 ? "text-destructive" : "text-emerald-700"}`}>{grossYen(expectedGross)}</span>
-                  {Number(project.expected_revenue) > 0 && (
-                    <span className="text-[10px] text-muted-foreground ml-1">
-                      {Math.round((expectedGross / Number(project.expected_revenue)) * 100)}%
-                    </span>
-                  )}
+                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                    <span className={`tabular-nums font-medium ${expectedGross < 0 ? "text-destructive" : "text-emerald-700"}`}>{grossYen(expectedGross)}</span>
+                    <MarginBadge gross={expectedGross} revenue={project.expected_revenue} testId="expected-margin" />
+                  </span>
                 </Field>
               </div>
+              <MarginBar className="mt-2" revenue={project.expected_revenue} costs={[{ label: "発注見込", value: project.expected_cost }, { label: "その他費用", value: project.other_cost }]} testId="expected-bar" />
             </div>
             <div className="border-t pt-3">
               <p className="text-[10px] text-muted-foreground mb-1.5">実績</p>
@@ -462,9 +462,12 @@ export default function ProjectDetail() {
                     </Field>
                     <Field label="粗利（実績）" className="col-span-2">
                       {/* 粗利見込と同じ色（プラスは緑・マイナスは赤） */}
-                      <span className={`tabular-nums font-medium ${gross < 0 ? "text-destructive" : gross > 0 ? "text-emerald-700" : ""}`} data-testid="actual-gross">{grossYen(gross)}</span>
-                      {rev > 0 && <span className="text-[10px] text-muted-foreground ml-1">{Math.round((gross / rev) * 100)}%</span>}
+                      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span className={`tabular-nums font-medium ${gross < 0 ? "text-destructive" : gross > 0 ? "text-emerald-700" : ""}`} data-testid="actual-gross">{grossYen(gross)}</span>
+                        <MarginBadge gross={gross} revenue={rev} testId="actual-margin" />
+                      </span>
                     </Field>
+                    <MarginBar className="col-span-2 sm:col-span-4" revenue={rev} costs={[{ label: "発注合計", value: cost }]} testId="actual-bar" />
                   </div>
                 );
               })()}

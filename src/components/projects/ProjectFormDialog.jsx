@@ -16,6 +16,7 @@ import { generateProjectNumber } from "@/lib/projectNumber";
 import { nextMonthEnd, todayString } from "@/lib/fiscal";
 import ClientCombobox from "@/components/clients/ClientCombobox";
 import ClientFormDialog from "@/components/clients/ClientFormDialog";
+import { MarginBadge, MarginBar } from "@/components/projects/GrossMargin";
 
 // 数値入力: 空は 0、カンマ入りも受け付ける
 const toNumber = (v) => {
@@ -268,11 +269,13 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">粗利見込</Label>
-                <div className={`h-9 flex items-center justify-end px-3 rounded-md bg-muted/40 text-sm font-medium tabular-nums ${expectedGross < 0 ? "text-destructive" : ""}`}>
-                  {yen(expectedGross)}
+                <div className={`h-9 flex items-center justify-end gap-2 px-3 rounded-md bg-muted/40 text-sm font-medium tabular-nums ${expectedGross < 0 ? "text-destructive" : toNumber(form.expected_revenue) > 0 ? "text-emerald-700" : ""}`}>
+                  {expectedGross < 0 ? `−${yen(-expectedGross)}` : yen(expectedGross)}
                 </div>
+                <div className="flex justify-end"><MarginBadge gross={expectedGross} revenue={toNumber(form.expected_revenue)} testId="form-expected-margin" /></div>
               </div>
             </div>
+            <MarginBar revenue={toNumber(form.expected_revenue)} costs={[{ label: "発注見込", value: toNumber(form.expected_cost) }, { label: "その他費用", value: toNumber(form.other_cost) }]} testId="form-expected-bar" />
             {project && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t">
                 <div className="space-y-1.5 pt-2">
@@ -285,9 +288,15 @@ export default function ProjectFormDialog({ open, onOpenChange, project = null, 
                 </div>
                 <div className="space-y-1.5 pt-2 col-span-2">
                   <Label className="text-xs">粗利（実績）</Label>
-                  <div className="h-9 flex items-center justify-end px-3 rounded-md bg-muted/40 text-sm font-medium tabular-nums">
-                    {yen(toNumber(form.confirmed_revenue) - toNumber(form.confirmed_cost))}
-                  </div>
+                  {(() => {
+                    const g = toNumber(form.confirmed_revenue) - toNumber(form.confirmed_cost);
+                    return (
+                      <div className={`h-9 flex items-center justify-end gap-2 px-3 rounded-md bg-muted/40 text-sm font-medium tabular-nums ${g < 0 ? "text-destructive" : g > 0 ? "text-emerald-700" : ""}`}>
+                        <MarginBadge gross={g} revenue={toNumber(form.confirmed_revenue)} testId="form-actual-margin" />
+                        {g < 0 ? `−${yen(-g)}` : yen(g)}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <p className="col-span-2 sm:col-span-4 text-[10px] text-muted-foreground">受注合計は請求書から、発注合計は連携先への発注書と入稿記録から自動で入ります。ここで直すと「手入力」になり、自動では変わりません（案件の画面の「自動に戻す」で戻せます）</p>
               </div>
