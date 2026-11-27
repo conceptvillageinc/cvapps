@@ -48,14 +48,15 @@ export function MarginBar({ revenue, costs, className = "", testId }) {
   return (
     <div className={className} data-testid={testId}>
       <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted" title={`受注を 100% としたときの割合`}>
-        {parts.map((c, i) => c.value > 0 && <div key={c.label} className={shades[i % shades.length]} style={{ width: `${(c.value / r) * 100}%` }} />)}
+        {/* 粗利（緑）を左から。そのあとに費用 */}
         {gross > 0 && <div className="bg-emerald-500" style={{ width: `${(gross / r) * 100}%` }} />}
+        {parts.map((c, i) => c.value > 0 && <div key={c.label} className={shades[i % shades.length]} style={{ width: `${(c.value / r) * 100}%` }} />)}
       </div>
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground tabular-nums">
+        <span className="inline-flex items-center gap-1 font-medium text-emerald-700"><span className="h-2 w-2 rounded-sm bg-emerald-500" />粗利 {pct(gross)}%</span>
         {shown.map((c) => (
           <span key={c.label} className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-sm ${dots[parts.indexOf(c) % dots.length]}`} />{c.label} {pct(c.value)}%</span>
         ))}
-        <span className="inline-flex items-center gap-1 font-medium text-emerald-700"><span className="h-2 w-2 rounded-sm bg-emerald-500" />粗利 {pct(gross)}%</span>
       </p>
     </div>
   );
