@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -48,19 +48,23 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
   const [v, setV] = useState(task.name || "");
   const ended = useRef(false);
   const textRef = useRef(null);
+  const boxRef = useRef(null);
+  // 入力欄の高さを文字に合わせる（表示のときと同じ折り返しのまま直せる）
+  useLayoutEffect(() => { const el = boxRef.current; if (!el) return; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }, [v, editing]);
   const caretAt = useRef(null); // クリックした文字の位置（そこから直せるように）。キーで始めたときは全部選ぶ
   useEffect(() => { if (editing) { setV(task.name || ""); ended.current = false; } }, [editing]);
   useEffect(() => { if (focused && !editing) textRef.current?.focus(); }, [focused, editing]);
   const end = (save, how = null) => {
     if (ended.current) return; // Enter のあとの「外れた」で二重に保存しない
     ended.current = true;
+    if (!save) setV(task.name || ""); // Esc でやめたら、打ちかけの文字は捨てる（次に開いたとき、カーソルが飛ばないように）
     const name = v.trim();
     onEnd(save && name && name !== task.name ? name : null, how);
   };
   const isTypingEnter = isTypingEnterKey;
   if (editing) {
     return (
-      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onFocus={(e) => {
+      <textarea ref={boxRef} autoFocus rows={1} value={v} onChange={(e) => setV(e.target.value.replace(/[\r\n]+/g, " "))} onClick={(e) => e.stopPropagation()} onFocus={(e) => {
           const at = caretAt.current; caretAt.current = null;
           if (at === null) { e.target.select(); return; }
           e.target.setSelectionRange(at, at);
@@ -68,14 +72,22 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
         onKeyDown={(e) => {
           const typing = !e.nativeEvent.isComposing && e.keyCode !== 229; // 変換候補を ↓ で選んでいるときは動かない
           if (isTypingEnter(e)) { e.preventDefault(); end(true, "enter"); }
-          else if (typing && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); end(true, (e.shiftKey ? "select-" : "") + (e.key === "ArrowDown" ? "down" : "up")); }
+          else if (typing && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            const el = e.currentTarget;
+            const how = (e.shiftKey ? "select-" : "") + (e.key === "ArrowDown" ? "down" : "up");
+            const lineH = parseFloat(getComputedStyle(el).lineHeight) || 20;
+            if (el.scrollHeight <= lineH * 1.5) { e.preventDefault(); end(true, how); return; } // 1 行なら、すぐ上下のタスクへ
+            // 何行かあるときは、まず行のあいだを動き、いちばん上／下の行でもう一度押すと上下のタスクへ
+            const before = [el.selectionStart, el.selectionEnd];
+            setTimeout(() => { if (el.selectionStart === before[0] && el.selectionEnd === before[1] && document.activeElement === el) end(true, how); }, 0);
+          }
           if (e.key === "Escape") end(false);
         }}
-        onBlur={() => end(true)} className="h-7 min-w-0 flex-1 rounded border border-primary/50 bg-white px-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="タスク名" data-testid="task-name-inline" />
+        onBlur={() => end(true)} className="block min-w-0 flex-1 resize-none overflow-hidden rounded -mx-0.5 px-0.5 py-0 border-0 bg-white text-sm leading-snug text-slate-800 [overflow-wrap:anywhere] ring-2 ring-primary/40 focus:outline-none" aria-label="タスク名" data-testid="task-name-inline" />
     );
   }
   return (
-    <span ref={textRef} tabIndex={-1} onClick={(e) => { e.stopPropagation(); caretAt.current = clickedOffset(e, task.name || ""); onStart(); }} onBlur={onFocusLeave}
+    <span ref={textRef} tabIndex={-1} onClick={(e) => { e.stopPropagation(); caretAt.current = clickedOffset(e, task.name || ""); setV(task.name || ""); onStart(); }} onBlur={onFocusLeave}
       onKeyDown={(e) => {
         if (isTypingEnter(e)) { e.preventDefault(); e.stopPropagation(); onFocusEnter(); }
         else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); onFocusMove(e.key === "ArrowDown" ? 1 : -1, e.shiftKey); }
