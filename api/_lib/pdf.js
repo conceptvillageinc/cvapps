@@ -54,13 +54,13 @@ export function renderDocumentPdf({ type, doc, company, stamp, logo = null }) {
       : [['摘要', 0, 'left'], ['数量', 63, 'center'], ['単価', 63, 'right'], ['明細金額', 88, 'right']];
     // 長い名称は折り返して行を高くするので、ページ分けは高さで行う
     // 最後のページ以外は下まで使い、内訳・備考は最後のページだけ。2 ページ目以降は見出しが 1 行だけ
-    const { pages: pagedRows, caps } = paginateRows(pdf, rows, columns, tableY, undefined, { notes: doc.notes, breakdownRows: Array.isArray(doc.tax_breakdown) && doc.tax_breakdown.length ? doc.tax_breakdown.length : 1 });
+    const { pages: pagedRows, caps, compact } = paginateRows(pdf, rows, columns, tableY, undefined, { notes: doc.notes, breakdownRows: Array.isArray(doc.tax_breakdown) && doc.tax_breakdown.length ? doc.tax_breakdown.length : 1 });
     const pages = pagedRows.length;
 
     try {
       for (let p = 0; p < pages; p++) {
         if (p > 0) pdf.addPage();
-        drawPage(pdf, { type, doc, company, stamp, logo, rows: pagedRows[p], rowsPerPage: caps[p], page: p + 1, pages, columns });
+        drawPage(pdf, { type, doc, company, stamp, logo, rows: pagedRows[p], rowsPerPage: caps[p], page: p + 1, pages, columns, compact });
       }
     } catch (err) {
       reject(err);
@@ -74,7 +74,7 @@ function titleOf(type, doc) {
   return type === 'invoice' ? `御請求書 ${doc.invoice_number}` : `納品書 ${doc.delivery_number}`;
 }
 
-function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, page, pages, columns }) {
+function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, page, pages, columns, compact = false }) {
   const isInvoice = type === 'invoice';
 
   // 2 ページ目以降は 1 行の見出しだけにして、すぐ明細表を続ける
@@ -124,8 +124,8 @@ function drawPage(pdf, { type, doc, company, stamp, logo, rows, rowsPerPage, pag
     const breakdown = Array.isArray(doc.tax_breakdown) && doc.tax_breakdown.length > 0
       ? doc.tax_breakdown
       : [{ rate: 10, taxable: doc.subtotal, tax: doc.tax }];
-    const bb = drawBreakdown(pdf, tableBottom, breakdown);
-    drawNotes(pdf, bb, doc.notes);
+    const bb = drawBreakdown(pdf, tableBottom, breakdown, { compact });
+    drawNotes(pdf, bb, doc.notes, { compact });
   }
 
   drawPageNumber(pdf, page, pages);

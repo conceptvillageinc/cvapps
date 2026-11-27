@@ -458,8 +458,8 @@ export function drawTable(pdf, y, { columns, rows, rowsPerPage }) {
 }
 
 /** 税率別内訳（右）。戻り値は枠の下端 y */
-export function drawBreakdown(pdf, tableBottom, breakdown) {
-  const y = tableBottom + L.breakdownGap;
+export function drawBreakdown(pdf, tableBottom, breakdown, { compact = false } = {}) {
+  const y = tableBottom + (compact ? COMPACT.breakdownGap : L.breakdownGap);
   const bx = MARGIN + L.bandW + 1;
   const bw = PAGE.width - MARGIN - bx;
   const rows = breakdown.length ? breakdown : [{ rate: 10, taxable: 0, tax: 0 }];
@@ -482,21 +482,27 @@ export function drawBreakdown(pdf, tableBottom, breakdown) {
 
 /** 備考の枠の高さ。文が長いときは、全部入るように枠を高くする（上限あり） */
 const NOTES_MAX_H = 300;
-export function notesHeight(pdf, notes) {
+export function notesHeight(pdf, notes, { compact = false } = {}) {
   const body = String(notes || '').trim();
-  if (!body) return L.notesH;
+  if (!body) return compact ? COMPACT.emptyNotesH : L.notesH;
   pdf.font('jp').fontSize(8);
   const th = pdf.heightOfString(body, { width: CONTENT_W - 28 });
-  return Math.min(NOTES_MAX_H, Math.max(L.notesH, Math.ceil(th) + 26));
+  return Math.min(NOTES_MAX_H, Math.max(compact ? Math.ceil(th) + 24 : L.notesH, Math.ceil(th) + 26));
 }
+
+/**
+ * 1 枚に詰めるときの余白（少しだけ 2 枚目にはみ出すとき用）
+ *   内訳・備考の上の空きを狭くし、備考が空なら枠を「備考」の見出しだけの高さにする
+ */
+const COMPACT = { breakdownGap: 8, notesGap: 6, emptyNotesH: 26 };
 
 /** 税率別内訳の枠の高さ */
 const breakdownHeight = (n) => 4 + Math.max(1, n || 1) * 23;
 
 /** 備考（全幅の枠。内訳の下）。文が長いときは枠を高くする */
-export function drawNotes(pdf, breakdownBottom, notes) {
-  const y = breakdownBottom + L.notesGap;
-  const h = Math.max(30, Math.min(notesHeight(pdf, notes), L.pageNoY - 10 - y));
+export function drawNotes(pdf, breakdownBottom, notes, { compact = false } = {}) {
+  const y = breakdownBottom + (compact ? COMPACT.notesGap : L.notesGap);
+  const h = Math.max(compact ? COMPACT.emptyNotesH : 30, Math.min(notesHeight(pdf, notes, { compact }), L.pageNoY - 10 - y));
   pdf.lineWidth(0.8).rect(MARGIN, y, CONTENT_W, h).stroke(LINE);
   pdf.font('jp').fontSize(8.5).fillColor(BLACK).text('備考', MARGIN + 14, y + 5, { lineBreak: false });
   const body = String(notes || '').trim();
@@ -539,7 +545,8 @@ export function rowsForFull(tableY) {
  * 行をページに分ける。最後のページ以外は下まで使い、最後のページは内訳・備考の分を空ける。
  *   notes / breakdownRows: 最後のページの備考の文と内訳の税率の数（備考が長いと、その分だけ行を減らす）
  *   2 ページ目以降の最後のページは、明細のあとに空行を少しだけ残して表を詰める（下に空欄の行を並べない）
- * @returns {{ pages: object[][], caps: number[] }}  caps はページごとの行数（drawTable の rowsPerPage）
+ *   少しだけ 2 ページ目にはみ出すときは、内訳・備考のまわりを詰めて 1 ページに収める（compact: true）
+ * @returns {{ pages: object[][], caps: number[], compact: boolean }}  caps はページごとの行数（drawTable の rowsPerPage）
  */
 const CONT_LAST_SPARE = 2; // 2 ページ目以降の最後のページで、明細のあとに残す空行
 export function paginateRows(pdf, rows, columns, firstTableY, restTableY = CONT_TABLE_Y, { notes = '', breakdownRows = 1 } = {}) {
@@ -569,16 +576,23 @@ export function paginateRows(pdf, rows, columns, firstTableY, restTableY = CONT_
     if (move.length === 0) break;
     pages.push(move); used.push(move.reduce((n, r) => n + r.units, 0));
   }
+  // 2 ページになったが、内訳・備考のまわりを詰めれば 1 ページに入るときは 1 ページにする
+  if (pages.length > 1) {
+    const total = used.reduce((a, b) => a + b, 0);
+    const compactCap = rowsFor(firstTableY, { notesH: notesHeight(pdf, notes, { compact: true }), breakdownRows, compact: true });
+    if (total <= compactCap) return { pages: [pages.flat()], caps: [compactCap], compact: true };
+  }
   const caps = pages.map((_, i) => {
     if (i < pages.length - 1) return full(i);
     if (i === 0) return last(i); // 1 ページだけのときは、これまでどおり決まった行数の表
     return Math.max(used[i], Math.min(last(i), Math.max(used[i] + CONT_LAST_SPARE, 5)));
   });
-  return { pages, caps };
+  return { pages, caps, compact: false };
 }
 
 /** 1ページに入る行数（表の開始位置から内訳・備考の分を空けて計算） */
-export function rowsFor(tableY, { notesH = L.notesH, breakdownRows = 1 } = {}) {
-  const reserved = L.breakdownGap + breakdownHeight(breakdownRows) + L.notesGap + notesH + 14; // 内訳＋備考＋ページ番号
+export function rowsFor(tableY, { notesH = L.notesH, breakdownRows = 1, compact = false } = {}) {
+  const gaps = compact ? COMPACT.breakdownGap + COMPACT.notesGap : L.breakdownGap + L.notesGap;
+  const reserved = gaps + breakdownHeight(breakdownRows) + notesH + 14; // 内訳＋備考＋ページ番号
   return Math.max(5, Math.floor((L.pageNoY - reserved - tableY - L.headH) / L.rowH));
 }
