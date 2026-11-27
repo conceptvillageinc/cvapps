@@ -563,7 +563,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                         <div onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => renaming !== t.id && onOpen(t.id)}
                           onMouseDown={(e) => rowMouseDown(e, t)} onMouseEnter={() => rowMouseEnter(t)} onClickCapture={(e) => rowClickCapture(e, t)}
                           style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 cursor-pointer transition-colors duration-700 ${selected.has(t.id) ? "bg-primary/10 hover:bg-primary/15" : added === t.id ? "bg-emerald-50" : "hover:bg-slate-50"} ${drag && movingOf(drag).includes(t.id) ? "opacity-40" : ""}`} data-testid="task-row" data-selected={selected.has(t.id) || undefined}>
-                          <div className="relative flex items-start gap-1.5 min-w-0 py-2 pr-2">{/* 名前が折り返すときは、◯などを 1 行目にそろえる */}
+                          <div className="relative flex items-start gap-1.5 min-w-0 py-2">{/* 名前が折り返すときは、◯などを 1 行目にそろえる */}
                             {/* つまみ：ここをドラッグすると動かす（選んでいる行なら、選んだ全部） */}
                             <span data-grip draggable={renaming !== t.id} onDragStart={(e) => gripDragStart(e, t)} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={(e) => e.stopPropagation()}
                               title={selected.has(t.id) && selCount > 1 ? `ドラッグで選んだ ${selCount} 件をまとめて動かす` : "ドラッグで動かす"}
