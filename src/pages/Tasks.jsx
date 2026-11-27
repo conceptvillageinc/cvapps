@@ -71,8 +71,8 @@ function DueList({ list, data, today, onOpen, showAssignee }) {
           <section key={g.key}>
             <p className={`px-4 pt-3 pb-1 text-sm font-bold ${g.key === "overdue" ? "text-rose-600" : "text-slate-800"}`}>{g.label}<span className="ml-2 text-[11px] font-normal text-slate-400">{rows.length}</span></p>
             <ul>{rows.map((t) => (
-              <li key={t.id} onClick={() => onOpen(t.id)} className="flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 cursor-pointer border-t border-slate-100 first:border-t-0" data-testid="task-row">
-                <TaskCheck done={t.completed} onToggle={(v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null })} size={17} />
+              <li key={t.id} onClick={() => onOpen(t.id)} className="flex items-start gap-2.5 px-4 py-2 hover:bg-slate-50 cursor-pointer border-t border-slate-100 first:border-t-0" data-testid="task-row">
+                <span className="flex shrink-0 pt-px"><TaskCheck done={t.completed} onToggle={(v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null })} size={17} /></span>
                 <span className="flex-1 min-w-0 [overflow-wrap:anywhere] text-sm leading-snug">{t.name}</span>
                 <TaskPlaceChip task={t.parent_task_id ? data.byId.tasks.get(t.parent_task_id) || t : t} byId={data.byId} />
                 <DueLabel task={t} today={today} className="w-20 text-right" />
