@@ -31,10 +31,23 @@ function Visibility({ task }) {
  *   Shift＋↓／↑ で、保存して複数選ぶ（枠の状態からでも同じ）
  *   行のほかの場所を押すと、これまでどおり詳細が開く
  */
+/** 名前のどの文字をクリックしたか（文字の位置）。わからなければ最後 */
+function clickedOffset(e, text) {
+  try {
+    const el = e.currentTarget;
+    let node = null; let offset = 0;
+    if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(e.clientX, e.clientY); node = p?.offsetNode; offset = p?.offset ?? 0; }
+    else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(e.clientX, e.clientY); node = r?.startContainer; offset = r?.startOffset ?? 0; }
+    if (node && el.contains(node) && node.nodeType === 3) return Math.min(offset, text.length);
+  } catch { /* 古いブラウザ */ }
+  return text.length;
+}
+
 function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, onFocusMove, onFocusLeave, onFocusEscape }) {
   const [v, setV] = useState(task.name || "");
   const ended = useRef(false);
   const textRef = useRef(null);
+  const caretAt = useRef(null); // クリックした文字の位置（そこから直せるように）。キーで始めたときは全部選ぶ
   useEffect(() => { if (editing) { setV(task.name || ""); ended.current = false; } }, [editing]);
   useEffect(() => { if (focused && !editing) textRef.current?.focus(); }, [focused, editing]);
   const end = (save, how = null) => {
@@ -46,7 +59,11 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
   const isTypingEnter = isTypingEnterKey;
   if (editing) {
     return (
-      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onFocus={(e) => e.target.select()}
+      <input autoFocus value={v} onChange={(e) => setV(e.target.value)} onClick={(e) => e.stopPropagation()} onFocus={(e) => {
+          const at = caretAt.current; caretAt.current = null;
+          if (at === null) { e.target.select(); return; }
+          e.target.setSelectionRange(at, at);
+        }}
         onKeyDown={(e) => {
           const typing = !e.nativeEvent.isComposing && e.keyCode !== 229; // 変換候補を ↓ で選んでいるときは動かない
           if (isTypingEnter(e)) { e.preventDefault(); end(true, "enter"); }
@@ -57,7 +74,7 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
     );
   }
   return (
-    <span ref={textRef} tabIndex={-1} onClick={(e) => { e.stopPropagation(); onStart(); }} onBlur={onFocusLeave}
+    <span ref={textRef} tabIndex={-1} onClick={(e) => { e.stopPropagation(); caretAt.current = clickedOffset(e, task.name || ""); onStart(); }} onBlur={onFocusLeave}
       onKeyDown={(e) => {
         if (isTypingEnter(e)) { e.preventDefault(); e.stopPropagation(); onFocusEnter(); }
         else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); onFocusMove(e.key === "ArrowDown" ? 1 : -1, e.shiftKey); }
