@@ -73,7 +73,7 @@ function DueList({ list, data, today, onOpen, showAssignee }) {
             <ul>{rows.map((t) => (
               <li key={t.id} onClick={() => onOpen(t.id)} className="flex items-center gap-2.5 px-4 py-2 hover:bg-slate-50 cursor-pointer border-t border-slate-100 first:border-t-0" data-testid="task-row">
                 <TaskCheck done={t.completed} onToggle={(v) => writes.update(t, { completed: v, completed_at: v ? new Date().toISOString() : null })} size={17} />
-                <span className="flex-1 truncate text-sm">{t.name}</span>
+                <span className="flex-1 min-w-0 [overflow-wrap:anywhere] text-sm leading-snug">{t.name}</span>
                 <TaskPlaceChip task={t.parent_task_id ? data.byId.tasks.get(t.parent_task_id) || t : t} byId={data.byId} />
                 <DueLabel task={t} today={today} className="w-20 text-right" />
                 {showAssignee && <UserAvatar user={data.byId.users.get(t.assignee_id)} size={20} />}

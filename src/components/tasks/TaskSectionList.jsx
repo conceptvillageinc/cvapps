@@ -81,7 +81,7 @@ function InlineTaskName({ task, editing, focused, onStart, onEnd, onFocusEnter, 
         else if (e.key === "Escape") { onFocusEscape?.(); e.currentTarget.blur(); }
       }}
       title={focused ? "Enter ですぐ下に新しいタスクを足せます（↑↓ で上下のタスクへ・押すと名前を直せます）" : "押すと名前を直せます"}
-      className={`min-w-0 truncate rounded px-0.5 -mx-0.5 text-sm cursor-text outline-none hover:ring-1 hover:ring-slate-300 hover:bg-white ${focused ? "ring-2 ring-primary/50 bg-primary/5" : ""} ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
+      className={`min-w-0 whitespace-normal [overflow-wrap:anywhere] rounded px-0.5 -mx-0.5 text-sm leading-snug cursor-text outline-none hover:ring-1 hover:ring-slate-300 hover:bg-white ${focused ? "ring-2 ring-primary/50 bg-primary/5" : ""} ${task.completed ? "line-through text-slate-400" : "text-slate-800"}`} data-testid="task-name-text">{task.name}</span>
   );
 }
 
