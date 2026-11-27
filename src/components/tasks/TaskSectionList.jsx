@@ -563,7 +563,7 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                         <div onDragOver={(e) => rowDragOver(e, g, i)} onClick={() => renaming !== t.id && onOpen(t.id)}
                           onMouseDown={(e) => rowMouseDown(e, t)} onMouseEnter={() => rowMouseEnter(t)} onClickCapture={(e) => rowClickCapture(e, t)}
                           style={grid} className={`group/row grid items-center border-b border-slate-100 px-2 cursor-pointer transition-colors duration-700 ${selected.has(t.id) ? "bg-primary/10 hover:bg-primary/15" : added === t.id ? "bg-emerald-50" : "hover:bg-slate-50"} ${drag && movingOf(drag).includes(t.id) ? "opacity-40" : ""}`} data-testid="task-row" data-selected={selected.has(t.id) || undefined}>
-                          <div className="flex items-start gap-1.5 min-w-0 py-2">{/* 名前が折り返すときは、◯などを 1 行目にそろえる */}
+                          <div className="relative flex items-start gap-1.5 min-w-0 py-2 pr-2">{/* 名前が折り返すときは、◯などを 1 行目にそろえる */}
                             {/* つまみ：ここをドラッグすると動かす（選んでいる行なら、選んだ全部） */}
                             <span data-grip draggable={renaming !== t.id} onDragStart={(e) => gripDragStart(e, t)} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={(e) => e.stopPropagation()}
                               title={selected.has(t.id) && selCount > 1 ? `ドラッグで選んだ ${selCount} 件をまとめて動かす` : "ドラッグで動かす"}
@@ -573,9 +573,14 @@ export default function TaskSectionList({ mode, tasks, sections, data, today, vi
                             <span className="flex shrink-0 pt-px"><TaskCheck done={t.completed} onToggle={(v) => toggleDone(t, v)} size={17} /></span>
                             <InlineTaskName task={t} {...nameProps(t)} />
                             {subs.length > 0 && <span className="mt-0.5 shrink-0 rounded bg-slate-100 px-1 text-[10px] text-slate-500 tabular-nums" title="サブタスク">{subs.filter((s) => s.completed).length}/{subs.length}</span>}
-                            {/* ボタン一つで削除（すぐ消して、少しのあいだ「元に戻す」を出す） */}
-                            <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(t.id); }} className="-mt-0.5 ml-auto shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-slate-100 hover:text-slate-700 focus:opacity-100" title="詳細を開く" aria-label="詳細を開く" data-testid="task-open"><PanelRightOpen className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={(e) => { e.stopPropagation(); writes.removeWithUndo(t, data.tasks); }} className="-mt-0.5 mr-1 shrink-0 rounded p-1 text-slate-300 opacity-0 group-hover/row:opacity-100 hover:bg-rose-50 hover:text-rose-600 focus:opacity-100" title="このタスクを削除" aria-label="削除" data-testid="task-delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                            {/* 詳細・削除のボタンは、マウスを乗せたときだけ名前の右上に重ねて出す（名前をボタンの分まで広く使う） */}
+                            {renaming !== t.id && (
+                              <span className="absolute right-1 top-1.5 z-[1] flex items-center gap-0.5 rounded-md bg-white/95 p-0.5 shadow-sm ring-1 ring-slate-200 opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                                <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(t.id); }} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="詳細を開く" aria-label="詳細を開く" data-testid="task-open"><PanelRightOpen className="w-3.5 h-3.5" /></button>
+                                {/* ボタン一つで削除（すぐ消して、少しのあいだ「元に戻す」を出す） */}
+                                <button type="button" onClick={(e) => { e.stopPropagation(); writes.removeWithUndo(t, data.tasks); }} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="このタスクを削除" aria-label="削除" data-testid="task-delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </span>
+                            )}
                           </div>
                           <InlineHours task={t} onSave={(h) => writes.update(t, { estimated_hours: h }).catch((e) => toast.error("予定時間を保存できませんでした: " + (e?.message || "")))} />
                           {showPlace && (
